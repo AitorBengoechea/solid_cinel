@@ -1,4 +1,5 @@
-import os 
+import os
+from numpy.distutils.core import setup
 setup(
       name='solid_cinel',
       version='0.1',

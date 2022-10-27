@@ -1,5 +1,6 @@
 import os
 from numpy.distutils.core import setup
+requirements = "requirements.txt"
 setup(
       name='solid_cinel',
       version='0.1',
@@ -12,7 +13,7 @@ setup(
           'Programming Language :: Python :: 3',
           ],
       data_files=[(x[0], list(map(lambda y: x[0]+'/'+y, x[2]))) for x in os.walk('solid_cinel')],
-      #install_requires=open(requirements).read().splitlines(),
+      install_requires=open(requirements).read().splitlines(),
       zip_safe=False,
       # setup_requires=["pytest-runner",],
       tests_require=[

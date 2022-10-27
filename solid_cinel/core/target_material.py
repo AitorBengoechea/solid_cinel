@@ -65,20 +65,21 @@ class Crys_atom():
         Examples
         --------
         >>> temperature, A, Z = 300, 27, 13
-        >>> test = Crys_atom(temperature, A, Z, preferred_orientation=[0, 1, 1])
+        >>> dir_vec_length, dir_vec_angles = [1, 1, 1], [60, 60, 60]
+        >>> test = Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation=[0, 1, 1])
         >>> test.preferred_orientation
         x    0
         y    1
         z    1
         Name: preferred orientation, dtype: int64
 
-        >>> Crys_atom(temperature, A, Z).preferred_orientation      
+        >>> Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles).preferred_orientation
         x    0
         y    0
         z    1
         Name: preferred orientation, dtype: int64
 
-        >>> with pytest.raises(ValueError): Crys_atom(temperature, A, Z, preferred_orientation=[0, 1])
+        >>> with pytest.raises(ValueError): Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation=[0, 1])
         """
         return self._preferred_orientation
 

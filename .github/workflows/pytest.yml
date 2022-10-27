@@ -1,0 +1,28 @@
+# .github/workflows/app.yaml
+name: CI
+
+on:
+  # Triggers the workflow on push or pull request events but only for the develop branch
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop 
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+        with:
+          python-version: "3.x"
+
+      - name: install general python dependencies
+        run: pip install sphinx sphinx_rtd_theme codecov numpydoc coveralls pytest-cov nbval
+      - name: install solid_cinel
+        run: python setup.py install --user
+      - name: pytest
+        run: pytest --cov=solid_cinel solid_cinel
+      - name: make docs
+        run: bash make_docs.sh html

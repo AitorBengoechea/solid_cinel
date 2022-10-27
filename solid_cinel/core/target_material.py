@@ -47,6 +47,7 @@ class Crys_atom():
                                                                "b",
                                                                "c"],
                                         name="direct vectors length")
+
         self.dir_vec_angles = pd.Series(dir_vec_angles, index=["$\alpha$",
                                                                "$\beta$",
                                                                "$\gamma$"],

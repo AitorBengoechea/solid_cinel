@@ -20,11 +20,9 @@ jobs:
 
       - name: install general python dependencies
         run: pip install sphinx sphinx_rtd_theme codecov numpydoc coveralls pytest-cov nbval
-      - name: install sandy's requirements
+      - name: install solid cinel requirements
         run: pip install -r requirements.txt
       - name: install solid_cinel
         run: python setup.py install --user
       - name: pytest
         run: pytest --cov=solid_cinel solid_cinel
-      - name: make docs
-        run: bash make_docs.sh html

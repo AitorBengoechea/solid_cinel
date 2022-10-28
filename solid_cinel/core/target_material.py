@@ -34,6 +34,14 @@ class Crys_atom():
             Direct lattice vectors angles in ª.
         preferred_orientation : iterable or `np.array` of size (1, 3)
             Preferred orientation of the target.
+        unit_pos : 1D iterable
+            Unitary positions of atoms in the lattice unit cell.
+        atom_mass : float
+            Atom mass, amu.
+        b_coh : float
+            Bound coherent scattering length (fm),.
+        b_incoh : float
+            Bound incoherent scattering length (fm),
 
         Returns
         -------

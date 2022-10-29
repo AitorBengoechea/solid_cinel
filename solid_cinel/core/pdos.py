@@ -58,4 +58,3 @@ def pdos():
         elif type == "romberg":
             y_norm = sp.integrate.romb(y, dx=dx)
         return y / y_norm
-Footer

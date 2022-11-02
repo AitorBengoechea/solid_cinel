@@ -79,7 +79,7 @@ class Crys_atom():
 
         Example
         -------
-        Object initialization
+        Object initialization:
         >>> preferred_orientation = np.array([ 0, 1, 1 ])
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
@@ -152,6 +152,7 @@ class Crys_atom():
 
         Example
         -------
+        Object initialization:
         >>> preferred_orientation = np.array([ 0, 1, 1 ])
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
@@ -178,7 +179,7 @@ class Crys_atom():
 
         Example
         -------
-        Object initialization
+        Object initialization:
         >>> preferred_orientation = np.array([ 0, 1, 1 ])
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
@@ -215,7 +216,7 @@ class Crys_atom():
 
         Example
         -------
-        Object initialization
+        Object initialization:
         >>> preferred_orientation = np.array([ 0, 1, 1 ])
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
@@ -250,7 +251,7 @@ class Crys_atom():
 
         Example
         -------
-        Object initialization
+        Object initialization:
         >>> preferred_orientation = np.array([ 0, 1, 1 ])
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]

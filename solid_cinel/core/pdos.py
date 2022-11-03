@@ -264,15 +264,8 @@ class Pdos():
 
         Example
         -------
+        Object initialization:
         >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> p.data.iloc[0:5]
-        E
-        0.0000    0.000000
-        0.0008    0.041157
-        0.0016    0.164629
-        0.0024    0.370415
-        0.0032    0.657892
-        Name: rho, dtype: float64
 
         Test the results:
         >>> p.Teff(T=20).round(4)
@@ -288,6 +281,34 @@ class Pdos():
         if twt is not None:
             Teff_weight += twt
         return Teff_weight * T
+
+    def DebyeWallerCoeff(self, T) -> float:
+        """
+        Calculate Debye Waller Coefficient in LEAPR formalism for a certain
+        pdos information.
+        .. math::
+            c=2\int_{0}^{\beta_{\textrm{max}}}P_s(\beta)\cosh(\dfrac{\beta}{2})d\beta
+
+        Parameters
+        ----------
+        T : 'int'
+            Temperature in K.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+
+        Test the results:
+        >>> p.DebyeWallerCoeff(T=20).round(6)
+        0.077454
+        >>> p.DebyeWallerCoeff(T=80).round(6)
+        0.379937
+        """
+        data = self.P(T)
+        P = data.values
+        beta = data.index.values
+        return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
 
     @staticmethod
     def normalization(rho, kind="trapezoidal") -> pd.Series:

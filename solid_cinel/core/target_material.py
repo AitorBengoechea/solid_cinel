@@ -66,7 +66,7 @@ class Crys_atom():
                                         index=["a", "b", "c"],
                                         name="direct vectors length")
         self.dir_vec_angles = pd.Series(np.array(dir_vec_angles) * np.pi / 180,
-                                        index=["$\alpha$", "$\beta$", "$\gamma$"],
+                                        index=["alpha", "beta", "gamma"],
                                         name="direct vectors angles")
         self.unit_pos = np.array(unit_pos).reshape(-1, 3)
         self.atom_mass = atom_mass
@@ -127,13 +127,13 @@ class Crys_atom():
         >>> assert all(direct_vectors["a3"].round(6) == np.array([1.428355, 0.824661, 2.332494]))
         """
         a = np.array([1., 0., 0.])
-        b = np.array([np.cos(self.dir_vec_angles["$\gamma$"]),
-                      np.sin(self.dir_vec_angles["$\gamma$"]),
+        b = np.array([np.cos(self.dir_vec_angles["gamma"]),
+                      np.sin(self.dir_vec_angles["gamma"]),
                       0.])
-        c = np.array([np.cos(self.dir_vec_angles["$\beta$"]),
-                     np.cos(self.dir_vec_angles["$\alpha$"]) - np.cos(self.dir_vec_angles["$\beta$"]) * np.cos(self.dir_vec_angles["$\gamma$"]),
+        c = np.array([np.cos(self.dir_vec_angles["beta"]),
+                     np.cos(self.dir_vec_angles["alpha"]) - np.cos(self.dir_vec_angles["beta"]) * np.cos(self.dir_vec_angles["gamma"]),
                       1])
-        c[1] /=  np.sin(self.dir_vec_angles["$\gamma$"])
+        c[1] /=  np.sin(self.dir_vec_angles["gamma"])
         c[2] *= np.sqrt(1. - c[0] ** 2 - c[1] ** 2)
 
         # Length multiplication:

@@ -9,6 +9,7 @@ import numpy as np
 import scipy as sp
 from scipy.constants import physical_constants as const
 import matplotlib
+import warnings
 
 # Examples variables:
 rho_in_energy_str = '''
@@ -80,7 +81,7 @@ class Pdos():
         Test the results:
         >>> assert sp.integrate.trapezoid(p.data.values, p.data.index) == 1.0
         """
-        rho_ = pd.Series(rho, dtype=float, name="rho in energy")
+        rho_ = pd.Series(rho, dtype=float, name="rho")
 
         if not len(rho_.shape) == 1:
             raise TypeError("Rho must have one dimension")
@@ -109,6 +110,7 @@ class Pdos():
 
         Test the results:
         >>> p.data.iloc[0:10]
+        E
         0.0000    0.000000
         0.0008    0.041157
         0.0016    0.164629
@@ -119,10 +121,11 @@ class Pdos():
         0.0056    2.015458
         0.0064    2.632193
         0.0072    3.331243
-        Name: rho in energy, dtype: float64
+        Name: rho, dtype: float64
         """
         rho_ = np.array(rho)
-        index = np.arange(len(rho_)) * interval_energy
+        index = pd.Index(np.arange(len(rho_)) * interval_energy)
+        index.name = "E"
         return cls(rho, index=index)
 
     def change_grid(self, eg=None, T=None):
@@ -150,47 +153,141 @@ class Pdos():
         Object initialization:
         >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> p.data.iloc[0:5]
+        E
         0.0000    0.000000
         0.0008    0.041157
         0.0016    0.164629
         0.0024    0.370415
         0.0032    0.657892
-        Name: rho in energy, dtype: float64
+        Name: rho, dtype: float64
 
         Test the results:
         >>> p.change_grid(T=300).data.iloc[0:5]
+        beta
         0.000000    0.000000
         0.030945    0.001064
         0.061891    0.004256
         0.092836    0.009576
         0.123782    0.017008
-        Name: rho in energy, dtype: float64
+        Name: rho, dtype: float64
 
         >>> p = Pdos([1, 2, 4], index=[1, 2, 4])
         >>> p.change_grid([1, 2, 3, 4, 5]).data
+        E
         1.0    0.105263
         2.0    0.210526
         3.0    0.315789
         4.0    0.421053
         5.0    0.000000
-        Name: rho in energy, dtype: float64
+        Name: rho, dtype: float64
         """
         grid = self.data.index
         if T:
             enew = grid / (const["Boltzmann constant in eV/K"][0] * T)
+            enew.name = "beta"
             rho_new = self.data.values
         if eg:
-            enew = grid.union(eg).astype("float").values
+            enew = grid.union(eg).astype("float")
+            enew.name = "E"
             rho_new = self.reshape_differential(
                 grid.values,
                 self.data.values,
-                enew,
+                enew.values,
                 )
         return self.__class__(rho_new, index=enew)
 
     def plot(self) -> matplotlib:
         """Plot rho (y) vs grid (x)."""
         return self.data.plot(title='PDOS')
+
+    def P(self, T, threshold=1.e-6) -> pd.Series:
+        """
+        Calculate P function for LEAPR formalism with PDOS.
+        .. math::
+            P(\beta^\prime)=\dfrac{\rho(\beta^\prime)}{2\beta^\prime\sinh(\beta^\prime/2)}
+
+        Parameters
+        ----------
+        T : 'int'
+            Temperature in K.
+        threshold : 'float', optional
+            Value to chech the initial DOS. The default is 1.e-6.
+
+        Raises
+        ------
+        ValueError
+            Initial point of input DOS is not zero.
+
+        Example
+        -------
+        Object initialization:
+        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+
+        Test the results:
+        >>> T = 300
+        >>> pdos.P(T).iloc[0:6].round(6)
+        beta
+        0.000000    1.111089
+        0.030945    1.111045
+        0.061891    1.110912
+        0.092836    1.110690
+        0.123782    1.109328
+        0.154727    1.109309
+        Name: P, dtype: float64
+        """
+        data = self.change_grid(T=T).data
+        rho_in_beta = data.values
+        beta_values = data.index.values
+        if abs(beta_values[0]) > threshold:
+            raise ValueError("Initial point of input DOS is not zero")
+        P_values = np.zeros(len(rho_in_beta))
+
+        # rho_in_beta is assumed to vary as beta^2 in the nearby of 0
+        P_values[0] = rho_in_beta[1] / beta_values[1] ** 2
+
+        # Rest of P values calculation:
+        P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
+        return pd.Series(P_values, index=data.index, name="P")
+
+    def Teff(self, T, twt=None) -> float:
+        """
+        Calculate the effective temperature for a certain pdos information.
+        .. math::
+            overline{T} = \left(w_t+\int_{0}^{\infty}\beta^2P(\beta)\cosh(\beta/2)d\beta\right)T
+
+        Parameters
+        ----------
+        T : 'int'
+            Temperature in K.
+        twt : 'float', optional
+            Translational weight, for solid is zero. The default is None.
+
+        Example
+        -------
+        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p.data.iloc[0:5]
+        E
+        0.0000    0.000000
+        0.0008    0.041157
+        0.0016    0.164629
+        0.0024    0.370415
+        0.0032    0.657892
+        Name: rho, dtype: float64
+
+        Test the results:
+        >>> p.Teff(T=20).round(4)
+        149.1699
+        >>> p.Teff(T=80).round(4) 
+        159.1632
+        """
+        data = self.P(T)
+        P = data.values
+        beta = data.index.values
+        Teff_weight = sp.integrate.trapezoid(beta ** 2 * P * np.cosh(0.5 * beta),
+                                              x=beta)
+        if twt is not None:
+            Teff_weight += twt
+        return Teff_weight * T
 
     @staticmethod
     def normalization(rho, kind="trapezoidal") -> pd.Series:

@@ -46,15 +46,15 @@ class Pdos():
             Object containing the method and properties of rho in energy.
 
         """
-        self.data = pd.Series(*args, **kwargs)
+        self.rho = pd.Series(*args, **kwargs)
 
     @property
-    def data(self) -> pd.Series:
+    def rho(self) -> pd.Series:
         """Pandas Series containing the rho values in energy (index)."""
-        return self._data
+        return self.data
 
-    @data.setter
-    def data(self, rho) -> pd.Series:
+    @rho.setter
+    def rho(self, rho_data) -> pd.Series:
         """
         Data setter for rho to ensure the following properties of the data:
             - Shape of the data: 1 dimension
@@ -81,7 +81,7 @@ class Pdos():
         Test the results:
         >>> assert sp.integrate.trapezoid(p.data.values, p.data.index) == 1.0
         """
-        rho_ = pd.Series(rho, dtype=float, name="rho")
+        rho_ = pd.Series(rho_data, dtype=float, name="rho")
 
         if not len(rho_.shape) == 1:
             raise TypeError("Rho must have one dimension")
@@ -89,7 +89,7 @@ class Pdos():
         if not rho_.index.is_monotonic_increasing:
             raise SyntaxError("energy grid is not monotonically increasing")
 
-        self._data = self.normalization(rho_)
+        self.data = self.normalization(rho_)
 
     @classmethod
     def from_data(cls, rho, interval_energy):
@@ -109,7 +109,7 @@ class Pdos():
         >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
 
         Test the results:
-        >>> p.data.iloc[0:10]
+        >>> p.rho.iloc[0:10]
         E
         0.0000    0.000000
         0.0008    0.041157
@@ -126,7 +126,7 @@ class Pdos():
         rho_ = np.array(rho)
         index = pd.Index(np.arange(len(rho_)) * interval_energy)
         index.name = "E"
-        return cls(rho, index=index)
+        return cls(rho_, index=index)
 
     def change_grid(self, eg=None, T=None):
         """
@@ -152,7 +152,7 @@ class Pdos():
         --------
         Object initialization:
         >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> p.data.iloc[0:5]
+        >>> p.rho.iloc[0:5]
         E
         0.0000    0.000000
         0.0008    0.041157
@@ -162,7 +162,7 @@ class Pdos():
         Name: rho, dtype: float64
 
         Test the results:
-        >>> p.change_grid(T=300).data.iloc[0:5]
+        >>> p.change_grid(T=300).rho.iloc[0:5]
         beta
         0.000000    0.000000
         0.030945    0.001064
@@ -172,7 +172,7 @@ class Pdos():
         Name: rho, dtype: float64
 
         >>> p = Pdos([1, 2, 4], index=[1, 2, 4])
-        >>> p.change_grid([1, 2, 3, 4, 5]).data
+        >>> p.change_grid([1, 2, 3, 4, 5]).rho
         E
         1.0    0.105263
         2.0    0.210526
@@ -181,20 +181,20 @@ class Pdos():
         5.0    0.000000
         Name: rho, dtype: float64
         """
-        grid = self.data.index
+        grid = self.rho.index
         if T:
             enew = grid / (const["Boltzmann constant in eV/K"][0] * T)
             enew.name = "beta"
-            rho_new = self.data.values
+            rho_new = self.rho.values
         if eg:
             enew = grid.union(eg).astype("float")
             enew.name = "E"
             rho_new = self.reshape_differential(
                 grid.values,
-                self.data.values,
+                self.rho.values,
                 enew.values,
                 )
-        return self.__class__(rho_new, index=enew)
+        return Pdos(rho_new, index=enew)
 
     def plot(self) -> matplotlib:
         """Plot rho (y) vs grid (x)."""
@@ -235,7 +235,7 @@ class Pdos():
         0.154727    1.109309
         Name: P, dtype: float64
         """
-        data = self.change_grid(T=T).data
+        data = self.change_grid(T=T).rho
         rho_in_beta = data.values
         beta_values = data.index.values
         if abs(beta_values[0]) > threshold:
@@ -308,42 +308,7 @@ class Pdos():
         data = self.P(T)
         P = data.values
         beta = data.index.values
-        return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
-
-    def B(self, T, atomic_mass, anstrom=True) -> float:
-        """
-        Calculate mean square displacement for a certain pdos information.
-
-        Parameters
-        ----------
-        T : 'int'
-            Temperature in K
-        atomic_mass : 'float'
-            Atomic mass of the nucleus in amu.
-        anstrom : 'bool', optional
-            Option to obtain the B unit in A^2. The default is True.
-
-        Examples
-        --------
-        Object initialization:
-        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> atomic_mass = 26.98153433356103
-
-        Test the results:
-        >>> T = 20
-        >>> p.B(T, atomic_mass).round(6)
-        0.274871
-
-        >>> T = 80
-        >>> p.B(T, atomic_mass).round(6)
-        0.337081
-        """
-        constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
-        constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
-        B = constant * self.DebyeWallerCoeff(T) / (T * atomic_mass)
-        if anstrom:
-            B *= 1.0e20
-        return B    
+        return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)   
 
     @staticmethod
     def normalization(rho, kind="trapezoidal") -> pd.Series:

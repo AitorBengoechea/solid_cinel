@@ -16,15 +16,13 @@ collections.Callable = collections.abc.Callable
 class Crys_atom():
     """Class to store the properties of materials."""
 
-    def __init__(self, temperature, A, Z, dir_vec_length, dir_vec_angles,
+    def __init__(self, A, Z, dir_vec_length, dir_vec_angles,
                  preferred_orientation, unit_pos, atom_mass, b_coh, b_incoh):
         """
         Initialize the crystaline structure formed by a single atom.
 
         Parameters
         ----------
-        temperature : `int`
-            Temperature in Kelvin.
         A : ´int´
             Atomic number.
         Z : ´int´
@@ -40,9 +38,9 @@ class Crys_atom():
         atom_mass : float
             Atom mass, amu.
         b_coh : float
-            Bound coherent scattering length (fm),.
+            Bound coherent scattering length (fm).
         b_incoh : float
-            Bound incoherent scattering length (fm),
+            Bound incoherent scattering length (fm).
 
         Returns
         -------
@@ -57,7 +55,6 @@ class Crys_atom():
             ValueError("The direct vector angles array do not have the apropiate lenght")
         if len(preferred_orientation) != 3:
             ValueError("The preferential orientation array do not have the apropiate lenght")
-        self.temperature = temperature
         self.A = A
         self.Z = Z
         self.preferred_orientation = pd.Series(preferred_orientation,
@@ -86,13 +83,12 @@ class Crys_atom():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> temperature = 300
         >>> A = 27
         >>> Z = 13
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
         >>> assert Al.material_name == "Al27"
@@ -113,13 +109,12 @@ class Crys_atom():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> temperature = 300
         >>> A = 27
         >>> Z = 13
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
         >>> direct_vectors = Al.dir_vec
 
         Test the results:
@@ -159,13 +154,12 @@ class Crys_atom():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> temperature = 300
         >>> A = 27
         >>> Z = 13
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
         >>> assert Al.unit_cell_vol.round(6) == 16.484804
@@ -186,13 +180,12 @@ class Crys_atom():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> temperature = 300
         >>> A = 27
         >>> Z = 13
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
         >>> reciprocal_vector = Al.reciproc_vec
 
         Test the results:
@@ -223,13 +216,12 @@ class Crys_atom():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> temperature = 300
         >>> A = 27
         >>> Z = 13
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
         >>> Al.atom_pos.round(6)
@@ -258,13 +250,12 @@ class Crys_atom():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> temperature = 300
         >>> A = 27
         >>> Z = 13
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(temperature, A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
         >>> assert Al.atom_number == 8

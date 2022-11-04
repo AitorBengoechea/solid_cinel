@@ -310,6 +310,41 @@ class Pdos():
         beta = data.index.values
         return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
 
+    def B(self, T, atomic_mass, anstrom=True) -> float:
+        """
+        Calculate mean square displacement for a certain pdos information.
+
+        Parameters
+        ----------
+        T : 'int'
+            Temperature in K
+        atomic_mass : 'float'
+            Atomic mass of the nucleus in amu.
+        anstrom : 'bool', optional
+            Option to obtain the B unit in A^2. The default is True.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> atomic_mass = 26.98153433356103
+
+        Test the results:
+        >>> T = 20
+        >>> p.B(T, atomic_mass).round(6)
+        0.274871
+
+        >>> T = 80
+        >>> p.B(T, atomic_mass).round(6)
+        0.337081
+        """
+        constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
+        constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
+        B = constant * self.DebyeWallerCoeff(T) / (T * atomic_mass)
+        if anstrom:
+            B *= 1.0e20
+        return B    
+
     @staticmethod
     def normalization(rho, kind="trapezoidal") -> pd.Series:
         """

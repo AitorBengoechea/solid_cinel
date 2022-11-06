@@ -57,15 +57,20 @@ class Target_mat(Solid, Pdos):
         b_incoh : float
             Bound incoherent scattering length (fm).
 
-        Parameters for Crys_atom
+        Parameters for pdos
         ------------------------
-        rho : 1D iterable
-            rho values.
-        interval_energy : 'float'
-            Energy interval in eV.
+        rho : list of 1D iterable
+            rho values for each element.
+        interval_energy : list of 'float'
+            Energy interval in eV for each element.
         """
         Solid.__init__(self, *args[0:9])
         # Avoid data setter in Pdos:
+        if isinstance(args[10], float):
+            atom_pdos = Pdos(args[9],
+                      index=pd.Index(np.arange(len(args[9])) * args[10],
+                                     name="E"))
+            self.pdos[self.name] = atom_pdos
         Pdos.__init__(self, args[9],
                       index=pd.Index(np.arange(len(args[9])) * args[10],
                                      name="E"))
@@ -98,16 +103,18 @@ class Target_mat(Solid, Pdos):
 
         Test the results:
         >>> T = 20
-        >>> Al.B(T).round(6)
+        >>> Al.B(T)["Al27"].round(6)
         0.274871
 
         >>> T = 80
-        >>> Al.B(T).round(6)
+        >>> Al.B(T)["Al27"].round(6)
         0.337081
         """
         constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
         constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
-        B = constant * self.DebyeWallerCoeff(T) / (T * self.atom_mass)
-        if anstrom:
-            B *= 1.0e20
+        B = {}
+        for element, atom_mass in self.atom_mass.items():
+            B[element] = constant * self.pdos[element].DebyeWallerCoeff(T) / (T * atom_mass)
+            if anstrom:
+                B *= 1.0e20
         return B

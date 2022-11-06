@@ -66,14 +66,12 @@ class Target_mat(Solid, Pdos):
         """
         Solid.__init__(self, *args[0:9])
         # Avoid data setter in Pdos:
+        self.pdos = {}
         if isinstance(args[10], float):
             atom_pdos = Pdos(args[9],
                       index=pd.Index(np.arange(len(args[9])) * args[10],
                                      name="E"))
             self.pdos[self.name] = atom_pdos
-        Pdos.__init__(self, args[9],
-                      index=pd.Index(np.arange(len(args[9])) * args[10],
-                                     name="E"))
 
     def B(self, T, anstrom=True) -> float:
         """
@@ -113,7 +111,7 @@ class Target_mat(Solid, Pdos):
         constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
         constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
         B = {}
-        for element, pdos in self.pdos:
+        for element, pdos in self.pdos.items():
             atom_mass = self.Atoms[element].atom_mass
             B[element] = constant * pdos.DebyeWallerCoeff(T) / (T * atom_mass)
             if anstrom:

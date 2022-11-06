@@ -5,7 +5,7 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.core.solid import Crys_atom
+from solid_cinel.core.solid import Solid
 from solid_cinel.core.pdos import Pdos
 from scipy.constants import physical_constants as const
 import scipy as sp
@@ -29,7 +29,7 @@ rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
 
 
-class Target_mat(Crys_atom, Pdos):
+class Target_mat(Solid, Pdos):
     """Class to store all the Target material methods and atributtes."""
 
     def __init__(self, *args):
@@ -64,7 +64,7 @@ class Target_mat(Crys_atom, Pdos):
         interval_energy : 'float'
             Energy interval in eV.
         """
-        Crys_atom.__init__(self, *args[0:9])
+        Solid.__init__(self, *args[0:9])
         # Avoid data setter in Pdos:
         Pdos.__init__(self, args[9],
                       index=pd.Index(np.arange(len(args[9])) * args[10],
@@ -94,7 +94,7 @@ class Target_mat(Crys_atom, Pdos):
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> T = 20

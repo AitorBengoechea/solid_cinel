@@ -5,7 +5,7 @@ Created on Thu Nov  3 14:24:18 2022
 @author: AB272525
 """
 
-from solid_cinel.data import elements
+from solid_cinel.core.material_composition import *
 import numpy as np
 import pandas as pd
 import collections
@@ -13,50 +13,58 @@ import pytest
 collections.Callable = collections.abc.Callable
 
 
-class Crys_atom():
-    """Class to store the properties of materials."""
+class Solid(Molecule):
+    """Class to store the properties and methods for solid materials."""
 
-    def __init__(self, A, Z, dir_vec_length, dir_vec_angles,
-                 preferred_orientation, unit_pos, atom_mass, b_coh, b_incoh):
+    def __init__(self, dir_vec_length, dir_vec_angles,
+                 preferred_orientation, unit_pos, *args, **kwargs):
         """
         Initialize the crystaline structure formed by a single atom.
 
         Parameters
         ----------
-        A : ´int´
-            Atomic number.
-        Z : ´int´
-            Number of protons.
         dir_vec_length : iterable or `np.array` of size (1, 3)
             Direct lattice vectors length in fm.
         preferred_orientation : iterable or `np.array` of size (1, 3)
             Direct lattice vectors angles in ª.
         preferred_orientation : iterable or `np.array` of size (1, 3)
             Preferred orientation of the target.
-        unit_pos : 1D iterable
-            Unitary positions of atoms in the lattice unit cell.
-        atom_mass : float
+        unit_pos : 'dict' or 1D iterable
+            Unitary positions of atoms in the lattice unit cell. Two options:
+            Single atom: 1D iterable
+            Multiple atoms: 'dict'
+                {"atom name" : [atom positions]}
+
+        Parameters for Molecule
+        -----------------------
+        A : 1D iterable of 'int' or 'int'
+            Atomic number.
+        Z : 1D iterable of 'int' or 'int'
+            Number of protons.
+        atom_mass : 1D iterable of 'float' or 'float'
             Atom mass, amu.
-        b_coh : float
+        b_coh : 1D iterable of 'float' or 'float'
             Bound coherent scattering length (fm).
-        b_incoh : float
+        b_incoh : 1D iterable of 'float' or 'float'
             Bound incoherent scattering length (fm).
+        name : 'str', optional
+            Name of the molecule, by default None
 
         Returns
         -------
-        ´Crys_atom´
+        ´Solid´
             Class to store the properties and method related with a crystaline
-            structure formed by a single atom.
+            structure of a solid.
 
         """
+        super().__init__(*args, **kwargs)
+
         if len(dir_vec_length) != 3:
             ValueError("The direct vector lengths array do not have the apropiate lenght")
         if len(dir_vec_angles) != 3:
             ValueError("The direct vector angles array do not have the apropiate lenght")
         if len(preferred_orientation) != 3:
             ValueError("The preferential orientation array do not have the apropiate lenght")
-        self.A = A
-        self.Z = Z
         self.preferred_orientation = pd.Series(preferred_orientation,
                                                index=["x", "y", "z"],
                                                name="preferred orientation")
@@ -66,35 +74,18 @@ class Crys_atom():
         self.dir_vec_angles = pd.Series(np.array(dir_vec_angles) * np.pi / 180,
                                         index=["alpha", "beta", "gamma"],
                                         name="direct vectors angles")
-        self.unit_pos = np.array(unit_pos).reshape(-1, 3)
-        self.atom_mass = atom_mass
-        self.b = {"b_coh": b_coh, "b_incoh": b_incoh}
+        self.unit_pos = unit_pos
 
     @property
-    def material_name(self) -> str:
-        """
-        Material name: element + A
+    def unit_pos(self) -> dict:
+        return self._unit_pos
 
-        Example
-        -------
-        Object initialization:
-        >>> preferred_orientation = np.array([ 0, 1, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
-
-        Test the results:
-        >>> assert Al.material_name == "Al27"
-
-        """
-        return elements.ELEMENTS[self.Z] + str(self.A)
+    @unit_pos.setter
+    def unit_pos(self, unit_pos):
+        if isinstance(unit_pos, dict):
+            self._unit_pos = {element: single_unit_pos for element, single_unit_pos in unit_pos.items()}
+        else:
+            self._unit_pos = {self.name: np.array(unit_pos).reshape(-1, 3)}
 
     @property
     def dir_vec(self) -> pd.Series:
@@ -114,7 +105,7 @@ class Crys_atom():
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Solid(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
         >>> direct_vectors = Al.dir_vec
 
         Test the results:
@@ -122,13 +113,15 @@ class Crys_atom():
         >>> assert all(direct_vectors["a2"].round(6) == np.array([1.428355, 2.473984, 0.      ]))
         >>> assert all(direct_vectors["a3"].round(6) == np.array([1.428355, 0.824661, 2.332494]))
         """
-        a = np.array([1., 0., 0.])
+        a = np.array([1.,
+                      0.,
+                      0.])
         b = np.array([np.cos(self.dir_vec_angles["gamma"]),
                       np.sin(self.dir_vec_angles["gamma"]),
                       0.])
         c = np.array([np.cos(self.dir_vec_angles["beta"]),
                      np.cos(self.dir_vec_angles["alpha"]) - np.cos(self.dir_vec_angles["beta"]) * np.cos(self.dir_vec_angles["gamma"]),
-                      1])
+                      1.0])
         c[1] /=  np.sin(self.dir_vec_angles["gamma"])
         c[2] *= np.sqrt(1. - c[0] ** 2 - c[1] ** 2)
 
@@ -159,7 +152,7 @@ class Crys_atom():
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Solid(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
         >>> assert Al.unit_cell_vol.round(6) == 16.484804
@@ -185,7 +178,7 @@ class Crys_atom():
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Solid(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
         >>> reciprocal_vector = Al.reciproc_vec
 
         Test the results:
@@ -221,10 +214,10 @@ class Crys_atom():
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Solid(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
-        >>> Al.atom_pos.round(6)
+        >>> Al.atom_pos["Al27"].round(6)
         array([[1.428355, 0.824661, 0.583124],
                [2.856711, 0.824661, 0.583124],
                [2.856711, 2.473984, 1.749371],
@@ -235,7 +228,8 @@ class Crys_atom():
                [2.142533, 2.061653, 0.583124]])
 
         """
-        return np.stack(self.unit_pos.dot(self.dir_vec.values))
+        return {element: np.stack(unit_pos.dot(self.dir_vec.values))
+                for element, unit_pos in self.unit_pos.items()}
 
     @property
     def atom_number(self) -> int:
@@ -255,9 +249,10 @@ class Crys_atom():
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Crys_atom(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Solid(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
-        >>> assert Al.atom_number == 8
+        >>> assert Al.atom_number["Al27"] == 8
         """
-        return self.unit_pos.shape[0]
+        return {element: atom_pos.shape[0]
+                for element, atom_pos in self.atom_pos.items()}

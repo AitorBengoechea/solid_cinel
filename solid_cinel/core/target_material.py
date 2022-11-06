@@ -5,7 +5,7 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.core.solid import Crys_atom
+from solid_cinel.core.solid import Solid
 from solid_cinel.core.pdos import Pdos
 from scipy.constants import physical_constants as const
 import scipy as sp
@@ -29,7 +29,7 @@ rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
 
 
-class Target_mat(Crys_atom, Pdos):
+class Target_mat(Solid, Pdos):
     """Class to store all the Target material methods and atributtes."""
 
     def __init__(self, *args):
@@ -57,18 +57,21 @@ class Target_mat(Crys_atom, Pdos):
         b_incoh : float
             Bound incoherent scattering length (fm).
 
-        Parameters for Crys_atom
+        Parameters for pdos
         ------------------------
-        rho : 1D iterable
-            rho values.
-        interval_energy : 'float'
-            Energy interval in eV.
+        rho : list of 1D iterable
+            rho values for each element.
+        interval_energy : list of 'float'
+            Energy interval in eV for each element.
         """
-        Crys_atom.__init__(self, *args[0:9])
+        Solid.__init__(self, *args[0:9])
         # Avoid data setter in Pdos:
-        Pdos.__init__(self, args[9],
+        self.pdos = {}
+        if isinstance(args[10], float):
+            atom_pdos = Pdos(args[9],
                       index=pd.Index(np.arange(len(args[9])) * args[10],
                                      name="E"))
+            self.pdos[self.name] = atom_pdos
 
     def B(self, T, anstrom=True) -> float:
         """
@@ -94,20 +97,23 @@ class Target_mat(Crys_atom, Pdos):
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(A, Z, dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> T = 20
-        >>> Al.B(T).round(6)
+        >>> Al.B(T)["Al27"].round(6)
         0.274871
 
         >>> T = 80
-        >>> Al.B(T).round(6)
+        >>> Al.B(T)["Al27"].round(6)
         0.337081
         """
         constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
         constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
-        B = constant * self.DebyeWallerCoeff(T) / (T * self.atom_mass)
-        if anstrom:
-            B *= 1.0e20
+        B = {}
+        for element, pdos in self.pdos.items():
+            atom_mass = self.atoms[element].atom_mass
+            B[element] = constant * pdos.DebyeWallerCoeff(T) / (T * atom_mass)
+            if anstrom:
+                B[element] *= 1.0e20
         return B

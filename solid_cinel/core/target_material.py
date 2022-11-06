@@ -115,5 +115,5 @@ class Target_mat(Solid, Pdos):
             atom_mass = self.atoms[element].atom_mass
             B[element] = constant * pdos.DebyeWallerCoeff(T) / (T * atom_mass)
             if anstrom:
-                B *= 1.0e20
+                B[element] *= 1.0e20
         return B

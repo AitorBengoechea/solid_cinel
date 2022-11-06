@@ -113,8 +113,9 @@ class Target_mat(Solid, Pdos):
         constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
         constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
         B = {}
-        for element, atom_mass in self.atom_mass.items():
-            B[element] = constant * self.pdos[element].DebyeWallerCoeff(T) / (T * atom_mass)
+        for element, pdos in self.pdos:
+            atom_mass = self.Atoms[element].atom_mass
+            B[element] = constant * pdos.DebyeWallerCoeff(T) / (T * atom_mass)
             if anstrom:
                 B *= 1.0e20
         return B

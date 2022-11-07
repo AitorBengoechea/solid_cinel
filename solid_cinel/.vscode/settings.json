@@ -1,9 +1,0 @@
-{
-    "autoDocstring.docstringFormat": "numpy",
-    "python.analysis.typeCheckingMode": "basic",
-    "python.linting.pylintEnabled": True,
-    "python.linting.pep8Enabled": True,
-    "python.autoComplete.extraPaths": [
-    
-    ]
-}

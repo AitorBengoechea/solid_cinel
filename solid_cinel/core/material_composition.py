@@ -1,4 +1,5 @@
 from solid_cinel.data import elements
+from scipy.constants import physical_constants as const
 import numpy as np
 import pandas as pd
 import collections
@@ -32,7 +33,7 @@ class Atom():
     @property
     def name(self) -> str:
         """
-        Material name: element + A
+        Material name: element + A.
 
         Example
         -------
@@ -68,8 +69,70 @@ class Atom():
         Test the results:
         >>> assert Al.zam == 130270
         """
-        zam = self.Z * 10000 + self.A * 10 
+        zam = self.Z * 10000 + self.A * 10
         return int(zam)
+
+    @property
+    def boundXs(self) -> float:
+        """
+        Bound total scattering cross section in barn.
+
+        Example
+        -------
+        Object initialization:
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+
+        Test the results:
+        >>> assert np.double(Al.boundXs).round(6) == np.double(1.503081)
+        """
+        return np.pi * 4 / 100 * (self.b["b_incoh"] ** 2 + self.b["b_coh"] ** 2)
+
+    @property
+    def boundIncXs(self) -> float:
+        """
+        Bound incoherent scattering cross section in barn.
+
+        Example
+        -------
+        Object initialization:
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+
+        Test the results:
+        >>> assert np.double(Al.boundIncXs).round(6) == np.double(0.008235)
+        """
+        return np.pi * 4 / 100 * self.b["b_incoh"] ** 2
+
+    @property
+    def freeXs(self) -> float:
+        """
+        Free scattering cross section in barn.
+
+        Example
+        -------
+        Object initialization:
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+
+        Test the results:
+        >>> assert np.double(Al.freeXs).round(6) == np.double(1.396702)
+        """
+        A = self.atom_mass / const["neutron mass in u"][0]
+        return self.boundXs * (A / (A + 1)) ** 2
+
 
 class Molecule(Atom):
     def __init__(self, A, Z, atom_mass, b_coh, b_incoh, name=None):

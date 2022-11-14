@@ -39,14 +39,15 @@ class S():
         df_.index.name = "alpha"
         df_.columns.name = "beta"
         # Normalization constrains:
-        self.normalization_check(self._data)
-        self.sum_rule_check(self._data)
+        self.normalization_check(df_)
+        self.sum_rule_check(df_)
         self._data = df_
 
     @classmethod
-    def from_FGM(cls, alpha_grid, beta_grid, w_t= 1.0):
+    def from_fgm(cls, alpha_grid, beta_grid, w_t= 1.0):
         """
-        Generate a S(alpha, beta) matrix for a given alpha and beta grid.
+        Generate a S(alpha, beta) matrix from Free Gas Model for a given alpha
+        and beta grid.
         .. math::
             S_t(\alpha,\,\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)\end{equation}
 
@@ -58,6 +59,24 @@ class S():
             beta grid.
         w_t: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1
+
+        Example
+        -------
+        >>> beta_grid = gen_beta(300)
+        >>> alpha_grid = gen_alpha(300, 26)
+        >>> S.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :10].round(6)
+        beta	0.000000	0.012894	0.025788	0.038682	0.051576	0.064470	0.077363	0.090257	0.103151	0.116045
+        alpha										
+        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815	3.341949	2.176603	1.309759	0.728176	0.374036
+        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714	3.396532	2.244871	1.374482	0.779612	0.409647
+        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252	3.448123	2.311530	1.439224	0.832280	0.447016
+        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511	3.496691	2.376443	1.503806	0.886035	0.486077
+        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575	3.542218	2.439483	1.568053	0.940728	0.526754
+        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533	3.584694	2.500535	1.631793	0.996203	0.568961
+        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476	3.624120	2.559495	1.694860	1.052303	0.612598
+        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500	3.660506	2.616271	1.757096	1.108867	0.657559
+        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701	3.693870	2.670778	1.818348	1.165733	0.703727
+        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177	3.724239	2.722947	1.878473	1.222741	0.750980
         """
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
         S_values = np.fromfunction(np.vectorize(f),
@@ -84,13 +103,13 @@ class S():
             The sum rule constrain is not satified.
 
         """
-        sum_rule = S.apply(_sum_rule, axis="columns") - S.index_values
-        if (abs(sum_rule) > 1.0e-14):
+        sum_rule = S.apply(_sum_rule, axis="columns") - S.index.values
+        if (abs(sum_rule) > 5.0e-3).any():
             raise ValueError("Sum rule of S(alpha, beta) not satisfied")
         return
 
     @staticmethod
-    def normalization_check(S):
+    def normalization_check(S) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the normalization constrain.
         .. math::
@@ -108,7 +127,7 @@ class S():
 
         """
         normalization = S.apply(_normalization, axis="columns") - 1.0
-        if (abs(normalization) > 1.0e-14):
+        if (abs(normalization) > 5.0e-3).any():
             raise ValueError("Normalization of S(alpha, beta) not satisfied")
         return
 
@@ -126,6 +145,14 @@ def _sum_rule(x) -> float:
     -------
     sum_rule_values : "float"
         Sum rule value for a fix alpha.
+
+    Example
+    -------
+    >>> beta_grid = gen_beta(300)
+    >>> alpha_grid = gen_alpha(300, 26)
+    >>> s = S.from_fgm(alpha_grid, beta_grid).data
+    >>> _sum_rule(s.iloc[0, ::]).round(6)
+    0.00105
     """
     beta = x.index.values
     S_values = x.values
@@ -141,6 +168,19 @@ def _normalization(x) -> float:
     ----------
     x : 'pd.Series'
         S(alpha, beta) matrix values for fix alpha.
+
+    Returns
+    -------
+    normalization_values : "float"
+        Normalization value for a fix alpha.
+
+    Example
+    -------
+    >>> beta_grid = gen_beta(300)
+    >>> alpha_grid = gen_alpha(300, 26)
+    >>> s = S.from_fgm(alpha_grid, beta_grid).data
+    >>> _normalization(s.iloc[0, ::]).round(6)
+    1.0
     """
     beta = x.index.values
     S_values = x.values
@@ -163,6 +203,12 @@ def gen_beta(T, num_grid=400, mid_E=0.08,
         minimum of energy transfer in eV. The default is 0.08.
     thermal_threshold : 'float', optional
         thermal energy threshold in eV. The default is 5.
+
+    Example
+    -------
+    >>> gen_beta(300, num_grid=10).round(6)
+    array([  0.      ,   0.515756,   1.031513,   1.547269,   2.063025,
+             2.578782,   3.094538,  12.280683,  48.735922, 193.408635])
     """
     kT = const["Boltzmann constant in eV/K"][0] * T
     mid_beta = mid_E / kT
@@ -193,6 +239,13 @@ def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
         minimum of energy transfer in eV. The default is 0.08.
     thermal_threshold : 'float', optional
         thermal energy threshold in eV. The default is 5.
+
+    Example
+    -------
+    >>> gen_alpha(300, 26, num_grid=10).round(6)
+    array([1.0500000e-03, 3.2850000e-03, 1.0270000e-02, 3.2114000e-02,
+           1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
+           9.5985550e+00, 3.0013001e+01])
     """
     A = atom_mass / const["neutron mass in u"][0]
     AkT = A * const["Boltzmann constant in eV/K"][0] * T

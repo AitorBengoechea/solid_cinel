@@ -44,6 +44,43 @@ class S():
         self.sum_rule_check(df_)
         self._data = df_
 
+    def to_sym(self, detail_balance=True) -> pd.DataFrame:
+        """
+        Generate the symmetric S(alpha, beta) matrix from the asymmetric
+        S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        detail_balance : 'bool', optional
+            Relationships between upscatter and downscatter. The default is
+            True.
+
+        Example
+        -------
+        >>> beta_grid = gen_beta(300)
+        >>> alpha_grid = gen_alpha(300, 26)
+        >>> S.from_model(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
+        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        alpha					
+        0.001050	8.701463	8.310148	7.332597	5.977775	4.502503
+        0.001087	8.553363	8.179618	7.246379	5.947043	4.521401
+        0.001125	8.407781	8.050773	7.159884	5.914070	4.537109
+        0.001164	8.264674	7.923611	7.073187	5.878976	4.549701
+        0.001205	8.124000	7.798127	6.986363	5.841878	4.559259
+        0.001247	7.985718	7.674316	6.899481	5.802889	4.565867
+        0.001291	7.849787	7.552171	6.812607	5.762123	4.569612
+        0.001336	7.716166	7.431685	6.725805	5.719689	4.570585
+        0.001382	7.584817	7.312851	6.639132	5.675693	4.568876
+        0.001431	7.455701	7.195659	6.552646	5.630238	4.564579
+        """
+        S_asym = self.data
+        if detail_balance:
+            beta = self.data.columns.values
+            S_sym = S_asym * np.exp(-beta)
+        else:
+            S_sym = S_asym
+        return S_sym
+
     @classmethod
     def from_model(cls, alpha_grid, beta_grid, model="FGM", w_t=1.0):
         """

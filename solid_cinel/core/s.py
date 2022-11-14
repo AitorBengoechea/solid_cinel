@@ -12,7 +12,8 @@ import scipy as sp
 
 class S():
     """
-    Class containing all the methods and properties of a S(alpha, beta) matrix.
+    Class containing all the methods and properties of a asymmetric
+    S(alpha, beta) matrix.
     """
     def __init__(self, *args, **kwargs):
         self.data = pd.DataFrame(*args, **kwargs)
@@ -44,9 +45,53 @@ class S():
         self._data = df_
 
     @classmethod
-    def from_fgm(cls, alpha_grid, beta_grid, w_t= 1.0):
+    def from_model(cls, alpha_grid, beta_grid, model="FGM", w_t=1.0):
         """
-        Generate a S(alpha, beta) matrix from Free Gas Model for a given alpha
+        Generate S(alpha, -beta) matrix using physical models for a given
+        alpha and beta grid.
+
+        Available models:
+            - FGM: Free Gas Model.
+
+        Parameters
+        ----------
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        model : 'str', optional
+            The model to calculate matrix values. The default is "FGM".
+        w_t: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1
+
+        Example
+        -------
+        >>> beta_grid = gen_beta(300)
+        >>> alpha_grid = gen_alpha(300, 26)
+        >>> S.from_model(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
+        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        alpha
+        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
+        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
+        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
+        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
+        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
+        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
+        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
+        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
+        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
+        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+
+        """
+        model_ = model.lower()
+        if model_ == "fgm":
+            S = cls.from_fgm(alpha_grid, beta_grid, w_t=w_t)
+        return cls(S)
+
+    @staticmethod
+    def from_fgm(alpha_grid, beta_grid, w_t=1.0) -> pd.DataFrame:
+        """
+        Generate a S(alpha, -beta) matrix from Free Gas Model for a given alpha
         and beta grid.
         .. math::
             S_t(\alpha,\,\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)\end{equation}
@@ -64,7 +109,7 @@ class S():
         -------
         >>> beta_grid = gen_beta(300)
         >>> alpha_grid = gen_alpha(300, 26)
-        >>> S.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
+        >>> S.from_fgm(alpha_grid, beta_grid).iloc[:10, :5].round(6)
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
         0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
@@ -83,7 +128,9 @@ class S():
                                    (len(alpha_grid), len(beta_grid)),
                                    dtype=int
                                    )
-        return cls(S_values, index=alpha_grid, columns=beta_grid)
+        S_index = pd.Index(alpha_grid, name="alpha")
+        S_columns = pd.Index(beta_grid, name="beta")
+        return pd.DataFrame(S_values, index=S_index, columns=S_columns)
 
     @staticmethod
     def sum_rule_check(S) -> None:
@@ -150,7 +197,7 @@ def _sum_rule(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_fgm(alpha_grid, beta_grid).data
+    >>> s = S.from_fgm(alpha_grid, beta_grid)
     >>> _sum_rule(s.iloc[0, ::]).round(6)
     0.00105
     """
@@ -178,7 +225,7 @@ def _normalization(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_fgm(alpha_grid, beta_grid).data
+    >>> s = S.from_fgm(alpha_grid, beta_grid)
     >>> _normalization(s.iloc[0, ::]).round(6)
     1.0
     """

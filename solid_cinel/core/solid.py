@@ -256,3 +256,34 @@ class Solid(Molecule):
         """
         return {element: atom_pos.shape[0]
                 for element, atom_pos in self.atom_pos.items()}
+
+    def get_d_min(self, wavelength) -> float:
+        """
+        The minimum dspacing for the LEAPR module of NJOY
+
+        Parameters
+        ----------
+        wavelength : 'float'
+            Incident neutron wavelength in Anstrom.
+
+        Example
+        -------
+        Object initialization:
+        >>> preferred_orientation = np.array([ 0, 1, 1 ])
+        >>> a = 2.856710674519725
+        >>> dir_vec_length = [a, a, a]
+        >>> dir_vec_angles = [60, 60, 60]
+        >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Solid(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        
+        Test the results:
+        >>> wavelength = 0.18855129477888757
+        >>> round(Al.get_d_min(wavelength), 6)
+        0.089562
+        """
+        return 0.5 * wavelength * 0.95

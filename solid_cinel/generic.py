@@ -16,7 +16,7 @@ def normalization_coeff(series, kind="trapezoidal") -> float:
     Parameters
     ----------
     series : TYPE
-        DESCRIPTION.
+        Function to test if it is normlize.
     kind : "str", optional
         integral type. The default is "trapezoidal".
 
@@ -24,6 +24,12 @@ def normalization_coeff(series, kind="trapezoidal") -> float:
     ------
     ValueError
         Kind is not available in github.
+
+    Example
+    -------
+    >>> f = pd.Series([1, 2, 4], index=[1, 2, 4])
+    >>> normalization_coeff(f)
+    7.5
     """
     y = series.values
     x = series.index.values

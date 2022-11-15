@@ -4,6 +4,7 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
+from solid_cinel.generic import normalization_coeff
 import pandas as pd
 import numpy as np
 import scipy as sp
@@ -89,7 +90,7 @@ class Pdos():
         if not rho_.index.is_monotonic_increasing:
             raise SyntaxError("energy grid is not monotonically increasing")
 
-        self.data = self.normalization(rho_)
+        self.data = rho_ / normalization_coeff(rho_)
 
     @classmethod
     def from_data(cls, rho, interval_energy):
@@ -309,46 +310,6 @@ class Pdos():
         P = data.values
         beta = data.index.values
         return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)   
-
-    @staticmethod
-    def normalization(rho, kind="trapezoidal") -> pd.Series:
-        """
-        Normalize a pd.Series
-
-        Parameters
-        ----------
-        rho : pd.Series
-            Pandas Series to normalize.
-        kind : 'str', optional
-            Integration technique. The default is "trapezoidal". Options:
-                - trapezoidal: Integrate along the given axis using the
-                  composite trapezoidal rule.
-                - simpson: Integrate y(x) using samples along the given axis
-                  and the composite Simpson’s rule.
-
-        Examples
-        --------
-        >>> p = pd.Series([1, 2, 4], index=[1, 2, 4])
-        >>> Pdos.normalization(p).round(6)
-        1    0.133333
-        2    0.266667
-        4    0.533333
-        dtype: float64
-        >>> Pdos.normalization(p, kind="simpson").round(6)
-        1    0.133333
-        2    0.266667
-        4    0.533333
-        dtype: float64
-        """
-        y = rho.values
-        x = rho.index.values
-        if kind == "trapezoidal":
-            y_norm = sp.integrate.trapezoid(y, x=x)
-        elif kind == "simpson":
-            y_norm = sp.integrate.simpson(y, x=x)
-        else:
-            raise ValueError("kind is not properly introduced")
-        return rho / y_norm
 
     @staticmethod
     def reshape_differential(x, y, xnew):

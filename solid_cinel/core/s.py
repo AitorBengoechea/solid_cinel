@@ -5,6 +5,7 @@ Created on Thu Oct 20 11:46:42 2022
 """
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
+from solid_cinel.generic import normalization_coeff
 import numpy as np
 import pandas as pd
 import scipy as sp
@@ -135,8 +136,8 @@ class S():
 
         SCT:
         Dont fit the normalization and sum rule with the correct precision
-        >>> ratio = 1.0880348914731839
-        >>> S = S.from_model(alpha_grid, beta_grid, model="SCT", ratio=ratio)
+        >>> #ratio = 1.0880348914731839
+        >>> #S = S.from_model(alpha_grid, beta_grid, model="SCT", ratio=ratio)
         """
         model_ = model.lower()
         if model_ == "fgm":
@@ -218,7 +219,7 @@ def _sum_rule(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_fgm(alpha_grid, beta_grid)
+    >>> s = S.from_model(alpha_grid, beta_grid).data
     >>> _sum_rule(s.iloc[0, ::]).round(6)
     0.00105
     """
@@ -246,14 +247,14 @@ def _normalization(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_fgm(alpha_grid, beta_grid)
+    >>> s = S.from_model(alpha_grid, beta_grid).data
     >>> _normalization(s.iloc[0, ::]).round(6)
     1.0
     """
     beta = x.index.values
-    S_values = x.values
-    normalization_values = trapezoid((1 + np.exp(-beta)) * S_values, beta)
-    return normalization_values
+    S_asymm_values = x.values
+    S = pd.Series((1 + np.exp(-beta)) * S_asymm_values, index=beta)
+    return normalization_coeff(S)
 
 
 def gen_beta(T, num_grid=400, mid_E=0.08,

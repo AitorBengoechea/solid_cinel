@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import scipy as sp
 from scipy.constants import physical_constants as const
+from scipy.interpolate import interp1d
 import matplotlib
 import warnings
 
@@ -330,7 +331,7 @@ class Pdos():
         `numpy.ndarray` with length `len(xnew)`
             interpolated array
         """
-        foo = sp.interpolate.interp1d(
+        foo = interp1d(
                 x, y,
                 axis=0,
                 copy=False,

@@ -1,5 +1,7 @@
-from solid_cinel.data import elements
+from solid_cinel.data.elements import ELEMENTS
 from scipy.constants import physical_constants as const
+from urllib.request import urlopen, Request, urlretrieve
+from io import StringIO
 import numpy as np
 import pandas as pd
 import collections
@@ -49,7 +51,7 @@ class Atom():
         >>> assert Al.name == "Al27"
 
         """
-        return elements.ELEMENTS[self.Z] + str(self.A)
+        return ELEMENTS[self.Z] + str(self.A)
 
     @property
     def zam(self) -> int:
@@ -196,3 +198,51 @@ class Molecule(Atom):
             self._name = name
         else:
             self._name = "Molecule"
+
+def get_str_from_html(html) -> str:
+    """
+    Get a the str from a html page.
+
+    Parameters
+    ----------
+    html : 'str'
+        The html page.
+
+    """
+    user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7'
+    headers = {'User-Agent': user_agent}
+    request = Request(html, None, headers)
+    response = urlopen(request)
+    return response.read().decode("utf-8")
+
+def get_atom_data(A, Z, source) -> pd.DataFrame:
+    """
+    Get atom data from internet.
+
+    Parameters
+    ----------
+    A : 'int'
+        Atomic number.
+    Z : 'int'
+        Number of protons.
+    source : _type_
+        _description_
+
+    Examples
+    --------
+    >>> get_atom_data(26, 13, "nist")
+        Isotope conc	Coh b	Inc b	Coh xs	Inc xs	Scatt xs	Abs xs
+    0	     Al	100 	3.449	0.256	1.495	0.0082	   1.503	 0.231
+
+    >>> get_atom_data(26, 35, "nist")
+        Isotope	conc	Coh b	Inc b   Coh xs	Inc xs	Scatt xs	Abs xs
+    0	Br	    0.00	6.795	0.0	    5.80	0.10	5.90	    6.9
+    1	79Br	50.69	6.800  -1.1	    5.81	0.15	5.96	    11.0
+    2	81Br	49.31	6.790	0.6	    5.79	0.05	5.84	    2.7
+    """
+    html = f"https://www.ncnr.nist.gov/resources/n-lengths/elements/{ELEMENTS[Z].lower()}.html"
+    data = get_str_from_html(html)
+    data = data[data.find("cross sections<tr>") + 19:]
+    data = data[:data.find("</table>")]
+    StringData = StringIO(data.replace("<th>", "").replace("<td>", "").replace("---", "0.0").replace("<tr>", ""))
+    return pd.read_csv(StringData, sep ="\t\t", engine="python")

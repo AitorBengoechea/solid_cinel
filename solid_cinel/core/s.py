@@ -5,7 +5,7 @@ Created on Thu Oct 20 11:46:42 2022
 """
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
-from solid_cinel.generic import normalization_coeff
+from solid_cinel.core.generic import normalization_coeff
 import numpy as np
 import pandas as pd
 import scipy as sp

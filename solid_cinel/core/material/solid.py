@@ -88,9 +88,10 @@ class Solid(Molecule):
     @unit_pos.setter
     def unit_pos(self, unit_pos):
         if isinstance(unit_pos, dict):
-            self._unit_pos = {element: single_unit_pos for element, single_unit_pos in unit_pos.items()}
+            _unit_pos = {element: single_unit_pos for element, single_unit_pos in unit_pos.items()}
         else:
-            self._unit_pos = {self.name: np.array(unit_pos).reshape(-1, 3)}
+            _unit_pos = {self.name: np.array(unit_pos).reshape(-1, 3)}
+        self._unit_pos = pd.Series(_unit_pos)
 
     @property
     def dir_vec(self) -> pd.Series:
@@ -216,8 +217,7 @@ class Solid(Molecule):
                [2.142533, 2.061653, 0.583124]])
 
         """
-        return {element: np.stack(unit_pos.dot(self.dir_vec.values))
-                for element, unit_pos in self.unit_pos.items()}
+        return self.unit_pos.apply(lambda x: np.stack(x.dot(self.dir_vec.values)))
 
     @property
     def atom_number(self) -> int:
@@ -242,36 +242,4 @@ class Solid(Molecule):
         Test the results:
         >>> assert Al.atom_number["Al27"] == 8
         """
-        return {element: atom_pos.shape[0]
-                for element, atom_pos in self.atom_pos.items()}
-
-    def get_d_min(self, wavelength) -> float:
-        """
-        The minimum dspacing for the LEAPR module of NJOY
-
-        Parameters
-        ----------
-        wavelength : 'float'
-            Incident neutron wavelength in Anstrom.
-
-        Example
-        -------
-        Object initialization:
-        >>> preferred_orientation = np.array([ 0, 1, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Solid(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
-        
-        Test the results:
-        >>> wavelength = 0.18855129477888757
-        >>> round(Al.get_d_min(wavelength), 6)
-        0.089562
-        """
-        return 0.5 * wavelength * 0.95
+        return self.atom_pos.apply(lambda x: x.shape[0])

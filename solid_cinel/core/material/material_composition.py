@@ -154,16 +154,17 @@ class Molecule(Atom):
         name : 'str', optional
             Name of the molecule, by default None
         """
-        self.atoms = {}
+        atoms = {}
         if isinstance(A, int):
             atom = Atom(A, Z, atom_mass, b_coh, b_incoh)
-            self.atoms[atom.name] = atom
+            atoms[atom.name] = atom
             name = atom.name if name is None else name
         else:
             for i in range(len(A)):
                 single_atom = Atom(A[i], Z[i], atom_mass[i],
                                    b_coh[i], b_incoh[i])
-                self.atoms[single_atom.name] = single_atom
+                atoms[single_atom.name] = single_atom
+        self.atoms = pd.Series(atoms)
         self.name = name
 
     @property

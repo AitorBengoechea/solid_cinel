@@ -30,7 +30,8 @@ def cubic(angles) -> np.ndarray:
 
     Example
     -------
-    >>> angles = pd.Series([60, 60, 60], index=["alpha", "beta", "gamma"])
+    >>> angles_rad = np.array([60, 60, 60]) * np.pi / 180
+    >>> angles = pd.Series(angles_rad, index=["alpha", "beta", "gamma"])
     >>> cubic_vec = cubic(angles)
 
     Test the results:

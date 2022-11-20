@@ -6,6 +6,7 @@ Created on Thu Nov  3 14:24:18 2022
 """
 
 from solid_cinel.core.material_composition import *
+from solid_cinel.core.crystal_symmetry import dir_vector_operator
 import numpy as np
 import pandas as pd
 import collections
@@ -17,7 +18,8 @@ class Solid(Molecule):
     """Class to store the properties and methods for solid materials."""
 
     def __init__(self, dir_vec_length, dir_vec_angles,
-                 preferred_orientation, unit_pos, *args, **kwargs):
+                 preferred_orientation, unit_pos,
+                 *args, sym="cubic", **kwargs):
         """
         Initialize the crystaline structure formed by a single atom.
 
@@ -34,6 +36,8 @@ class Solid(Molecule):
             Single atom: 1D iterable
             Multiple atoms: 'dict'
                 {"atom name" : [atom positions]}
+        sym : 'str', optional
+            Symmetry of the solid, by default "cubic"
 
         Parameters for Molecule
         -----------------------
@@ -75,6 +79,7 @@ class Solid(Molecule):
                                         index=["alpha", "beta", "gamma"],
                                         name="direct vectors angles")
         self.unit_pos = unit_pos
+        self.sym = sym
 
     @property
     def unit_pos(self) -> dict:
@@ -109,30 +114,12 @@ class Solid(Molecule):
         >>> direct_vectors = Al.dir_vec
 
         Test the results:
-        >>> assert all(direct_vectors["a1"].round(6) == np.array([2.856711, 0.      , 0.      ]))
-        >>> assert all(direct_vectors["a2"].round(6) == np.array([1.428355, 2.473984, 0.      ]))
-        >>> assert all(direct_vectors["a3"].round(6) == np.array([1.428355, 0.824661, 2.332494]))
+        >>> assert all(direct_vectors.loc["a1"].values.round(6) == np.array([2.856711, 0.      , 0.      ]))
+        >>> assert all(direct_vectors.loc["a2"].values.round(6) == np.array([1.428355, 2.473984, 0.      ]))
+        >>> assert all(direct_vectors.loc["a3"].values.round(6) == np.array([1.428355, 0.824661, 2.332494]))
         """
-        a = np.array([1.,
-                      0.,
-                      0.])
-        b = np.array([np.cos(self.dir_vec_angles["gamma"]),
-                      np.sin(self.dir_vec_angles["gamma"]),
-                      0.])
-        c = np.array([np.cos(self.dir_vec_angles["beta"]),
-                     np.cos(self.dir_vec_angles["alpha"]) - np.cos(self.dir_vec_angles["beta"]) * np.cos(self.dir_vec_angles["gamma"]),
-                      1.0])
-        c[1] /=  np.sin(self.dir_vec_angles["gamma"])
-        c[2] *= np.sqrt(1. - c[0] ** 2 - c[1] ** 2)
-
-        # Length multiplication:
-        a *= self.dir_vec_length["a"]
-        b *= self.dir_vec_length["b"]
-        c *= self.dir_vec_length["c"]
-
-        # Final result:
-        return pd.Series([a, b, c], index=["a1", "a2", "a3"],
-                         name="Lattice direct vectors")
+        operator = dir_vector_operator(self.dir_vec_angles, self.sym)
+        return operator * self.dir_vec_length.values
 
     @property
     def unit_cell_vol(self) -> float:
@@ -158,7 +145,7 @@ class Solid(Molecule):
         >>> assert Al.unit_cell_vol.round(6) == 16.484804
         """
         vec = self.dir_vec
-        return np.dot(vec["a1"], np.cross(vec["a2"], vec["a3"]))
+        return np.dot(vec.loc["a1"], np.cross(vec.loc["a2"], vec.loc["a3"]))
 
     @property
     def reciproc_vec(self) -> pd.Series:
@@ -182,19 +169,20 @@ class Solid(Molecule):
         >>> reciprocal_vector = Al.reciproc_vec
 
         Test the results:
-        >>> assert all(reciprocal_vector["b1"].round(6) == np.array([ 2.199448, -1.269852, -0.897921]))
-        >>> assert all(reciprocal_vector["b2"].round(6) == np.array([ 0.      ,  2.539703, -0.897921]))
-        >>> assert all(reciprocal_vector["b3"].round(6) == np.array([0.      , 0.      , 2.693762]))
+        >>> assert all(reciprocal_vector.loc["b1"].values.round(6) == np.array([ 2.199448, -1.269852, -0.897921]))
+        >>> assert all(reciprocal_vector.loc["b2"].values.round(6) == np.array([ 0.      ,  2.539703, -0.897921]))
+        >>> assert all(reciprocal_vector.loc["b3"].values.round(6) == np.array([0.      , 0.      , 2.693762]))
         """
         dir_vec = self.dir_vec
         reci_coeff = np.array([
-            np.cross(dir_vec["a2"], dir_vec["a3"]),
-            np.cross(dir_vec["a3"], dir_vec["a1"]),
-            np.cross(dir_vec["a1"], dir_vec["a2"]),
+            np.cross(dir_vec.loc["a2"], dir_vec.loc["a3"]),
+            np.cross(dir_vec.loc["a3"], dir_vec.loc["a1"]),
+            np.cross(dir_vec.loc["a1"], dir_vec.loc["a2"]),
                                ])
         reci_coeff *= 2 * np.pi / self.unit_cell_vol
-        return pd.Series(list(reci_coeff), index=["b1", "b2", "b3"],
-                         name="Lattice Reciprocal vectors")
+        return pd.DataFrame(reci_coeff,
+                            index=["b1", "b2", "b3"],
+                            columns=dir_vec.index)
 
     @property
     def atom_pos(self) -> np.array:

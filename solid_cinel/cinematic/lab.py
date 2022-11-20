@@ -36,4 +36,16 @@ class Neutron():
         mass = self.mass * const["atomic mass unit-electron volt relationship"][0] / sp.constants.c ** 2
         walength = 2 * np.pi * const["reduced Planck constant in eV s"][0] / np.sqrt(2 * mass * self.E)
         return walength * 1.0e10
-    
+
+    @property
+    def d_min(self) -> float:
+        """
+        The minimum dspacing for the LEAPR module of NJOY
+
+        Example
+        -------
+        >>> n = Neutron(2.301)
+        >>> n.d_min.round(6)
+        0.089562
+        """
+        return 0.5 * self.wavelength * 0.95

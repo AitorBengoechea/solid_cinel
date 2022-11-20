@@ -5,8 +5,8 @@ Created on Thu Nov  3 14:24:18 2022
 @author: AB272525
 """
 
-from solid_cinel.core.material_composition import *
-from solid_cinel.core.crystal_symmetry import dir_vector_operator
+from solid_cinel.core.material.material_composition import *
+from solid_cinel.core.material.crystal_symmetry import dir_vector_operator
 import numpy as np
 import pandas as pd
 import collections

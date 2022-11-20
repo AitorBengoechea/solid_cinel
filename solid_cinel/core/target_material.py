@@ -5,8 +5,8 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.core.solid import Solid
-from solid_cinel.core.pdos import Pdos
+from solid_cinel.core.material.solid import Solid
+from solid_cinel.core.material.pdos import Pdos
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np

@@ -4,7 +4,7 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.generic import normalization_coeff
+from solid_cinel.core.generic import normalization_coeff
 import pandas as pd
 import numpy as np
 import scipy as sp

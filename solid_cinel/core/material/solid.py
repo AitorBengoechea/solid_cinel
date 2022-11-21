@@ -261,7 +261,7 @@ def hkl_minimize(rec_vecs, d_min):
         return d_hkl - d_min
     result = []
     for i in range(3):
-        result.append(sp.optimize.minimize(lambda x: hkl_range_minimization(x, i),
+        result.append(minimize(lambda x: hkl_range_minimization(x, i),
                                     [-100, -100, -100],
                                     method='COBYLA',
                                     constraints=({'type': 'ineq', 'fun': constrain, 'args': [d_min]})).x)

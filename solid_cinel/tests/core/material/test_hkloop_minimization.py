@@ -14,7 +14,8 @@ import pytest
 
 
 @nb.jit(nopython=True, nogil=True)
-def hklloop_max(rec_vecs, d_min, hklM):
+def hklloop_max(rec_vecs, d_min):
+    hklM = []
     hklrange = np.arange(-100, 100 + 1)
     hklrange = hklrange[hklrange != 0]  # (0,0,0) excluded
 
@@ -49,6 +50,7 @@ def test_hklloop_aprox(d_min):
     if rec_vecs.isnull().values.any():
         assert True == True
     else:
-        full_hkl = hklloop_max(rec_vecs, d_min, [1])[1::].max(axis=0)
+        rec_vecs = rec_vecs.values
+        full_hkl = hklloop_max(rec_vecs, d_min).max(axis=0)
         hkl_minimization = hkl_minimize(rec_vecs, d_min)
         assert (hkl_minimization >= full_hkl).all() == True

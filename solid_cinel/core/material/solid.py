@@ -7,6 +7,7 @@ Created on Thu Nov  3 14:24:18 2022
 
 from solid_cinel.core.material.material_composition import *
 from solid_cinel.core.material.crystal_symmetry import dir_vector_operator
+from scipy.optimize import minimize
 import numpy as np
 import pandas as pd
 import collections
@@ -243,3 +244,25 @@ class Solid(Molecule):
         >>> assert Al.atom_number["Al27"] == 8
         """
         return self.atom_pos.apply(lambda x: x.shape[0])
+
+    def get_Brag_edges(self, d_min, aprox=False):
+        # hkl range minimization:
+        hkl_max = hkl_minimize(self.reciproc_vec, d_min)
+        return
+
+
+def hkl_minimize(rec_vecs, d_min):
+    def hkl_range_minimization(x, i):
+        return x[i]
+    def constrain(x, d_min):
+        vec_tau_hkl = x[0] * rec_vecs[0] + x[1] * rec_vecs[1] + x[2] * rec_vecs[2]
+        vec_tau_hkl_norm = np.linalg.norm(vec_tau_hkl)                
+        d_hkl = 2 * np.pi / vec_tau_hkl_norm
+        return d_hkl - d_min
+    result = []
+    for i in range(3):
+        result.append(sp.optimize.minimize(lambda x: hkl_range_minimization(x, i),
+                                    [-100, -100, -100],
+                                    method='COBYLA',
+                                    constraints=({'type': 'ineq', 'fun': constrain, 'args': [d_min]})).x)
+    return abs(np.array(result).diagonal().astype(int))  # [h_max, k_max, l_max]

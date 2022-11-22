@@ -38,4 +38,4 @@ jobs:
       - name: install solid_cinel
         run: python setup.py install --user
       - name: pytest
-        run: pytest --cov=solid_cinel tests/
+        run: pytest --cov=solid_cinel solid_cinel/tests/

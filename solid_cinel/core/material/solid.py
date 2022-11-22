@@ -151,7 +151,7 @@ class Solid(Crystal_structure, Molecule):
         return
 
 
-def hkl_max_value(rec_vecs, d_min) -> np.ndarray:
+def hkl_max_value(rec_vecs, d_min, precision=1.0e-7) -> np.ndarray:
     """
     Get the maximun h, k and l integers for the constrain of d > d_min.
 
@@ -187,4 +187,6 @@ def hkl_max_value(rec_vecs, d_min) -> np.ndarray:
                                     [-100, -100, -100],
                                     method='COBYLA',
                                     constraints=({'type': 'ineq', 'fun': constrain, 'args': [d_min]})).x)
-    return abs(np.array(result).diagonal().astype(int))  # [h_max, k_max, l_max]
+    confidance = np.array(list(map(lambda x: constrain(x, d_min), result)))
+    hkl_max = abs(np.array(result).diagonal().astype(int))
+    return np.where(abs(confidance) <= precision,  hkl_max, 100)  # [h_max, k_max, l_max]

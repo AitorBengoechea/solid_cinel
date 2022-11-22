@@ -97,7 +97,7 @@ class Target_mat(Solid, Pdos):
         >>> atomic_mass_Al27 = 26.98153433356103
         >>> b_coh_Al27  = 3.449
         >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(dir_vec_length, dir_vec_angles, preferred_orientation, unit_pos, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> T = 20

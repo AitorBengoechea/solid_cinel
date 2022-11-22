@@ -10,16 +10,10 @@ from solid_cinel.core.material.solid import Solid, hkl_max_value
 import numba as nb
 import numpy as np
 import pandas as pd
-import platform
 import pytest
 
-if platform.system().lower() == "linux":
-    parallel = True
-else:
-    parallel = False
 
-
-@nb.jit(nopython=True, nogil=True, parallel=parallel)
+@nb.jit(nopython=True, nogil=True, parallel=False)
 def hklloop_max(rec_vecs, d_min):
     hklM = []
     hklrange = np.arange(-100, 100 + 1)

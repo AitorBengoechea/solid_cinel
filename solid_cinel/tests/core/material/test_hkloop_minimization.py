@@ -51,4 +51,4 @@ def test_hklloop_aprox(d_min):
         hkl_minimization = hkl_max_value(rec_vecs, d_min)
         assert (hkl_minimization >= full_hkl).all()
     except IndexError: #Random problem can not be solve in hklloop_max
-        return True
+        assert True

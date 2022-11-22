@@ -240,9 +240,12 @@ def get_atom_data(A, Z, source) -> pd.DataFrame:
     1	79Br	50.69	6.800  -1.1	    5.81	0.15	5.96	    11.0
     2	81Br	49.31	6.790	0.6	    5.79	0.05	5.84	    2.7
     """
-    html = f"https://www.ncnr.nist.gov/resources/n-lengths/elements/{ELEMENTS[Z].lower()}.html"
-    data = get_str_from_html(html)
-    data = data[data.find("cross sections<tr>") + 19:]
-    data = data[:data.find("</table>")]
-    StringData = StringIO(data.replace("<th>", "").replace("<td>", "").replace("---", "0.0").replace("<tr>", ""))
-    return pd.read_csv(StringData, sep ="\t\t", engine="python")
+    if source.lower() == "nist":
+        html = f"https://www.ncnr.nist.gov/resources/n-lengths/elements/{ELEMENTS[Z].lower()}.html"
+        data_str = get_str_from_html(html)
+        data_str = data_str[data_str.find("cross sections<tr>") + 19:]
+        data_str = data_str[:data_str.find("</table>")]
+        data_str = data_str.replace("<th>", "").replace("<td>", "").replace("---", "0.0").replace("<tr>", "")
+        StringData = StringIO(data_str)
+        data =pd.read_csv(StringData, sep ="\t\t", engine="python")
+    return data

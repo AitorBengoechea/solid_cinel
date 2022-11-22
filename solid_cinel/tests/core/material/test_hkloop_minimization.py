@@ -48,4 +48,4 @@ def test_hklloop_aprox(d_min):
     rec_vecs = rec_vecs.values
     full_hkl = hklloop_max(rec_vecs, d_min).max(axis=0)
     hkl_minimization = hkl_max_value(rec_vecs, d_min)
-    assert (hkl_minimization >= full_hkl).all() == True
+    assert (hkl_minimization >= full_hkl).all()

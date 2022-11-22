@@ -1,5 +1,5 @@
 # .github/workflows/app.yaml
-name: CI
+name: Test all the files of solid_cinel
 
 on:
   # Triggers the workflow on push or pull request events but only for the develop branch

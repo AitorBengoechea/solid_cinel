@@ -254,6 +254,7 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> pd.DataFrame:
     >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl)
     >>> hkl_data.shape[0]
     95800
+    >>> hkl_data["Fsq"] = hkl_data["Fsq"].round(6)
     >>> hkl_data.iloc[:10]
           h     k     l         d           Fsq   d_round  f_round
     0  31.0  21.0  20.0  0.089800  3.810648e-36  0.089800      0.0

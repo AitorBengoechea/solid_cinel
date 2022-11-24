@@ -13,6 +13,7 @@ from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np
 import pandas as pd
+import numba as nb
 import collections
 collections.Callable = collections.abc.Callable
 import pytest
@@ -86,6 +87,8 @@ class Target_mat(Solid, Pdos):
     def get_Bfact(self, T, anstrom=True) -> float:
         """
         Calculate mean square displacement for a certain pdos information.
+        .. math::
+            B_j= \dfrac{4\pi^2\hbar^2}{M_jk_BT}\lambda_s
 
         Parameters
         ----------
@@ -130,7 +133,7 @@ class Target_mat(Solid, Pdos):
 
         return self.pdos.apply(get_Bfac) / atom_masses
 
-    def get_multiplicity(self, T, E) -> pd.DataFrame:
+    def get_multiplicity(self, T, E, precision=[6, 6]) -> pd.DataFrame:
         """
         Obtain hkl data for the solid in a certain temperature and for a neutron
         certain energy filtering with the multiplicity.
@@ -141,6 +144,9 @@ class Target_mat(Solid, Pdos):
             Temperature in K
         E : 'float'
             Neutron energy
+        precision: ['int', 'int'], optional
+            Precision to get the multiplicity for d_hkl and Fsq_hkl. The
+            default is [6, 6].
 
         Examples
         --------
@@ -161,35 +167,34 @@ class Target_mat(Solid, Pdos):
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> multiplicity["Fsq"] = multiplicity["Fsq"].round(6)
         >>> multiplicity.shape[0]
         678
         >>> multiplicity.iloc[:10]
-                     d         Fsq               Multiplicity
-        h   k   l                                    
-        1.0 1.0 0.0  2.019999  0.115016           6.0
-                1.0  2.332494  0.115989           8.0
-        2.0 1.0 1.0  1.428355  0.111207          12.0
-            2.0 0.0  1.010000  0.103962           6.0
-                1.0  1.218106  0.108433          24.0
-                2.0  1.166247  0.107523           8.0
-        3.0 2.0 1.0  0.903371  0.100519          24.0
-                2.0  0.926839  0.101369          24.0
-            3.0 2.0  0.824661  0.097189          24.0
-                3.0  0.777498  0.094765          32.0
-        >>> multiplicity.iloc[667:677]
-                        d         Fsq         Multiplicity
-        h    k    l
-        31.0 19.0 18.0  0.091254  0.0         168.0
-                  19.0  0.090999  0.0         384.0
-             20.0 17.0  0.090884  0.0         336.0
-                  18.0  0.090815  0.0         552.0
-                  19.0  0.090609  0.0         288.0
-             21.0 15.0  0.089911  0.0         384.0
-                  16.0  0.090157  0.0         168.0
-                  17.0  0.090269  0.0         216.0
-                  18.0  0.090247  0.0         192.0
-                  19.0  0.090090  0.0         168.0
+               d         Fsq               Multiplicity
+        h k l                                    
+        1 1 0  2.019999  0.115016           6.0
+            1  2.332494  0.115989           8.0
+        2 1 1  1.428355  0.111207          12.0
+          2 0  1.010000  0.103962           6.0
+            1  1.218106  0.108433          24.0
+            2  1.166247  0.107523           8.0
+        3 2 1  0.903371  0.100519          24.0
+            2  0.926839  0.101369          24.0
+          3 2  0.824661  0.097189          24.0
+            3  0.777498  0.094765          32.0
+        >>> multiplicity.round(6).iloc[667:677]
+                  d         Fsq         Multiplicity
+        h  k  l
+        31 19 18  0.091254  0.0         168.0
+              19  0.090999  0.0         384.0
+           20 17  0.090884  0.0         336.0
+              18  0.090815  0.0         552.0
+              19  0.090609  0.0         288.0
+           21 15  0.089911  0.0         384.0
+              16  0.090157  0.0         168.0
+              17  0.090269  0.0         216.0
+              18  0.090247  0.0         192.0
+              19  0.090090  0.0         168.0
         """
         recs_vec = self.reciproc_vec.values
         d_min = Neutron(E).d_min
@@ -197,8 +202,9 @@ class Target_mat(Solid, Pdos):
         B = self.get_Bfact(T)
         pos = self.atom_pos
         csl = self.atoms.apply(lambda x: x.b["b_coh"])
-        hkl_data =  numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl)
-        return _filter_hkl_data(hkl_data)
+        hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl,
+                                  np.array(precision))
+        return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
     def get_coherent_XS(self, T, d_min, multiplicity=True):
         multiplicity = self.get_multiplicity(T, d_min)
@@ -206,7 +212,7 @@ class Target_mat(Solid, Pdos):
         return
 
 
-def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> pd.DataFrame:
+def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> pd.DataFrame:
     """
     Obtain hkl data for the solid in a certain temperature and for a neutron
     certain energy.
@@ -226,6 +232,10 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> pd.DataFrame:
         object.
     csl : 'pd.Series'
         Coherent elastic length for each element of Target_Material object.
+    precision: 'np.array':
+        Array containing:
+            0: Precision to reagroup in multiplicity the d_hkl
+            1: Precision to reagroup in multiplicity the Fsq_hkl
 
     Examples
     --------
@@ -251,49 +261,43 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> pd.DataFrame:
     >>> B = Al.get_Bfact(T)
     >>> pos = Al.atom_pos
     >>> csl = Al.atoms.apply(lambda x: x.b["b_coh"])
-    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl)
+    >>> precision = np.array([6, 6])
+    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl, precision)
     >>> hkl_data.shape[0]
-    95800
-    >>> hkl_data["Fsq"] = hkl_data["Fsq"].round(6)
-    >>> hkl_data.iloc[:10]
-          h     k     l         d  Fsq   d_round  f_round
-    0  31.0  21.0  20.0  0.089800  0.0  0.089800      0.0
-    1  31.0  21.0  19.0  0.090090  0.0  0.090090      0.0
-    2  31.0  21.0  18.0  0.090247  0.0  0.090247      0.0
-    3  31.0  21.0  17.0  0.090269  0.0  0.090269      0.0
-    4  31.0  21.0  16.0  0.090157  0.0  0.090157      0.0
-    5  31.0  21.0  15.0  0.089911  0.0  0.089911      0.0
-    6  31.0  20.0  21.0  0.089800  0.0  0.089800      0.0
-    7  31.0  20.0  20.0  0.090269  0.0  0.090269      0.0
-    8  31.0  20.0  19.0  0.090609  0.0  0.090609      0.0
-    9  31.0  20.0  18.0  0.090815  0.0  0.090815      0.0
+    678
+    >>> hkl_data.round(6).iloc[:10]
+        h   k   l         d  Fsq  Multiplicity
+    0  31  21  20  0.089800  0.0         336.0
+    1  31  21  19  0.090090  0.0         168.0
+    2  31  21  18  0.090247  0.0         192.0
+    3  31  21  17  0.090269  0.0         216.0
+    4  31  21  16  0.090157  0.0         168.0
+    5  31  21  15  0.089911  0.0         384.0
+    6  31  20  19  0.090609  0.0         288.0
+    7  31  20  18  0.090815  0.0         552.0
+    8  31  20  17  0.090884  0.0         336.0
+    9  31  19  19  0.090999  0.0         384.0
     """
-    B_ = np.array(np.stack(Bfac.values))
-    pos_ = np.array(np.stack(pos.values))
-    cls_ = np.array(np.stack(csl.values))
-    hkl_data = hklloop(d_min, hkl_max, rec_vecs, B_, pos_, cls_)
-    columns = ["h", "k", "l", "d", "Fsq", "d_round", "f_round"]
-    return pd.DataFrame(hkl_data, columns=columns)
+    Bfac_ = nb.typed.Dict.empty(
+            key_type=nb.core.types.unicode_type,
+            value_type=nb.core.types.float64,
+        )
+    pos_ = nb.typed.Dict.empty(
+            key_type=nb.core.types.unicode_type,
+            value_type=nb.core.types.float64[:, :],
+        )
+    csl_ = nb.typed.Dict.empty(
+            key_type=nb.core.types.unicode_type,
+            value_type=nb.core.types.float64,
+        )
+    for element, value in Bfac.items():
+        Bfac_[element] = value
+        pos_[element] = pos[element]
+        csl_[element] = csl[element]
+    hkl_data_dict = hklloop(d_min, hkl_max, rec_vecs, Bfac_, pos_, csl_,
+                            precision)
+    columns = ["h", "k", "l", "d", "Fsq", "Multiplicity"] 
 
-def _filter_hkl_data(hkl_data) -> pd.DataFrame:
-    """
-    Filter hkl data for being in order and for only having one hkl combination
-    for the same d and Fsq
-
-    Parameters
-    ----------
-    hkl_data : 'pd.DataFrame'
-        hkl data before any filter is apply.
-    """
-    def _get_multiplicity(frame):
-        data_ = frame.sort_values(by=["h", "k", "l"], ascending=False).iloc[0]
-        data_["Multiplicity"] = frame.shape[0] 
-        return data_
-
-    return hkl_data.groupby(by=["d_round", "f_round"])\
-                              .apply(_get_multiplicity)\
-                              .sort_values(by=["h", "k", "l"])\
-                              .set_index(["h", "k", "l"])\
-                              .drop(columns = ["d_round", "f_round"])
-
-
+    return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, mul]
+                         for (h, k, l), [d_hkl, Fsq_hkl, mul]
+                         in hkl_data_dict.items()], columns=columns)

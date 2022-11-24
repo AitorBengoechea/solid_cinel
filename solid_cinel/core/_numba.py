@@ -6,10 +6,13 @@ import math
 
 
 @nb.jit(nopython=True, nogil=True)
-def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> list:
+def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> dict:
     """
     Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
     fill the condition of d_hkl > d_min
+    .. math::
+        d_{hkl} = \frac{2\pi}{\tau_{hkl}}
+        F(\vec{\tau}_{hkl})=\sum_{j=1}^{N_{uc}}b_j\exp\left(-\dfrac{\hbar^2\tau_{hkl}^2}{4M_jk_BT}\Lambda_j(T)\right) e^{i\vec{\tau}_{hkl}\cdot\vec{p}_j}
 
     Parameters
     ----------
@@ -27,35 +30,52 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> list:
     csl : 'pd.Series'
         Coherent elastic length for each element of Target_Material object.
     """
-    hklM = []
+    hklM = {}
+    hkldF = {}
     h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
 
-    for h in h_range[::-1]: # to get positive hkl order
+    for h in h_range[::-1]:  # to get positive hkl order
         for k in k_range[::-1]:
             for l in l_range[::-1]:
-                if h ** 2 + k ** 2 + l ** 2 == 0: # (0, 0, 0) is excluded
+                if h ** 2 + k ** 2 + l ** 2 == 0:  # (0, 0, 0) is excluded
                     continue
 
                 # d_hkl:
-                hkl = np.array([h, k, l])
-                vec_tau_hkl = h * rec_vecs[0] + k * rec_vecs[1] + l * rec_vecs[2]        
+                vec_tau_hkl = h * rec_vecs[0] + k * rec_vecs[1] + l * rec_vecs[2]
                 d_hkl = 2 * np.pi / np.linalg.norm(vec_tau_hkl)
-                
-                if d_hkl < d_min: # d < d_min is excluded
+
+                if d_hkl < d_min:  # d < d_min is excluded
                     continue
 
                 # Fsq_hkl
                 real = 0.
                 imag = 0.
-                for element in range(len(Bfac)):
-                    expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2 * Bfac[element] / (8 * np.pi ** 2))
+                for element in Bfac:
+                    expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
+                                       * Bfac[element] / (8 * np.pi ** 2))
                     element_position = pos[element]
-                    cumulant_cos = np.sum(np.cos(np.sum(vec_tau_hkl * element_position, axis=1)))
-                    cumulant_sin = np.sum(np.sin(np.sum(vec_tau_hkl * element_position, axis=1)))
+                    cumulant_cos = np.sum(
+                        np.cos(
+                            np.sum(vec_tau_hkl * element_position, axis=1)
+                            )
+                        )
+                    cumulant_sin = np.sum(
+                        np.sin(
+                            np.sum(vec_tau_hkl * element_position, axis=1)
+                            )
+                        )
                     real += csl[element] * 0.1 * expon_hkl * cumulant_cos
                     imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
-                Fsq_hkl = real ** 2 + imag ** 2 # Fsquared
-                hklM.append([h, k, l, d_hkl, Fsq_hkl, round(d_hkl, 6), round(Fsq_hkl, 6)])
+                Fsq_hkl = real ** 2 + imag ** 2  # Fsquared
+
+                # same dspacing and Fsquared with precision will be regrouped
+                d_rnd = round(d_hkl, precision[0])
+                Fsq_rnd = round(Fsq_hkl, precision[1])
+                if (d_rnd, Fsq_rnd) in hkldF:
+                    hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
+                else:
+                    hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq_hkl, 1])
     return hklM
 
 @nb.jit(nopython=True, nogil=True)

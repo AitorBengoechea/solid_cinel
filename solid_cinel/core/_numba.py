@@ -5,74 +5,70 @@ from numba import cuda
 import math
 
 
-@nb.jit(nopython=True,nogil=True)
-def hklloop(d_min, hkl_max, d_precision, Fsq_precision,
-            rec_vecs, preferred_orientation, pddf_key, 
-            pddf_val, third_cumulant_O, Bfac, pos, csl, 
-            hklM, hkldF):
-    '''loop in (hkl) to generate hklM dictionary
-    '''
-    
-    hklrange = np.arange(-hkl_max, hkl_max + 1)
-    
-    for h in hklrange[::-1]: # to get positive hkl order
-        for k in hklrange[::-1]:
-            for l in hklrange[::-1]:
-                if h ** 2 + k ** 2 + l ** 2 == 0: # (0, 0, 0) is excluded
+@nb.jit(nopython=True, nogil=True)
+def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> dict:
+    """
+    Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
+    fill the condition of d_hkl > d_min
+    .. math::
+        d_{hkl} = \frac{2\pi}{\tau_{hkl}}
+        F(\vec{\tau}_{hkl})=\sum_{j=1}^{N_{uc}}b_j\exp\left(-\dfrac{\hbar^2\tau_{hkl}^2}{4M_jk_BT}\Lambda_j(T)\right) e^{i\vec{\tau}_{hkl}\cdot\vec{p}_j}
+
+    Parameters
+    ----------
+    d_min : 'float'
+        The minimum dspacing for the LEAPR module of NJOY
+    hkl_max : 'np.array'
+        Maximun h, k, l index for generating a d > d_min
+    rec_vecs : 'np.array'
+        Reciprocal vectors
+    Bfac : 'pd.Series'
+        Pandas series with the B factor for Target_Material object elements.
+    pos : 'pd.Series'
+        Pandas series with atomic position of elements in Target_Material 
+        object.
+    csl : 'pd.Series'
+        Coherent elastic length for each element of Target_Material object.
+    """
+    hklM = {}
+    hkldF = {}
+    h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
+
+    for h in h_range[::-1]:  # to get positive hkl order
+        for k in k_range[::-1]:
+            for l in l_range[::-1]:
+                if h ** 2 + k ** 2 + l ** 2 == 0:  # (0, 0, 0) is excluded
                     continue
+
+                # d_hkl:
                 vec_tau_hkl = h * rec_vecs[0] + k * rec_vecs[1] + l * rec_vecs[2]
-                vec_tau_hkl_norm = np.linalg.norm(vec_tau_hkl)                
-                d_hkl = k2Pi / vec_tau_hkl_norm # d_hkl = 2pi / tau_hkl
-                d_rnd = round(d_hkl, d_precision)
-                
-                if d_hkl < d_min: # d < d_min is excluded
+                d_hkl = 2 * np.pi / np.linalg.norm(vec_tau_hkl)
+
+                if d_hkl < d_min:  # d < d_min is excluded
                     continue
-                    
+
+                # Fsq_hkl
                 real = 0.
                 imag = 0.
-                for element in pos:
-                    expon_hkl = np.exp(-0.5 * vec_tau_hkl_norm ** 2 * Bfac[element] / (8 * np.pi ** 2))
-                    element_position = pos[ element ]
-                    for iep in range(len(element_position)):
-                        
-                        if (third_cumulant_O is not None) and 'O' in element:
-                            cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]) - third_cumulant_O * vec_tau_hkl_norm ** 3)
-                            cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]) - third_cumulant_O * vec_tau_hkl_norm ** 3)
-                        else:
-                            cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]))
-                            cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]))
-                        real += csl[element] * 0.1 * expon_hkl * cumulant_cos
-                        imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
-                        
-                        #real += csl[element] * 0.1 * expon_hkl * np.cos(np.sum(vec_tau_hkl * element_position[iep]))
-                        #imag += csl[element] * 0.1 * expon_hkl * np.sin(np.sum(vec_tau_hkl * element_position[iep]))
-                Fsq_hkl = real ** 2 + imag ** 2 # Fsquared
-                Fsq_rnd = round(Fsq_hkl, Fsq_precision)
-                
+                for element in Bfac:
+                    expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
+                                       * Bfac[element] / (8 * np.pi ** 2))
+                    element_position = pos[element]
+                    scalar = np.sum(vec_tau_hkl * element_position, axis=1)
+                    cumulant_cos = np.sum(np.cos(scalar))
+                    cumulant_sin = np.sum(np.sin(scalar))
+                    real += csl[element] * 0.1 * expon_hkl * cumulant_cos
+                    imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
+                Fsq_hkl = real ** 2 + imag ** 2  # Fsquared
+
                 # same dspacing and Fsquared with precision will be regrouped
+                d_rnd = round(d_hkl, precision[0])
+                Fsq_rnd = round(Fsq_hkl, precision[1])
                 if (d_rnd, Fsq_rnd) in hkldF:
-                    hklM[ hkldF[ (d_rnd, Fsq_rnd) ] ][-1] += 1
+                    hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
                 else:
-                    hkldF[ (d_rnd, Fsq_rnd) ] = (h, k, l)
-                    if len(preferred_orientation) == 3:
-                        OA_num = 0.
-                        for i in range(3):
-                            OA_num += preferred_orientation[i] * vec_tau_hkl[i]
-                        OA_den = np.linalg.norm(preferred_orientation) * vec_tau_hkl_norm
-                        orientation_angle_hkl = np.arccos(OA_num / OA_den)
-                        if pddf_key == 'march-dollase':
-                            PDDF_hkl = (pddf_val[0] ** 2 * np.cos(orientation_angle_hkl) ** 2 + 
-                            np.sin(orientation_angle_hkl) ** 2 / pddf_val[0]) ** (-1.5)
-                        elif pddf_key == 'altomare':
-                            PDDF_hkl = np.exp(pddf_val[0] * np.cos(2 * orientation_angle_hkl)) + pddf_val[1]
-                        elif pddf_key == 'cvc':
-                            PDDF_hkl = np.exp(-pddf_val[0] * (1 - np.cos(orientation_angle_hkl) ** pddf_val[1]))
-                        else:
-                            PDDF_hkl = 1.
-                        hklM[ (h, k, l) ] = np.array([ d_hkl, Fsq_hkl, orientation_angle_hkl * 180 / np.pi, PDDF_hkl, 1 ])
-                    else:
-                        hklM[ (h, k, l) ] = np.array([ d_hkl, Fsq_hkl, 0., 1., 1 ])
-                    
+                    hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq_hkl, 1])
     return hklM
 
 @nb.jit(nopython=True, nogil=True)

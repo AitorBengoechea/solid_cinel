@@ -5,12 +5,15 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.core.material.solid import Solid
+from solid_cinel.core.material.solid import Solid, hkl_max_value
 from solid_cinel.core.material.pdos import Pdos
+from solid_cinel.core._numba import hklloop
+from solid_cinel.cinematic.lab import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np
 import pandas as pd
+import numba as nb
 import collections
 collections.Callable = collections.abc.Callable
 import pytest
@@ -66,16 +69,26 @@ class Target_mat(Solid, Pdos):
         """
         Solid.__init__(self, *args[0:9])
         # Avoid data setter in Pdos:
-        self.pdos = {}
+        pdos = {}
+        elements_name = self.atoms.index
         if isinstance(args[10], float):
             atom_pdos = Pdos(args[9],
                       index=pd.Index(np.arange(len(args[9])) * args[10],
                                      name="E"))
-            self.pdos[self.name] = atom_pdos
+            pdos[elements_name[0]] = atom_pdos
+        else:
+            for i in range(len(args[10])):
+                atom_pdos = Pdos(args[9][i],
+                      index=pd.Index(np.arange(len(args[9][i])) * args[10][i],
+                                     name="E"))
+                pdos[elements_name[i]] = atom_pdos
+        self.pdos = pd.Series(pdos)
 
-    def B(self, T, anstrom=True) -> float:
+    def get_Bfact(self, T, anstrom=True) -> float:
         """
         Calculate mean square displacement for a certain pdos information.
+        .. math::
+            B_j= \dfrac{4\pi^2\hbar^2}{M_jk_BT}\lambda_s
 
         Parameters
         ----------
@@ -101,19 +114,190 @@ class Target_mat(Solid, Pdos):
 
         Test the results:
         >>> T = 20
-        >>> Al.B(T)["Al27"].round(6)
+        >>> Al.get_Bfact(T)["Al27"].round(6)
         0.274871
 
         >>> T = 80
-        >>> Al.B(T)["Al27"].round(6)
+        >>> Al.get_Bfact(T)["Al27"].round(6)
         0.337081
         """
         constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
         constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
-        B = {}
-        for element, pdos in self.pdos.items():
-            atom_mass = self.atoms[element].atom_mass
-            B[element] = constant * pdos.DebyeWallerCoeff(T) / (T * atom_mass)
+        atom_masses = self.atoms.apply(lambda x: x.atom_mass)
+
+        def get_Bfac(single_pdos):
+            B = constant * single_pdos.DebyeWallerCoeff(T) / T
             if anstrom:
-                B[element] *= 1.0e20
-        return B
+                B *= 1.0e20
+            return B
+
+        return self.pdos.apply(get_Bfac) / atom_masses
+
+    def get_multiplicity(self, T, E, precision=[6, 6]) -> pd.DataFrame:
+        """
+        Obtain hkl data for the solid in a certain temperature and for a neutron
+        certain energy filtering with the multiplicity.
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K
+        E : 'float'
+            Neutron energy
+        precision: ['int', 'int'], optional
+            Precision to get the multiplicity for d_hkl and Fsq_hkl. The
+            default is [6, 6].
+
+        Examples
+        --------
+        Object initialization:
+        >>> preferred_orientation = np.array([ 0, 1, 1 ])
+        >>> a = 2.856710674519725
+        >>> dir_vec_length = [a, a, a]
+        >>> dir_vec_angles = [60, 60, 60]
+        >>> unit_pos = np.array([0., 0., 0.])
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+
+        Test the results:
+        >>> T = 20
+        >>> E = 2.301
+        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> multiplicity.shape[0]
+        678
+        >>> multiplicity.iloc[:10]
+               d         Fsq               Multiplicity
+        h k l                                    
+        1 1 0  2.019999  0.115016           6.0
+            1  2.332494  0.115989           8.0
+        2 1 1  1.428355  0.111207          12.0
+          2 0  1.010000  0.103962           6.0
+            1  1.218106  0.108433          24.0
+            2  1.166247  0.107523           8.0
+        3 2 1  0.903371  0.100519          24.0
+            2  0.926839  0.101369          24.0
+          3 2  0.824661  0.097189          24.0
+            3  0.777498  0.094765          32.0
+        >>> multiplicity.round(6).iloc[667:677]
+                  d         Fsq         Multiplicity
+        h  k  l
+        31 19 18  0.091254  0.0         168.0
+              19  0.090999  0.0         384.0
+           20 17  0.090884  0.0         336.0
+              18  0.090815  0.0         552.0
+              19  0.090609  0.0         288.0
+           21 15  0.089911  0.0         384.0
+              16  0.090157  0.0         168.0
+              17  0.090269  0.0         216.0
+              18  0.090247  0.0         192.0
+              19  0.090090  0.0         168.0
+        """
+        recs_vec = self.reciproc_vec.values
+        d_min = Neutron(E).d_min
+        hkl_max = hkl_max_value(recs_vec, d_min)
+        B = self.get_Bfact(T)
+        pos = self.atom_pos
+        csl = self.atoms.apply(lambda x: x.b["b_coh"])
+        hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl,
+                                  np.array(precision))
+        return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
+
+    def get_coherent_XS(self, T, d_min, multiplicity=True):
+        multiplicity = self.get_multiplicity(T, d_min)
+        # Bragg Edges:
+        return
+
+
+def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> pd.DataFrame:
+    """
+    Obtain hkl data for the solid in a certain temperature and for a neutron
+    certain energy.
+
+    Parameters
+    ----------
+    d_min : 'float'
+        The minimum dspacing for the LEAPR module of NJOY
+    hkl_max : 'np.array'
+        Maximun h, k, l index for generating a d>d_min
+    rec_vecs : 'np.array'
+        Reciprocal vectors
+    Bfac : 'pd.Series'
+        Pandas series with the B factor for Target_Material object elements.
+    pos : 'pd.Series'
+        Pandas series with atomic position of elements in Target_Material 
+        object.
+    csl : 'pd.Series'
+        Coherent elastic length for each element of Target_Material object.
+    precision: 'np.array':
+        Array containing:
+            0: Precision to reagroup in multiplicity the d_hkl
+            1: Precision to reagroup in multiplicity the Fsq_hkl
+
+    Examples
+    --------
+    Object initialization:
+    >>> preferred_orientation = np.array([ 0, 1, 1 ])
+    >>> a = 2.856710674519725
+    >>> dir_vec_length = [a, a, a]
+    >>> dir_vec_angles = [60, 60, 60]
+    >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
+    >>> A = 27
+    >>> Z = 13
+    >>> atomic_mass_Al27 = 26.98153433356103
+    >>> b_coh_Al27  = 3.449
+    >>> b_incoh_Al27 = 0.256
+    >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+
+    Test the results:
+    >>> T = 20
+    >>> E = 2.301
+    >>> recs_vec = Al.reciproc_vec.values
+    >>> d_min = Neutron(E).d_min
+    >>> hkl_max = hkl_max_value(recs_vec, d_min)
+    >>> B = Al.get_Bfact(T)
+    >>> pos = Al.atom_pos
+    >>> csl = Al.atoms.apply(lambda x: x.b["b_coh"])
+    >>> precision = np.array([6, 6])
+    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl, precision)
+    >>> hkl_data.shape[0]
+    678
+    >>> hkl_data.round(6).iloc[:10]
+        h   k   l         d  Fsq  Multiplicity
+    0  31  21  20  0.089800  0.0         336.0
+    1  31  21  19  0.090090  0.0         168.0
+    2  31  21  18  0.090247  0.0         192.0
+    3  31  21  17  0.090269  0.0         216.0
+    4  31  21  16  0.090157  0.0         168.0
+    5  31  21  15  0.089911  0.0         384.0
+    6  31  20  19  0.090609  0.0         288.0
+    7  31  20  18  0.090815  0.0         552.0
+    8  31  20  17  0.090884  0.0         336.0
+    9  31  19  19  0.090999  0.0         384.0
+    """
+    Bfac_ = nb.typed.Dict.empty(
+            key_type=nb.core.types.unicode_type,
+            value_type=nb.core.types.float64,
+        )
+    pos_ = nb.typed.Dict.empty(
+            key_type=nb.core.types.unicode_type,
+            value_type=nb.core.types.float64[:, :],
+        )
+    csl_ = nb.typed.Dict.empty(
+            key_type=nb.core.types.unicode_type,
+            value_type=nb.core.types.float64,
+        )
+    for element, value in Bfac.items():
+        Bfac_[element] = value
+        pos_[element] = pos[element]
+        csl_[element] = csl[element]
+    hkl_data_dict = hklloop(d_min, hkl_max, rec_vecs, Bfac_, pos_, csl_,
+                            precision)
+    columns = ["h", "k", "l", "d", "Fsq", "Multiplicity"] 
+
+    return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, mul]
+                         for (h, k, l), [d_hkl, Fsq_hkl, mul]
+                         in hkl_data_dict.items()], columns=columns)

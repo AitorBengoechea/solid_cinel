@@ -145,11 +145,6 @@ class Solid(Crystal_structure, Molecule):
         """
         return self.atom_pos.apply(lambda x: x.shape[0])
 
-    def get_Brag_edges(self, d_min, aprox=False):
-        # hkl range minimization:
-        hkl_max = hkl_max_value(self.reciproc_vec, d_min)
-        return
-
 
 def hkl_max_value(rec_vecs, d_min, precision=1.0e-7) -> np.ndarray:
     """

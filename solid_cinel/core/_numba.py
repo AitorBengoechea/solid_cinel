@@ -6,9 +6,27 @@ import math
 
 
 @nb.jit(nopython=True, nogil=True)
-def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl):
-    '''loop in (hkl) to generate hklM dictionary
-    '''
+def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> list:
+    """
+    Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
+    fill the condition of d_hkl > d_min
+
+    Parameters
+    ----------
+    d_min : 'float'
+        The minimum dspacing for the LEAPR module of NJOY
+    hkl_max : 'np.array'
+        Maximun h, k, l index for generating a d > d_min
+    rec_vecs : 'np.array'
+        Reciprocal vectors
+    Bfac : 'pd.Series'
+        Pandas series with the B factor for Target_Material object elements.
+    pos : 'pd.Series'
+        Pandas series with atomic position of elements in Target_Material 
+        object.
+    csl : 'pd.Series'
+        Coherent elastic length for each element of Target_Material object.
+    """
     hklM = []
     h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
 

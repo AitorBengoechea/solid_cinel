@@ -149,7 +149,7 @@ class Target_mat(Solid, Pdos):
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
+        >>> unit_pos = np.array([0., 0., 0.])
         >>> A = 27
         >>> Z = 13
         >>> atomic_mass_Al27 = 26.98153433356103
@@ -165,20 +165,20 @@ class Target_mat(Solid, Pdos):
         >>> multiplicity.shape[0]
         678
         >>> multiplicity.iloc[:10]
-                            d       Fsq  Multiplicity
-        h   k   l
-        1.0 1.0 0.0  2.019999  0.000000           6.0
-                1.0  2.332494  0.000000           8.0
-        2.0 1.0 1.0  1.428355  0.000000          12.0
-            2.0 0.0  1.010000  6.653574           6.0
-                1.0  1.218106  0.000000          24.0
-                2.0  1.166247  6.881496           8.0
-        3.0 2.0 1.0  0.903371  0.000000          24.0
-                2.0  0.926839  0.000000          24.0
-            3.0 2.0  0.824661  0.000000          24.0
-                3.0  0.777498  0.000000          32.0
+                     d         Fsq               Multiplicity
+        h   k   l                                    
+        1.0 1.0 0.0  2.019999  0.115016           6.0
+                1.0  2.332494  0.115989           8.0
+        2.0 1.0 1.0  1.428355  0.111207          12.0
+            2.0 0.0  1.010000  0.103962           6.0
+                1.0  1.218106  0.108433          24.0
+                2.0  1.166247  0.107523           8.0
+        3.0 2.0 1.0  0.903371  0.100519          24.0
+                2.0  0.926839  0.101369          24.0
+            3.0 2.0  0.824661  0.097189          24.0
+                3.0  0.777498  0.094765          32.0
         >>> multiplicity.iloc[667:677]
-                            d  Fsq  Multiplicity
+                        d         Fsq         Multiplicity
         h    k    l
         31.0 19.0 18.0  0.091254  0.0         168.0
                   19.0  0.090999  0.0         384.0
@@ -198,7 +198,7 @@ class Target_mat(Solid, Pdos):
         pos = self.atom_pos
         csl = self.atoms.apply(lambda x: x.b["b_coh"])
         hkl_data =  numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl)
-        return filter_hkl_data(hkl_data)
+        return _filter_hkl_data(hkl_data)
 
     def get_coherent_XS(self, T, d_min, multiplicity=True):
         multiplicity = self.get_multiplicity(T, d_min)
@@ -275,7 +275,7 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl) -> pd.DataFrame:
     columns = ["h", "k", "l", "d", "Fsq", "d_round", "f_round"]
     return pd.DataFrame(hkl_data, columns=columns)
 
-def filter_hkl_data(hkl_data) -> pd.DataFrame:
+def _filter_hkl_data(hkl_data) -> pd.DataFrame:
     """
     Filter hkl data for being in order and for only having one hkl combination
     for the same d and Fsq

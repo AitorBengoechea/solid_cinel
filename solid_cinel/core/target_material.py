@@ -143,7 +143,7 @@ class Target_mat(Solid, Pdos):
         T : 'float'
             Temperature in K
         E : 'float'
-            Neutron energy
+            Neutron energy in eV
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
@@ -151,7 +151,7 @@ class Target_mat(Solid, Pdos):
         Examples
         --------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 1, 1 ])
+        >>> preferred_orientation = np.array([ 0, 0, 1 ])
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
@@ -170,31 +170,31 @@ class Target_mat(Solid, Pdos):
         >>> multiplicity.shape[0]
         678
         >>> multiplicity.iloc[:10]
-               d         Fsq               Multiplicity
-        h k l                                    
-        1 1 0  2.019999  0.115016           6.0
-            1  2.332494  0.115989           8.0
-        2 1 1  1.428355  0.111207          12.0
-          2 0  1.010000  0.103962           6.0
-            1  1.218106  0.108433          24.0
-            2  1.166247  0.107523           8.0
-        3 2 1  0.903371  0.100519          24.0
-            2  0.926839  0.101369          24.0
-          3 2  0.824661  0.097189          24.0
-            3  0.777498  0.094765          32.0
+                      d       Fsq  Orientation angle  Multiplicity
+        h k l
+        1 1 0  2.019999  0.115016         125.264390           6.0
+            1  2.332494  0.115989          70.528779           8.0
+        2 1 1  1.428355  0.111207          90.000000          12.0
+          2 0  1.010000  0.103962         125.264390           6.0
+            1  1.218106  0.108433         100.024988          24.0
+            2  1.166247  0.107523          70.528779           8.0
+        3 2 1  0.903371  0.100519         104.963217          24.0
+            2  0.926839  0.101369          82.388621          24.0
+          3 2  0.824661  0.097189          90.000000          24.0
+            3  0.777498  0.094765          70.528779          32.0
         >>> multiplicity.round(6).iloc[667:677]
-                  d         Fsq         Multiplicity
+                         d  Fsq  Orientation angle  Multiplicity
         h  k  l
-        31 19 18  0.091254  0.0         168.0
-              19  0.090999  0.0         384.0
-           20 17  0.090884  0.0         336.0
-              18  0.090815  0.0         552.0
-              19  0.090609  0.0         288.0
-           21 15  0.089911  0.0         384.0
-              16  0.090157  0.0         168.0
-              17  0.090269  0.0         216.0
-              18  0.090247  0.0         192.0
-              19  0.090090  0.0         168.0
+        31 19 18  0.091254  0.0          87.009863         168.0
+              19  0.090999  0.0          84.777020         384.0
+           20 17  0.090884  0.0          90.000000         336.0
+              18  0.090815  0.0          87.768637         552.0
+              19  0.090609  0.0          85.544023         288.0
+           21 15  0.089911  0.0          95.160350         384.0
+              16  0.090157  0.0          92.954150         168.0
+              17  0.090269  0.0          90.739152         216.0
+              18  0.090247  0.0          88.521943         192.0
+              19  0.090090  0.0          86.309150         168.0
         """
         recs_vec = self.reciproc_vec.values
         d_min = Neutron(E).d_min
@@ -203,16 +203,296 @@ class Target_mat(Solid, Pdos):
         pos = self.atom_pos
         csl = self.atoms.apply(lambda x: x.b["b_coh"])
         hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl,
+                                  self.preferred_orientation.values,
                                   np.array(precision))
         return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
-    def get_coherent_XS(self, T, d_min, multiplicity=True):
-        multiplicity = self.get_multiplicity(T, d_min)
-        # Bragg Edges:
-        return
+    @staticmethod
+    def get_pddf(data, kind=None, pddf_val=None) -> pd.DataFrame:
+        """
+        Add to the hkl data dataframe the Pole Density Distribution Function.
+
+        Parameters
+        ----------
+        data: 'pd.DataFrame'
+            Frame with hkl data.
+        kind : 'str', optional
+            key to calculate PDDF. The default is None. Options:
+                - march_dollase
+                - altomare
+                - cvc
+        pddf_val : 1D iterable, optional
+            Value to calculate PDDF. The default is None. Options:
+                - march-dollase : shape(1, 1)
+                - altomare: shape(1, 2)
+                - cvc: shape(1, 2)
+
+        Example
+        -------
+        Object initialization:
+        >>> preferred_orientation = np.array([ 0, 0, 1 ])
+        >>> a = 2.856710674519725
+        >>> dir_vec_length = [a, a, a]
+        >>> dir_vec_angles = [60, 60, 60]
+        >>> unit_pos = np.array([0., 0., 0.])
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> T = 20
+        >>> E = 2.301
+
+        Test the results:
+        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> Target_mat.get_pddf(multiplicity).iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity  PDDF
+        h k l
+        1 1 0  2.019999  0.115016                0.0           6.0   1.0
+            1  2.332494  0.115989                0.0           8.0   1.0
+        2 1 1  1.428355  0.111207                0.0          12.0   1.0
+          2 0  1.010000  0.103962                0.0           6.0   1.0
+            1  1.218106  0.108433                0.0          24.0   1.0
+            2  1.166247  0.107523                0.0           8.0   1.0
+        3 2 1  0.903371  0.100519                0.0          24.0   1.0
+            2  0.926839  0.101369                0.0          24.0   1.0
+          3 2  0.824661  0.097189                0.0          24.0   1.0
+            3  0.777498  0.094765                0.0          32.0   1.0
+
+        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> Target_mat.get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity      PDDF
+        h k l
+        1 1 0  2.019999  0.115016         125.264390           6.0  0.464758
+            1  2.332494  0.115989          70.528779           8.0  1.193243
+        2 1 1  1.428355  0.111207          90.000000          12.0  2.828427
+          2 0  1.010000  0.103962         125.264390           6.0  0.464758
+            1  1.218106  0.108433         100.024988          24.0  2.119463
+            2  1.166247  0.107523          70.528779           8.0  1.193243
+        3 2 1  0.903371  0.100519         104.963217          24.0  1.592384
+            2  0.926839  0.101369          82.388621          24.0  2.377318
+          3 2  0.824661  0.097189          90.000000          24.0  2.828427
+            3  0.777498  0.094765          70.528779          32.0  1.193243
+
+        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> Target_mat.get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity      PDDF
+        h k l
+        1 1 0  2.019999  0.115016         125.264390           6.0  1.716531
+            1  2.332494  0.115989          70.528779           8.0  1.459426
+        2 1 1  1.428355  0.111207          90.000000          12.0  1.367879
+          2 0  1.010000  0.103962         125.264390           6.0  1.716531
+            1  1.218106  0.108433         100.024988          24.0  1.390865
+            2  1.166247  0.107523          70.528779           8.0  1.459426
+        3 2 1  0.903371  0.100519         104.963217          24.0  1.420350
+            2  0.926839  0.101369          82.388621          24.0  1.381017
+          3 2  0.824661  0.097189          90.000000          24.0  1.367879
+            3  0.777498  0.094765          70.528779          32.0  1.459426
+
+        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> Target_mat.get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity      PDDF
+        h k l
+        1 1 0  2.019999  0.115016         125.264390           6.0  0.206522
+            1  2.332494  0.115989          70.528779           8.0  0.513417
+        2 1 1  1.428355  0.111207          90.000000          12.0  0.367879
+          2 0  1.010000  0.103962         125.264390           6.0  0.206522
+            1  1.218106  0.108433         100.024988          24.0  0.309104
+            2  1.166247  0.107523          70.528779           8.0  0.513417
+        3 2 1  0.903371  0.100519         104.963217          24.0  0.284165
+            2  0.926839  0.101369          82.388621          24.0  0.419981
+          3 2  0.824661  0.097189          90.000000          24.0  0.367879
+            3  0.777498  0.094765          70.528779          32.0  0.513417
+        """
+        orientation_angle = data.loc[:, "Orientation angle"] * np.pi / 180
+
+        if kind is None:
+            data["Orientation angle"] = 0.
+            PDDF_hkl = 1.
+        elif kind.lower() == 'march-dollase' and isinstance(pddf_val, (int, float)):
+            PDDF_hkl = (pddf_val ** 2 * np.cos(orientation_angle) ** 2 +
+                        np.sin(orientation_angle) ** 2 / pddf_val) ** (-1.5)
+        elif kind.lower() == 'altomare' and len(pddf_val) == 2:
+            PDDF_hkl = np.exp(pddf_val[0] * np.cos(2 * orientation_angle)) + pddf_val[1]
+        elif kind.lower() == 'cvc' and len(pddf_val) == 2:
+            PDDF_hkl = np.exp(-pddf_val[0] * (1 - np.cos(orientation_angle) ** pddf_val[1]))
+        else:
+            ValueError("Introduced kind is not available")
+
+        data["PDDF"] = PDDF_hkl
+        return data
+
+    @staticmethod
+    def get_difrac_angles(data, E) -> pd.DataFrame:
+        """
+        Add to the hkl data dataframe the difraction angles(ª) vs hkl data
+
+        Parameters
+        ----------
+        data: 'pd.DataFrame'
+            Frame with hkl data.
+        E : 'float'
+            Neutron energy in eV
+
+        Example
+        -------
+        Object initialization:
+        >>> preferred_orientation = np.array([ 0, 0, 1 ])
+        >>> a = 2.856710674519725
+        >>> dir_vec_length = [a, a, a]
+        >>> dir_vec_angles = [60, 60, 60]
+        >>> unit_pos = np.array([0., 0., 0.])
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> T = 20
+        >>> E = 2.301
+        >>> multiplicity = Al.get_multiplicity(T, E)
+
+        Test the results:
+        >>> Target_mat.get_difrac_angles(multiplicity, E).iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity     theta
+        h k l
+        1 1 0  2.019999  0.115016         125.264390           6.0   5.350060
+            1  2.332494  0.115989          70.528779           8.0   4.632867
+        2 1 1  1.428355  0.111207          90.000000          12.0   7.568882
+          2 0  1.010000  0.103962         125.264390           6.0  10.711827
+            1  1.218106  0.108433         100.024988          24.0   8.877727
+            2  1.166247  0.107523          70.528779           8.0   9.273329
+        3 2 1  0.903371  0.100519         104.963217          24.0  11.980567
+            2  0.926839  0.101369          82.388621          24.0  11.676144
+          3 2  0.824661  0.097189          90.000000          24.0  13.128861
+            3  0.777498  0.094765          70.528779          32.0  13.929091
+
+        """
+        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2
+        constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
+        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
+        d = data.loc[:, "d"]
+        angle_value = np.clip(1 - np.pi ** 2 * constant / (d ** 2 * E), -1, 1)
+        data["theta"] = np.arccos(angle_value) * 180 / np.pi
+        return data
+
+    def get_coherent_XS(self, *args, threshold=1.e-30, file=None, theta=True,
+                        **kwargs) -> pd.DataFrame:
+        """
+        Get coherent elastic cross section
+
+        Parameters
+        ----------
+        threshold : 'float', optional
+            Minimun value of xs to take into account. The default is 1.e-30.
+        theta : 'bool', optional
+            Option to get the difraction angles vs hkl data. The default is
+            True
+        file : 'str', optional
+            Name of the file to write the data. The default is False.
+
+        Parameters for get_multiplicity
+        -------------------------------
+        T : 'float'
+            Temperature in K
+        E : 'float'
+            Neutron energy in eV
+        precision: ['int', 'int'], optional
+            Precision to get the multiplicity for d_hkl and Fsq_hkl. The
+            default is [6, 6].
+
+        Parameters for get_ppdf
+        -----------------------
+        kind : 'str', optional
+            key to calculate PDDF. The default is None. Options:
+                - march_dollase
+                - altomare
+                - cvc
+        pddf_val : 1D iterable, optional
+            Value to calculate PDDF. The default is None. Options:
+                - march-dollase : shape(1, 1)
+                - altomare: shape(1, 2)
+                - cvc: shape(1, 2)
+
+        Returns
+        -------
+        Object initialization:
+        >>> preferred_orientation = np.array([ 0, 0, 1 ])
+        >>> a = 2.856710674519725
+        >>> dir_vec_length = [a, a, a]
+        >>> dir_vec_angles = [60, 60, 60]
+        >>> unit_pos = np.array([0., 0., 0.])
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> T = 20
+        >>> E = 2.301
+
+        Test the results:
+        >>> Al.get_coherent_XS(T, E).round(6).iloc[:10, :4]
+                      d       Fsq  Orientation angle  Multiplicity
+        h k l
+        1 1 1  2.332494  0.115989                0.0           8.0
+            0  2.019999  0.115016                0.0           6.0
+        2 1 1  1.428355  0.111207                0.0          12.0
+          2 1  1.218106  0.108433                0.0          24.0
+            2  1.166247  0.107523                0.0           8.0
+            0  1.010000  0.103962                0.0           6.0
+        3 2 2  0.926839  0.101369                0.0          24.0
+            1  0.903371  0.100519                0.0          24.0
+          3 2  0.824661  0.097189                0.0          24.0
+            3  0.777498  0.094765                0.0          32.0
+        >>> Al.get_coherent_XS(T, E).round(6).iloc[:10, 4::]
+              PDDF         E        Xs      theta
+        h k l
+        1 1 1  1.0  0.003759  0.005370   4.632867
+            0  1.0  0.005012  0.003459   5.350060
+        2 1 1  1.0  0.010024  0.004729   7.568882
+          2 1  1.0  0.013783  0.007865   8.877727
+            2  1.0  0.015036  0.002489   9.273329
+            0  1.0  0.020048  0.001563  10.711827
+        3 2 2  1.0  0.023807  0.005595  11.676144
+            1  1.0  0.025060  0.005407  11.980567
+          3 2  1.0  0.030072  0.004773  13.128861
+            3  1.0  0.033831  0.005850  13.929091
+        """
+        # Get multiplicity
+        T, E = args
+        data = self.get_multiplicity(T, E,
+                                     precision=kwargs.pop("precision", [6, 6]))
+        # Get PDDF:
+        self.get_pddf(data, kwargs.pop("kind", None),
+                      kwargs.pop("pddf_val", None))
+
+        # Get Xs:
+        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2 
+        constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
+        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
+        data["E"] = data["E"] = np.pi ** 2 * constant /(2 * data["d"] ** 2)
+        data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
+        data["Xs"] *= constant * np.pi ** 2
+        data["Xs"] /= self.unit_cell_vol * self.atom_number
+        if threshold:
+            data["Xs"][data["Xs"] < threshold] = 0.0
+
+        # difraction angles vs hkl data
+        if theta:
+            self.get_difrac_angles(data, E)
+
+        # Get the final result
+        result = data.sort_values(by=["E"])
+        if file:
+            result.to_csv(file, sep='\t',
+                          float_format="%20.10e")
+        return result
 
 
-def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> pd.DataFrame:
+def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
+                   preferred_orientation, precision) -> pd.DataFrame:
     """
     Obtain hkl data for the solid in a certain temperature and for a neutron
     certain energy.
@@ -240,7 +520,7 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> pd.Da
     Examples
     --------
     Object initialization:
-    >>> preferred_orientation = np.array([ 0, 1, 1 ])
+    >>> preferred_orientation = np.array([ 0, 0, 1 ])
     >>> a = 2.856710674519725
     >>> dir_vec_length = [a, a, a]
     >>> dir_vec_angles = [60, 60, 60]
@@ -262,22 +542,24 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> pd.Da
     >>> pos = Al.atom_pos
     >>> csl = Al.atoms.apply(lambda x: x.b["b_coh"])
     >>> precision = np.array([6, 6])
-    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl, precision)
+    >>> preferred_orientation = Al.preferred_orientation.values
+    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl, preferred_orientation, precision)
     >>> hkl_data.shape[0]
     678
     >>> hkl_data.round(6).iloc[:10]
-        h   k   l         d  Fsq  Multiplicity
-    0  31  21  20  0.089800  0.0         336.0
-    1  31  21  19  0.090090  0.0         168.0
-    2  31  21  18  0.090247  0.0         192.0
-    3  31  21  17  0.090269  0.0         216.0
-    4  31  21  16  0.090157  0.0         168.0
-    5  31  21  15  0.089911  0.0         384.0
-    6  31  20  19  0.090609  0.0         288.0
-    7  31  20  18  0.090815  0.0         552.0
-    8  31  20  17  0.090884  0.0         336.0
-    9  31  19  19  0.090999  0.0         384.0
+        h   k   l         d  Fsq  Orientation angle  Multiplicity
+    0  31  21  20  0.089800  0.0          84.107323         336.0
+    1  31  21  19  0.090090  0.0          86.309150         168.0
+    2  31  21  18  0.090247  0.0          88.521943         192.0
+    3  31  21  17  0.090269  0.0          90.739152         216.0
+    4  31  21  16  0.090157  0.0          92.954150         168.0
+    5  31  21  15  0.089911  0.0          95.160350         384.0
+    6  31  20  19  0.090609  0.0          85.544023         288.0
+    7  31  20  18  0.090815  0.0          87.768637         552.0
+    8  31  20  17  0.090884  0.0          90.000000         336.0
+    9  31  19  19  0.090999  0.0          84.777020         384.0
     """
+    # Preparation of variables to be accept in numba nopython mode:
     Bfac_ = nb.typed.Dict.empty(
             key_type=nb.core.types.unicode_type,
             value_type=nb.core.types.float64,
@@ -294,10 +576,16 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> pd.Da
         Bfac_[element] = value
         pos_[element] = pos[element]
         csl_[element] = csl[element]
-    hkl_data_dict = hklloop(d_min, hkl_max, rec_vecs, Bfac_, pos_, csl_,
-                            precision)
-    columns = ["h", "k", "l", "d", "Fsq", "Multiplicity"] 
 
-    return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, mul]
-                         for (h, k, l), [d_hkl, Fsq_hkl, mul]
+    preferred_orientation_ = np.array(preferred_orientation, dtype=float)
+
+    # Execute numba
+    hkl_data_dict = hklloop(d_min, hkl_max, rec_vecs, Bfac_, pos_, csl_,
+                            preferred_orientation_, precision)
+
+    # Order the output
+    columns = ["h", "k", "l", "d", "Fsq", "Orientation angle", "Multiplicity"]
+
+    return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, orientation, mul]
+                         for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul]
                          in hkl_data_dict.items()], columns=columns)

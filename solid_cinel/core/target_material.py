@@ -431,7 +431,6 @@ class Target_mat(Solid, Pdos):
         >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
         >>> T = 20
         >>> E = 2.301
-        >>> multiplicity = Al.get_multiplicity(T, E)
 
         Test the results:
         >>> Al.get_coherent_XS(T, E).round(6).iloc[:10, :4]
@@ -487,7 +486,8 @@ class Target_mat(Solid, Pdos):
         # Get the final result
         result = data.sort_values(by=["E"])
         if file:
-            result.to_csv(file)
+            result.to_csv(file, sep='\t',
+                          float_format="%20.10e")
         return result
 
 

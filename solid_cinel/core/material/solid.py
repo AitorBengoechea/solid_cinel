@@ -141,9 +141,9 @@ class Solid(Crystal_structure, Molecule):
         >>> Al = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
-        >>> assert Al.atom_number["Al27"] == 8
+        >>> assert Al.atom_number == 8
         """
-        return self.atom_pos.apply(lambda x: x.shape[0])
+        return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
 
 
 def hkl_max_value(rec_vecs, d_min, precision=1.0e-7) -> np.ndarray:

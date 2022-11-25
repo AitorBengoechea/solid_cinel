@@ -6,7 +6,8 @@ import math
 
 
 @nb.jit(nopython=True, nogil=True)
-def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> dict:
+def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
+            precision) -> dict:
     """
     Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
     fill the condition of d_hkl > d_min
@@ -68,7 +69,10 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, precision) -> dict:
                     hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
                 else:
                     hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
-                    hklM[(h, k, l)] = np.array([d_hkl, Fsq_hkl, 1])
+                    OA_num = np.sum(vec_tau_hkl * preferred_orientation)
+                    OA_den = np.linalg.norm(vec_tau_hkl) * np.linalg.norm(preferred_orientation)
+                    orientation_angle_hkl = np.arccos(OA_num / OA_den) * 180 / np.pi
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq_hkl, orientation_angle_hkl, 1])
     return hklM
 
 @nb.jit(nopython=True, nogil=True)

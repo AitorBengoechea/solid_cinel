@@ -434,7 +434,7 @@ class Target_mat(Solid, Pdos):
         >>> multiplicity = Al.get_multiplicity(T, E)
 
         Test the results:
-        >>> Al.get_coherent_XS(T, E).iloc[:10]
+        >>> Al.get_coherent_XS(T, E).round(6).iloc[:10]
                       d       Fsq  Orientation angle  Multiplicity  PDDF         E        Xs      theta
         h k l
         1 1 1  2.332494  0.115989                0.0           8.0   1.0  0.003759  0.005370   4.632867

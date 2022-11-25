@@ -14,7 +14,7 @@ import sys
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
-def test_Al27_coherent_Xs(T):
+def test_Fe56_coherent_Xs(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Fe56.py", ""))
     preferred_orientation = np.array([ 0, 0, 1 ])

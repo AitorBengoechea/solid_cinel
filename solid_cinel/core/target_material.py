@@ -202,15 +202,30 @@ class Target_mat(Solid, Pdos):
         B = self.get_Bfact(T)
         pos = self.atom_pos
         csl = self.atoms.apply(lambda x: x.b["b_coh"])
-        hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl,
+        hkl_data = numba_hkl_data(d_min,
+                                  hkl_max,
+                                  recs_vec,
+                                  B,
+                                  pos,
+                                  csl,
                                   self.preferred_orientation.values,
-                                  np.array(precision))
+                                  np.array(precision)
+                                  )
         return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
     @staticmethod
     def get_pddf(data, kind=None, pddf_val=None) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the Pole Density Distribution Function.
+        March-dollase:
+            .. math::
+                \mathcal{P}_{hkl}(\Theta)=(P_1^2\cos^2(\Theta)+P_1^{-1}\sin^2(\Theta))^{-3/2}.
+        Altomare:
+            .. math::
+                \mathcal{P}_{hkl}(\Theta)=\exp(P_1\cos(2\Theta))
+        cvc:
+            .. math::
+                \mathcal{P}_{hkl}(\Theta)=\exp(-P_1(1-\cos^{P_2}(\Theta)))
 
         Parameters
         ----------
@@ -243,9 +258,22 @@ class Target_mat(Solid, Pdos):
         >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
         >>> T = 20
         >>> E = 2.301
+        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> multiplicity.iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity
+        h k l
+        1 1 0  2.019999  0.115016         125.264390           6.0
+            1  2.332494  0.115989          70.528779           8.0
+        2 1 1  1.428355  0.111207          90.000000          12.0
+          2 0  1.010000  0.103962         125.264390           6.0
+            1  1.218106  0.108433         100.024988          24.0
+            2  1.166247  0.107523          70.528779           8.0
+        3 2 1  0.903371  0.100519         104.963217          24.0
+            2  0.926839  0.101369          82.388621          24.0
+          3 2  0.824661  0.097189          90.000000          24.0
+            3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> multiplicity = Al.get_multiplicity(T, E)
         >>> Target_mat.get_pddf(multiplicity).iloc[:10]
                       d       Fsq  Orientation angle  Multiplicity  PDDF
         h k l
@@ -327,6 +355,8 @@ class Target_mat(Solid, Pdos):
     def get_difrac_angles(data, E) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the difraction angles(ª) vs hkl data
+        .. math::
+            2\theta_{hkl}=\arccos\left(1-\dfrac{\pi^2\hbar^2}{md_{hkl}^2E}\right)
 
         Parameters
         ----------
@@ -352,6 +382,19 @@ class Target_mat(Solid, Pdos):
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> multiplicity.iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity
+        h k l
+        1 1 0  2.019999  0.115016         125.264390           6.0
+            1  2.332494  0.115989          70.528779           8.0
+        2 1 1  1.428355  0.111207          90.000000          12.0
+          2 0  1.010000  0.103962         125.264390           6.0
+            1  1.218106  0.108433         100.024988          24.0
+            2  1.166247  0.107523          70.528779           8.0
+        3 2 1  0.903371  0.100519         104.963217          24.0
+            2  0.926839  0.101369          82.388621          24.0
+          3 2  0.824661  0.097189          90.000000          24.0
+            3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
         >>> Target_mat.get_difrac_angles(multiplicity, E).iloc[:10]
@@ -377,20 +420,103 @@ class Target_mat(Solid, Pdos):
         data["theta"] = np.arccos(angle_value) * 180 / np.pi
         return data
 
-    def get_coherent_XS(self, *args, threshold=1.e-30, file=None, theta=True,
-                        **kwargs) -> pd.DataFrame:
+    @staticmethod
+    def get_BraggEdges_Xs(data, unit_cell_vol, atom_number,
+                          threshold=1.e-30) -> pd.DataFrame:
         """
-        Get coherent elastic cross section
+        Add to the hkl data dataframe the cross section related with the
+        Bragg Edges.
+        .. math::
+            \sigma_{\textrm{coh}}^{\textrm{el}}(E_{hkl})=\dfrac{\pi^2\hbar^2}{mN_{uc}V_{uc}E_{hkl}}M_{hkl}d_{hkl}\left|F(\vec{\tau}_{hkl})\right|^2\mathcal{P}_{hkl}(\Theta_{hkl})
 
         Parameters
         ----------
+        data: 'pd.DataFrame'
+            Frame with hkl data.
+        unit_cell_vol : 'float'
+            Unit cell volume.
+        atom_number : 'int'
+            The number of atoms in the unit cell.
         threshold : 'float', optional
-            Minimun value of xs to take into account. The default is 1.e-30.
+            Minimun value of xs. The default is 1.e-30.
+
+        Example
+        -------
+        Object initialization:
+        >>> preferred_orientation = np.array([ 0, 0, 1 ])
+        >>> a = 2.856710674519725
+        >>> dir_vec_length = [a, a, a]
+        >>> dir_vec_angles = [60, 60, 60]
+        >>> unit_pos = np.array([0., 0., 0.])
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> T = 20
+        >>> E = 2.301
+        >>> unit_cell_vol = Al.unit_cell_vol
+        >>> atom_number = Al.atom_number
+        >>> BraggEdges = Al.get_BraggEdges(T, E, xs=False, theta=False)
+        >>> BraggEdges.iloc[:10]
+                      d       Fsq  Orientation angle  Multiplicity  PDDF         E
+        h k l
+        1 1 1  2.332494  0.115989                0.0           8.0   1.0  0.003759
+            0  2.019999  0.115016                0.0           6.0   1.0  0.005012
+        2 1 1  1.428355  0.111207                0.0          12.0   1.0  0.010024
+          2 1  1.218106  0.108433                0.0          24.0   1.0  0.013783
+            2  1.166247  0.107523                0.0           8.0   1.0  0.015036
+            0  1.010000  0.103962                0.0           6.0   1.0  0.020048
+        3 2 2  0.926839  0.101369                0.0          24.0   1.0  0.023807
+            1  0.903371  0.100519                0.0          24.0   1.0  0.025060
+          3 2  0.824661  0.097189                0.0          24.0   1.0  0.030072
+            3  0.777498  0.094765                0.0          32.0   1.0  0.033831
+
+        Test the results:
+        >>> Target_mat.get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]
+        h  k  l
+        1  1  1    0.005370
+              0    0.003459
+        2  1  1    0.004729
+           2  1    0.007865
+              2    0.002489
+              0    0.001563
+        3  2  2    0.005595
+              1    0.005407
+           3  2    0.004773
+              3    0.005850
+        Name: Xs, dtype: float64
+        """
+        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2
+        constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
+        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
+        if "PDDF" not in data.columns:
+            Target_mat.get_pddf(data)
+        data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
+        data["Xs"] *= constant * np.pi ** 2
+        data["Xs"] /= unit_cell_vol * atom_number
+        if threshold:
+            data["Xs"][data["Xs"] < threshold] = 0.0
+        return data
+
+    def get_BraggEdges(self, *args, xs=True, file_BraggEdges=None,
+                       theta=True, **kwargs) -> pd.DataFrame:
+        """
+        Get BraggEdges.
+        .. math::
+            E_n=\dfrac{h^2}{2m\lambda^2}=\dfrac{h^2}{2m(2d_{hkl})^2}
+
+        Parameters
+        ----------
+        xs : 'bool', optional
+            Option to get the xs related with Bragg Edges. The default is
+            True
         theta : 'bool', optional
             Option to get the difraction angles vs hkl data. The default is
             True
-        file : 'str', optional
-            Name of the file to write the data. The default is False.
+        file_BraggEdges : 'str', optional
+            Name of the file to write Bragg Edges data. The default is False.
 
         Parameters for get_multiplicity
         -------------------------------
@@ -415,6 +541,11 @@ class Target_mat(Solid, Pdos):
                 - altomare: shape(1, 2)
                 - cvc: shape(1, 2)
 
+        Parameters for get_BraggEdges_Xs
+        --------------------------------
+        threshold : 'float', optional
+            Minimun value of xs. The default is 1.e-30.
+
         Returns
         -------
         Object initialization:
@@ -433,7 +564,7 @@ class Target_mat(Solid, Pdos):
         >>> E = 2.301
 
         Test the results:
-        >>> Al.get_coherent_XS(T, E).round(6).iloc[:10, :4]
+        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, :4]
                       d       Fsq  Orientation angle  Multiplicity
         h k l
         1 1 1  2.332494  0.115989                0.0           8.0
@@ -446,49 +577,171 @@ class Target_mat(Solid, Pdos):
             1  0.903371  0.100519                0.0          24.0
           3 2  0.824661  0.097189                0.0          24.0
             3  0.777498  0.094765                0.0          32.0
-        >>> Al.get_coherent_XS(T, E).round(6).iloc[:10, 4::]
-              PDDF         E        Xs      theta
+
+        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, 4::]
+               PDDF         E        Xs      theta
         h k l
-        1 1 1  1.0  0.003759  0.005370   4.632867
-            0  1.0  0.005012  0.003459   5.350060
-        2 1 1  1.0  0.010024  0.004729   7.568882
-          2 1  1.0  0.013783  0.007865   8.877727
-            2  1.0  0.015036  0.002489   9.273329
-            0  1.0  0.020048  0.001563  10.711827
-        3 2 2  1.0  0.023807  0.005595  11.676144
-            1  1.0  0.025060  0.005407  11.980567
-          3 2  1.0  0.030072  0.004773  13.128861
-            3  1.0  0.033831  0.005850  13.929091
+        1 1 1   1.0  0.003759  0.005370   4.632867
+            0   1.0  0.005012  0.003459   5.350060
+        2 1 1   1.0  0.010024  0.004729   7.568882
+          2 1   1.0  0.013783  0.007865   8.877727
+            2   1.0  0.015036  0.002489   9.273329
+            0   1.0  0.020048  0.001563  10.711827
+        3 2 2   1.0  0.023807  0.005595  11.676144
+            1   1.0  0.025060  0.005407  11.980567
+          3 2   1.0  0.030072  0.004773  13.128861
+            3   1.0  0.033831  0.005850  13.929091
         """
         # Get multiplicity
-        T, E = args
-        data = self.get_multiplicity(T, E,
-                                     precision=kwargs.pop("precision", [6, 6]))
+        data = self.get_multiplicity(*args,
+                                     precision=kwargs.pop("precision", [6, 6])
+                                     )
         # Get PDDF:
-        self.get_pddf(data, kwargs.pop("kind", None),
-                      kwargs.pop("pddf_val", None))
+        self.get_pddf(data,
+                      kwargs.pop("kind", None),
+                      kwargs.pop("pddf_val", None)
+                      )
 
-        # Get Xs:
-        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2 
+        # Get Bragg Edges:
+        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2
         constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
         constant *= 1.0e20  # Coherence with Bfac that is in anstrom
-        data["E"] = data["E"] = np.pi ** 2 * constant /(2 * data["d"] ** 2)
-        data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
-        data["Xs"] *= constant * np.pi ** 2
-        data["Xs"] /= self.unit_cell_vol * self.atom_number
-        if threshold:
-            data["Xs"][data["Xs"] < threshold] = 0.0
+        data["E"] = np.pi ** 2 * constant / (2 * data["d"] ** 2)
+        data = data.sort_values(by=["E"])
+
+        # Optional argument:
+        # Xs:
+        if xs:
+            self.get_BraggEdges_Xs(data,
+                                   self.unit_cell_vol,
+                                   self.atom_number,
+                                   threshold=kwargs.get("threshold", 1.e-30)
+                                   )
 
         # difraction angles vs hkl data
         if theta:
-            self.get_difrac_angles(data, E)
+            self.get_difrac_angles(data,
+                                   args[1]
+                                   )
 
         # Get the final result
-        result = data.sort_values(by=["E"])
-        if file:
-            result.to_csv(file, sep='\t',
-                          float_format="%20.10e")
-        return result
+        if file_BraggEdges:
+            data.to_csv(file_BraggEdges,
+                        sep='\t',
+                        float_format="%20.10e")
+        return data
+
+    def get_coherent_Xs(self, energy_cut, energy_sup, *args,
+                        file_Xs=None, **kwargs) -> pd.DataFrame:
+        """
+        Get coherent Xs.
+
+        Parameters
+        ----------
+        energy_cut : 'float'
+            energy cut-off, above which the peak will not be stored.
+        energy_sup : 'float', optional
+            Superior bound of energy. The default is False.
+        file_Xs : 'str', optional
+            Name of the file to write Xs the data. The default is False.
+
+        Parameters for get_BraggEdges
+        -----------------------------
+        theta : 'bool', optional
+            Option to get the difraction angles vs hkl data. The default is
+            True
+        file_BraggEdges : 'str', optional
+            Name of the file to write Bragg Edges data. The default is False.
+
+        Parameters for get_multiplicity
+        -------------------------------
+        T : 'float'
+            Temperature in K
+        E : 'float'
+            Neutron energy in eV
+        precision: ['int', 'int'], optional
+            Precision to get the multiplicity for d_hkl and Fsq_hkl. The
+            default is [6, 6].
+
+        Parameters for get_ppdf
+        -----------------------
+        kind : 'str', optional
+            key to calculate PDDF. The default is None. Options:
+                - march_dollase
+                - altomare
+                - cvc
+        pddf_val : 1D iterable, optional
+            Value to calculate PDDF. The default is None. Options:
+                - march-dollase : shape(1, 1)
+                - altomare: shape(1, 2)
+                - cvc: shape(1, 2)
+
+        Parameters for get_BraggEdges_Xs
+        --------------------------------
+        threshold : 'float', optional
+            Minimun value of xs. The default is 1.e-30.
+
+        Returns
+        -------
+        Object initialization:
+        >>> preferred_orientation = np.array([ 0, 0, 1 ])
+        >>> a = 2.856710674519725
+        >>> dir_vec_length = [a, a, a]
+        >>> dir_vec_angles = [60, 60, 60]
+        >>> unit_pos = np.array([0., 0., 0.])
+        >>> A = 27
+        >>> Z = 13
+        >>> atomic_mass_Al27 = 26.98153433356103
+        >>> b_coh_Al27  = 3.449
+        >>> b_incoh_Al27 = 0.256
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> T = 20
+        >>> E = 2.301
+
+        Test the results:
+        >>> energy_cut = 2.301
+        >>> energy_sup = 10.0
+        >>> Al.get_coherent_Xs(energy_cut, energy_sup, T, E).round(6).iloc[:10]
+        ZAM         130270
+        MT               2
+        E
+        0.003759  1.428610
+        0.005012  1.761554
+        0.010024  1.352587
+        0.013783  1.554352
+        0.015036  1.590366
+        0.020048  1.270746
+        0.023807  1.305106
+        0.025060  1.455627
+        0.030072  1.371732
+        0.033831  1.392236
+        """
+        BraggEdges_Xs = self.get_BraggEdges(*args, **kwargs)\
+                            .reset_index()\
+                            .loc[::, ["E", "Xs"]]
+        BraggEdges_Xs = BraggEdges_Xs[BraggEdges_Xs["E"] <= energy_cut]
+
+        if (BraggEdges_Xs["E"] > energy_sup).any():
+            raise ValueError("Energy superior bonds not properly introduce")
+        else:
+            bound_sup = pd.DataFrame([[energy_sup, 0.0]],
+                                     columns=["E", "Xs"])
+            BraggEdges_Xs = pd.concat([BraggEdges_Xs, bound_sup],
+                                      axis=0,
+                                      ignore_index=True)
+
+        xs = BraggEdges_Xs["E"].to_frame()
+        xs["Xs"] = np.cumsum(BraggEdges_Xs["Xs"]) / BraggEdges_Xs["E"]
+        xs = xs.set_index("E")
+        xs.columns = pd.MultiIndex.from_product(
+            [self.atoms.apply(lambda x: x.zam).values, [2]],
+            names=["ZAM", "MT"])
+        # Optional argument:
+        if file_Xs:
+            xs.to_csv(file_Xs,
+                      sep='\t',
+                      float_format="%20.10e")
+        return xs
 
 
 def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,

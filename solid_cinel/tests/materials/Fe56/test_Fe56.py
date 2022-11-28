@@ -44,7 +44,7 @@ def test_Fe56_BraggEddges(T):
                     dir_vec_length, dir_vec_angles,
                     A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
                     rho_in_energy, interv_in_energy)
-    E = 2.301
+    E = 4.096
     file = os.path.abspath(f"Multiplicity_Fe_{T}K.dat")
     test_data = pd.DataFrame(np.loadtxt(file),
                              columns=["h", "k", "l", "d", "theta", "Orientation angle", "PDDF", "Fsq", "Multiplicity", "E", "Xs"])\
@@ -87,8 +87,8 @@ def test_Fe56_coherent_Xs(T):
                     dir_vec_length, dir_vec_angles,
                     A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
                     rho_in_energy, interv_in_energy)
-    E = 2.301
-    energy_cut = 2.301
+    E = 4.096
+    energy_cut = 4.096
     energy_sup = 10.0
     file = os.path.abspath(f"Fe56_Fe_{T}K_coh_XS")
     test_data = pd.DataFrame(np.loadtxt(file),

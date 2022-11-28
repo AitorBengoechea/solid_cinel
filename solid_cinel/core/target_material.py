@@ -474,19 +474,19 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765                0.0          32.0   1.0  0.033831
 
         Test the results:
-        >>> Target_mat.get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).iloc[:10]
-                      d       Fsq  Orientation angle  Multiplicity  PDDF         E        Xs
-        h k l
-        1 1 1  2.332494  0.115989                0.0           8.0   1.0  0.003759  0.005370
-            0  2.019999  0.115016                0.0           6.0   1.0  0.005012  0.003459
-        2 1 1  1.428355  0.111207                0.0          12.0   1.0  0.010024  0.004729
-          2 1  1.218106  0.108433                0.0          24.0   1.0  0.013783  0.007865
-            2  1.166247  0.107523                0.0           8.0   1.0  0.015036  0.002489
-            0  1.010000  0.103962                0.0           6.0   1.0  0.020048  0.001563
-        3 2 2  0.926839  0.101369                0.0          24.0   1.0  0.023807  0.005595
-            1  0.903371  0.100519                0.0          24.0   1.0  0.025060  0.005407
-          3 2  0.824661  0.097189                0.0          24.0   1.0  0.030072  0.004773
-            3  0.777498  0.094765                0.0          32.0   1.0  0.033831  0.005850
+        >>> Target_mat.get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]
+        h  k  l
+        1  1  1    0.005370
+              0    0.003459
+        2  1  1    0.004729
+           2  1    0.007865
+              2    0.002489
+              0    0.001563
+        3  2  2    0.005595
+              1    0.005407
+           3  2    0.004773
+              3    0.005850
+        Name: Xs, dtype: float64
         """
         constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2
         constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)

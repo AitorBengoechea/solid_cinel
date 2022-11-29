@@ -705,20 +705,21 @@ class Target_mat(Solid, Pdos):
         ZAM         130270
         MT               2
         E
-        0.003759  1.428610
-        0.005012  1.761554
-        0.010024  1.352587
-        0.013783  1.554352
-        0.015036  1.590366
-        0.020048  1.270746
-        0.023807  1.305106
-        0.025060  1.455627
-        0.030072  1.371732
-        0.033831  1.392236
+        0.003759  1.428617
+        0.005012  1.761562
+        0.010024  1.352593
+        0.013783  1.554360
+        0.015036  1.590374
+        0.020048  1.270752
+        0.023807  1.305112
+        0.025060  1.455634
+        0.030072  1.371739
+        0.033831  1.392243
         """
         BraggEdges_Xs = self.get_BraggEdges(*args, **kwargs)\
                             .reset_index()\
                             .loc[::, ["E", "Xs"]]
+        BraggEdges_Xs["E"] = BraggEdges_Xs["E"].round(6)
         BraggEdges_Xs = BraggEdges_Xs[BraggEdges_Xs["E"] <= energy_cut]
 
         if (BraggEdges_Xs["E"] > energy_sup).any():
@@ -729,10 +730,10 @@ class Target_mat(Solid, Pdos):
             BraggEdges_Xs = pd.concat([BraggEdges_Xs, bound_sup],
                                       axis=0,
                                       ignore_index=True)
-
-        xs = BraggEdges_Xs["E"].to_frame()
-        xs["Xs"] = np.cumsum(BraggEdges_Xs["Xs"]) / BraggEdges_Xs["E"]
-        xs = xs.set_index("E")
+        xs = BraggEdges_Xs.set_index("E")
+        if xs.index.has_duplicates:
+            xs = xs.groupby(by="E").sum()
+        xs["Xs"] = np.cumsum(xs["Xs"]) / xs.index.values
         xs.columns = pd.MultiIndex.from_product(
             [self.atoms.apply(lambda x: x.zam).values, [2]],
             names=["ZAM", "MT"])

@@ -15,11 +15,13 @@ import numpy as np
 import pandas as pd
 import numba as nb
 import collections
-collections.Callable = collections.abc.Callable
 import pytest
+collections.Callable = collections.abc.Callable
+
 
 # Examples variables:
-rho_in_energy_str = '''
+# 1 atom
+rho_in_energy_Al27_str = '''
     0 .0066 .0264 .0594 .1055 .1649 .2374 .3232 .4221
     .5342 .6595 .7980 .9497 1.1146 1.2927 1.4839 1.6884
     2.0169 2.4373 2.9366 3.6133 4.6775 7.1346 7.3650
@@ -28,8 +30,122 @@ rho_in_energy_str = '''
     4.1914 3.8169 3.3439 2.7855 3.2782 5.3082 8.5930
     12.3377 8.4616 5.6695 4.1585 2.6081 0.0
 '''
-rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
-interv_in_energy = 0.0008
+rho_in_energy_Al27 = np.fromstring(rho_in_energy_Al27_str, dtype=np.float64,
+                                   sep=' ')
+interv_in_energy_Al27 = 0.0008
+
+preferred_orientation_Al27 = np.array([0, 0, 1])
+a_Al27 = 2.856710674519725
+dir_vec_length_Al27 = [a_Al27, a_Al27, a_Al27]
+dir_vec_angles_Al27 = [60, 60, 60]
+unit_pos_Al27 = np.array([0.0, 0.0, 0.0])
+A_Al27 = 27
+Z_Al27 = 13
+atomic_mass_Al27 = 26.98153433356103
+b_coh_Al27 = 3.449
+b_incoh_Al27 = 0.256
+
+# 2 atom:
+rho_in_energy_O16_str = '''
+0.000000E+00 6.923874E-03 2.497670E-02 5.488348E-02
+9.504920E-02 1.479389E-01 2.139513E-01 2.889902E-01
+3.722217E-01 4.694096E-01 5.797566E-01 7.142103E-01
+8.648680E-01 1.037820E+00 1.270585E+00 1.816629E+00
+1.726038E+00 1.064790E+00 8.615329E-01 8.017556E-01
+7.808027E-01 7.815640E-01 7.991818E-01 8.341637E-01
+8.819783E-01 9.379855E-01 1.239156E+00 2.544143E+00
+5.493169E+00 7.542890E+00 6.200347E+00 3.899265E+00
+3.176137E+00 3.982750E+00 5.293972E+00 5.997778E+00
+6.310875E+00 6.750886E+00 7.348876E+00 9.615086E+00
+1.342006E+01 1.785015E+01 2.514254E+01 3.308876E+01
+3.394329E+01 3.018225E+01 2.677197E+01 2.401069E+01
+2.264379E+01 2.170413E+01 2.108204E+01 2.061835E+01
+2.034441E+01 2.020180E+01 2.021090E+01 2.032422E+01
+2.048390E+01 2.089081E+01 2.149127E+01 2.224180E+01
+2.335361E+01 2.456841E+01 2.400029E+01 2.378412E+01
+2.057435E+01 1.340375E+01 1.410426E+01 1.986035E+01
+2.335756E+01 2.336811E+01 2.139441E+01 2.074719E+01
+2.063757E+01 2.095150E+01 2.158940E+01 2.254504E+01
+2.422993E+01 2.691331E+01 3.179124E+01 4.563659E+01
+5.752641E+01 5.609342E+01 4.689648E+01 2.438494E+01
+4.135546E+00 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 5.255256E-01 2.237281E+00 4.016499E+00
+5.186199E+00 6.762413E+00 8.981823E+00 1.161543E+01
+1.599614E+01 3.174364E+01 3.582525E+01 2.322394E+01
+1.668530E+01 1.262719E+01 1.004853E+01 8.184454E+00
+6.946893E+00 6.009886E+00 5.284656E+00 4.766380E+00
+4.441574E+00 4.272284E+00 3.664723E+00 2.362237E+00
+8.264423E-01 1.493527E-02 0.000000E+00'''
+rho_in_energy_O16 = np.fromstring(rho_in_energy_O16_str, dtype=np.float64,
+                                  sep=' ')
+interv_in_energy_O16 = interv_in_energy_U238 = 6.956193E-04
+rho_in_energy_U238_str = '''
+0.000000E+00 1.041128E-01 3.759952E-01 8.354039E-01
+1.469796E+00 2.335578E+00 3.467660E+00 4.841392E+00
+6.492841E+00 8.608376E+00 1.131303E+01 1.504441E+01
+2.006807E+01 2.750471E+01 4.171597E+01 1.585670E+02
+1.978483E+02 1.144621E+02 7.555927E+01 4.831100E+01
+4.389081E+01 4.246484E+01 4.103699E+01 3.986249E+01
+3.827959E+01 3.592088E+01 3.272170E+01 3.914602E+01
+8.144694E+01 9.693959E+01 5.503795E+01 2.619253E+01
+1.763331E+01 1.475875E+01 1.522465E+01 1.213117E+01
+6.175029E+00 2.483519E+00 1.445581E+00 1.423177E+00
+1.502350E+00 1.718768E+00 2.211346E+00 3.061686E+00
+3.550530E+00 3.349917E+00 2.768379E+00 2.177488E+00
+1.856123E+00 1.622775E+00 1.445254E+00 1.300794E+00
+1.180078E+00 1.075748E+00 9.928057E-01 9.238564E-01
+8.577708E-01 8.073819E-01 7.634820E-01 7.172257E-01
+6.728183E-01 6.251482E-01 5.496737E-01 4.992486E-01
+3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-01
+9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
+7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
+1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
+3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
+2.653572E-02 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 7.105193E-03 5.274518E-02 1.324974E-01
+2.310275E-01 4.042710E-01 6.421137E-01 8.073457E-01
+9.162074E-01 1.077923E+00 1.142595E+00 1.092532E+00
+1.060668E+00 1.000020E+00 8.769838E-01 7.610532E-01
+6.898200E-01 6.324347E-01 5.857072E-01 5.563076E-01
+5.468099E-01 5.515587E-01 4.871045E-01 3.198787E-01
+1.132118E-01 2.066306E-03 0.000000E+00
+'''
+rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
+                                   sep=' ')
+rho_in_energy = [rho_in_energy_O16, rho_in_energy_U238]
+interv_in_energy = [interv_in_energy_O16, interv_in_energy_U238]
+preferred_orientation = np.array([0, 0, 1])
+unit_pos_U_str = '''
+0.500000  0.000000  0.000000
+0.500000  0.500000  0.500000
+0.000000  0.000000  0.500000
+0.000000  0.500000  0.000000'''
+unit_pos_U = np.fromstring(unit_pos_U_str, dtype=np.float64, sep=' ')\
+               .reshape(-1, 3)
+unit_pos_O_str = '''
+0.250000  0.250000  0.250000
+0.750000  0.250000  0.250000
+0.250000  0.750000  0.750000
+0.750000  0.750000  0.750000
+0.750000  0.250000  0.750000
+0.250000  0.250000  0.750000
+0.750000  0.750000  0.250000
+0.250000  0.750000  0.250000'''
+unit_pos_O = np.fromstring(unit_pos_O_str, dtype=np.float64, sep=' ')\
+               .reshape(-1, 3)
+unit_pos = {"O16": unit_pos_O, "U238": unit_pos_U}
+a = 5.54781
+dir_vec_length = [a, a, a]
+dir_vec_angles = [90, 90, 90]
+energy_sup = 5.  # eV
+energy_cut = 6.85e-1
+A = [16, 238]
+Z = [8, 92]
+atom_mass = [15.99491399021626, 238.05077040419212]
+b_coh = [5.878374042670532, 8.62912188811068]
+b_incoh = [0.0, 0.19947114020071632]
 
 
 class Target_mat(Solid, Pdos):
@@ -100,17 +216,8 @@ class Target_mat(Solid, Pdos):
         Examples
         --------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 1, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> UO2 = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> T = 20
@@ -120,6 +227,18 @@ class Target_mat(Solid, Pdos):
         >>> T = 80
         >>> Al.get_Bfact(T)["Al27"].round(6)
         0.337081
+
+        >>> T = 296
+        >>> UO2.get_Bfact(T).round(6)
+        O16     0.468604
+        U238    0.253845
+        dtype: float64
+
+        >>> T = 400
+        >>> UO2.get_Bfact(T).round(6)
+        O16     0.595531
+        U238    0.340297
+        dtype: float64
         """
         constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
         constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
@@ -151,17 +270,7 @@ class Target_mat(Solid, Pdos):
         Examples
         --------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 0, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0., 0., 0.])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
 
         Test the results:
         >>> T = 20
@@ -199,15 +308,12 @@ class Target_mat(Solid, Pdos):
         recs_vec = self.reciproc_vec.values
         d_min = Neutron(energy_cut).d_min
         hkl_max = hkl_max_value(recs_vec, d_min)
-        B = self.get_Bfact(T)
-        pos = self.atom_pos
-        csl = self.atoms.apply(lambda x: x.b["b_coh"])
         hkl_data = numba_hkl_data(d_min,
                                   hkl_max,
                                   recs_vec,
-                                  B,
-                                  pos,
-                                  csl,
+                                  self.get_Bfact(T),
+                                  self.atom_pos,
+                                  self.atoms.apply(lambda x: x.b["b_coh"]),
                                   self.preferred_orientation.values,
                                   np.array(precision)
                                   )
@@ -245,17 +351,7 @@ class Target_mat(Solid, Pdos):
         Example
         -------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 0, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0., 0., 0.])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -368,17 +464,7 @@ class Target_mat(Solid, Pdos):
         Example
         -------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 0, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0., 0., 0.])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -443,17 +529,7 @@ class Target_mat(Solid, Pdos):
         Example
         -------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 0, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0., 0., 0.])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> unit_cell_vol = Al.unit_cell_vol
@@ -549,17 +625,7 @@ class Target_mat(Solid, Pdos):
         Returns
         -------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 0, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0., 0., 0.])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
 
@@ -682,17 +748,7 @@ class Target_mat(Solid, Pdos):
         Returns
         -------
         Object initialization:
-        >>> preferred_orientation = np.array([ 0, 0, 1 ])
-        >>> a = 2.856710674519725
-        >>> dir_vec_length = [a, a, a]
-        >>> dir_vec_angles = [60, 60, 60]
-        >>> unit_pos = np.array([0., 0., 0.])
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
 
@@ -732,6 +788,7 @@ class Target_mat(Solid, Pdos):
         if xs.index.has_duplicates:
             xs = xs.groupby(by="E").sum()
         xs["Xs"] = np.cumsum(xs["Xs"]) / xs.index.values
+        xs = pd.concat([xs] * len(self.atoms), axis=1)
         xs.columns = pd.MultiIndex.from_product(
             [self.atoms.apply(lambda x: x.zam).values, [2]],
             names=["ZAM", "MT"])
@@ -748,6 +805,7 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
     """
     Obtain hkl data for the solid in a certain temperature and for a neutron
     certain energy.
+    2 atoms test in test folder.
 
     Parameters
     ----------
@@ -772,17 +830,9 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
     Examples
     --------
     Object initialization:
-    >>> preferred_orientation = np.array([ 0, 0, 1 ])
-    >>> a = 2.856710674519725
-    >>> dir_vec_length = [a, a, a]
-    >>> dir_vec_angles = [60, 60, 60]
-    >>> unit_pos = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-    >>> A = 27
-    >>> Z = 13
-    >>> atomic_mass_Al27 = 26.98153433356103
-    >>> b_coh_Al27  = 3.449
-    >>> b_incoh_Al27 = 0.256
-    >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy, interv_in_energy)
+    >>> unit_pos_Al27 = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
+    >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+    >>> UO2 = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
 
     Test the results:
     >>> T = 20
@@ -810,6 +860,30 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
     7  31  20  18  0.090815  0.0          87.768637         552.0
     8  31  20  17  0.090884  0.0          90.000000         336.0
     9  31  19  19  0.090999  0.0          84.777020         384.0
+
+    >>> T = 296
+    >>> E = 6.85e-1
+    >>> recs_vec = UO2.reciproc_vec.values
+    >>> d_min = Neutron(E).d_min
+    >>> hkl_max = hkl_max_value(recs_vec, d_min)
+    >>> B = UO2.get_Bfact(T)
+    >>> pos = UO2.atom_pos
+    >>> csl = UO2.atoms.apply(lambda x: x.b["b_coh"])
+    >>> precision = np.array([6, 6])
+    >>> preferred_orientation = UO2.preferred_orientation.values
+    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl, preferred_orientation, precision)
+    >>> hkl_data.round(6).iloc[:10]
+        h  k  l         d       Fsq  Orientation angle  Multiplicity
+    0  33  7  2  0.164168  0.000000          86.607081         216.0
+    1  33  7  1  0.164384  0.108687          88.302052         384.0
+    2  33  7  0  0.164456  0.000000          90.000000         144.0
+    3  33  6  4  0.164240  0.000000          83.199199         288.0
+    4  33  6  3  0.164746  0.000000          84.888910         432.0
+    5  33  6  2  0.165110  0.000000          86.587580         192.0
+    6  33  6  1  0.165330  0.000000          88.292276         264.0
+    7  33  6  0  0.165404  0.000000          90.000000         432.0
+    8  33  5  4  0.165037  0.000000          83.166021         528.0
+    9  33  5  3  0.165551  0.116100          84.863872         120.0
     """
     # Preparation of variables to be accept in numba nopython mode:
     Bfac_ = nb.typed.Dict.empty(
@@ -826,11 +900,10 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
         )
     for element, value in Bfac.items():
         Bfac_[element] = value
-        pos_[element] = pos[element]
+        pos_[element] = pos.loc[element].values
         csl_[element] = csl[element]
 
     preferred_orientation_ = np.array(preferred_orientation, dtype=float)
-
     # Execute numba
     hkl_data_dict = hklloop(d_min, hkl_max, rec_vecs, Bfac_, pos_, csl_,
                             preferred_orientation_, precision)
@@ -840,4 +913,5 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
 
     return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, orientation, mul]
                          for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul]
-                         in hkl_data_dict.items()], columns=columns)
+                         in hkl_data_dict.items()],
+                        columns=columns)

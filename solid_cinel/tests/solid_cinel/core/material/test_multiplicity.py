@@ -110,7 +110,7 @@ def test_multiplicity(E):
     )
     for element, value in Al.get_Bfact(T).to_dict().items():
         Bfac[element] = value
-        pos[element] = Al.atom_pos[element]
+        pos[element] = Al.atom_pos[element].values
         csl[element] = 3.449
     try:
         data_original = hklloop(d_min,

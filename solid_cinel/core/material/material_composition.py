@@ -8,7 +8,10 @@ import collections
 import pytest
 collections.Callable = collections.abc.Callable
 
+
 class Atom():
+    """Class to store properties of the atoms."""
+
     def __init__(self, A, Z, atom_mass, b_coh, b_incoh):
         """
         Initialize the Atom class to describe a single atoms.
@@ -137,6 +140,11 @@ class Atom():
 
 
 class Molecule(Atom):
+    """
+    Class to store the properties and method for all the atom of
+    the molecule
+    """
+
     def __init__(self, A, Z, atom_mass, b_coh, b_incoh, name=None):
         """
         Initialize the Molecule class to describe a molecule.

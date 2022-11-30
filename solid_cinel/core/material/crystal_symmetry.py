@@ -16,10 +16,9 @@ class Crystal_structure():
         self.symmetry = symmetry.lower()
 
     @property
-    def _cubic(self) -> np.ndarray:
+    def _operator(self) -> np.ndarray:
         """
-        Generate the operator for obteining the direct lattice vectors in cubic
-        symmetry based on the angles.
+        Generate the operator for obteining the direct lattice vectors.
 
         Example
         -------
@@ -28,7 +27,7 @@ class Crystal_structure():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> crys = Crystal_structure(dir_vec_length, dir_vec_angles)
-        >>> cubic_vec = crys._cubic
+        >>> cubic_vec = crys._operator
 
         Test the results:
         >>> assert all(cubic_vec[0].round(6) == np.array([1.      , 0.      , 0.]))
@@ -70,7 +69,7 @@ class Crystal_structure():
 
         """
         if self.symmetry == "cubic":
-            operator = pd.DataFrame(self._cubic)
+            operator = pd.DataFrame(self._operator)
         operator.index = pd.Index(["a1", "a2", "a3"])
         operator.columns = pd.Index(["x", "y", "z"])
         return operator * self.length.values

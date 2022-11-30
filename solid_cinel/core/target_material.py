@@ -133,7 +133,7 @@ class Target_mat(Solid, Pdos):
 
         return self.pdos.apply(get_Bfac) / atom_masses
 
-    def get_multiplicity(self, T, E, precision=[6, 6]) -> pd.DataFrame:
+    def get_multiplicity(self, T, energy_cut, precision=[6, 6]) -> pd.DataFrame:
         """
         Obtain hkl data for the solid in a certain temperature and for a neutron
         certain energy filtering with the multiplicity.
@@ -142,8 +142,8 @@ class Target_mat(Solid, Pdos):
         ----------
         T : 'float'
             Temperature in K
-        E : 'float'
-            Neutron energy in eV
+        energy_cut : 'float'
+            Energy limit for d espace limit in eV
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
@@ -197,7 +197,7 @@ class Target_mat(Solid, Pdos):
               19  0.090090  0.0          86.309150         168.0
         """
         recs_vec = self.reciproc_vec.values
-        d_min = Neutron(E).d_min
+        d_min = Neutron(energy_cut).d_min
         hkl_max = hkl_max_value(recs_vec, d_min)
         B = self.get_Bfact(T)
         pos = self.atom_pos
@@ -352,7 +352,7 @@ class Target_mat(Solid, Pdos):
         return data
 
     @staticmethod
-    def get_difrac_angles(data, E) -> pd.DataFrame:
+    def get_difrac_angles(data, energy_cut) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the difraction angles(ª) vs hkl data
         .. math::
@@ -362,8 +362,8 @@ class Target_mat(Solid, Pdos):
         ----------
         data: 'pd.DataFrame'
             Frame with hkl data.
-        E : 'float'
-            Neutron energy in eV
+        energy_cut : 'float'
+            Energy cut for d espace in eV
 
         Example
         -------
@@ -416,7 +416,7 @@ class Target_mat(Solid, Pdos):
         constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
         constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         d = data.loc[:, "d"]
-        angle_value = np.clip(1 - np.pi ** 2 * constant / (d ** 2 * E), -1, 1)
+        angle_value = np.clip(1 - np.pi ** 2 * constant / (d ** 2 * energy_cut), -1, 1)
         data["theta"] = np.arccos(angle_value) * 180 / np.pi
         return data
 
@@ -522,8 +522,8 @@ class Target_mat(Solid, Pdos):
         -------------------------------
         T : 'float'
             Temperature in K
-        E : 'float'
-            Neutron energy in eV
+        energy_cut : 'float'
+            Energy cut for d espace in eV
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
@@ -657,8 +657,6 @@ class Target_mat(Solid, Pdos):
         -------------------------------
         T : 'float'
             Temperature in K
-        E : 'float'
-            Neutron energy in eV
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
@@ -701,7 +699,7 @@ class Target_mat(Solid, Pdos):
         Test the results:
         >>> energy_cut = 2.301
         >>> energy_sup = 10.0
-        >>> Al.get_coherent_Xs(energy_cut, energy_sup, T, E).round(6).iloc[:10]
+        >>> Al.get_coherent_Xs(energy_cut, energy_sup, T).round(6).iloc[:10]
         ZAM         130270
         MT               2
         E
@@ -716,7 +714,7 @@ class Target_mat(Solid, Pdos):
         0.030072  1.371739
         0.033831  1.392243
         """
-        BraggEdges_Xs = self.get_BraggEdges(*args, **kwargs)\
+        BraggEdges_Xs = self.get_BraggEdges(*args, energy_cut, **kwargs)\
                             .reset_index()\
                             .loc[::, ["E", "Xs"]]
         BraggEdges_Xs["E"] = BraggEdges_Xs["E"].round(6)

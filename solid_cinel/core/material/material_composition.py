@@ -230,15 +230,6 @@ def get_atom_data(A, Z, source) -> pd.DataFrame:
 
     Examples
     --------
-    >>> get_atom_data(26, 13, "nist")
-        Isotope conc	Coh b	Inc b	Coh xs	Inc xs	Scatt xs	Abs xs
-    0	     Al	100 	3.449	0.256	1.495	0.0082	   1.503	 0.231
-
-    >>> get_atom_data(26, 35, "nist")
-        Isotope	conc	Coh b	Inc b   Coh xs	Inc xs	Scatt xs	Abs xs
-    0	Br	    0.00	6.795	0.0	    5.80	0.10	5.90	    6.9
-    1	79Br	50.69	6.800  -1.1	    5.81	0.15	5.96	    11.0
-    2	81Br	49.31	6.790	0.6	    5.79	0.05	5.84	    2.7
     """
     if source.lower() == "nist":
         html = f"https://www.ncnr.nist.gov/resources/n-lengths/elements/{ELEMENTS[Z].lower()}.html"

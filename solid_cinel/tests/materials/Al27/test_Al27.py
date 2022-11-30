@@ -86,7 +86,6 @@ def test_Fe56_coherent_Xs(T):
                     dir_vec_length, dir_vec_angles,
                     A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
                     rho_in_energy, interv_in_energy)
-    E = 2.301
     energy_cut = 2.301
     energy_sup = 10.0
     file = os.path.abspath(f"Al27_Al_{T}K_coh_XS")
@@ -96,7 +95,7 @@ def test_Fe56_coherent_Xs(T):
     test_data.columns = pd.MultiIndex.from_product(
         [Al.atoms.apply(lambda x: x.zam).values, [2]],
         names=["ZAM", "MT"])
-    data = Al.get_coherent_Xs(energy_cut, energy_sup, T, E)
+    data = Al.get_coherent_Xs(energy_cut, energy_sup, T)
     comp = test_data/data - 1
     comp_inv = data/test_data - 1  # Avoid one 0 and the other a number
     assert (comp.fillna(0) < 1.0e-4).all().all()

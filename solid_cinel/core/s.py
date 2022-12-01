@@ -200,6 +200,44 @@ class S():
             raise ValueError("Normalization of S(alpha, beta) not satisfied")
         return
 
+    @staticmethod
+    def scale_grid(grid, T, therm=0.0253) -> np.ndarray:
+        """
+        Scale alpha or beta spectrum.
+
+        Parameters
+        ----------
+        grid : 'np.ndarray' of 1D or 2D
+            Alpha o Beta grid.
+        T : 'float'
+            Temperature in K.
+        therm : 'float', optional
+            factor for regrid alpha and beta. The default is 0.0253.
+
+        Example
+        -------
+        >>> T = 300
+        >>> alpha0 = gen_alpha(T, 26, num_grid=10)
+        >>> S.scale_grid(alpha0, T).round(6)
+        array([1.0280000e-03, 3.2140000e-03, 1.0051000e-02, 3.1428000e-02,
+               9.8269000e-02, 3.0727100e-01, 9.6078300e-01, 3.0041990e+00,
+               9.3936040e+00, 2.9372154e+01])
+        
+        >>> beta0 = gen_beta(T, num_grid=10)
+        >>> S.scale_grid(beta0, T).round(6)
+        array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
+                 2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
+
+        >>> grid0 = np.array([alpha0, beta0])
+        >>> S.scale_grid(grid0, T).round(6)
+        array([[1.02800000e-03, 3.21400000e-03, 1.00510000e-02, 3.14280000e-02,
+                9.82690000e-02, 3.07271000e-01, 9.60783000e-01, 3.00419900e+00,
+                9.39360400e+00, 2.93721540e+01],
+               [0.00000000e+00, 5.04744000e-01, 1.00948800e+00, 1.51423100e+00,
+                2.01897500e+00, 2.52371900e+00, 3.02846300e+00, 1.20184620e+01,
+                4.76952980e+01, 1.89278915e+02]])
+        """
+        return grid * therm / (const["Boltzmann constant in eV/K"][0] * T)
 
 def _sum_rule(x) -> float:
     """

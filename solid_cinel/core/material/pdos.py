@@ -310,7 +310,48 @@ class Pdos():
         data = self.P(T)
         P = data.values
         beta = data.index.values
-        return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)   
+        return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
+
+    def get_tau1(self, T) -> pd.Series:
+        """
+        Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
+
+        Parameters
+        ----------
+        T : 'int'
+            Temperature in K.
+
+        Raises
+        ------
+        ValueError
+            Tau function doesnt satisfy normalization condition.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+
+        Test the results:
+        >>> p.get_tau1(20).iloc[:10]
+        beta
+        0.000000    0.004250
+        0.464181    0.005313
+        0.928361    0.006524
+        1.392542    0.007875
+        1.856723    0.009344
+        2.320904    0.010932
+        2.785084    0.012606
+        3.249265    0.014359
+        3.713446    0.016167
+        4.177627    0.018020
+        Name: P, dtype: float64
+        """
+        P = self.P(T)
+        beta = P.index.values
+        tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff(T)
+        if normalization_coeff(tau1 * (1 + np.exp(-beta))) < 1.e-5:
+            raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
+        return tau1
 
     @staticmethod
     def reshape_differential(x, y, xnew):

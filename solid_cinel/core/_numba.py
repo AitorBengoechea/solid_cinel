@@ -75,46 +75,53 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
                     hklM[(h, k, l)] = np.array([d_hkl, Fsq_hkl, orientation_angle_hkl, 1])
     return hklM
 
+
 @nb.jit(nopython=True, nogil=True)
-def convolTaufunc_CPU(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):
-    '''Tau function for n phonon (n > 1) in LEAPR formalism is 
-    to be computed by convolution. Tau1_neg function is zero 
-    beyond the maximum value of beta ((num_dos - 1) * interv_in_beta). 
-    According to the calculation of Taun_neg by convolution, by recurrence,
-    Taun_neg is nonzero within n * (num_dos - 1) * interv_in_beta.
-    
-    The convolution process is direct : Tau1_neg and Taunm1_neg will be
-    extended to the same length as Taun_neg by adding 0 in the end;
-    then the positive part is also computed by multiplying exp(-beta);
-    finally Taun_neg can be computed by the convolution formula.
-    
-    interv_in_beta : interval of beta for the PDOS, float
-    Tau1_neg : Tau function for n = 1 negative part, num_dos * 1 array
-    Taunm1_neg : Tau function for n - 1 negative part, ((n - 1) * (num_dos - 1) + 1) * 1 array
-    Taun_neg : Taun_neg function for n negative part, in LEAPR formalism, 
-                (n * (num_dos - 1) + 1) * 1 array
-    '''
-    
-    N = len(Tau1_neg)                             # length of Tau1_neg
-    Nnm1 = len(Taunm1_neg)                        # length of Taunm1_neg
-    Nn = len(Taun_neg)                            # length of Taun_neg
-    
-    for i in prange(Nn):                           # loop for Taun_neg            
-        for j in prange(N):                        # loop for Tau1_neg
+def tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold) -> np.array:
+    """
+    Get the tau_{n}(-beta) function values.
+
+    Parameters
+    ----------
+    delta_beta : 'float'
+        Interval of beta for the PDOS.
+    tau1 : 'np.array' of 1D
+        Tau(-beta) function for n = 1 expansion.
+    tau_n_minus_1 : 'np.array' of 1D
+        Tau(-beta) function for n - 1 expansion.
+    threshold : 'float'
+        Minimun value to take into account.
+
+    Returns
+    -------
+    tau_n : 'np.array' of 1D
+        Tau(-beta) function for n expansion.
+
+    """
+    tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
+    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
+    N = len(tau1)
+
+    for i in prange(len(tau_n)):  # loop for tau_n
+        for j in prange(N):  # loop for tau1
             convol = 0.
-            k = i - j                             # indice of Taunm1_neg(-(beta-beta^pirme))
-            if 0 <= k and k < Nnm1:
-                convol = Taunm1_neg[k]
-            elif -Nnm1 < k and k < 0:             # Tau(beta) = exp(-beta)Tau(beta)
-                convol = Taunm1_neg[-k] * math.exp(k * interv_in_beta)
-            l = i + j                             # indice of Taunm1_neg(-(beta+beta^pirme))
+
+            k = i - j  # tau_n_minus_1(-(beta-beta^pirme))
+            if k >= 0 and k < Nnm1:
+                convol = tau_n_minus_1[k]
+            elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
+                convol = tau_n_minus_1[-k] * np.exp(k * delta_beta)
+
+            l = i + j  # Tau_n_minus_1(-(beta+beta^pirme))
             if l < Nnm1:
-                convol += Taunm1_neg[l] * math.exp(-j * interv_in_beta)
-            convol *= Tau1_neg[j]
+                convol += tau_n_minus_1[l] * np.exp(-j * delta_beta)
+
             if j == 0 or j == N - 1:
                 convol *= 0.5                      # trapz integrate
-            Taun_neg[i] += interv_in_beta * convol
-    return Taun_neg
+
+            tau_n[i] += tau1[j] * convol * delta_beta
+
+    return tau_n[tau_n >= threshold]
 
 @cuda.jit
 def convolTaufunc(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):

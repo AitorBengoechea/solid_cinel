@@ -4,7 +4,8 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.core.generic import normalization_coeff
+from solid_cinel.core.generic import normalization_coeff, reshape_differential
+from solid_cinel.core._numba import tau_n_CPU
 import pandas as pd
 import numpy as np
 import scipy as sp
@@ -191,7 +192,7 @@ class Pdos():
         if eg:
             enew = grid.union(eg).astype("float")
             enew.name = "E"
-            rho_new = self.reshape_differential(
+            rho_new = reshape_differential(
                 grid.values,
                 self.rho.values,
                 enew.values,
@@ -312,7 +313,7 @@ class Pdos():
         beta = data.index.values
         return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
 
-    def get_tau1(self, T) -> pd.Series:
+    def _get_tau_1(self, T) -> pd.Series:
         """
         Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
 
@@ -332,7 +333,7 @@ class Pdos():
         >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
 
         Test the results:
-        >>> p.get_tau1(20).iloc[:10]
+        >>> p._get_tau_1(20).iloc[:10]
         beta
         0.000000    0.004250
         0.464181    0.005313
@@ -344,41 +345,103 @@ class Pdos():
         3.249265    0.014359
         3.713446    0.016167
         4.177627    0.018020
-        Name: P, dtype: float64
+        Name: 1, dtype: float64
         """
         P = self.P(T)
         beta = P.index.values
         tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff(T)
         if normalization_coeff(tau1 * (1 + np.exp(-beta))) < 1.e-5:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
+        tau1.name = 1
         return tau1
 
-    @staticmethod
-    def reshape_differential(x, y, xnew):
+    def _check_tau(tau):
+        norm = tau.apply(lambda x: normalization_coeff(x * (1 + np.exp(-x.index.values))), axis=0)
+        if (norm < 1.e-5).any():
+            raise ValueError("Tau function doesnt satisfy the normalization condition")
+        return 
+
+    def get_tau(self, T, nphonon=1000, beta=None, threshold=1.0e-14) -> pd.DataFrame:
         """
-        Linearly interpolate array over new energy grid structure.
-        Extrapolated values are replaced by zeros.
+        Get tau function for the selected phonon expansion.
+        .. math::
+            For n=1:
+                \mathcal{T}_1(-\beta)=\dfrac{P(-\beta)\exp(\beta/2)}{\lambda}
+            For n>1:
+                \mathcal{T}_n(-\beta)=\int_{0}^{\infty}\mathcal{T}_1(-\beta^\prime)\left(\mathcal{T}_{n-1}(-\beta+\beta^\prime)+\exp(-\beta^\prime)\mathcal{T}_{n-1}(-\beta-\beta^\prime)\right)d\beta^\prime
 
         Parameters
         ----------
-        x : 1d array-like object with at least two entries
-            energy grid
-        xnew : 1d array-like object with at least two entries
-            new energy grid
-        y : `numpy.ndarray` with at least two entries and same length as `x`
-            array to interpolate
-        Returns
-        -------
-        `numpy.ndarray` with length `len(xnew)`
-            interpolated array
+        T : 'int'
+            Temperature in K.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1.
+        beta : '1D iterable', optional
+            If this options is activate, the tau function will be linearly
+            interpolate to the 1D iterable introduce. The default is None.
+        threshold : 'float', optional
+            Minimun value to take into account. The default is 1.0e-14.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+
+        Test the results:
+        >>> p.get_tau(20, nphonon=5).iloc[:10]
+        tau_n            1         2         3             4             5
+        beta
+        0.000000  0.004250  0.000120  0.000004  1.530025e-07  5.908313e-09
+        0.464181  0.005313  0.000151  0.000005  1.927121e-07  7.444051e-09
+        0.928361  0.006524  0.000188  0.000007  2.420754e-07  9.359578e-09
+        1.392542  0.007875  0.000233  0.000008  3.032675e-07  1.174370e-08
+        1.856723  0.009344  0.000287  0.000010  3.789125e-07  1.470474e-08
+        2.320904  0.010932  0.000351  0.000013  4.721669e-07  1.837448e-08
+        2.785084  0.012606  0.000427  0.000015  5.868175e-07  2.291294e-08
+        3.249265  0.014359  0.000517  0.000019  7.273949e-07  2.851401e-08
+        3.713446  0.016167  0.000621  0.000023  8.993050e-07  3.541201e-08
+        4.177627  0.018020  0.000743  0.000029  1.108981e-06  4.388966e-08
+        
+        >>> beta = [.000, .025, .050, .075, .100, .125, .150, .175, .200, .225]
+        >>> p.get_tau(20, nphonon=5, beta=beta)
+        tau_n         1         2         3             4             5
+        beta
+        0.000  0.004250  0.000120  0.000004  1.530025e-07  5.908313e-09
+        0.025  0.004308  0.000122  0.000004  1.551412e-07  5.991025e-09
+        0.050  0.004365  0.000123  0.000004  1.572799e-07  6.073737e-09
+        0.075  0.004422  0.000125  0.000004  1.594186e-07  6.156450e-09
+        0.100  0.004479  0.000127  0.000004  1.615573e-07  6.239162e-09
+        0.125  0.004537  0.000128  0.000004  1.636960e-07  6.321874e-09
+        0.150  0.004594  0.000130  0.000004  1.658347e-07  6.404587e-09
+        0.175  0.004651  0.000131  0.000005  1.679733e-07  6.487299e-09
+        0.200  0.004708  0.000133  0.000005  1.701120e-07  6.570011e-09
+        0.225  0.004765  0.000135  0.000005  1.722507e-07  6.652724e-09
         """
-        foo = interp1d(
-                x, y,
-                axis=0,
-                copy=False,
-                kind="slinear",
-                bounds_error=False,
-                fill_value=0.,
-                assume_sorted=True,
-                )
-        return foo(xnew)
+        tau1 = self._get_tau_1(T)
+        tau = [tau1.values]
+        if nphonon > 1:
+            delta_beta = tau1.index[1]
+            tau_n_minus_1 = tau1.values
+            for n in range(1, nphonon):
+                tau_n = tau_n_CPU(delta_beta, tau1.values,
+                                  tau_n_minus_1, threshold)
+                tau.append(tau_n)
+                tau_n_minus_1 = tau_n
+            tau = pd.DataFrame(tau).fillna(0).T
+            tau.index = pd.Index(np.arange(tau.shape[0]) * delta_beta,
+                                 name="beta")
+            tau.columns = pd.Index(np.arange(1, nphonon + 1), name="tau_n")
+        if beta is not None:
+            new_beta_grid = tau.index.union(beta)
+            reshape_tau_values = reshape_differential(tau.index.values,
+                                                      tau.values,
+                                                      new_beta_grid)
+            tau = pd.DataFrame(reshape_tau_values,
+                               index=new_beta_grid,
+                               columns=tau.columns).loc[beta]
+            tau.index.name = "beta"
+        return tau
+
+
+def numba_get_tau_n():
+    return

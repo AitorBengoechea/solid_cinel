@@ -40,3 +40,34 @@ def normalization_coeff(series, kind="trapezoidal") -> float:
     else:
         raise ValueError("kind is not properly introduced")
     return y_norm
+
+
+def reshape_differential(x, y, xnew):
+    """
+    Linearly interpolate array over new energy grid structure.
+    Extrapolated values are replaced by zeros.
+
+    Parameters
+    ----------
+    x : 1d array-like object with at least two entries
+        energy grid
+    xnew : 1d array-like object with at least two entries
+        new energy grid
+    y : `numpy.ndarray` with at least two entries and same length as `x`
+        array to interpolate
+    Returns
+    -------
+    `numpy.ndarray` with length `len(xnew)`
+        interpolated array
+    """
+    foo = sp.interpolate.interp1d(
+                                  x,
+                                  y,
+                                  axis=0,
+                                  copy=False,
+                                  kind="slinear",
+                                  bounds_error=False,
+                                  fill_value=0.,
+                                  assume_sorted=True,
+                                  )
+    return foo(xnew)

@@ -355,13 +355,28 @@ class Pdos():
         tau1.name = 1
         return tau1
 
-    def _check_tau(tau):
+    @staticmethod
+    def _check_tau_norm(tau):
+        """
+        Check if the tau functions are normalize
+
+        Parameters
+        ----------
+        tau : 'pd.DataFrame'
+            tau functions.
+
+        Raises
+        ------
+        ValueError
+            The tau functions doenst satisfy the normalization.
+        """
         norm = tau.apply(lambda x: normalization_coeff(x * (1 + np.exp(-x.index.values))), axis=0)
         if (norm < 1.e-5).any():
             raise ValueError("Tau function doesnt satisfy the normalization condition")
         return 
 
-    def get_tau(self, T, nphonon=1000, beta=None, threshold=1.0e-14) -> pd.DataFrame:
+    def get_tau(self, T, nphonon=1000, beta=None, threshold=1.0e-14,
+                norm_check=True) -> pd.DataFrame:
         """
         Get tau function for the selected phonon expansion.
         .. math::
@@ -431,6 +446,8 @@ class Pdos():
             tau.index = pd.Index(np.arange(tau.shape[0]) * delta_beta,
                                  name="beta")
             tau.columns = pd.Index(np.arange(1, nphonon + 1), name="tau_n")
+        if norm_check:
+            Pdos._check_tau_norm(tau)
         if beta is not None:
             new_beta_grid = tau.index.union(beta)
             reshape_tau_values = reshape_differential(tau.index.values,
@@ -441,7 +458,3 @@ class Pdos():
                                columns=tau.columns).loc[beta]
             tau.index.name = "beta"
         return tau
-
-
-def numba_get_tau_n():
-    return

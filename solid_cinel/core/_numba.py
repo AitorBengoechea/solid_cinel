@@ -96,7 +96,6 @@ def tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold) -> np.array:
     -------
     tau_n : 'np.array' of 1D
         Tau(-beta) function for n expansion.
-
     """
     tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
     Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
@@ -167,24 +166,54 @@ def convolTaufunc(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):
             Taun_neg[i] += interv_in_beta * convol
     return Taun_neg
 
+
 @nb.jit(nopython=True, nogil=True)
-def Sabadd(i, Na, Nb, alpha, debye_waller_coeff,
-          beta_pip1, beta_Tauip1, Tauip1, SabSolid, xa):
-    '''increase of S(alpha, -beta) of (i + 1) phonon expansion
-    order
-    '''
-    
-    for ia in prange(Na):
-        xa[ia] += math.log(alpha[ia] * debye_waller_coeff / (i + 1))
-        ex = math.exp(-alpha[ia] * debye_waller_coeff + xa[ia])
-        for ib in prange(len(beta_pip1)): # interpolation of Tau(beta)
-            j = np.searchsorted(beta_Tauip1, beta_pip1[ib], side = 'right') # beta_Tauip1[j-1] <= beta_pip1[ib] < beta_Tauip1[j]
-            Tau_interp = interp1(beta_Tauip1[j - 1], Tauip1[j - 1],
-                                 beta_Tauip1[j], Tauip1[j],
-                                 beta_pip1[ib], 'linlin')
-            add = Tau_interp * ex # add adopted from LEAPR, but asymmetric form
-            SabSolid[ia, ib] += add
-    return SabSolid
+def update_Sab_with_tau_n(n, alpha_grid, DebyeWallerCoeff,
+                          tau_n, Sab, iter_sum) -> np.array:
+    """
+    Iterative sum into a S(alpha, -beta) matrix of tau_n(-beta) functions. This
+    function only add one term to term to the matrix.
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+
+    Numerical appoximation to get convergence in large exponentiation and
+    factorial numbers. Each element of the array is related with one alpha
+    and represent the following term of the previous equation:
+    ..math::
+       \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+    Parameters
+    ----------
+    n : 'int'
+        phonon expansion order in python nomenclature. For example, for
+        convenience with arrays, the order 2 is represent with n=1
+        (order = n + 1).
+    alpha_grid : 'np.array[:]'
+        alpha values of the matrix S(alpha, -beta).
+    DebyeWallerCoeff : 'float'
+        Debye Wallelr Coefficient.
+    tau_n : 'np.array[:]'
+        tau_n values.
+    Sab : 'np.array[:, :]'
+        S(alpha, -beta) matrix for n-1 expansion order.
+    iter_sum : 'np.array[:]'
+        Iterative coefficient explained above for n-1 expansion order.
+
+    Returns
+    -------
+    Sab : 'np.array[:, :]'
+        S(alpha, -beta) matrix for n expansion order..
+    iter_sum : 'np.array[:]'
+        Iterative coefficient explained above for n expansion order.
+
+    """
+    for alpha in prange(len(alpha_grid)):
+        iter_sum[alpha] += np.log(alpha_grid[alpha] * DebyeWallerCoeff / (n + 1))
+        alpha_mul = np.exp(-alpha_grid[alpha] * DebyeWallerCoeff + iter_sum[alpha])
+        Sab[alpha, :] += alpha_mul * tau_n
+    return Sab, iter_sum
+
 
 @nb.jit(nopython=True, nogil=True)
 def convolSab(alphai, SabSolid_alpha, delta_beta, SabDiff, Nb, beta,

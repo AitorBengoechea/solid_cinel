@@ -5,7 +5,8 @@ Created on Thu Oct 20 11:46:42 2022
 """
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
-from solid_cinel.core.generic import normalization_coeff
+from solid_cinel.core.generic import normalization_coeff, reshape_differential
+from solid_cinel.core._numba import tau_n_CPU
 import numpy as np
 import pandas as pd
 import scipy as sp
@@ -153,6 +154,89 @@ class S():
                                    dtype=int
                                    )
         return cls(S_values, index=alpha_grid, columns=beta_grid)
+
+    @classmethod
+    def from_pdos(cls, pdos, T, alpha, beta, threshold=1.0e-14, nphonon=1000):
+        """
+        
+
+        Parameters
+        ----------
+        cls : TYPE
+            DESCRIPTION.
+        pdos : TYPE
+            DESCRIPTION.
+        T : TYPE
+            DESCRIPTION.
+        alpha : TYPE
+            DESCRIPTION.
+        beta : TYPE
+            DESCRIPTION.
+        threshold : TYPE, optional
+            DESCRIPTION. The default is 1.0e-14.
+        nphonon : TYPE, optional
+            DESCRIPTION. The default is 1000.
+
+        """
+        alpha_grid = cls.scale_grid(alpha, T)
+        beta_grid = cls.scale_grid(beta, T)
+        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        tau1 = pdos._get_tau_1(T)
+        delta_beta = tau1.index[1]
+        S_values, iter_sum = cls.S_from_tau1(tau1, debye_waller_coeff,
+                                             alpha_grid, beta_grid)
+        if nphonon > 1:
+            tau1 = tau_n_minus_1 = tau1.values
+            for n in range(1, nphonon):
+                # Tau_n(-beta)
+                tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
+                beta_tau_n = np.arange(len(tau_n)) * delta_beta
+                check_tau_n(tau_n, beta_tau_n)
+
+                # Interpolate tau_n(-beta):
+                tau_n_reshape = reshape_differential(beta_tau_n, tau_n,
+                                                     beta_grid)
+
+                # Compute S(alpha, -beta) for tau_n reshape
+                iter_sum += np.log(alpha_grid * debye_waller_coeff / (n + 1))
+                alpha_mul = np.exp(-alpha_grid * debye_waller_coeff + iter_sum)
+                S_values += np.outer(alpha_mul, tau_n_reshape)
+
+                # Next tau_n
+                tau_n_minus_1 = tau_n
+        return cls(S_values, columns=beta_grid, index=alpha_grid)
+
+    @staticmethod
+    def S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid):
+        """
+        
+
+        Parameters
+        ----------
+        tau1 : TYPE
+            DESCRIPTION.
+        debye_waller_coeff : TYPE
+            DESCRIPTION.
+        alpha_grid : TYPE
+            DESCRIPTION.
+        beta_grid : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        S_values : TYPE
+            DESCRIPTION.
+        iter_sum : TYPE
+            DESCRIPTION.
+
+        """
+        iter_sum = np.log(alpha_grid * debye_waller_coeff)
+        alpha_mul = np.exp(-alpha_grid * debye_waller_coeff + iter_sum)
+        tau1_reshape = reshape_differential(tau1.index.values,
+                                            tau1.values,
+                                            beta_grid)
+        S_values = np.outer(alpha_mul, tau1_reshape)
+        return S_values, iter_sum
 
     @staticmethod
     def sum_rule_check(S) -> None:
@@ -359,3 +443,25 @@ def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
     min_alpha = min_E / 4 / AkT
     max_alpha = 4 * thermal_threshold / AkT
     return np.logspace(np.log10(min_alpha), np.log10(max_alpha), num=num_grid)
+
+
+def check_tau_n(tau_n, beta) -> None:
+    """
+    
+
+    Parameters
+    ----------
+    tau_n : TYPE
+        DESCRIPTION.
+    beta : TYPE
+        DESCRIPTION.
+
+    Raises
+    ------
+    ValueError
+        DESCRIPTION.
+
+    """
+    if sp.integrate.trapezoid(tau_n, x=beta) < 1.e-5:
+        raise ValueError("Tau function doesnt satisfy the normalization condition")
+    return

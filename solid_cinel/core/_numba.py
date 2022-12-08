@@ -88,7 +88,7 @@ def tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold) -> np.array:
     tau1 : 'np.array' of 1D
         Tau(-beta) function for n = 1 expansion.
     tau_n_minus_1 : 'np.array' of 1D
-        Tau(-beta) function for n - 1 expansion.
+        Tau_{n-1}(-beta) function.
     threshold : 'float'
         Minimun value to take into account.
 
@@ -99,29 +99,35 @@ def tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold) -> np.array:
 
     """
     tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
-    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
+    Nnm1 = len(tau_n_minus_1)
     N = len(tau1)
+    j = np.arange(len(tau1))
+    for i in range(len(tau_n)):
+        convol = np.zeros(len(tau1))
 
-    for i in prange(len(tau_n)):  # loop for tau_n
-        for j in prange(N):  # loop for tau1
-            convol = 0.
+        # tau_n_minus_1(-(beta-beta^pirme))
+        k = i - j
+        condition = (k >= 0) & (k < Nnm1)
+        convol[condition] = tau_n_minus_1[k[condition]]
 
-            k = i - j  # tau_n_minus_1(-(beta-beta^pirme))
-            if k >= 0 and k < Nnm1:
-                convol = tau_n_minus_1[k]
-            elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
-                convol = tau_n_minus_1[-k] * np.exp(k * delta_beta)
+        # tau(beta) = exp(-beta)Tau(-beta)
+        condition = (k < 0) & (-k < Nnm1)
+        convol[condition] = tau_n_minus_1[-k[condition]] * np.exp(k[condition] * delta_beta)
 
-            l = i + j  # Tau_n_minus_1(-(beta+beta^pirme))
-            if l < Nnm1:
-                convol += tau_n_minus_1[l] * np.exp(-j * delta_beta)
+        # Tau_n_minus_1(-(beta+beta^pirme))
+        l = i + j
+        condition = i + j < Nnm1
+        convol[condition] += tau_n_minus_1[l[condition]] * np.exp(-j[condition] * delta_beta)
 
-            if j == 0 or j == N - 1:
-                convol *= 0.5                      # trapz integrate
+        # trapz integrate
+        convol[0] *= 0.5
+        convol[N-1] *= 0.5
 
-            tau_n[i] += tau1[j] * convol * delta_beta
+        # Integrate(sum):
+        tau_n[i] = (tau1 * convol * delta_beta).sum()
 
     return tau_n[tau_n >= threshold]
+
 
 @cuda.jit
 def convolTaufunc(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):

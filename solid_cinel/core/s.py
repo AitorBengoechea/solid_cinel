@@ -111,7 +111,7 @@ class S():
         -------
         >>> beta_grid = gen_beta(300)
         >>> alpha_grid = gen_alpha(300, 26)
-        >>> S.from_model(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
+        >>> S.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
@@ -134,16 +134,11 @@ class S():
         return S_sym
 
     @classmethod
-    def from_model(cls, alpha_grid, beta_grid, model="FGM", **kwargs):
+    def from_fgm(cls, alpha_grid, beta_grid, T=None, w_t=1):
         """
-        Generate S(alpha, -beta) matrix using physical models for a given
-        alpha and beta grid.
-
-        Available models:
-            - FGM: Free Gas Model.
-                .. math::
-                    S_t(\alpha,\,\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)\end{equation}
-            - SCT: Short Collision Time
+        Generate S(alpha, -beta) matrix using Free Gas Model.
+        .. math::
+            S_t(\alpha,\,-\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)\end{equation}
 
         Parameters
         ----------
@@ -153,17 +148,10 @@ class S():
             beta grid.
         model : 'str', optional
             The model to calculate matrix values. The default is "FGM".
-
-        Parameters for FGM
-        ------------------
+        T : 'float', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is None.
         w_t: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Parameters for SCT
-        ------------------
-        ratio: 'float'
-            Ratio between Effective Temperature and Temperature
-        w_s: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
         Example
@@ -171,7 +159,7 @@ class S():
         FGM:
         >>> beta_grid = gen_beta(300)
         >>> alpha_grid = gen_alpha(300, 26)
-        >>> S.from_model(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
+        >>> S.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
         0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
@@ -184,11 +172,49 @@ class S():
         0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
         0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
         0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+        """
+        if T is not None:
+            alpha_grid = cls.scale_grid(alpha_grid, T)
+            beta_grid = cls.scale_grid(beta_grid, T)
 
+        f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
+
+        S_values = np.fromfunction(np.vectorize(f),
+                                   (len(alpha_grid), len(beta_grid)),
+                                   dtype=int
+                                   )
+        return cls(S_values, index=alpha_grid, columns=beta_grid)
+
+    @classmethod
+    def from_sct(cls, alpha_grid, beta_grid, T, pdos, scale=False, w_s=1):
+        """
+        Generate S(alpha, -beta) matrix using Short Collision Time.
+        .. math::
+            S(\alpha,\,-\beta)=\sqrt{\dfrac{1}{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\omega_{s}\alpha-\beta)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T}\right)
+
+        Parameters
+        ----------
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        w_s: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Example
+        -------
         SCT:
         Dont fit the normalization and sum rule with the correct precision
-        >>> ratio = 1.0880348914731839
-        >>> S = S.from_model(alpha_grid, beta_grid, model="SCT", ratio=ratio)
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> beta_grid = gen_beta(T)
+        >>> alpha_grid = gen_alpha(T, 26)
+        >>> S = S.from_sct(alpha_grid, beta_grid, T, pdos)
         >>> S.data.iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -203,14 +229,12 @@ class S():
         0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
-        model_ = model.lower()
-        if model_ == "fgm":
-            w_t = kwargs.get("w_t", 1)
-            f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
-        elif model_ == "sct":
-            w_s = kwargs.get("w_s", 1)
-            ratio = kwargs.pop("ratio")
-            f = lambda i, j: np.exp(-(alpha_grid[i] * w_s - beta_grid[j]) ** 2 / (4 * ratio * w_s * alpha_grid[i])) / np.sqrt(4 * np.pi * w_s * alpha_grid[i] * ratio)
+        if scale:
+            alpha_grid = cls.scale_grid(alpha_grid, T)
+            beta_grid = cls.scale_grid(beta_grid, T)
+        ratio = pdos.Teff(T) / T
+
+        f = lambda i, j: np.exp(-(alpha_grid[i] * w_s - beta_grid[j]) ** 2 / (4 * ratio * w_s * alpha_grid[i])) / np.sqrt(4 * np.pi * w_s * alpha_grid[i] * ratio)
 
         S_values = np.fromfunction(np.vectorize(f),
                                    (len(alpha_grid), len(beta_grid)),
@@ -219,7 +243,7 @@ class S():
         return cls(S_values, index=alpha_grid, columns=beta_grid)
 
     @classmethod
-    def from_pdos(cls, pdos, T, alpha_grid, beta_grid, scale=False,
+    def from_pdos(cls, alpha_grid, beta_grid, T, pdos, scale=False,
                   threshold=1.0e-14, nphonon=1000):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
@@ -244,7 +268,7 @@ class S():
             beta grid.
         scale : 'bool', optional
             Option to scale beta and alpha grid with the method scale_grid. The
-            default is 1000.
+            default is False.
         threshold : 'float', optional
             Minimun value to take into account. The default is 1.0e-14.
         nphonon : 'int', optional
@@ -255,7 +279,7 @@ class S():
         >>> T = 800
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> S_mat = S.from_pdos(pdos, T, alpha0_, beta0_, scale=True)
+        >>> S_mat = S.from_pdos(alpha0_, beta0_, T, pdos, scale=True)
         >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -489,7 +513,7 @@ def _sum_rule(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_model(alpha_grid, beta_grid).data
+    >>> s = S.from_fgm(alpha_grid, beta_grid).data
     >>> _sum_rule(s.iloc[1, ::]).round(6)
     0.001087
     """
@@ -517,7 +541,7 @@ def _normalization(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_model(alpha_grid, beta_grid).data
+    >>> s = S.from_fgm(alpha_grid, beta_grid).data
     >>> _normalization(s.iloc[0, ::]).round(6)
     1.0
     """

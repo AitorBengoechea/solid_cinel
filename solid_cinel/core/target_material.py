@@ -7,6 +7,7 @@ Created on Thu Oct 20 11:46:42 2022
 
 from solid_cinel.core.material.solid import Solid, hkl_max_value
 from solid_cinel.core.material.pdos import Pdos
+from solid_cinel.core.s import S
 from solid_cinel.core._numba import hklloop
 from solid_cinel.cinematic.lab import Neutron
 from scipy.constants import physical_constants as const
@@ -798,6 +799,82 @@ class Target_mat(Solid, Pdos):
                       sep='\t',
                       float_format="%20.10e")
         return xs
+
+    def get_Sab(self, *args, model="phonon expansion", **kwargs):
+        """
+        Generate S(alpha, -beta) matrix for the selected material. The
+        available options are:
+            model = "fgm": Free Gas Model
+            model = "sct": Short Collision Time
+            model = "phonon expansion": Phonon Expansion
+
+        Parameters for Free Gas model
+        -----------------------------
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        model : 'str', optional
+            The model to calculate matrix values. The default is "FGM".
+        T : 'float', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is None.
+        w_t: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for Short Collision Time
+        -----------------------------------
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        w_s: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for Phonon Expansion
+        -------------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float'
+            Temperature in K.
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        scale : 'bool', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is False.
+        threshold : 'float', optional
+            Minimun value to take into account. The default is 1.0e-14.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Raises
+        ------
+        ValueError
+            The model key is not in the available list.
+
+        Returns
+        -------
+        Sab : 'pd.Series' of 'solid_cinel.core.s.S' objects
+            S(alpha, -beta) matrix divide by a atom key.
+
+        """
+        if model.lower() == "fgm":
+            Sab = self.pdos.apply(lambda x: S.from_fgm(*args, **kwargs))
+        else:
+            if model.lower() == "sct":
+                method = S.from_sct
+            elif model.lower() == "phonon expansion":
+                method = S.from_pdos
+            else:
+                raise ValueError("The selected model is not available")
+            Sab = self.pdos.apply(lambda x: method(*args, x, **kwargs))
+        return Sab
 
 
 def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,

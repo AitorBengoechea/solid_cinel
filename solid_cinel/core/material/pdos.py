@@ -211,7 +211,7 @@ class Pdos():
 
         Parameters
         ----------
-        T : 'int'
+        T : 'float'
             Temperature in K.
         threshold : 'float', optional
             Value to chech the initial DOS. The default is 1.e-6.
@@ -260,7 +260,7 @@ class Pdos():
 
         Parameters
         ----------
-        T : 'int'
+        T : 'float'
             Temperature in K.
         twt : 'float', optional
             Translational weight, for solid is zero. The default is None.
@@ -294,7 +294,7 @@ class Pdos():
 
         Parameters
         ----------
-        T : 'int'
+        T : 'float'
             Temperature in K.
 
         Examples
@@ -319,7 +319,7 @@ class Pdos():
 
         Parameters
         ----------
-        T : 'int'
+        T : 'float'
             Temperature in K.
 
         Raises
@@ -387,7 +387,7 @@ class Pdos():
 
         Parameters
         ----------
-        T : 'int'
+        T : 'float'
             Temperature in K.
         nphonon : 'int', optional
             Phonon expansion order. The default is 1.

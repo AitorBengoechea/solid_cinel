@@ -10,6 +10,56 @@ from solid_cinel.core._numba import tau_n_CPU
 import numpy as np
 import pandas as pd
 import scipy as sp
+import warnings
+
+# Examples variables:
+rho_in_energy_str = '''
+    0 .0066 .0264 .0594 .1055 .1649 .2374 .3232 .4221
+    .5342 .6595 .7980 .9497 1.1146 1.2927 1.4839 1.6884
+    2.0169 2.4373 2.9366 3.6133 4.6775 7.1346 7.3650
+    7.5156 7.6733 7.8309 8.0740 8.4419 9.0595 9.6773
+    7.3645 6.2674 5.1965 4.7958 4.8024 4.6841 4.4673
+    4.1914 3.8169 3.3439 2.7855 3.2782 5.3082 8.5930
+    12.3377 8.4616 5.6695 4.1585 2.6081 0.0
+'''
+rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
+interv_in_energy = 0.0008
+alpha0_str = '''
+  .005 .010 .015 .020 .025 .030 .035 .040 .045 .050
+  .060 .070 .080 .090 .100 .125 .150 .175 .200 .225
+  .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
+  .500 .525 .550 .575 .600 .625 .675 .700 .725 .750
+  .800 .850 .900 .950 1.00 1.05 1.10 1.15 1.20 1.25
+  1.30 1.35 1.40 1.50 1.60 1.70 1.80 1.90 2.00 2.10
+  2.20 2.30 2.40 2.50 2.60 2.70 2.80 2.90 3.00 3.10
+  3.20 3.30 3.40 3.50 3.60 3.80 4.00 4.20 4.40 4.60
+  4.80 5.00 5.20 5.40 5.60 5.80 6.00 6.20 6.40 6.60
+  6.80 7.00 7.40 7.80 8.20 8.60 9.00 9.40 9.80 10.2
+  10.6 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0
+  15.5 16.0 16.5 17.0 17.5 18.0 18.5 19.0 19.5 20.0
+  21.0 22.0 23.0 24.0 24.5 25.0 26.0 27.0 28.0 29.0
+  30.0 32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5
+  55.0 57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0
+'''
+alpha0_ = np.fromstring(alpha0_str, dtype=np.float64, sep=' ')
+beta0_str = '''
+  .000 .025 .050 .075 .100 .125 .150 .175 .200 .225
+  .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
+  .500 .525 .550 .575 .600 .625 .650 .675 .700 .725
+  .750 .775 .800 .825 .850 .875 .900 .925 .950 .975
+  1.00 1.05 1.10 1.15 1.20 1.25 1.30 1.35 1.40 1.45
+  1.50 1.55 1.60 1.70 1.80 1.90 2.00 2.10 2.20 2.30
+  2.40 2.50 2.60 2.70 2.80 2.90 3.00 3.10 3.20 3.30
+  3.40 3.50 3.60 3.70 3.80 3.90 4.00 4.10 4.20 4.30
+  4.40 4.50 4.60 4.70 4.80 4.90 5.00 5.10 5.20 5.30
+  5.40 5.50 5.60 5.70 5.80 5.90 6.00 6.25 6.50 6.75
+  7.00 7.50 8.00 8.50 9.00 10.0 11.0 12.0 13.0 14.0
+  15.0 16.0 17.0 18.0 19.0 20.0 22.5 25.0 27.5 30.0
+  32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5 55.0
+  57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0 77.5 80.0
+  82.5 85.0 87.5 90.0
+'''
+beta0_ = np.fromstring(beta0_str, dtype=np.float64, sep=' ')
 
 
 class S():
@@ -17,14 +67,13 @@ class S():
     Class containing all the methods and properties of a asymmetric
     S(alpha, beta) matrix.
     """
+
     def __init__(self, *args, **kwargs):
         self.data = pd.DataFrame(*args, **kwargs)
 
     @property
     def data(self) -> pd.DataFrame:
-        """
-        Dataframe with the S(alpha, beta) matrix values.
-        """
+        """Dataframe with the S(alpha, beta) matrix values."""
         return self._data
 
     @data.setter
@@ -44,6 +93,7 @@ class S():
         # Normalization constrains:
         self.normalization_check(df_)
         self.sum_rule_check(df_)
+        # DataFrame:
         self._data = df_
 
     def to_sym(self, detail_balance=True) -> pd.DataFrame:
@@ -62,23 +112,23 @@ class S():
         >>> beta_grid = gen_beta(300)
         >>> alpha_grid = gen_alpha(300, 26)
         >>> S.from_model(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
-        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
-        alpha					
-        0.001050	8.701463	8.310148	7.332597	5.977775	4.502503
-        0.001087	8.553363	8.179618	7.246379	5.947043	4.521401
-        0.001125	8.407781	8.050773	7.159884	5.914070	4.537109
-        0.001164	8.264674	7.923611	7.073187	5.878976	4.549701
-        0.001205	8.124000	7.798127	6.986363	5.841878	4.559259
-        0.001247	7.985718	7.674316	6.899481	5.802889	4.565867
-        0.001291	7.849787	7.552171	6.812607	5.762123	4.569612
-        0.001336	7.716166	7.431685	6.725805	5.719689	4.570585
-        0.001382	7.584817	7.312851	6.639132	5.675693	4.568876
-        0.001431	7.455701	7.195659	6.552646	5.630238	4.564579
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
+        0.001087  8.553363  8.232522  7.340419  6.063184  4.639515
+        0.001125  8.407781  8.102844  7.252800  6.029567  4.655632
+        0.001164  8.264674  7.974859  7.164978  5.993787  4.668553
+        0.001205  8.124000  7.848564  7.077028  5.955964  4.678361
+        0.001247  7.985718  7.723951  6.989018  5.916214  4.685142
+        0.001291  7.849787  7.601016  6.901017  5.874652  4.688985
+        0.001336  7.716166  7.479752  6.813088  5.831389  4.689983
+        0.001382  7.584817  7.360149  6.725291  5.786534  4.688230
+        0.001431  7.455701  7.242199  6.637682  5.740191  4.683821
         """
         S_asym = self.data
         if detail_balance:
             beta = self.data.columns.values
-            S_sym = S_asym * np.exp(-beta)
+            S_sym = S_asym * np.exp(-beta / 2)
         else:
             S_sym = S_asym
         return S_sym
@@ -137,8 +187,21 @@ class S():
 
         SCT:
         Dont fit the normalization and sum rule with the correct precision
-        >>> #ratio = 1.0880348914731839
-        >>> #S = S.from_model(alpha_grid, beta_grid, model="SCT", ratio=ratio)
+        >>> ratio = 1.0880348914731839
+        >>> S = S.from_model(alpha_grid, beta_grid, model="SCT", ratio=ratio)
+        >>> S.data.iloc[:10, :5].round(6)
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
+        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
+        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
+        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
+        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
+        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
+        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
+        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
+        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
+        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
         model_ = model.lower()
         if model_ == "fgm":
@@ -156,34 +219,64 @@ class S():
         return cls(S_values, index=alpha_grid, columns=beta_grid)
 
     @classmethod
-    def from_pdos(cls, pdos, T, alpha, beta, threshold=1.0e-14, nphonon=1000):
+    def from_pdos(cls, pdos, T, alpha_grid, beta_grid, scale=False,
+                  threshold=1.0e-14, nphonon=1000):
         """
-        
+        Generate S(alpha, -beta) matrix using phonon expansion.
+        .. math::
+            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+        Numerical appoximation to get convergence in large exponentiation and
+        factorial numbers. Each element of the array is related with one alpha
+        and represent the following term of the previous equation:
+        ..math::
+           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
 
         Parameters
         ----------
-        cls : TYPE
-            DESCRIPTION.
-        pdos : TYPE
-            DESCRIPTION.
-        T : TYPE
-            DESCRIPTION.
-        alpha : TYPE
-            DESCRIPTION.
-        beta : TYPE
-            DESCRIPTION.
-        threshold : TYPE, optional
-            DESCRIPTION. The default is 1.0e-14.
-        nphonon : TYPE, optional
-            DESCRIPTION. The default is 1000.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float'
+            Temperature in K.
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        scale : 'bool', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is 1000.
+        threshold : 'float', optional
+            Minimun value to take into account. The default is 1.0e-14.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
 
+        Example
+        -------
+        >>> T = 800
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> S_mat = S.from_pdos(pdos, T, alpha0_, beta0_, scale=True)
+        >>> S_mat.data.round(6).iloc[:10, :10]
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699  0.045874  0.055049  0.064224  0.073399  0.082573
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645  0.038775  0.038942  0.039101  0.039260  0.039426
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857  0.076081  0.076376  0.076655  0.076935  0.077228
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663  0.111949  0.112336  0.112702  0.113069  0.113453
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093  0.146411  0.146860  0.147282  0.147707  0.148152
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174  0.179500  0.179984  0.180436  0.180892  0.181370
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937  0.211249  0.211744  0.212204  0.212667  0.213154
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412  0.241692  0.242177  0.242624  0.243076  0.243551
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631  0.270863  0.271320  0.271737  0.272159  0.272605
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625  0.298796  0.299209  0.299582  0.299960  0.300361
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425  0.325524  0.325881  0.326197  0.326518  0.326861
         """
-        alpha_grid = cls.scale_grid(alpha, T)
-        beta_grid = cls.scale_grid(beta, T)
+        if scale:
+            alpha_grid = cls.scale_grid(alpha_grid, T)
+            beta_grid = cls.scale_grid(beta_grid, T)
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
-        S_values, iter_sum = cls.S_from_tau1(tau1, debye_waller_coeff,
+        S_values, iter_sum = cls._S_from_tau1(tau1, debye_waller_coeff,
                                              alpha_grid, beta_grid)
         if nphonon > 1:
             tau1 = tau_n_minus_1 = tau1.values
@@ -207,28 +300,66 @@ class S():
         return cls(S_values, columns=beta_grid, index=alpha_grid)
 
     @staticmethod
-    def S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid):
+    def _S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid):
         """
-        
+        Generate S(alpha, -beta) matrix using first phonon expansion.
+        .. math::
+            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)(\alpha\lambda)\mathcal{T}_1(-\beta)
 
         Parameters
         ----------
-        tau1 : TYPE
-            DESCRIPTION.
-        debye_waller_coeff : TYPE
-            DESCRIPTION.
-        alpha_grid : TYPE
-            DESCRIPTION.
-        beta_grid : TYPE
-            DESCRIPTION.
+        tau1 : 'pd.Series'
+            $\mathcal{T}_1(-\beta)$ function values and in the index beta
+            values.
+        debye_waller_coeff : 'float'
+            Debye Waller Coefficient.
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
 
         Returns
         -------
-        S_values : TYPE
-            DESCRIPTION.
-        iter_sum : TYPE
-            DESCRIPTION.
+        S_values : 'np.array[:, :]'
+            S(alpha, -beta) matrix values for the firts phonon expansion.
+        iter_sum : 'np.array[:]'
+            iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
 
+        Example
+        -------
+        >>> T = 800
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> tau1 = pdos._get_tau_1(T)
+        >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        >>> alpha_grid = S.scale_grid(alpha0_, T)
+        >>> beta_grid = S.scale_grid(beta0_, T)
+        >>> S_mat, iter_sum = S._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
+        >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :10]
+              0         1         2         3         4         5         6         7         8         9
+        0  0.036967  0.037137  0.037308  0.037478  0.037644  0.037788  0.037968  0.038139  0.038311  0.038490
+        1  0.070694  0.071019  0.071345  0.071671  0.071988  0.072262  0.072607  0.072935  0.073264  0.073606
+        2  0.101393  0.101859  0.102326  0.102795  0.103249  0.103643  0.104137  0.104607  0.105079  0.105570
+        3  0.129265  0.129859  0.130455  0.131052  0.131631  0.132133  0.132764  0.133363  0.133964  0.134591
+        4  0.154499  0.155209  0.155921  0.156635  0.157327  0.157927  0.158681  0.159397  0.160115  0.160864
+        5  0.177272  0.178087  0.178904  0.179724  0.180517  0.181206  0.182070  0.182892  0.183717  0.184576
+        6  0.197752  0.198661  0.199573  0.200487  0.201372  0.202140  0.203105  0.204022  0.204941  0.205900
+        7  0.216097  0.217090  0.218086  0.219085  0.220053  0.220892  0.221946  0.222948  0.223953  0.225000
+        8  0.232453  0.233521  0.234593  0.235667  0.236708  0.237611  0.238745  0.239822  0.240903  0.242030
+        9  0.246960  0.248095  0.249234  0.250375  0.251481  0.252440  0.253645  0.254789  0.255938  0.257135
+
+        >>> pd.Series(np.exp(iter_sum.round(6))).iloc[:10]
+        0    0.044821
+        1    0.089642
+        2    0.134463
+        3    0.179284
+        4    0.224106
+        5    0.268927
+        6    0.313748
+        7    0.358569
+        8    0.403390
+        9    0.448211
+        dtype: float64
         """
         iter_sum = np.log(alpha_grid * debye_waller_coeff)
         alpha_mul = np.exp(-alpha_grid * debye_waller_coeff + iter_sum)
@@ -243,7 +374,12 @@ class S():
         """
         Check if the S(alpha, beta) matrix satifies the sum rule constrain.
         .. math::
-            \int_{-\infty}^{\infty}\beta S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(-1+\exp(-\beta))d\beta = -\alpha
+            \int_{-\infty}^{\infty}\beta S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(1-\exp(-\beta))d\beta = \alpha
+        
+        For SCT and for phonon expansion, the normalization is only satisfy to
+        large alpha values, for the rest:
+        .. math::
+            \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(-1+\exp(-\beta))d\beta = -\alpha
 
         Parameters
         ----------
@@ -256,17 +392,25 @@ class S():
             The sum rule constrain is not satified.
 
         """
-        sum_rule = S.apply(_sum_rule, axis="columns") - S.index.values
-        if (abs(sum_rule) > 5.0e-3).any():
-            raise ValueError("Sum rule of S(alpha, beta) not satisfied")
+        sum_rule = S.apply(_sum_rule, axis="columns")
+        sum_rule /= S.index.values
+        if (abs(1 - abs(sum_rule)) > 0.5).any():
+            raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
+        if (abs(1 - abs(sum_rule)) > 1.0e-3).any():
+            warnings.warn("Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
     @staticmethod
-    def normalization_check(S) -> None:
+    def normalization_check(S, pdos=None, T=None) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the normalization constrain.
         .. math::
             \int_{-\infty}^{\infty}S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}S(\alpha,\,-\beta)(1+\exp(-\beta))d\beta = 1
+
+        For SCT and for phonon expansion, the normalization is only satisfy to
+        large alpha values, for the rest:
+        .. math::
+            \int_{0}^{\infty}S(\alpha,\,-\beta)(1+\exp(-\beta))d\beta = 1 - \exp(-\alpha\lambda)
 
         Parameters
         ----------
@@ -279,9 +423,11 @@ class S():
             The normalization constrain is not satified.
 
         """
-        normalization = S.apply(_normalization, axis="columns") - 1.0
-        if (abs(normalization) > 5.0e-3).any():
-            raise ValueError("Normalization of S(alpha, beta) not satisfied")
+        normalization = S.apply(_normalization, axis="columns")
+        if pdos and T:
+            normalization /= (1 - np.exp(S.index.values * pdos.DebyeWallerCoeff(T))) 
+        if (abs(normalization - 1.0) > 5.0e-3).any():
+            warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
     @staticmethod
@@ -323,6 +469,7 @@ class S():
         """
         return grid * therm / (const["Boltzmann constant in eV/K"][0] * T)
 
+
 def _sum_rule(x) -> float:
     """
     Calculate the sum rule value for a fix alpha value.
@@ -331,6 +478,7 @@ def _sum_rule(x) -> float:
     ----------
     x : 'pd.Series'
         S(alpha, beta) matrix values for fix alpha.
+
 
     Returns
     -------
@@ -342,8 +490,8 @@ def _sum_rule(x) -> float:
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
     >>> s = S.from_model(alpha_grid, beta_grid).data
-    >>> _sum_rule(s.iloc[0, ::]).round(6)
-    0.00105
+    >>> _sum_rule(s.iloc[1, ::]).round(6)
+    0.001087
     """
     beta = x.index.values
     S_values = x.values
@@ -447,20 +595,20 @@ def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
 
 def check_tau_n(tau_n, beta) -> None:
     """
-    
+    Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
+    normalized to the unity.
 
     Parameters
     ----------
     tau_n : TYPE
         DESCRIPTION.
-    beta : TYPE
-        DESCRIPTION.
+    beta : 1D iterable
+        beta grid.
 
     Raises
     ------
     ValueError
-        DESCRIPTION.
-
+        Tau function doesnt satisfy the normalization condition.
     """
     if sp.integrate.trapezoid(tau_n, x=beta) < 1.e-5:
         raise ValueError("Tau function doesnt satisfy the normalization condition")

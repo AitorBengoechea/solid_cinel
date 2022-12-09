@@ -131,18 +131,14 @@ class Pdos():
         index.name = "E"
         return cls(rho_, index=index)
 
-    def change_grid(self, eg=None, T=None):
+    def to_beta_grid(self, T):
         """
         Change the energy grid of rho. Two options available:
             - Tranform energy grid in beta grid by introducing T
-            - Linearly interpolate a new energy grid that is a union between
-              the old one and the new one.
 
         Parameters
         ----------
-        eg : 1D iterable, optional
-            New energy grid. The default is None.
-        T : 'float', optional
+        T : 'float'
             Temperature to change energy grid to beta grid. The default is
             None.
 
@@ -165,7 +161,8 @@ class Pdos():
         Name: rho, dtype: float64
 
         Test the results:
-        >>> p.change_grid(T=300).rho.iloc[0:5]
+        >>> T = 300
+        >>> p.to_beta_grid(T).rho.iloc[0:5]
         beta
         0.000000    0.000000
         0.030945    0.001064
@@ -173,30 +170,11 @@ class Pdos():
         0.092836    0.009576
         0.123782    0.017008
         Name: rho, dtype: float64
-
-        >>> p = Pdos([1, 2, 4], index=[1, 2, 4])
-        >>> p.change_grid([1, 2, 3, 4, 5]).rho
-        E
-        1.0    0.105263
-        2.0    0.210526
-        3.0    0.315789
-        4.0    0.421053
-        5.0    0.000000
-        Name: rho, dtype: float64
         """
         grid = self.rho.index
-        if T:
-            enew = grid / (const["Boltzmann constant in eV/K"][0] * T)
-            enew.name = "beta"
-            rho_new = self.rho.values
-        if eg:
-            enew = grid.union(eg).astype("float")
-            enew.name = "E"
-            rho_new = reshape_differential(
-                grid.values,
-                self.rho.values,
-                enew.values,
-                )
+        enew = grid / (const["Boltzmann constant in eV/K"][0] * T)
+        enew.name = "beta"
+        rho_new = self.rho.values
         return Pdos(rho_new, index=enew)
 
     def plot(self) -> matplotlib:
@@ -238,7 +216,7 @@ class Pdos():
         0.154727    1.109309
         Name: P, dtype: float64
         """
-        data = self.change_grid(T=T).rho
+        data = self.to_beta_grid(T).rho
         rho_in_beta = data.values
         beta_values = data.index.values
         if abs(beta_values[0]) > threshold:

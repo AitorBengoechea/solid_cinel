@@ -46,6 +46,43 @@ atomic_mass_Al27 = 26.98153433356103
 b_coh_Al27 = 3.449
 b_incoh_Al27 = 0.256
 
+alpha0_str = '''
+  .005 .010 .015 .020 .025 .030 .035 .040 .045 .050
+  .060 .070 .080 .090 .100 .125 .150 .175 .200 .225
+  .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
+  .500 .525 .550 .575 .600 .625 .675 .700 .725 .750
+  .800 .850 .900 .950 1.00 1.05 1.10 1.15 1.20 1.25
+  1.30 1.35 1.40 1.50 1.60 1.70 1.80 1.90 2.00 2.10
+  2.20 2.30 2.40 2.50 2.60 2.70 2.80 2.90 3.00 3.10
+  3.20 3.30 3.40 3.50 3.60 3.80 4.00 4.20 4.40 4.60
+  4.80 5.00 5.20 5.40 5.60 5.80 6.00 6.20 6.40 6.60
+  6.80 7.00 7.40 7.80 8.20 8.60 9.00 9.40 9.80 10.2
+  10.6 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0
+  15.5 16.0 16.5 17.0 17.5 18.0 18.5 19.0 19.5 20.0
+  21.0 22.0 23.0 24.0 24.5 25.0 26.0 27.0 28.0 29.0
+  30.0 32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5
+  55.0 57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0
+'''
+alpha0_ = np.fromstring(alpha0_str, dtype = np.float64, sep = ' ')
+beta0_str = '''
+  .000 .025 .050 .075 .100 .125 .150 .175 .200 .225
+  .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
+  .500 .525 .550 .575 .600 .625 .650 .675 .700 .725
+  .750 .775 .800 .825 .850 .875 .900 .925 .950 .975
+  1.00 1.05 1.10 1.15 1.20 1.25 1.30 1.35 1.40 1.45
+  1.50 1.55 1.60 1.70 1.80 1.90 2.00 2.10 2.20 2.30
+  2.40 2.50 2.60 2.70 2.80 2.90 3.00 3.10 3.20 3.30
+  3.40 3.50 3.60 3.70 3.80 3.90 4.00 4.10 4.20 4.30
+  4.40 4.50 4.60 4.70 4.80 4.90 5.00 5.10 5.20 5.30
+  5.40 5.50 5.60 5.70 5.80 5.90 6.00 6.25 6.50 6.75
+  7.00 7.50 8.00 8.50 9.00 10.0 11.0 12.0 13.0 14.0
+  15.0 16.0 17.0 18.0 19.0 20.0 22.5 25.0 27.5 30.0
+  32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5 55.0
+  57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0 77.5 80.0
+  82.5 85.0 87.5 90.0
+'''
+beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
+
 # 2 atom:
 rho_in_energy_O16_str = '''
 0.000000E+00 6.923874E-03 2.497670E-02 5.488348E-02
@@ -321,7 +358,7 @@ class Target_mat(Solid, Pdos):
         return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
     @staticmethod
-    def get_pddf(data, kind=None, pddf_val=None) -> pd.DataFrame:
+    def _get_pddf(data, kind=None, pddf_val=None) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the Pole Density Distribution Function.
         March-dollase:
@@ -371,7 +408,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> Target_mat.get_pddf(multiplicity).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity).iloc[:10]
                       d       Fsq  Orientation angle  Multiplicity  PDDF
         h k l
         1 1 0  2.019999  0.115016                0.0           6.0   1.0
@@ -386,7 +423,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765                0.0          32.0   1.0
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat.get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10]
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  0.464758
@@ -401,7 +438,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0  1.193243
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat.get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10]
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  1.716531
@@ -416,7 +453,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0  1.459426
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat.get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10]
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  0.206522
@@ -449,7 +486,7 @@ class Target_mat(Solid, Pdos):
         return data
 
     @staticmethod
-    def get_difrac_angles(data, energy_cut) -> pd.DataFrame:
+    def _get_difrac_angles(data, energy_cut) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the difraction angles(ª) vs hkl data
         .. math::
@@ -484,7 +521,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> Target_mat.get_difrac_angles(multiplicity, E).iloc[:10]
+        >>> Target_mat._get_difrac_angles(multiplicity, E).iloc[:10]
                       d       Fsq  Orientation angle  Multiplicity     theta
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0   5.350060
@@ -508,7 +545,7 @@ class Target_mat(Solid, Pdos):
         return data
 
     @staticmethod
-    def get_BraggEdges_Xs(data, unit_cell_vol, atom_number,
+    def _get_BraggEdges_Xs(data, unit_cell_vol, atom_number,
                           threshold=1.e-30) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the cross section related with the
@@ -551,7 +588,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765                0.0          32.0   1.0  0.033831
 
         Test the results:
-        >>> Target_mat.get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]
+        >>> Target_mat._get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]
         h  k  l
         1  1  1    0.005370
               0    0.003459
@@ -664,7 +701,7 @@ class Target_mat(Solid, Pdos):
                                      precision=kwargs.pop("precision", [6, 6])
                                      )
         # Get PDDF:
-        self.get_pddf(data,
+        self._get_pddf(data,
                       kwargs.pop("kind", None),
                       kwargs.pop("pddf_val", None)
                       )
@@ -679,7 +716,7 @@ class Target_mat(Solid, Pdos):
         # Optional argument:
         # Xs:
         if xs:
-            self.get_BraggEdges_Xs(data,
+            self._get_BraggEdges_Xs(data,
                                    self.unit_cell_vol,
                                    self.atom_number,
                                    threshold=kwargs.get("threshold", 1.e-30)
@@ -687,7 +724,7 @@ class Target_mat(Solid, Pdos):
 
         # difraction angles vs hkl data
         if theta:
-            self.get_difrac_angles(data,
+            self._get_difrac_angles(data,
                                    args[1]
                                    )
 
@@ -863,6 +900,62 @@ class Target_mat(Solid, Pdos):
         Sab : 'pd.Series' of 'solid_cinel.core.s.S' objects
             S(alpha, -beta) matrix divide by a atom key.
 
+        Object initialization:
+        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+
+        Test the results:
+        FGM:
+        >>> T = 300
+        >>> from solid_cinel.core.s import gen_beta, gen_alpha
+        >>> beta_grid = gen_beta(300)
+        >>> alpha_grid = gen_alpha(300, 26)
+        >>> Al.get_Sab(alpha_grid, beta_grid, model="fgm")["Al27"].data.iloc[:10, :5].round(6)
+        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        alpha
+        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
+        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
+        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
+        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
+        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
+        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
+        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
+        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
+        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
+        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+
+        SCT:
+        >>> T = 300
+        >>> beta_grid = gen_beta(T)
+        >>> alpha_grid = gen_alpha(T, 26)
+        >>> Al.get_Sab(alpha_grid, beta_grid, T, model="sct")["Al27"].data.iloc[:10, :5].round(6)
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
+        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
+        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
+        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
+        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
+        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
+        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
+        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
+        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
+        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
+
+        Phonon Expansion:
+        >>> T = 800
+        >>> Al.get_Sab(alpha0_, beta0_, T, scale=True, model="phonon expansion")["Al27"].data.iloc[:10, :5].round(6)
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
         if model.lower() == "fgm":
             Sab = self.pdos.apply(lambda x: S.from_fgm(*args, **kwargs))

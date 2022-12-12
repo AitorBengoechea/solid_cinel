@@ -98,7 +98,7 @@ def test_Al27_BraggEddges(T):
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
-def test_Fe56_coherent_Xs(T):
+def test_Al27_coherent_Xs(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Al27.py", ""))
     file = os.path.abspath(f"Al27_Al_{T}K_coh_XS")
@@ -117,7 +117,7 @@ def test_Fe56_coherent_Xs(T):
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
-def test_Fe56_Sab(T):
+def test_Al27_Sab(T):
     wd = os.getcwd()
     beta_grid = S.scale_grid(beta0_, T)
     alpha_grid = S.scale_grid(alpha0_, T)

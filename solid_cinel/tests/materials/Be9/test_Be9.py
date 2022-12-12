@@ -177,7 +177,7 @@ def test_Be9_coherent_Xs(T):
     os.chdir(wd)
 
 
-@pytest.mark.parametrize("T", [296, 400, 500, 600, 700, 800, 1000, 1200])
+@pytest.mark.parametrize("T", [296, 800, 1200])
 def test_Be9_Sab(T):
     wd = os.getcwd()
     beta_grid = S.scale_grid(beta0_, T)

@@ -116,7 +116,7 @@ def test_Al27_coherent_Xs(T):
     os.chdir(wd)
 
 
-@pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
+@pytest.mark.parametrize("T", [20, 293.6, 800])
 def test_Al27_Sab(T):
     wd = os.getcwd()
     beta_grid = S.scale_grid(beta0_, T)

@@ -244,7 +244,7 @@ class S():
 
     @classmethod
     def from_pdos(cls, alpha_grid, beta_grid, T, pdos, scale=False,
-                  threshold=1.0e-14, nphonon=1000):
+                  threshold=0.0, nphonon=1000):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -270,7 +270,9 @@ class S():
             Option to scale beta and alpha grid with the method scale_grid. The
             default is False.
         threshold : 'float', optional
-            Minimun value to take into account. The default is 1.0e-14.
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
 
@@ -279,7 +281,7 @@ class S():
         >>> T = 800
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> S_mat = S.from_pdos(alpha0_, beta0_, T, pdos, scale=True)
+        >>> S_mat = S.from_pdos(alpha0_, beta0_, T, pdos, scale=True, threshold=1.0e-14)
         >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha

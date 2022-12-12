@@ -943,7 +943,7 @@ class Target_mat(Solid, Pdos):
 
         Phonon Expansion:
         >>> T = 800
-        >>> Al.get_Sab(alpha0_, beta0_, T, scale=True, model="phonon expansion")["Al27"].data.iloc[:10, :5].round(6)
+        >>> Al.get_Sab(alpha0_, beta0_, T, scale=True, model="phonon expansion", threshold=1.0e-14)["Al27"].data.iloc[:10, :5].round(6)
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645

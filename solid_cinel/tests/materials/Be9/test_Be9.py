@@ -180,8 +180,8 @@ def test_Be9_coherent_Xs(T):
 @pytest.mark.parametrize("T", [296, 400, 500, 600, 700, 800, 1000, 1200])
 def test_Be9_Sab(T):
     wd = os.getcwd()
-    beta_grid = S.scale_grid(beta0_, T)
-    alpha_grid = S.scale_grid(alpha0_, T)
+    beta_grid = scale_grid(beta0_, T)
+    alpha_grid = scale_grid(alpha0_, T)
     os.chdir(__file__.replace("test_Be9.py", ""))
     file = os.path.abspath(f"Be9_Be_{T}K_SSab")
     test_data = pd.DataFrame(np.loadtxt(file).T * np.exp(beta_grid/2),

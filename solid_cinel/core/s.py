@@ -174,8 +174,8 @@ class S():
         0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
         """
         if T is not None:
-            alpha_grid = cls.scale_grid(alpha_grid, T)
-            beta_grid = cls.scale_grid(beta_grid, T)
+            alpha_grid = scale_grid(alpha_grid, T)
+            beta_grid = scale_grid(beta_grid, T)
 
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
 
@@ -230,8 +230,8 @@ class S():
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
         if scale:
-            alpha_grid = cls.scale_grid(alpha_grid, T)
-            beta_grid = cls.scale_grid(beta_grid, T)
+            alpha_grid = scale_grid(alpha_grid, T)
+            beta_grid = scale_grid(beta_grid, T)
         ratio = pdos.Teff(T) / T
 
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_s - beta_grid[j]) ** 2 / (4 * ratio * w_s * alpha_grid[i])) / np.sqrt(4 * np.pi * w_s * alpha_grid[i] * ratio)
@@ -297,8 +297,8 @@ class S():
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
         if scale:
-            alpha_grid = cls.scale_grid(alpha_grid, T)
-            beta_grid = cls.scale_grid(beta_grid, T)
+            alpha_grid = scale_grid(alpha_grid, T)
+            beta_grid = scale_grid(beta_grid, T)
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
@@ -358,8 +358,8 @@ class S():
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> tau1 = pdos._get_tau_1(T)
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        >>> alpha_grid = S.scale_grid(alpha0_, T)
-        >>> beta_grid = S.scale_grid(beta0_, T)
+        >>> alpha_grid = scale_grid(alpha0_, T)
+        >>> beta_grid = scale_grid(beta0_, T)
         >>> S_mat, iter_sum = S._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
         >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5]
               0         1         2         3         4
@@ -456,46 +456,6 @@ class S():
             warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
-    @staticmethod
-    def scale_grid(grid, T, therm=0.0253) -> np.ndarray:
-        """
-        Scale alpha or beta spectrum.
-
-        Parameters
-        ----------
-        grid : 'np.ndarray' of 1D or 2D
-            Alpha o Beta grid.
-        T : 'float'
-            Temperature in K.
-        therm : 'float', optional
-            factor for regrid alpha and beta. The default is 0.0253.
-
-        Example
-        -------
-        >>> T = 300
-        >>> alpha0 = gen_alpha(T, 26, num_grid=10)
-        >>> S.scale_grid(alpha0, T).round(6)
-        array([1.0280000e-03, 3.2140000e-03, 1.0051000e-02, 3.1428000e-02,
-               9.8269000e-02, 3.0727100e-01, 9.6078300e-01, 3.0041990e+00,
-               9.3936040e+00, 2.9372154e+01])
-        
-        >>> beta0 = gen_beta(T, num_grid=10)
-        >>> S.scale_grid(beta0, T).round(6)
-        array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
-                 2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
-
-        >>> grid0 = np.array([alpha0, beta0])
-        >>> S.scale_grid(grid0, T).round(6)
-        array([[1.02800000e-03, 3.21400000e-03, 1.00510000e-02, 3.14280000e-02,
-                9.82690000e-02, 3.07271000e-01, 9.60783000e-01, 3.00419900e+00,
-                9.39360400e+00, 2.93721540e+01],
-               [0.00000000e+00, 5.04744000e-01, 1.00948800e+00, 1.51423100e+00,
-                2.01897500e+00, 2.52371900e+00, 3.02846300e+00, 1.20184620e+01,
-                4.76952980e+01, 1.89278915e+02]])
-        """
-        return grid * therm / (const["Boltzmann constant in eV/K"][0] * T)
-
-
 def _sum_rule(x) -> float:
     """
     Calculate the sum rule value for a fix alpha value.
@@ -554,7 +514,7 @@ def _normalization(x) -> float:
 
 
 def gen_beta(T, num_grid=400, mid_E=0.08,
-             thermal_threshold=5.) -> np.ndarray:
+             thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
     """
     Generate beta grid for a given temperature
 
@@ -568,6 +528,14 @@ def gen_beta(T, num_grid=400, mid_E=0.08,
         minimum of energy transfer in eV. The default is 0.08.
     thermal_threshold : 'float', optional
         thermal energy threshold in eV. The default is 5.
+    scale : 'bool', optional
+        Option to scale beta and alpha grid with the method scale_grid. The
+        default is False.
+        
+    Parameters for scale_grid
+    -------------------------
+    therm : 'float', optional
+        factor for regrid alpha and beta. The default is 0.0253.
 
     Example
     -------
@@ -584,11 +552,14 @@ def gen_beta(T, num_grid=400, mid_E=0.08,
     second_half = np.logspace(np.log10(mid_beta), np.log10(max_beta),
                               num=int(num_grid * 0.4),
                               endpoint=True)
-    return np.concatenate((first_half, second_half))
+    beta_grid = np.concatenate((first_half, second_half))
+    if scale:
+        beta_grid = scale_grid(beta_grid, T, **kwargs)
+    return beta_grid
 
 
 def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
-              thermal_threshold=5.) -> np.ndarray:
+              thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
     """
     Generate a alpha grid for a given temperature and atomic mass.
 
@@ -604,6 +575,14 @@ def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
         minimum of energy transfer in eV. The default is 0.08.
     thermal_threshold : 'float', optional
         thermal energy threshold in eV. The default is 5.
+    scale : 'bool', optional
+        Option to scale beta and alpha grid with the method scale_grid. The
+        default is False.
+        
+    Parameters for scale_grid
+    -------------------------
+    therm : 'float', optional
+        factor for regrid alpha and beta. The default is 0.0253.
 
     Example
     -------
@@ -616,7 +595,49 @@ def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
     AkT = A * const["Boltzmann constant in eV/K"][0] * T
     min_alpha = min_E / 4 / AkT
     max_alpha = 4 * thermal_threshold / AkT
-    return np.logspace(np.log10(min_alpha), np.log10(max_alpha), num=num_grid)
+    alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
+                             num=num_grid)
+    if scale:
+        alpha_grid =  scale_grid(alpha_grid, T, **kwargs)
+    return alpha_grid
+
+def scale_grid(grid, T, therm=0.0253) -> np.ndarray:
+    """
+    Scale alpha or beta spectrum.
+
+    Parameters
+    ----------
+    grid : 'np.ndarray' of 1D or 2D
+        Alpha o Beta grid.
+    T : 'float'
+        Temperature in K.
+    therm : 'float', optional
+        factor for regrid alpha and beta. The default is 0.0253.
+
+    Example
+    -------
+    >>> T = 300
+    >>> alpha0 = gen_alpha(T, 26, num_grid=10)
+    >>> scale_grid(alpha0, T).round(6)
+    array([1.0280000e-03, 3.2140000e-03, 1.0051000e-02, 3.1428000e-02,
+           9.8269000e-02, 3.0727100e-01, 9.6078300e-01, 3.0041990e+00,
+           9.3936040e+00, 2.9372154e+01])
+        
+    >>> beta0 = gen_beta(T, num_grid=10)
+    >>> scale_grid(beta0, T).round(6)
+    array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
+           2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
+
+    >>> grid0 = np.array([alpha0, beta0])
+    >>> scale_grid(grid0, T).round(6)
+    array([[1.02800000e-03, 3.21400000e-03, 1.00510000e-02, 3.14280000e-02,
+            9.82690000e-02, 3.07271000e-01, 9.60783000e-01, 3.00419900e+00,
+            9.39360400e+00, 2.93721540e+01],
+           [0.00000000e+00, 5.04744000e-01, 1.00948800e+00, 1.51423100e+00,
+            2.01897500e+00, 2.52371900e+00, 3.02846300e+00, 1.20184620e+01,
+            4.76952980e+01, 1.89278915e+02]])
+    """
+    return grid * therm / (const["Boltzmann constant in eV/K"][0] * T)
 
 
 def check_tau_n(tau_n, beta) -> None:

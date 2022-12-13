@@ -837,6 +837,163 @@ class Target_mat(Solid, Pdos):
                       float_format="%20.10e")
         return xs
 
+    def _get_Sab_multiple(self, *args, model, **kwargs) -> pd.Series:
+        """
+        Generate S(alpha, -beta) matrix for the selected multiple atoms. The
+        available options are:
+            model = "fgm": Free Gas Model
+            model = "sct": Short Collision Time
+            model = "phonon expansion": Phonon Expansion
+
+        Parameters for Free Gas model
+        -----------------------------
+        alpha_grid : 'dict' of 1D iterable
+            Alpha grid.
+        beta_grid : 'dict' of 1D iterable
+            beta grid.
+        T : 'float', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is None.
+        w_t: 'dict', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        
+        Parameters for Short Collision Time
+        -----------------------------------
+        alpha_grid :'dict' of 1D iterable
+            Alpha grid.
+        beta_grid : 'dict' of 1D iterable
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        w_s: 'dict', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        
+        Parameters for Phonon Expansion
+        -------------------------------
+        T : 'float'
+            Temperature in K.
+        alpha_grid : 'dict' of 1D iterable
+            Alpha grid.
+        beta_grid : 'dict' of 1D iterable
+            beta grid.
+        scale : 'bool', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is False.
+        threshold : 'dict', optional
+            Minimun value to take into account. The default is 1.0e-14.
+        nphonon : 'dict', optional
+            Phonon expansion order. The default is 1000.
+
+        Raises
+        ------
+        ValueError
+            The model key is not in the available list.
+
+        Returns
+        -------
+        Sab : 'pd.Series' of 'solid_cinel.core.s.S' objects
+            S(alpha, -beta) matrix divide by a atom key.
+
+        """
+        index = self.pdos.index
+        alpha_grid = args[0]
+        beta_grid = args[1]
+        groups = self.pdos.groupby(by=index)
+        if model.lower() == "fgm":
+            w_t = {key: kwargs.get("w_t", {}).get(key, 1) for key in index}
+            T = kwargs.pop("T", None)
+            Sab = groups.apply(lambda x: S.from_fgm(alpha_grid[x.name], beta_grid[x.name],
+                                                  w_t=w_t[x.name], T=T))
+        else:
+            T = args[2]
+            scale = kwargs.pop("scale", False)
+            if model.lower() == "sct":
+                w_s = {key: kwargs.get("w_s", {}).get(key, 1) for key in index}
+                Sab = groups.apply(lambda x: S.from_sct(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
+                                                        w_s=w_s[x.name], scale=scale))
+            elif model.lower() == "phonon expansion":
+                threshold = {key: kwargs.get("threshold", {}).get(key, 0.0) for key in index}
+                nphonon = {key: kwargs.get("nphonon", {}).get(key, 1000) for key in index}
+                Sab = groups.apply(lambda x: S.from_pdos(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
+                                                         threshold=threshold[x.name], nphonon=nphonon[x.name], scale=scale))
+            else:
+                raise ValueError("The selected model is not available")
+        return Sab
+
+    def _get_Sab_single(self, *args, model, **kwargs) -> pd.Series:
+        """
+        Generate S(alpha, -beta) matrix for the selected atom. The
+        available options are:
+            model = "fgm": Free Gas Model
+            model = "sct": Short Collision Time
+            model = "phonon expansion": Phonon Expansion
+
+        Parameters for Free Gas model
+        -----------------------------
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        model : 'str', optional
+            The model to calculate matrix values. The default is "FGM".
+        T : 'float', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is None.
+        w_t: 'dict', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        
+        Parameters for Short Collision Time
+        -----------------------------------
+        alpha_grid :1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        w_s: 'dict', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        
+        Parameters for Phonon Expansion
+        -------------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float'
+            Temperature in K.
+        alpha_grid : 1D iterable
+            Alpha grid.
+        beta_grid : 1D iterable
+            beta grid.
+        scale : 'bool', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is False.
+        threshold : 'float', optional
+            Minimun value to take into account. The default is 1.0e-14.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Raises
+        ------
+        ValueError
+            The model key is not in the available list.
+
+        Returns
+        -------
+        Sab : 'pd.Series' of 'solid_cinel.core.s.S' objects
+            S(alpha, -beta) matrix divide by a atom key.
+
+        """
+        if model.lower() == "fgm":
+            Sab = self.pdos.apply(lambda x: S.from_fgm(*args, **kwargs))
+        else:
+            if model.lower() == "sct":
+                method = S.from_sct
+            elif model.lower() == "phonon expansion":
+                method = S.from_pdos
+            else:
+                raise ValueError("The selected model is not available")
+            Sab = self.pdos.apply(lambda x: method(*args, x, **kwargs))
+        return Sab
+
     def get_Sab(self, *args, model="phonon expansion", **kwargs):
         """
         Generate S(alpha, -beta) matrix for the selected material. The
@@ -867,8 +1024,6 @@ class Target_mat(Solid, Pdos):
             beta grid.
         T : 'float'
             Temperature in K.
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
         w_s: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
@@ -957,16 +1112,10 @@ class Target_mat(Solid, Pdos):
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        if model.lower() == "fgm":
-            Sab = self.pdos.apply(lambda x: S.from_fgm(*args, **kwargs))
+        if isinstance(args[0], dict) or isinstance(args[0], pd.Series):
+            Sab = self._get_Sab_multiple(*args, model=model, **kwargs)
         else:
-            if model.lower() == "sct":
-                method = S.from_sct
-            elif model.lower() == "phonon expansion":
-                method = S.from_pdos
-            else:
-                raise ValueError("The selected model is not available")
-            Sab = self.pdos.apply(lambda x: method(*args, x, **kwargs))
+            Sab = self._get_Sab_single(*args, model=model, **kwargs)
         return Sab
 
 

@@ -8,7 +8,7 @@ from scipy.integrate import trapezoid
 import numpy as np
 import pandas as pd
 from solid_cinel import Target_mat
-from solid_cinel.core.s import S
+from solid_cinel.core.s import S, scale_grid
 from scipy.integrate import trapezoid
 import pytest
 import os
@@ -114,11 +114,12 @@ def test_Fe56_coherent_Xs(T):
     assert (comp_inv.fillna(0) < 1.0e-4).all().all()
     os.chdir(wd)
 
+
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
-def test_Al27_Sab(T):
+def test_Fe56_Sab(T):
     wd = os.getcwd()
-    beta_grid = S.scale_grid(beta0_, T)
-    alpha_grid = S.scale_grid(alpha0_, T)
+    beta_grid = scale_grid(beta0_, T)
+    alpha_grid = scale_grid(alpha0_, T)
     os.chdir(__file__.replace("test_Fe56.py", ""))
     file = os.path.abspath(f"Fe56_Fe_{T}K_SSab")
     test_data = pd.DataFrame(np.loadtxt(file).T * np.exp(beta_grid/2),

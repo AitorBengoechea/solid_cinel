@@ -346,8 +346,8 @@ def test_UO2_Sab(T):
                  "U238": scale_grid(beta0_U238, T)}
     alpha_grid = {"O16": scale_grid(alpha0_O16, T),
                   "U238": scale_grid(alpha0_U238, T)}
-    nphonon = {"O16": 200,
-               "U238": 300}
+    nphonon = {"O16": 200 if T != 1200 else 900,
+               "U238": 300 if T != 1200 else 900}
     os.chdir(__file__.replace("test_UO2.py", ""))
     Sab = UO2.get_Sab(alpha_grid, beta_grid, T, nphonon=nphonon)
 

@@ -898,26 +898,24 @@ class Target_mat(Solid, Pdos):
         index = self.pdos.index
         alpha_grid = args[0]
         beta_grid = args[1]
+        groups = self.pdos.groupby(by=index)
         if model.lower() == "fgm":
-            w_t = {key: kwargs.get("w_t", 1).get(key, 1) for key in index}
+            w_t = {key: kwargs.get("w_t", {}).get(key, 1) for key in index}
             T = kwargs.pop("T", None)
-            Sab = self.pdos.groupby(by=index)\
-                      .apply(lambda x: S.from_fgm(alpha_grid[x.name], beta_grid[x.name],
+            Sab = groups.apply(lambda x: S.from_fgm(alpha_grid[x.name], beta_grid[x.name],
                                                   w_t=w_t[x.name], T=T))
         else:
             T = args[2]
             scale = kwargs.pop("scale", False)
             if model.lower() == "sct":
-                w_s = {key: kwargs.get("w_s", 1).get(key, 1) for key in index}
-                Sab = self.pdos.groupby(by=index)\
-                          .apply(lambda x: S.from_sct(alpha_grid[x.name], beta_grid[x.name], T, x,
-                                                      w_s=w_s[x.name], scale=scale))
+                w_s = {key: kwargs.get("w_s", {}).get(key, 1) for key in index}
+                Sab = groups.apply(lambda x: S.from_sct(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
+                                                        w_s=w_s[x.name], scale=scale))
             elif model.lower() == "phonon expansion":
-                threshold = {key: kwargs.get("threshold", 0.0).get(key, 0.0) for key in index}
-                nphonon = {key: kwargs.get("nphonon", 1000).get(key, 1000) for key in index}
-                Sab = self.pdos.groupby(by=index)\
-                          .apply(lambda x: S.from_pdos(alpha_grid[x.name], beta_grid[x.name], T, x,
-                                                       threshold=threshold[x.name], nphonon= nphonon[x.name], scale=scale))
+                threshold = {key: kwargs.get("threshold", {}).get(key, 0.0) for key in index}
+                nphonon = {key: kwargs.get("nphonon", {}).get(key, 1000) for key in index}
+                Sab = groups.apply(lambda x: S.from_pdos(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
+                                                         threshold=threshold[x.name], nphonon=nphonon[x.name], scale=scale))
             else:
                 raise ValueError("The selected model is not available")
         return Sab
@@ -1114,7 +1112,7 @@ class Target_mat(Solid, Pdos):
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        if isinstance(args[0], dict):
+        if isinstance(args[0], dict) or isinstance(args[0], pd.Series):
             Sab = self._get_Sab_multiple(*args, model=model, **kwargs)
         else:
             Sab = self._get_Sab_single(*args, model=model, **kwargs)

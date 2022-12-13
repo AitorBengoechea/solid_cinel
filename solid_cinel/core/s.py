@@ -554,9 +554,8 @@ def gen_beta(T, num_grid=400, mid_E=0.08,
                               endpoint=True)
     beta_grid = np.concatenate((first_half, second_half))
     if scale:
-        return scale_grid(beta_grid, T, **kwargs)
-    else:
-        return beta_grid
+        beta_grid = scale_grid(beta_grid, T, **kwargs)
+    return beta_grid
 
 
 def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
@@ -599,9 +598,8 @@ def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
     alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
                              num=num_grid)
     if scale:
-        return scale_grid(alpha_grid, T, **kwargs)
-    else:
-        return alpha_grid
+        alpha_grid =  scale_grid(alpha_grid, T, **kwargs)
+    return alpha_grid
 
 def scale_grid(grid, T, therm=0.0253) -> np.ndarray:
     """
@@ -640,7 +638,6 @@ def scale_grid(grid, T, therm=0.0253) -> np.ndarray:
             4.76952980e+01, 1.89278915e+02]])
     """
     return grid * therm / (const["Boltzmann constant in eV/K"][0] * T)
-
 
 
 def check_tau_n(tau_n, beta) -> None:

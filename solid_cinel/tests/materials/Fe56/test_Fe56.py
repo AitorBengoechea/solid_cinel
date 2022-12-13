@@ -2,11 +2,14 @@
 """
 Created on Fri Nov 25 14:52:18 2022
 
-@author: AB272525
+@author: AB272525from solid_cinel.core.s import S
+from scipy.integrate import trapezoid
 """
 import numpy as np
 import pandas as pd
 from solid_cinel import Target_mat
+from solid_cinel.core.s import S, scale_grid
+from scipy.integrate import trapezoid
 import pytest
 import os
 
@@ -40,6 +43,39 @@ Fe = Target_mat(preferred_orientation, unit_pos,
                 rho_in_energy, interv_in_energy)
 energy_cut = 4.096
 energy_sup = 10.0
+alpha0_str = '''
+  .01008 .015 .0252 .033 0.050406
+  .0756 0.100812 0.151218 0.201624 0.252030 0.302436 0.352842
+  0.403248 0.453654 0.504060 0.554466 0.609711 0.670259 0.736623
+  0.809349 0.889061 0.976435 1.072130 1.177080 1.292110 1.418220
+  1.556330 1.707750 1.873790 2.055660 2.255060 2.473520 2.712950
+  2.975460 3.263080 3.578320 3.923900 4.302660 4.717700 5.172560
+  5.671180 6.217580 6.816500 7.472890 8.192280 8.980730 9.844890
+  10.79190 11.83030 12.96740 14.21450 15.58150 17.07960 18.72080
+  20.52030 22.49220 24.65260 28. 30. 32. 34. 36. 38. 40. 42.5 45.
+  47.5 50. 52.5 55. 57.5 60. 62.5 65. 67.5 70. 72.5 75. 77.5 80.
+  85. 90.
+'''
+alpha0_ = np.fromstring(alpha0_str, dtype = np.float64, sep = ' ')
+beta0_str = '''
+  0.0 .02 .04 .06 .08 .10 .12 .14 .16 .18
+  .20 .22 .24 .26 .28 .30 .32 .34 .36 .38 
+  .40 .42 .44 .46 .48 .50 .52 .54 .56 .58
+  .60 .62 .64 .66 .68 .70 .72 .74 .76 .78
+  .80 .82 .84 .86 .88 .90 .92 .94 .96 .98
+  1.00 1.02 1.04 1.06 1.08 1.10 1.12 1.14 1.16 1.18 
+  1.20 1.22 1.24 1.26 1.28 1.30 1.32 1.34 1.36 1.38 
+  1.40 1.42 1.44 1.46 1.48 1.50 1.52 1.55 1.60 1.65
+  1.70 1.75 1.80 1.85 1.90 1.95 2.00 2.05 2.10 2.20 
+  2.30 2.40 2.50 2.60 2.70 2.80 2.90 3.00 3.10 3.20
+  3.40 3.60 3.80 4.00 4.50 5.00 5.50 6.00 6.50 7.00
+  7.50 8.00 8.50 9.00 9.50 10.0 10.5 11.0 11.5 12.0
+  12.5 13.0 13.5 14.0 15.0 16.0 17.0 18.0 19.0 20.0
+  22.5 25.0 27.5 30.0 32.5 35.0 37.5 40.0 42.5 45.0
+  47.5 50.0 52.5 55.0 60.0 65.0 70.0 75.0 80.0 85.0
+  90.0
+'''
+beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
@@ -76,4 +112,29 @@ def test_Fe56_coherent_Xs(T):
     comp_inv = data/test_data - 1  # Avoid one 0 and the other a number
     assert (comp.fillna(0) < 1.0e-4).all().all()
     assert (comp_inv.fillna(0) < 1.0e-4).all().all()
+    os.chdir(wd)
+
+
+@pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
+def test_Fe56_Sab(T):
+    wd = os.getcwd()
+    beta_grid = scale_grid(beta0_, T)
+    alpha_grid = scale_grid(alpha0_, T)
+    os.chdir(__file__.replace("test_Fe56.py", ""))
+    file = os.path.abspath(f"Fe56_Fe_{T}K_SSab")
+    test_data = pd.DataFrame(np.loadtxt(file).T * np.exp(beta_grid/2),
+                             columns=beta_grid,
+                             index=alpha_grid)
+    test_data.index.name, test_data.columns.name = "alpha", "beta"
+    threshold = 0.0 if T < 200 else 1.0e-14
+    data = Fe.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion",
+                      threshold=threshold)["Fe56"].data
+    Sab_normalize = []
+    for ia in range(len(test_data.index)):
+        Sab_normalize_original = trapezoid(beta_grid * data.iloc[ia] * (1 + np.exp(-beta_grid)), beta_grid)
+        Sab_normalize_Aitor = trapezoid(beta_grid * test_data.iloc[ia] * (1 + np.exp(-beta_grid)), beta_grid)
+        Sab_normalize.append([Sab_normalize_original/Sab_normalize_Aitor - 1,
+                              Sab_normalize_Aitor/Sab_normalize_original - 1])
+    comp = pd.DataFrame(Sab_normalize, index=test_data.index)
+    assert (abs(comp) < 1.0e-3).all().all()
     os.chdir(wd)

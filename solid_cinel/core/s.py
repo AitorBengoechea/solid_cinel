@@ -420,7 +420,7 @@ class S():
         """
         sum_rule = S.apply(_sum_rule, axis="columns")
         sum_rule /= S.index.values
-        if (abs(1 - abs(sum_rule)) > 0.5).any():
+        if (abs(1 - abs(sum_rule)) > 0.6).any():
             raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
         if (abs(1 - abs(sum_rule)) > 1.0e-3).any():
             warnings.warn("Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")

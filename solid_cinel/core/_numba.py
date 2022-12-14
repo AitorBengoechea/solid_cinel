@@ -23,12 +23,11 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
         Maximun h, k, l index for generating a d > d_min
     rec_vecs : 'np.array'
         Reciprocal vectors
-    Bfac : 'pd.Series'
-        Pandas series with the B factor for Target_Material object elements.
-    pos : 'pd.Series'
-        Pandas series with atomic position of elements in Target_Material 
-        object.
-    csl : 'pd.Series'
+    Bfac : 'nb.typed.Dict'
+        Dict with the B factor for Target_Material object elements.
+    pos : 'nb.typed.Dict'
+        Dict with atomic position of elements in Target_Material object.
+    csl : 'nb.typed.Dict'
         Coherent elastic length for each element of Target_Material object.
     """
     hklM = {}
@@ -48,23 +47,11 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
                 if d_hkl < d_min:  # d < d_min is excluded
                     continue
 
-                # Fsq_hkl
-                real = 0.
-                imag = 0.
-                for element in Bfac:
-                    expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
-                                       * Bfac[element] / (8 * np.pi ** 2))
-                    element_position = pos[element]
-                    scalar = np.sum(vec_tau_hkl * element_position, axis=1)
-                    cumulant_cos = np.sum(np.cos(scalar))
-                    cumulant_sin = np.sum(np.sin(scalar))
-                    real += csl[element] * 0.1 * expon_hkl * cumulant_cos
-                    imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
-                Fsq_hkl = real ** 2 + imag ** 2  # Fsquared
+                Fsq = Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos)  # Fsquared
 
                 # same dspacing and Fsquared with precision will be regrouped
                 d_rnd = round(d_hkl, precision[0])
-                Fsq_rnd = round(Fsq_hkl, precision[1])
+                Fsq_rnd = round(Fsq, precision[1])
                 if (d_rnd, Fsq_rnd) in hkldF:
                     hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
                 else:
@@ -72,11 +59,49 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
                     OA_num = np.sum(vec_tau_hkl * preferred_orientation)
                     OA_den = np.linalg.norm(vec_tau_hkl) * np.linalg.norm(preferred_orientation)
                     orientation_angle_hkl = np.arccos(OA_num / OA_den) * 180 / np.pi
-                    hklM[(h, k, l)] = np.array([d_hkl, Fsq_hkl, orientation_angle_hkl, 1])
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq, orientation_angle_hkl, 1])
     return hklM
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
+def Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos) -> float:
+    """
+    Get F_hkl:
+    .. math::
+        F(\vec{\tau}_{hkl})=\sum_{j=1}^{N_{uc}}b_j\exp\left(-\dfrac{\hbar^2\tau_{hkl}^2}{4M_jk_BT}\Lambda_j(T)\right) e^{i\vec{\tau}_{hkl}\cdot\vec{p}_j}
+
+    Parameters
+    ----------
+    h : 'int'
+        h plane number.
+    k : 'int'
+        k plane number.
+    l : 'int'
+        l plane number.
+    vec_tau_hkl : 'np.array'
+        Reciprocal vectors
+    Bfac : 'nb.typed.Dict'
+        Dict with the B factor for Target_Material object elements.
+    pos : 'nb.typed.Dict'
+        Dict with atomic position of elements in Target_Material object.
+    csl : 'nb.typed.Dict'
+        Coherent elastic length for each element of Target_Material object.
+    """
+    real = 0.
+    imag = 0.
+    for element in Bfac:
+        expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
+                           * Bfac[element] / (8 * np.pi ** 2))
+        element_position = pos[element]
+        scalar = np.sum(vec_tau_hkl * element_position, axis=1)
+        cumulant_cos = np.sum(np.cos(scalar))
+        cumulant_sin = np.sum(np.sin(scalar))
+        real += csl[element] * 0.1 * expon_hkl * cumulant_cos
+        imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
+    return real ** 2 + imag ** 2  # Fsquared
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold) -> np.array:
     """
     Get the tau_{n}(-beta) function values.
@@ -167,7 +192,7 @@ def convolTaufunc(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):
     return Taun_neg
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def update_Sab_with_tau_n(n, alpha_grid, DebyeWallerCoeff,
                           tau_n, Sab, iter_sum) -> np.array:
     """

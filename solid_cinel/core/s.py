@@ -562,12 +562,10 @@ class S():
         # Get the output energies and the scatterig angle
         E_prima = self.get_output_energy(T, incident_neutron_energy)
         theta = self.get_theta(T, incident_neutron_energy, m)
-        if len(E_prima) > len(theta):
-            E_prima = E_prima[:len(theta)]
 
         vector = boundXs / (2 * const["Boltzmann constant in eV/K"][0] * T) * np.sqrt(E_prima / incident_neutron_energy)
 
-        inelastic_xs = vector * self.data.iloc[:len(theta), :len(E_prima)]
+        inelastic_xs = vector * self.data.iloc[:len(theta), ::]
         inelastic_xs.index = pd.Index(theta, name="theta")
         inelastic_xs.columns = pd.Index(E_prima, name="E_out")
         return inelastic_xs

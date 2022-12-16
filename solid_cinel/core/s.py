@@ -87,7 +87,7 @@ class S():
         df : 2D iterable
             Iterable containing the S(alpha, beta) matrix.
         """
-        df_ = pd.DataFrame(df)
+        df_ = pd.DataFrame(df).sort_index(axis=0).sort_index(axis=1)
         df_.index.name = "alpha"
         df_.columns.name = "beta"
         # Normalization constrains:
@@ -451,10 +451,125 @@ class S():
         """
         normalization = S.apply(_normalization, axis="columns")
         if pdos and T:
-            normalization /= (1 - np.exp(S.index.values * pdos.DebyeWallerCoeff(T))) 
+            normalization /= (1 - np.exp(S.index.values * pdos.DebyeWallerCoeff(T)))
         if (abs(normalization - 1.0) > 5.0e-3).any():
             warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
+
+    def get_output_energy(self, T, incident_neutron_energy) -> np.array:
+        """
+        Based on the S(alpha, -beta) matrix, get the posible
+        output energies for a incident neutron energy and that beta grid.
+        .. math::
+            E^\prime = \beta k_B T + E
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        incident_neutron_energy : 'float'
+            Incident neutron energy in eV.
+
+        Example
+        -------
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> beta_grid = scale_grid(beta0_, T)
+        >>> alpha_grid = scale_grid(alpha0_, T)
+        >>> Sab = S.from_fgm(alpha_grid, beta_grid)
+        >>> Sab.get_output_energy(T, incident_neutron_energy)[0:5]
+        array([0.33118  , 0.3318125, 0.332445 , 0.3330775, 0.33371  ])
+        """
+        beta = self.data.columns.values
+        return beta * const["Boltzmann constant in eV/K"][0] * T + incident_neutron_energy
+
+    def get_theta(self, T, incident_neutron_energy, m) -> np.array:
+        """
+        Based on the S(alpha, -beta) matrix, get the posible scattering angles
+        for a scattering atom, temperature and incident neutron energy.
+        .. math::
+            \mu = \frac{E^\prime + E - \alpha Ak_BT}{2\sqrt{E^\prime E}}
+            \theta = \arccos(\mu)
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        incident_neutron_energy : 'float'
+            Incident neutron energy in eV.
+        m : 'float'
+            Atom mass, amu.
+
+        Example
+        -------
+        >>> T = 800
+        >>> m = 26.98153433356103
+        >>> incident_neutron_energy = 0.33118
+        >>> beta_grid = scale_grid(beta0_, T)
+        >>> alpha_grid = scale_grid(alpha0_, T)
+        >>> Sab = S.from_fgm(alpha_grid, beta_grid)
+        >>> Sab.get_theta(T, incident_neutron_energy, m)[0:5].round(6)
+        array([0.101125, 0.143002, 0.175125, 0.202199, 0.226045])
+        """
+        A = A = m / const["neutron mass in u"][0]
+        E_prima = self.get_output_energy(T, incident_neutron_energy)
+        alpha = self.data.index.values
+        if len(E_prima) > len(alpha):
+            E_prima = E_prima[:len(alpha)]
+        elif len(E_prima) < len(alpha):
+            alpha = alpha[:len(E_prima)]
+        mu = E_prima + incident_neutron_energy - alpha * A * const["Boltzmann constant in eV/K"][0] * T
+        mu /= (2 * np.sqrt(E_prima * incident_neutron_energy))
+        return np.arccos(mu[abs(mu) <= 1])
+
+    def get_inelastic_Xs(self, T, m, boundXs, incident_neutron_energy) -> pd.DataFrame:
+        """
+        Get inelastic scattering for a atom with a certain bound Xs and mass
+        and for a certain incident energy.
+        .. math::
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        m : 'float'
+            Atom mass, amu.
+        boundXs : 'float'
+            Bound total scattering cross section in barn.
+        incident_neutron_energy : 'float'
+            Incident neutron energy in eV.
+
+        Example
+        -------
+        >>> T = 800
+        >>> m = 26.98153433356103
+        >>> boundXs = 1.5030808051112423
+        >>> incident_neutron_energy = 0.33118
+        >>> beta_grid = scale_grid(beta0_, T)
+        >>> alpha_grid = scale_grid(alpha0_, T)
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> Sab = S.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> Sab.get_inelastic_Xs(T, m, boundXs, incident_neutron_energy).iloc[:5, :5].round(6)
+        E_out     0.331180  0.331812  0.332445  0.333077  0.333710
+        theta
+        0.101125  0.414306  0.416519  0.418685  0.420825  0.422894
+        0.143002  0.814356  0.818542  0.822529  0.826404  0.830112
+        0.175125  1.200295  1.206236  1.211737  1.216984  1.221948
+        0.202199  1.572293  1.579791  1.586531  1.592831  1.598713
+        0.226045  1.930542  1.939419  1.947155  1.954222  1.960724
+        """
+        # Get the output energies and the scatterig angle
+        E_prima = self.get_output_energy(T, incident_neutron_energy)
+        theta = self.get_theta(T, incident_neutron_energy, m)
+
+        vector = boundXs / (2 * const["Boltzmann constant in eV/K"][0] * T) * np.sqrt(E_prima / incident_neutron_energy)
+
+        inelastic_xs = vector * self.data.iloc[:len(theta), ::]
+        inelastic_xs.index = pd.Index(theta, name="theta")
+        inelastic_xs.columns = pd.Index(E_prima, name="E_out")
+        return inelastic_xs
+
 
 def _sum_rule(x) -> float:
     """

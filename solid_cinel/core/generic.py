@@ -34,7 +34,7 @@ def normalization_coeff(series, kind="trapezoidal") -> float:
     y = series.values
     x = series.index.values
     if kind == "trapezoidal":
-        y_norm = np.trapz(y, x=x)
+        y_norm = sp.integrate.trapezoid(y, x=x)
     elif kind == "simpson":
         y_norm = sp.integrate.simpson(y, x=x)
     else:
@@ -70,7 +70,4 @@ def reshape_differential(x, y, xnew):
                                   fill_value=0.,
                                   assume_sorted=True,
                                   )
-    if len(y.shape) == 1:
-        return np.interp(xnew, x, y, left=0.0, right=0.0)
-    else:
-        return foo(xnew)
+    return foo(xnew)

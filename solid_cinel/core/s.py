@@ -313,8 +313,8 @@ class S():
                 check_tau_n(tau_n, beta_tau_n)
 
                 # Interpolate tau_n(-beta):
-                tau_n_reshape = reshape_differential(beta_tau_n, tau_n,
-                                                     beta_grid)
+                tau_n_reshape = np.interp(beta_grid, beta_tau_n, tau_n,
+                                          left=0.0, right=0.0)
 
                 # Compute S(alpha, -beta) for tau_n reshape
                 iter_sum += np.log(alpha_grid * debye_waller_coeff / (n + 1))

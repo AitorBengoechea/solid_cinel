@@ -527,7 +527,7 @@ class S():
         Get inelastic scattering for a atom with a certain bound Xs and mass
         and for a certain incident energy.
         .. math::
-            
+            \sigma(E \rightarrow E^\prime, \mu)=\dfrac{\sigma_b}{2k_B T}\sqrt{\dfrac{E^\prime}{E}} S(\alpha, \beta)
 
         Parameters
         ----------

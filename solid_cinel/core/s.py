@@ -527,6 +527,7 @@ class S():
         Get inelastic scattering for a atom with a certain bound Xs and mass
         and for a certain incident energy.
         .. math::
+            
 
         Parameters
         ----------

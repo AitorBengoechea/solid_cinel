@@ -7,7 +7,7 @@ Created on Thu Oct 20 11:46:42 2022
 
 from solid_cinel.core.material.solid import Solid, hkl_max_value
 from solid_cinel.core.material.pdos import Pdos
-from solid_cinel.core.s import S
+from solid_cinel.core.s import Sab
 from solid_cinel.core._numba import hklloop
 from solid_cinel.cinematic.lab import Neutron
 from scipy.constants import physical_constants as const
@@ -902,23 +902,23 @@ class Target_mat(Solid, Pdos):
         if model.lower() == "fgm":
             w_t = {key: kwargs.get("w_t", {}).get(key, 1) for key in index}
             T = kwargs.pop("T", None)
-            Sab = groups.apply(lambda x: S.from_fgm(alpha_grid[x.name], beta_grid[x.name],
+            Sab_matrix = groups.apply(lambda x: Sab.from_fgm(alpha_grid[x.name], beta_grid[x.name],
                                                   w_t=w_t[x.name], T=T))
         else:
             T = args[2]
             scale = kwargs.pop("scale", False)
             if model.lower() == "sct":
                 w_s = {key: kwargs.get("w_s", {}).get(key, 1) for key in index}
-                Sab = groups.apply(lambda x: S.from_sct(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
+                Sab_matrix = groups.apply(lambda x: Sab.from_sct(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
                                                         w_s=w_s[x.name], scale=scale))
             elif model.lower() == "phonon expansion":
                 threshold = {key: kwargs.get("threshold", {}).get(key, 0.0) for key in index}
                 nphonon = {key: kwargs.get("nphonon", {}).get(key, 1000) for key in index}
-                Sab = groups.apply(lambda x: S.from_pdos(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
+                Sab_matrix = groups.apply(lambda x: Sab.from_pdos(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
                                                          threshold=threshold[x.name], nphonon=nphonon[x.name], scale=scale))
             else:
                 raise ValueError("The selected model is not available")
-        return Sab
+        return Sab_matrix
 
     def _get_Sab_single(self, *args, model, **kwargs) -> pd.Series:
         """
@@ -983,16 +983,16 @@ class Target_mat(Solid, Pdos):
 
         """
         if model.lower() == "fgm":
-            Sab = self.pdos.apply(lambda x: S.from_fgm(*args, **kwargs))
+            Sab_matrix = self.pdos.apply(lambda x: Sab.from_fgm(*args, **kwargs))
         else:
             if model.lower() == "sct":
-                method = S.from_sct
+                method = Sab.from_sct
             elif model.lower() == "phonon expansion":
-                method = S.from_pdos
+                method = Sab.from_pdos
             else:
                 raise ValueError("The selected model is not available")
-            Sab = self.pdos.apply(lambda x: method(*args, x, **kwargs))
-        return Sab
+            Sab_matrix = self.pdos.apply(lambda x: method(*args, x, **kwargs))
+        return Sab_matrix
 
     def get_Sab(self, *args, model="phonon expansion", **kwargs):
         """

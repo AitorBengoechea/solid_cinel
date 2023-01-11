@@ -511,7 +511,7 @@ class S():
         >>> Sab.get_theta(T, incident_neutron_energy, m)[0:5].round(6)
         array([0.101125, 0.143002, 0.175125, 0.202199, 0.226045])
         """
-        A = A = m / const["neutron mass in u"][0]
+        A = m / const["neutron mass in u"][0]
         E_prima = self.get_output_energy(T, incident_neutron_energy)
         alpha = self.data.index.values
         if len(E_prima) > len(alpha):
@@ -527,7 +527,7 @@ class S():
         Get inelastic scattering for a atom with a certain bound Xs and mass
         and for a certain incident energy.
         .. math::
-            
+            \sigma(E \rightarrow E^\prime, \mu)=\dfrac{\sigma_b}{2k_B T}\sqrt{\dfrac{E^\prime}{E}} S(\alpha, \beta)
 
         Parameters
         ----------

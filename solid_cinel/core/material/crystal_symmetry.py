@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 class Crystal_structure():
-    def __init__(self, length, angles, symmetry="cubic"):
+    def __init__(self, length, angles):
         if len(length) != 3:
             ValueError("The direct vector lengths array do not have the apropiate lenght")
         if len(angles) != 3:
@@ -13,10 +13,9 @@ class Crystal_structure():
         self.angles = pd.Series(np.array(angles) * np.pi / 180,
                                 index=["alpha", "beta", "gamma"],
                                 name="direct vectors angles")
-        self.symmetry = symmetry.lower()
 
     @property
-    def _operator(self) -> np.ndarray:
+    def operator(self) -> np.ndarray:
         """
         Generate the operator for obteining the direct lattice vectors.
 
@@ -27,7 +26,7 @@ class Crystal_structure():
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
         >>> crys = Crystal_structure(dir_vec_length, dir_vec_angles)
-        >>> cubic_vec = crys._operator
+        >>> cubic_vec = crys.operator.values
 
         Test the results:
         >>> assert all(cubic_vec[0].round(6) == np.array([1.      , 0.      , 0.]))
@@ -46,7 +45,8 @@ class Crystal_structure():
                       1.0])
         c[1] /=  np.sin(angles["gamma"])
         c[2] *= np.sqrt(1. - c[0] ** 2 - c[1] ** 2)
-        return np.array([a, b, c])
+        return pd.DataFrame([a, b, c], index=["a1", "a2", "a3"],
+                            columns=["x", "y", "z"])
 
     @property
     def dir_vec(self) -> pd.DataFrame:
@@ -68,11 +68,7 @@ class Crystal_structure():
         >>> assert all(direct_vectors.loc["a3"].values.round(6) == np.array([1.428355, 0.824661, 2.332494]))
 
         """
-        if self.symmetry == "cubic":
-            operator = pd.DataFrame(self._operator)
-        operator.index = pd.Index(["a1", "a2", "a3"])
-        operator.columns = pd.Index(["x", "y", "z"])
-        return operator * self.length.values
+        return self.operator * self.length.values
 
     @property
     def unit_cell_vol(self) -> float:

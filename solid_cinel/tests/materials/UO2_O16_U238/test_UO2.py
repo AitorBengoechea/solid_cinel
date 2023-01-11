@@ -8,7 +8,7 @@ Created on Wed Nov 30 15:00:47 2022
 import numpy as np
 import pandas as pd
 from solid_cinel import Target_mat
-from solid_cinel.core.s import S, scale_grid
+from solid_cinel.core.s import scale_grid
 from scipy.integrate import trapezoid
 import pytest
 import os

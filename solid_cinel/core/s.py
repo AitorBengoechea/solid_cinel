@@ -763,8 +763,8 @@ def check_tau_n(tau_n, beta) -> None:
 
     Parameters
     ----------
-    tau_n : TYPE
-        DESCRIPTION.
+    tau_n : 1D iterable
+        tau_n function values.
     beta : 1D iterable
         beta grid.
 

@@ -108,7 +108,7 @@ class Solid(Crystal_structure, Molecule):
             structure of a solid.
 
         """
-        Crystal_structure.__init__(self, *args[0:2], kwargs.pop("symmetry", "cubic"))
+        Crystal_structure.__init__(self, *args[0:2])
         Molecule.__init__(self, *args[2:], **kwargs)
 
         if len(preferred_orientation) != 3:

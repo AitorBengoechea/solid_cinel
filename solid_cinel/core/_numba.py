@@ -93,11 +93,11 @@ def Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos) -> float:
         expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
                            * Bfac[element] / (8 * np.pi ** 2))
         element_position = pos[element]
-        scalar = np.sum(vec_tau_hkl * element_position, axis=1)
-        cumulant_cos = np.sum(np.cos(scalar))
-        cumulant_sin = np.sum(np.sin(scalar))
-        real += csl[element] * 0.1 * expon_hkl * cumulant_cos
-        imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
+        for iep in range(len(element_position)):
+            cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]))
+            cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]))
+            real += csl[element] * 0.1 * expon_hkl * cumulant_cos
+            imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
     return real ** 2 + imag ** 2  # Fsquared
 
 

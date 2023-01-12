@@ -62,8 +62,8 @@ beta0_str = '''
 beta0_ = np.fromstring(beta0_str, dtype=np.float64, sep=' ')
 
 
-class S():
-    """
+class Sab():
+    """ 
     Class containing all the methods and properties of a asymmetric
     S(alpha, beta) matrix.
     """
@@ -111,7 +111,7 @@ class S():
         -------
         >>> beta_grid = gen_beta(300)
         >>> alpha_grid = gen_alpha(300, 26)
-        >>> S.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
+        >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
@@ -159,7 +159,7 @@ class S():
         FGM:
         >>> beta_grid = gen_beta(300)
         >>> alpha_grid = gen_alpha(300, 26)
-        >>> S.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
+        >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
         0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
@@ -214,7 +214,7 @@ class S():
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> beta_grid = gen_beta(T)
         >>> alpha_grid = gen_alpha(T, 26)
-        >>> S = S.from_sct(alpha_grid, beta_grid, T, pdos)
+        >>> S = Sab.from_sct(alpha_grid, beta_grid, T, pdos)
         >>> S.data.iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -281,7 +281,7 @@ class S():
         >>> T = 800
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> S_mat = S.from_pdos(alpha0_, beta0_, T, pdos, scale=True, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha0_, beta0_, T, pdos, scale=True, threshold=1.0e-14)
         >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -360,7 +360,7 @@ class S():
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
         >>> alpha_grid = scale_grid(alpha0_, T)
         >>> beta_grid = scale_grid(beta0_, T)
-        >>> S_mat, iter_sum = S._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
+        >>> S_mat, iter_sum = Sab._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
         >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5]
               0         1         2         3         4
         0  0.036967  0.037137  0.037308  0.037478  0.037644
@@ -476,7 +476,7 @@ class S():
         >>> incident_neutron_energy = 0.33118
         >>> beta_grid = scale_grid(beta0_, T)
         >>> alpha_grid = scale_grid(alpha0_, T)
-        >>> Sab = S.from_fgm(alpha_grid, beta_grid)
+        >>> Sab = Sab.from_fgm(alpha_grid, beta_grid)
         >>> Sab.get_output_energy(T, incident_neutron_energy)[0:5]
         array([0.33118  , 0.3318125, 0.332445 , 0.3330775, 0.33371  ])
         """
@@ -507,11 +507,11 @@ class S():
         >>> incident_neutron_energy = 0.33118
         >>> beta_grid = scale_grid(beta0_, T)
         >>> alpha_grid = scale_grid(alpha0_, T)
-        >>> Sab = S.from_fgm(alpha_grid, beta_grid)
+        >>> Sab = Sab.from_fgm(alpha_grid, beta_grid)
         >>> Sab.get_theta(T, incident_neutron_energy, m)[0:5].round(6)
         array([0.101125, 0.143002, 0.175125, 0.202199, 0.226045])
         """
-        A = A = m / const["neutron mass in u"][0]
+        A = m / const["neutron mass in u"][0]
         E_prima = self.get_output_energy(T, incident_neutron_energy)
         alpha = self.data.index.values
         if len(E_prima) > len(alpha):
@@ -550,7 +550,7 @@ class S():
         >>> alpha_grid = scale_grid(alpha0_, T)
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> Sab = S.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
         >>> Sab.get_inelastic_Xs(T, m, boundXs, incident_neutron_energy).iloc[:5, :5].round(6)
         E_out     0.331180  0.331812  0.332445  0.333077  0.333710
         theta
@@ -591,7 +591,7 @@ def _sum_rule(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_fgm(alpha_grid, beta_grid).data
+    >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
     >>> _sum_rule(s.iloc[1, ::]).round(6)
     0.001087
     """
@@ -619,7 +619,7 @@ def _normalization(x) -> float:
     -------
     >>> beta_grid = gen_beta(300)
     >>> alpha_grid = gen_alpha(300, 26)
-    >>> s = S.from_fgm(alpha_grid, beta_grid).data
+    >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
     >>> _normalization(s.iloc[0, ::]).round(6)
     1.0
     """
@@ -763,8 +763,8 @@ def check_tau_n(tau_n, beta) -> None:
 
     Parameters
     ----------
-    tau_n : TYPE
-        DESCRIPTION.
+    tau_n : 1D iterable
+        tau_n function values.
     beta : 1D iterable
         beta grid.
 

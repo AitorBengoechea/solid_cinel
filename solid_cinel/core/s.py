@@ -116,9 +116,11 @@ class Beta():
                                   num=int(num_grid * 0.4),
                                   endpoint=True)
         beta_grid = np.concatenate((first_half, second_half))
+
         if scale:
-            beta_grid = scale_grid(beta_grid, T, **kwargs)
-        return cls(beta_grid)
+            return cls(beta_grid).scale(T, **kwargs)
+        else:
+            return cls(beta_grid)
 
     @classmethod
     def from_energy_grid(cls, energy_grid, T):
@@ -190,7 +192,7 @@ class Beta():
         -------
         >>> T = 800
         >>> incident_neutron_energy = 0.33118
-        >>> beta_grid = Beta(scale_grid(beta0_, T))
+        >>> beta_grid = Beta(beta0_).scale(T)
         >>> beta_grid.get_output_energy(T, incident_neutron_energy).iloc[0:5]
         beta
         0.000000    0.331180
@@ -206,11 +208,42 @@ class Beta():
         return pd.Series(output_energy,
                          name="output energy",
                          index=self.to_index)
+
+    def scale(self, T, therm=0.0253):
+        """
+        Scale alpha or beta spectrum.
+    
+        Parameters
+        ----------
+        grid : 'np.ndarray' of 1D or 2D
+            Alpha o Beta grid.
+        T : 'float'
+            Temperature in K.
+        therm : 'float', optional
+            factor for regrid alpha and beta. The default is 0.0253.
+    
+        Example
+        -------
+        >>> T = 300
+        >>> beta0 = Beta.generate_grid(T, num_grid=10)
+        >>> beta0.scale(T).data.round(6)
+        array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
+               2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
+        """
+        kbT = const["Boltzmann constant in eV/K"][0] * T
+        scale_grid = self.data * therm / kbT
+        return Beta(scale_grid)
     
 class Alpha():
     def __init__(self, array):
         self.data = np.sort(array)
-        
+
+    @property
+    def to_index(self) -> pd.Index:
+        """Tranform the Beta class data into a pandas Index."""
+        return pd.Index(self.data, name="alpha")
+
+    @classmethod
     def generate_grid(cls, T, atom_mass, num_grid=300, min_E=2.8e-3,
                   thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
         """
@@ -239,7 +272,7 @@ class Alpha():
 
         Example
         -------
-        >>> Beta.generate_grid(300, 26, num_grid=10).round(6)
+        >>> Alpha.generate_grid(300, 26, num_grid=10).data.round(6)
         array([1.0500000e-03, 3.2850000e-03, 1.0270000e-02, 3.2114000e-02,
                1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
                9.5985550e+00, 3.0013001e+01])
@@ -251,11 +284,46 @@ class Alpha():
         alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
                                  num=num_grid)
         if scale:
-            alpha_grid =  scale_grid(alpha_grid, T, **kwargs)
-        return cls(alpha_grid)
+            return cls(alpha_grid).scale(T, **kwargs)
+        else:
+            return cls(alpha_grid)
 
-    def from_calc():
-        return
+    @classmethod
+    def from_output_energy(cls, output_energy, incident_neutron_energy, T,
+                           m, theta):
+        """
+        
+
+        Parameters
+        ----------
+        output_energy : 1D iterable or 'float'
+            Neutron output energies in eV.
+        incident_neutron_energy : 'float'
+            Neutron incident energy in eV.
+        T : 'float'
+            Temperature in Kelvin.
+        m : 'float'
+            Atom mass, amu
+        theta : 'float'
+            scattering angle in Degrees.
+
+        Example
+        -------
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> m = 26.98153433356103
+        >>> theta = 0.101125 * 180 / np.pi
+        >>> Alpha.from_output_energy(output_energy, incident_neutron_energy, T, m, theta).data.round(6)
+        array([-0.357344, -0.357343, -0.35734 , -0.357338, -0.357335])
+        """
+        output_energy_ = np.array(output_energy)
+        A = m / const["neutron mass in u"][0]
+        AkT = A * const["Boltzmann constant in eV/K"][0] * T
+        mu = np.cos(theta * np.pi / 180)
+        alpha = (output_energy_ - incident_neutron_energy - 2 * mu * np.sqrt(output_energy_ * incident_neutron_energy))
+        alpha /= AkT
+        return cls(alpha)
 
     def get_theta(self, T, incident_neutron_energy, m, beta_grid) -> pd.Series:
         """
@@ -279,17 +347,22 @@ class Alpha():
         >>> T = 800
         >>> m = 26.98153433356103
         >>> incident_neutron_energy = 0.33118
-        >>> beta_grid = scale_grid(beta0_, T)
-        >>> alpha_grid = scale_grid(alpha0_, T)
-        >>> Sab = Sab.from_fgm(alpha_grid, beta_grid)
-        >>> Sab.get_theta(T, incident_neutron_energy, m)[0:5].round(6)
-        array([0.101125, 0.143002, 0.175125, 0.202199, 0.226045])
+        >>> beta_grid = Beta(beta0_).scale(T)
+        >>> alpha_grid = Alpha(alpha0_).scale(T)
+        >>> alpha_grid.get_theta(T, incident_neutron_energy, m, beta_grid).iloc[0:5].round(6)
+        alpha
+        0.001835    0.101125
+        0.003670    0.143002
+        0.005505    0.175125
+        0.007340    0.202199
+        0.009175    0.226045
+        Name: mu, dtype: float64
         """
         alpha = self.data
         A = m / const["neutron mass in u"][0]
 
         beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        E_prima = beta.get_output_energy(T, incident_neutron_energy)
+        E_prima = beta.get_output_energy(T, incident_neutron_energy).values
 
         if len(E_prima) > len(alpha):
             E_prima = E_prima[:len(alpha)]
@@ -299,7 +372,31 @@ class Alpha():
         mu = E_prima + incident_neutron_energy - alpha * A * const["Boltzmann constant in eV/K"][0] * T
         mu /= (2 * np.sqrt(E_prima * incident_neutron_energy))
         mu = np.arccos(mu[abs(mu) <= 1])
-        return pd.Series(mu, index=alpha[:len(mu)])
+        return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
+
+    def scale(self, T, therm=0.0253):
+        """
+        Scale alpha or beta spectrum.
+    
+        Parameters
+        ----------
+        grid : 'np.ndarray' of 1D or 2D
+            Alpha o Beta grid.
+        T : 'float'
+            Temperature in K.
+        therm : 'float', optional
+            factor for regrid alpha and beta. The default is 0.0253.
+    
+        Example
+        -------
+        >>> T = 300
+        >>> alpha0 = Alpha.generate_grid(T, 26, num_grid=10)
+        >>> alpha0.scale(T).data.round(6)
+        array([1.0280000e-03, 3.2140000e-03, 1.0051000e-02, 3.1428000e-02,
+               9.8269000e-02, 3.0727100e-01, 9.6078300e-01, 3.0041990e+00,
+               9.3936040e+00, 2.9372154e+01])
+        """
+        return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
 
 class Sab():
@@ -310,8 +407,22 @@ class Sab():
 
     def __init__(self, *args, **kwargs):
         self.data = pd.DataFrame(*args, **kwargs)
-        self.beta = Beta(self.data.columns.values)
-        self.alpha = Alpha(self.data.index.values)
+
+    @property
+    def alpha(self) -> Alpha:
+        """
+        Initialize the Alpha class with the information of S(alpha, beta)
+        matrix
+        """
+        return Alpha(self.data.index.values)
+
+    @property
+    def beta(self) -> Beta:
+        """
+        Initialize the Beta class with the information of S(alpha, beta)
+        matrix
+        """
+        return Beta(self.data.columns.values)
 
     @property
     def data(self) -> pd.DataFrame:
@@ -351,8 +462,8 @@ class Sab():
 
         Example
         -------
-        >>> beta_grid = gen_beta(300)
-        >>> alpha_grid = gen_alpha(300, 26)
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha_grid = Alpha.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -399,8 +510,8 @@ class Sab():
         Example
         -------
         FGM:
-        >>> beta_grid = gen_beta(300)
-        >>> alpha_grid = gen_alpha(300, 26)
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha_grid = Alpha.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
@@ -415,10 +526,6 @@ class Sab():
         0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
         0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
         """
-        if T is not None:
-            alpha_grid = scale_grid(alpha_grid, T)
-            beta_grid = scale_grid(beta_grid, T)
-
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
 
         S_values = np.fromfunction(np.vectorize(f),
@@ -428,7 +535,7 @@ class Sab():
         return cls(S_values, index=alpha_grid, columns=beta_grid)
 
     @classmethod
-    def from_sct(cls, alpha_grid, beta_grid, T, pdos, scale=False, w_s=1):
+    def from_sct(cls, alpha_grid, beta_grid, T, pdos, w_s=1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
         .. math::
@@ -454,8 +561,8 @@ class Sab():
         >>> T = 300
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> beta_grid = gen_beta(T)
-        >>> alpha_grid = gen_alpha(T, 26)
+        >>> beta_grid = Beta.generate_grid(T).data
+        >>> alpha_grid = Alpha.generate_grid(T, 26).data
         >>> S = Sab.from_sct(alpha_grid, beta_grid, T, pdos)
         >>> S.data.iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
@@ -471,9 +578,6 @@ class Sab():
         0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
-        if scale:
-            alpha_grid = scale_grid(alpha_grid, T)
-            beta_grid = scale_grid(beta_grid, T)
         ratio = pdos.Teff(T) / T
 
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_s - beta_grid[j]) ** 2 / (4 * ratio * w_s * alpha_grid[i])) / np.sqrt(4 * np.pi * w_s * alpha_grid[i] * ratio)
@@ -485,7 +589,7 @@ class Sab():
         return cls(S_values, index=alpha_grid, columns=beta_grid)
 
     @classmethod
-    def from_pdos(cls, alpha_grid, beta_grid, T, pdos, scale=False,
+    def from_pdos(cls, alpha_grid, beta_grid, T, pdos,
                   threshold=0.0, nphonon=1000):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
@@ -508,9 +612,6 @@ class Sab():
             Alpha grid.
         beta_grid : 1D iterable
             beta grid.
-        scale : 'bool', optional
-            Option to scale beta and alpha grid with the method scale_grid. The
-            default is False.
         threshold : 'float', optional
             Minimun value to take into account in the creation of tau_n
             functions. For T>200 is convenient to set into 1.0e-14 to speed up
@@ -523,7 +624,9 @@ class Sab():
         >>> T = 800
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> S_mat = Sab.from_pdos(alpha0_, beta0_, T, pdos, scale=True, threshold=1.0e-14)
+        >>> alpha = Alpha(alpha0_).scale(T).data
+        >>> beta = Beta(beta0_).scale(T).data
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -538,14 +641,11 @@ class Sab():
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        if scale:
-            alpha_grid = scale_grid(alpha_grid, T)
-            beta_grid = scale_grid(beta_grid, T)
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
         S_values, iter_sum = cls._S_from_tau1(tau1, debye_waller_coeff,
-                                             alpha_grid, beta_grid)
+                                              alpha_grid, beta_grid)
         if nphonon > 1:
             tau1 = tau_n_minus_1 = tau1.values
             for n in range(1, nphonon):
@@ -600,8 +700,8 @@ class Sab():
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> tau1 = pdos._get_tau_1(T)
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        >>> alpha_grid = scale_grid(alpha0_, T)
-        >>> beta_grid = scale_grid(beta0_, T)
+        >>> alpha_grid = Alpha(alpha0_).scale(T).data
+        >>> beta_grid = Beta(beta0_).scale(T).data
         >>> S_mat, iter_sum = Sab._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
         >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5]
               0         1         2         3         4
@@ -722,8 +822,8 @@ class Sab():
         >>> m = 26.98153433356103
         >>> boundXs = 1.5030808051112423
         >>> incident_neutron_energy = 0.33118
-        >>> beta_grid = scale_grid(beta0_, T)
-        >>> alpha_grid = scale_grid(alpha0_, T)
+        >>> beta_grid = Beta(beta0_).scale(T).data
+        >>> alpha_grid = Alpha(alpha0_).scale(T).data
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
@@ -765,8 +865,8 @@ def _sum_rule(x) -> float:
 
     Example
     -------
-    >>> beta_grid = gen_beta(300)
-    >>> alpha_grid = gen_alpha(300, 26)
+    >>> beta_grid = Beta.generate_grid(300).data
+    >>> alpha_grid = Alpha.generate_grid(300, 26).data
     >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
     >>> _sum_rule(s.iloc[1, ::]).round(6)
     0.001087
@@ -793,8 +893,8 @@ def _normalization(x) -> float:
 
     Example
     -------
-    >>> beta_grid = gen_beta(300)
-    >>> alpha_grid = gen_alpha(300, 26)
+    >>> beta_grid = Beta.generate_grid(300).data
+    >>> alpha_grid = Alpha.generate_grid(300, 26).data
     >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
     >>> _normalization(s.iloc[0, ::]).round(6)
     1.0
@@ -803,44 +903,6 @@ def _normalization(x) -> float:
     S_asymm_values = x.values
     S = pd.Series((1 + np.exp(-beta)) * S_asymm_values, index=beta)
     return normalization_coeff(S)
-
-def scale_grid(grid, T, therm=0.0253) -> np.ndarray:
-    """
-    Scale alpha or beta spectrum.
-
-    Parameters
-    ----------
-    grid : 'np.ndarray' of 1D or 2D
-        Alpha o Beta grid.
-    T : 'float'
-        Temperature in K.
-    therm : 'float', optional
-        factor for regrid alpha and beta. The default is 0.0253.
-
-    Example
-    -------
-    >>> T = 300
-    >>> alpha0 = gen_alpha(T, 26, num_grid=10)
-    >>> scale_grid(alpha0, T).round(6)
-    array([1.0280000e-03, 3.2140000e-03, 1.0051000e-02, 3.1428000e-02,
-           9.8269000e-02, 3.0727100e-01, 9.6078300e-01, 3.0041990e+00,
-           9.3936040e+00, 2.9372154e+01])
-        
-    >>> beta0 = gen_beta(T, num_grid=10)
-    >>> scale_grid(beta0, T).round(6)
-    array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
-           2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
-
-    >>> grid0 = np.array([alpha0, beta0])
-    >>> scale_grid(grid0, T).round(6)
-    array([[1.02800000e-03, 3.21400000e-03, 1.00510000e-02, 3.14280000e-02,
-            9.82690000e-02, 3.07271000e-01, 9.60783000e-01, 3.00419900e+00,
-            9.39360400e+00, 2.93721540e+01],
-           [0.00000000e+00, 5.04744000e-01, 1.00948800e+00, 1.51423100e+00,
-            2.01897500e+00, 2.52371900e+00, 3.02846300e+00, 1.20184620e+01,
-            4.76952980e+01, 1.89278915e+02]])
-    """
-    return grid * therm / (const["Boltzmann constant in eV/K"][0] * T)
 
 
 def check_tau_n(tau_n, beta) -> None:

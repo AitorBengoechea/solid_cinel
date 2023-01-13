@@ -910,12 +910,12 @@ class Target_mat(Solid, Pdos):
             if model.lower() == "sct":
                 w_s = {key: kwargs.get("w_s", {}).get(key, 1) for key in index}
                 Sab_matrix = groups.apply(lambda x: Sab.from_sct(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
-                                                        w_s=w_s[x.name], scale=scale))
+                                                        w_s=w_s[x.name]))
             elif model.lower() == "phonon expansion":
                 threshold = {key: kwargs.get("threshold", {}).get(key, 0.0) for key in index}
                 nphonon = {key: kwargs.get("nphonon", {}).get(key, 1000) for key in index}
                 Sab_matrix = groups.apply(lambda x: Sab.from_pdos(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
-                                                         threshold=threshold[x.name], nphonon=nphonon[x.name], scale=scale))
+                                                         threshold=threshold[x.name], nphonon=nphonon[x.name]))
             else:
                 raise ValueError("The selected model is not available")
         return Sab_matrix
@@ -1063,9 +1063,9 @@ class Target_mat(Solid, Pdos):
         Test the results:
         FGM:
         >>> T = 300
-        >>> from solid_cinel.core.s import gen_beta, gen_alpha
-        >>> beta_grid = gen_beta(300)
-        >>> alpha_grid = gen_alpha(300, 26)
+        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> beta_grid = Beta.generate_grid(T).data
+        >>> alpha_grid = Alpha.generate_grid(T, 26).data
         >>> Al.get_Sab(alpha_grid, beta_grid, model="fgm")["Al27"].data.iloc[:10, :5].round(6)
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
@@ -1082,8 +1082,8 @@ class Target_mat(Solid, Pdos):
 
         SCT:
         >>> T = 300
-        >>> beta_grid = gen_beta(T)
-        >>> alpha_grid = gen_alpha(T, 26)
+        >>> beta_grid = Beta.generate_grid(T).data
+        >>> alpha_grid = Alpha.generate_grid(T, 26).data
         >>> Al.get_Sab(alpha_grid, beta_grid, T, model="sct")["Al27"].data.iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -1100,7 +1100,9 @@ class Target_mat(Solid, Pdos):
 
         Phonon Expansion:
         >>> T = 800
-        >>> Al.get_Sab(alpha0_, beta0_, T, scale=True, model="phonon expansion", threshold=1.0e-14)["Al27"].data.iloc[:10, :5].round(6)
+        >>> beta_grid = Beta(beta0_).scale(T).data
+        >>> alpha_grid = Alpha(alpha0_).scale(T).data
+        >>> Al.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion", threshold=1.0e-14)["Al27"].data.iloc[:10, :5].round(6)
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -1190,9 +1192,9 @@ class Target_mat(Solid, Pdos):
 
         FGM:
         >>> T = 300
-        >>> from solid_cinel.core.s import gen_beta, gen_alpha
-        >>> beta_grid = gen_beta(300)
-        >>> alpha_grid = gen_alpha(300, 26)
+        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> beta_grid = Beta.generate_grid(T).scale(T).data
+        >>> alpha_grid = Alpha.generate_grid(T, 26).scale(T).data
         >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha_grid, beta_grid, model="fgm", T=T).iloc[:10, :5].round(6)
         E_out            0.331180    0.331506    0.331832    0.332159    0.332485
              theta
@@ -1209,8 +1211,8 @@ class Target_mat(Solid, Pdos):
         
         SCT:
         >>> T = 300
-        >>> beta_grid = gen_beta(T)
-        >>> alpha_grid = gen_alpha(T, 26)
+        >>> beta_grid = Beta.generate_grid(T).data
+        >>> alpha_grid = Alpha.generate_grid(T, 26).data
         >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha_grid, beta_grid, T, model="sct").iloc[:10, :5].round(6)
         E_out            0.331180    0.331513    0.331847    0.332180    0.332513
              theta
@@ -1227,7 +1229,9 @@ class Target_mat(Solid, Pdos):
         
         Phonon Expansion:
         >>> T = 800
-        >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha0_, beta0_, T, scale=True, model="phonon expansion", threshold=1.0e-14).iloc[:10, :5].round(6)
+        >>> beta_grid = Beta(beta0_).scale(T).data
+        >>> alpha_grid = Alpha(alpha0_).scale(T).data
+        >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha_grid, beta_grid, T, model="phonon expansion", threshold=1.0e-14).iloc[:10, :5].round(6)
         E_out          0.331180  0.331812  0.332445  0.333077  0.333710
              theta
         Al27 0.101125  0.414306  0.416519  0.418685  0.420825  0.422894

@@ -8,7 +8,7 @@ Created on Wed Nov 30 15:00:47 2022
 import numpy as np
 import pandas as pd
 from solid_cinel import Target_mat
-from solid_cinel.core.s import scale_grid
+from solid_cinel.core.s import Alpha, Beta
 from scipy.integrate import trapezoid
 import pytest
 import os
@@ -342,10 +342,10 @@ def test_UO2_coherent_Xs(T):
 @pytest.mark.parametrize("T", [296, 400, 800, 1200])
 def test_UO2_Sab(T):
     wd = os.getcwd()
-    beta_grid = {"O16": scale_grid(beta0_O16, T),
-                 "U238": scale_grid(beta0_U238, T)}
-    alpha_grid = {"O16": scale_grid(alpha0_O16, T),
-                  "U238": scale_grid(alpha0_U238, T)}
+    beta_grid = {"O16": Beta(beta0_O16).scale(T).data,
+                 "U238": Beta(beta0_U238).scale(T).data}
+    alpha_grid = {"O16": Alpha(alpha0_O16).scale(T).data,
+                  "U238": Alpha(alpha0_U238).scale(T).data}
     nphonon = {"O16": 200 if T != 1200 else 900,
                "U238": 300 if T != 1200 else 900}
     os.chdir(__file__.replace("test_UO2.py", ""))

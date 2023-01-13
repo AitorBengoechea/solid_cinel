@@ -62,14 +62,256 @@ beta0_str = '''
 beta0_ = np.fromstring(beta0_str, dtype=np.float64, sep=' ')
 
 
+class Beta():
+    """
+    Class with all the method for the creation and manipulation of beta grids.
+    """
+
+    def __init__(self, array):
+        self.data = np.sort(array)
+
+    @property
+    def to_index(self) -> pd.Index:
+        """Tranform the Beta class data into a pandas Index."""
+        return pd.Index(self.data, name="beta")
+
+    @classmethod
+    def generate_grid(cls, T, num_grid=400, mid_E=0.08,
+                      thermal_threshold=5., scale=False, **kwargs):
+        """
+        Generate beta grid for a given temperature
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        num_grid : 'int', optional
+            Number of grid. The default is 400.
+        mid_E : 'float', optional
+            minimum of energy transfer in eV. The default is 0.08.
+        thermal_threshold : 'float', optional
+            thermal energy threshold in eV. The default is 5.
+        scale : 'bool', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is False.
+
+        Parameters for scale_grid
+        -------------------------
+        therm : 'float', optional
+            factor for regrid alpha and beta. The default is 0.0253.
+
+        Example
+        -------
+        >>> Beta.generate_grid(300, num_grid=10).data.round(6)
+        array([  0.      ,   0.515756,   1.031513,   1.547269,   2.063025,
+                 2.578782,   3.094538,  12.280683,  48.735922, 193.408635])
+        """
+        kT = const["Boltzmann constant in eV/K"][0] * T
+        mid_beta = mid_E / kT
+        max_beta = thermal_threshold / kT
+        first_half = np.linspace(0, mid_beta,
+                                 num=int(num_grid * 0.6),
+                                 endpoint=False)
+        second_half = np.logspace(np.log10(mid_beta), np.log10(max_beta),
+                                  num=int(num_grid * 0.4),
+                                  endpoint=True)
+        beta_grid = np.concatenate((first_half, second_half))
+        if scale:
+            beta_grid = scale_grid(beta_grid, T, **kwargs)
+        return cls(beta_grid)
+
+    @classmethod
+    def from_energy_grid(cls, energy_grid, T):
+        """
+        Tranform a energy grid into a beta grid. (use in pdos.py)
+        .. math::
+            \beta=\dfrac{E}{k_BT}
+
+        Parameters
+        ----------
+        energy_grid : 1D iterable
+            Energy grid.
+        T : 'float'
+            Temperature in Kelvin.
+
+        Example
+        -------
+        >>> energy_grid = np.arange(len(rho_in_energy)) * interv_in_energy
+        >>> T = 300
+        >>> Beta.from_energy_grid(energy_grid, T).data[0:5].round(6)
+        array([0.      , 0.030945, 0.061891, 0.092836, 0.123782])
+        """
+        kbT = const["Boltzmann constant in eV/K"][0] * T
+        return cls(np.array(energy_grid) / kbT)
+
+    @classmethod
+    def from_output_energy(cls, output_energy, incident_neutron_energy, T):
+        """
+        Generate a beta grid based on the output energies and the incident
+        neutron energy.
+
+        Parameters
+        ----------
+        output_energy : 1D iterable or 'float'
+            Neutron output energies in eV.
+        incident_neutron_energy : 'float'
+            Neutron incident energy in eV.
+        T : 'float'
+            Temperature in Kelvin.
+
+        Example
+        -------
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> Beta.from_output_energy(output_energy, incident_neutron_energy, T).data.round(6)
+        array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
+        """
+        output_energy_ = np.array(output_energy)
+        kbT = const["Boltzmann constant in eV/K"][0] * T
+        beta = (output_energy_ - incident_neutron_energy) / kbT
+        return cls(beta)
+
+    def get_output_energy(self, T, incident_neutron_energy) -> pd.Series:
+        """
+        Based on the S(alpha, -beta) matrix, get the posible
+        output energies for a incident neutron energy and that beta grid.
+        .. math::
+            E^\prime = \beta k_B T + E
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        incident_neutron_energy : 'float'
+            Incident neutron energy in eV.
+
+        Example
+        -------
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> beta_grid = Beta(scale_grid(beta0_, T))
+        >>> beta_grid.get_output_energy(T, incident_neutron_energy).iloc[0:5]
+        beta
+        0.000000    0.331180
+        0.009175    0.331812
+        0.018350    0.332445
+        0.027524    0.333077
+        0.036699    0.333710
+        Name: output energy, dtype: float64
+        """
+        beta = self.data
+        kbT = const["Boltzmann constant in eV/K"][0] * T
+        output_energy = beta * kbT + incident_neutron_energy
+        return pd.Series(output_energy,
+                         name="output energy",
+                         index=self.to_index)
+    
+class Alpha():
+    def __init__(self, array):
+        self.data = np.sort(array)
+        
+    def generate_grid(cls, T, atom_mass, num_grid=300, min_E=2.8e-3,
+                  thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
+        """
+        Generate a alpha grid for a given temperature and atomic mass.
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        atom_mass : 'float'
+            atomic mass in amu.
+        num_grid : 'int', optional
+            Number of grid. The default is 400.
+        mid_E : 'float', optional
+            minimum of energy transfer in eV. The default is 0.08.
+        thermal_threshold : 'float', optional
+            thermal energy threshold in eV. The default is 5.
+        scale : 'bool', optional
+            Option to scale beta and alpha grid with the method scale_grid. The
+            default is False.
+            
+        Parameters for scale_grid
+        -------------------------
+        therm : 'float', optional
+            factor for regrid alpha and beta. The default is 0.0253.
+
+        Example
+        -------
+        >>> Beta.generate_grid(300, 26, num_grid=10).round(6)
+        array([1.0500000e-03, 3.2850000e-03, 1.0270000e-02, 3.2114000e-02,
+               1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
+               9.5985550e+00, 3.0013001e+01])
+        """
+        A = atom_mass / const["neutron mass in u"][0]
+        AkT = A * const["Boltzmann constant in eV/K"][0] * T
+        min_alpha = min_E / 4 / AkT
+        max_alpha = 4 * thermal_threshold / AkT
+        alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
+                                 num=num_grid)
+        if scale:
+            alpha_grid =  scale_grid(alpha_grid, T, **kwargs)
+        return cls(alpha_grid)
+
+    def from_calc():
+        return
+
+    def get_theta(self, T, incident_neutron_energy, m, beta_grid) -> pd.Series:
+        """
+        Based on the S(alpha, -beta) matrix, get the posible scattering angles
+        for a scattering atom, temperature and incident neutron energy.
+        .. math::
+            \mu = \frac{E^\prime + E - \alpha Ak_BT}{2\sqrt{E^\prime E}}
+            \theta = \arccos(\mu)
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        incident_neutron_energy : 'float'
+            Incident neutron energy in eV.
+        m : 'float'
+            Atom mass, amu.
+
+        Example
+        -------
+        >>> T = 800
+        >>> m = 26.98153433356103
+        >>> incident_neutron_energy = 0.33118
+        >>> beta_grid = scale_grid(beta0_, T)
+        >>> alpha_grid = scale_grid(alpha0_, T)
+        >>> Sab = Sab.from_fgm(alpha_grid, beta_grid)
+        >>> Sab.get_theta(T, incident_neutron_energy, m)[0:5].round(6)
+        array([0.101125, 0.143002, 0.175125, 0.202199, 0.226045])
+        """
+        alpha = self.data
+        A = m / const["neutron mass in u"][0]
+
+        beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
+        E_prima = beta.get_output_energy(T, incident_neutron_energy)
+
+        if len(E_prima) > len(alpha):
+            E_prima = E_prima[:len(alpha)]
+        elif len(E_prima) < len(alpha):
+            alpha = alpha[:len(E_prima)]
+
+        mu = E_prima + incident_neutron_energy - alpha * A * const["Boltzmann constant in eV/K"][0] * T
+        mu /= (2 * np.sqrt(E_prima * incident_neutron_energy))
+        mu = np.arccos(mu[abs(mu) <= 1])
+        return pd.Series(mu, index=alpha[:len(mu)])
+
+
 class Sab():
-    """ 
+    """
     Class containing all the methods and properties of a asymmetric
     S(alpha, beta) matrix.
     """
 
     def __init__(self, *args, **kwargs):
         self.data = pd.DataFrame(*args, **kwargs)
+        self.beta = Beta(self.data.columns.values)
+        self.alpha = Alpha(self.data.index.values)
 
     @property
     def data(self) -> pd.DataFrame:
@@ -456,72 +698,6 @@ class Sab():
             warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
-    def get_output_energy(self, T, incident_neutron_energy) -> np.array:
-        """
-        Based on the S(alpha, -beta) matrix, get the posible
-        output energies for a incident neutron energy and that beta grid.
-        .. math::
-            E^\prime = \beta k_B T + E
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        incident_neutron_energy : 'float'
-            Incident neutron energy in eV.
-
-        Example
-        -------
-        >>> T = 800
-        >>> incident_neutron_energy = 0.33118
-        >>> beta_grid = scale_grid(beta0_, T)
-        >>> alpha_grid = scale_grid(alpha0_, T)
-        >>> Sab = Sab.from_fgm(alpha_grid, beta_grid)
-        >>> Sab.get_output_energy(T, incident_neutron_energy)[0:5]
-        array([0.33118  , 0.3318125, 0.332445 , 0.3330775, 0.33371  ])
-        """
-        beta = self.data.columns.values
-        return beta * const["Boltzmann constant in eV/K"][0] * T + incident_neutron_energy
-
-    def get_theta(self, T, incident_neutron_energy, m) -> np.array:
-        """
-        Based on the S(alpha, -beta) matrix, get the posible scattering angles
-        for a scattering atom, temperature and incident neutron energy.
-        .. math::
-            \mu = \frac{E^\prime + E - \alpha Ak_BT}{2\sqrt{E^\prime E}}
-            \theta = \arccos(\mu)
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        incident_neutron_energy : 'float'
-            Incident neutron energy in eV.
-        m : 'float'
-            Atom mass, amu.
-
-        Example
-        -------
-        >>> T = 800
-        >>> m = 26.98153433356103
-        >>> incident_neutron_energy = 0.33118
-        >>> beta_grid = scale_grid(beta0_, T)
-        >>> alpha_grid = scale_grid(alpha0_, T)
-        >>> Sab = Sab.from_fgm(alpha_grid, beta_grid)
-        >>> Sab.get_theta(T, incident_neutron_energy, m)[0:5].round(6)
-        array([0.101125, 0.143002, 0.175125, 0.202199, 0.226045])
-        """
-        A = m / const["neutron mass in u"][0]
-        E_prima = self.get_output_energy(T, incident_neutron_energy)
-        alpha = self.data.index.values
-        if len(E_prima) > len(alpha):
-            E_prima = E_prima[:len(alpha)]
-        elif len(E_prima) < len(alpha):
-            alpha = alpha[:len(E_prima)]
-        mu = E_prima + incident_neutron_energy - alpha * A * const["Boltzmann constant in eV/K"][0] * T
-        mu /= (2 * np.sqrt(E_prima * incident_neutron_energy))
-        return np.arccos(mu[abs(mu) <= 1])
-
     def get_inelastic_Xs(self, T, m, boundXs, incident_neutron_energy) -> pd.DataFrame:
         """
         Get inelastic scattering for a atom with a certain bound Xs and mass
@@ -560,9 +736,9 @@ class Sab():
         0.202199  1.572293  1.579791  1.586531  1.592831  1.598713
         0.226045  1.930542  1.939419  1.947155  1.954222  1.960724
         """
-        # Get the output energies and the scatterig angle
-        E_prima = self.get_output_energy(T, incident_neutron_energy)
-        theta = self.get_theta(T, incident_neutron_energy, m)
+        # Get the output energies: and the scatterig angle
+        E_prima = self.beta.get_output_energy(T, incident_neutron_energy).values
+        theta = self.alpha.get_theta(T, incident_neutron_energy, m, self.beta).values
 
         vector = boundXs / (2 * const["Boltzmann constant in eV/K"][0] * T) * np.sqrt(E_prima / incident_neutron_energy)
 
@@ -627,95 +803,6 @@ def _normalization(x) -> float:
     S_asymm_values = x.values
     S = pd.Series((1 + np.exp(-beta)) * S_asymm_values, index=beta)
     return normalization_coeff(S)
-
-
-def gen_beta(T, num_grid=400, mid_E=0.08,
-             thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
-    """
-    Generate beta grid for a given temperature
-
-    Parameters
-    ----------
-    T : 'float'
-        Temperature in K.
-    num_grid : 'int', optional
-        Number of grid. The default is 400.
-    mid_E : 'float', optional
-        minimum of energy transfer in eV. The default is 0.08.
-    thermal_threshold : 'float', optional
-        thermal energy threshold in eV. The default is 5.
-    scale : 'bool', optional
-        Option to scale beta and alpha grid with the method scale_grid. The
-        default is False.
-        
-    Parameters for scale_grid
-    -------------------------
-    therm : 'float', optional
-        factor for regrid alpha and beta. The default is 0.0253.
-
-    Example
-    -------
-    >>> gen_beta(300, num_grid=10).round(6)
-    array([  0.      ,   0.515756,   1.031513,   1.547269,   2.063025,
-             2.578782,   3.094538,  12.280683,  48.735922, 193.408635])
-    """
-    kT = const["Boltzmann constant in eV/K"][0] * T
-    mid_beta = mid_E / kT
-    max_beta = thermal_threshold / kT
-    first_half = np.linspace(0, mid_beta,
-                             num=int(num_grid * 0.6),
-                             endpoint=False)
-    second_half = np.logspace(np.log10(mid_beta), np.log10(max_beta),
-                              num=int(num_grid * 0.4),
-                              endpoint=True)
-    beta_grid = np.concatenate((first_half, second_half))
-    if scale:
-        beta_grid = scale_grid(beta_grid, T, **kwargs)
-    return beta_grid
-
-
-def gen_alpha(T, atom_mass, num_grid=300, min_E=2.8e-3,
-              thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
-    """
-    Generate a alpha grid for a given temperature and atomic mass.
-
-    Parameters
-    ----------
-    T : 'float'
-        Temperature in K.
-    atom_mass : 'float'
-        atomic mass in amu.
-    num_grid : 'int', optional
-        Number of grid. The default is 400.
-    mid_E : 'float', optional
-        minimum of energy transfer in eV. The default is 0.08.
-    thermal_threshold : 'float', optional
-        thermal energy threshold in eV. The default is 5.
-    scale : 'bool', optional
-        Option to scale beta and alpha grid with the method scale_grid. The
-        default is False.
-        
-    Parameters for scale_grid
-    -------------------------
-    therm : 'float', optional
-        factor for regrid alpha and beta. The default is 0.0253.
-
-    Example
-    -------
-    >>> gen_alpha(300, 26, num_grid=10).round(6)
-    array([1.0500000e-03, 3.2850000e-03, 1.0270000e-02, 3.2114000e-02,
-           1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
-           9.5985550e+00, 3.0013001e+01])
-    """
-    A = atom_mass / const["neutron mass in u"][0]
-    AkT = A * const["Boltzmann constant in eV/K"][0] * T
-    min_alpha = min_E / 4 / AkT
-    max_alpha = 4 * thermal_threshold / AkT
-    alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
-                             num=num_grid)
-    if scale:
-        alpha_grid =  scale_grid(alpha_grid, T, **kwargs)
-    return alpha_grid
 
 def scale_grid(grid, T, therm=0.0253) -> np.ndarray:
     """

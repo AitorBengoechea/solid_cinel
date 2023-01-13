@@ -6,6 +6,7 @@ Created on Thu Oct 20 11:46:42 2022
 
 from solid_cinel.core.generic import normalization_coeff, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU
+from solid_cinel.core.s import Beta
 import pandas as pd
 import numpy as np
 import scipy as sp
@@ -171,11 +172,9 @@ class Pdos():
         0.123782    0.017008
         Name: rho, dtype: float64
         """
-        grid = self.rho.index
-        enew = grid / (const["Boltzmann constant in eV/K"][0] * T)
-        enew.name = "beta"
-        rho_new = self.rho.values
-        return Pdos(rho_new, index=enew)
+        grid = self.rho.index.values
+        self.beta = Beta.from_energy_grid(grid, T)
+        return Pdos(self.rho.values, index=self.beta.to_index)
 
     def plot(self) -> matplotlib:
         """Plot rho (y) vs grid (x)."""
@@ -216,9 +215,8 @@ class Pdos():
         0.154727    1.109309
         Name: P, dtype: float64
         """
-        data = self.to_beta_grid(T).rho
-        rho_in_beta = data.values
-        beta_values = data.index.values
+        rho_in_beta = self.to_beta_grid(T).rho.values
+        beta_values = self.beta.data
         if abs(beta_values[0]) > threshold:
             raise ValueError("Initial point of input DOS is not zero")
         P_values = np.zeros(len(rho_in_beta))
@@ -228,7 +226,7 @@ class Pdos():
 
         # Rest of P values calculation:
         P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
-        return pd.Series(P_values, index=data.index, name="P")
+        return pd.Series(P_values, index=self.beta.to_index, name="P")
 
     def Teff(self, T, twt=None) -> float:
         """
@@ -251,14 +249,13 @@ class Pdos():
         Test the results:
         >>> p.Teff(T=20).round(4)
         149.1699
-        >>> p.Teff(T=80).round(4) 
+        >>> p.Teff(T=80).round(4)
         159.1632
         """
-        data = self.P(T)
-        P = data.values
-        beta = data.index.values
+        P = self.P(T).values
+        beta = self.beta.data
         Teff_weight = sp.integrate.trapezoid(beta ** 2 * P * np.cosh(0.5 * beta),
-                                              x=beta)
+                                             x=beta)
         if twt is not None:
             Teff_weight += twt
         return Teff_weight * T
@@ -286,9 +283,8 @@ class Pdos():
         >>> p.DebyeWallerCoeff(T=80).round(6)
         0.379937
         """
-        data = self.P(T)
-        P = data.values
-        beta = data.index.values
+        P = self.P(T).values
+        beta = self.beta.data
         return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
 
     def _get_tau_1(self, T) -> pd.Series:
@@ -326,7 +322,7 @@ class Pdos():
         Name: 1, dtype: float64
         """
         P = self.P(T)
-        beta = P.index.values
+        beta = self.beta.data
         tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff(T)
         if normalization_coeff(tau1 * (1 + np.exp(-beta))) < 1.e-5:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
@@ -435,8 +431,7 @@ class Pdos():
                 tau.append(tau_n)
                 tau_n_minus_1 = tau_n
         tau = pd.DataFrame(tau).fillna(0).T
-        tau.index = pd.Index(np.arange(tau.shape[0]) * delta_beta,
-                             name="beta")
+        tau.index = Beta(np.arange(tau.shape[0]) * delta_beta).to_index
         tau.columns = pd.Index(np.arange(1, nphonon + 1), name="tau_n")
 
         # Check if the tau functions satisfy the normalization condition
@@ -446,11 +441,11 @@ class Pdos():
         # Change the beta grid for another one introduce by the user. If beta
         # values are not in the original grid, apply linear interpolation.
         if beta is not None:
+            beta_ = beta if isinstance(beta, Beta) else Beta(beta)
             reshape_tau_values = reshape_differential(tau.index.values,
                                                       tau.values,
-                                                      beta)
-            beta_ = pd.Index(beta, name="beta")
+                                                      beta_.data)
             tau = pd.DataFrame(reshape_tau_values,
-                               index=beta_,
+                               index=beta_.to_index,
                                columns=tau.columns)
         return tau

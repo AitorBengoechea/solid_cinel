@@ -357,6 +357,24 @@ class Alpha():
         0.007340    0.202199
         0.009175    0.226045
         Name: mu, dtype: float64
+
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> beta_grid = Beta.from_output_energy(output_energy, incident_neutron_energy, T)
+        >>> m = 26.98153433356103
+        >>> theta = 45
+        >>> alpha = Alpha.from_output_energy(output_energy, incident_neutron_energy, T, m, theta)
+        >>> theta = alpha.get_theta(T, incident_neutron_energy, m, beta_grid)
+        >>> import numpy as np
+        >>> theta * 180 / np.pi
+        alpha
+        0.105201    45.0
+        0.105302    45.0
+        0.105403    45.0
+        0.105504    45.0
+        0.105605    45.0
+        Name: mu, dtype: float64
         """
         alpha = self.data
         A = m / const["neutron mass in u"][0]

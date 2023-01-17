@@ -315,13 +315,13 @@ class Alpha():
         >>> m = 26.98153433356103
         >>> theta = 0.101125 * 180 / np.pi
         >>> Alpha.from_output_energy(output_energy, incident_neutron_energy, T, m, theta).data.round(6)
-        array([-0.357344, -0.357343, -0.35734 , -0.357338, -0.357335])
+        array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
         output_energy_ = np.array(output_energy)
         A = m / const["neutron mass in u"][0]
         AkT = A * const["Boltzmann constant in eV/K"][0] * T
         mu = np.cos(theta * np.pi / 180)
-        alpha = (output_energy_ - incident_neutron_energy - 2 * mu * np.sqrt(output_energy_ * incident_neutron_energy))
+        alpha = (output_energy_ + incident_neutron_energy - 2 * mu * np.sqrt(output_energy_ * incident_neutron_energy))
         alpha /= AkT
         return cls(alpha)
 
@@ -356,6 +356,24 @@ class Alpha():
         0.005505    0.175125
         0.007340    0.202199
         0.009175    0.226045
+        Name: mu, dtype: float64
+
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> beta_grid = Beta.from_output_energy(output_energy, incident_neutron_energy, T)
+        >>> m = 26.98153433356103
+        >>> theta = 45
+        >>> alpha = Alpha.from_output_energy(output_energy, incident_neutron_energy, T, m, theta)
+        >>> theta = alpha.get_theta(T, incident_neutron_energy, m, beta_grid)
+        >>> import numpy as np
+        >>> theta * 180 / np.pi
+        alpha
+        0.105201    45.0
+        0.105302    45.0
+        0.105403    45.0
+        0.105504    45.0
+        0.105605    45.0
         Name: mu, dtype: float64
         """
         alpha = self.data

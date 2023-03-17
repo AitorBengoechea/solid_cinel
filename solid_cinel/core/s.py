@@ -5,7 +5,7 @@ Created on Thu Oct 20 11:46:42 2022
 """
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
-from solid_cinel.core.generic import normalization_coeff, reshape_differential
+from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU
 import numpy as np
 import pandas as pd
@@ -920,7 +920,7 @@ def _normalization(x) -> float:
     beta = x.index.values
     S_asymm_values = x.values
     S = pd.Series((1 + np.exp(-beta)) * S_asymm_values, index=beta)
-    return normalization_coeff(S)
+    return integrate(S)
 
 
 def check_tau_n(tau_n, beta) -> None:
@@ -940,6 +940,6 @@ def check_tau_n(tau_n, beta) -> None:
     ValueError
         Tau function doesnt satisfy the normalization condition.
     """
-    if sp.integrate.trapezoid(tau_n, x=beta) < 1.e-5:
+    if integrate(pd.Series(tau_n, index=beta)) < 1.e-5:
         raise ValueError("Tau function doesnt satisfy the normalization condition")
     return

@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 
 
-def normalization_coeff(series, kind="trapezoidal") -> float:
+def integrate(series, kind="trapezoidal") -> float:
     """
     Get normalization coefficient of a function.
 
@@ -28,7 +28,7 @@ def normalization_coeff(series, kind="trapezoidal") -> float:
     Example
     -------
     >>> f = pd.Series([1, 2, 4], index=[1, 2, 4])
-    >>> normalization_coeff(f)
+    >>> integrate(f)
     7.5
     """
     y = series.values

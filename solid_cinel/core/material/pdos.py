@@ -4,7 +4,7 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.core.generic import normalization_coeff, reshape_differential
+from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU
 from solid_cinel.core.s import Beta
 import pandas as pd
@@ -93,7 +93,7 @@ class Pdos():
         if not rho_.index.is_monotonic_increasing:
             raise SyntaxError("energy grid is not monotonically increasing")
 
-        self.data = rho_ / normalization_coeff(rho_)
+        self.data = rho_ / integrate(rho_)
 
     @classmethod
     def from_data(cls, rho, interval_energy):
@@ -324,7 +324,7 @@ class Pdos():
         P = self.P(T)
         beta = self.beta.data
         tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff(T)
-        if normalization_coeff(tau1 * (1 + np.exp(-beta))) < 1.e-5:
+        if integrate(tau1 * (1 + np.exp(-beta))) < 1.e-5:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
         tau1.name = 1
         return tau1
@@ -344,7 +344,7 @@ class Pdos():
         ValueError
             The tau functions doenst satisfy the normalization.
         """
-        norm = tau.apply(lambda x: normalization_coeff(x * (1 + np.exp(-x.index.values))), axis=0)
+        norm = tau.apply(lambda x: integrate(x * (1 + np.exp(-x.index.values))), axis=0)
         if (norm < 1.e-5).any():
             raise ValueError("Tau function doesnt satisfy the normalization condition")
         return 

@@ -61,6 +61,131 @@ beta0_str = '''
 '''
 beta0_ = np.fromstring(beta0_str, dtype=np.float64, sep=' ')
 
+alpha0_str_U238 = '''
+ 1.14731156e-04 1.22909925e-04 1.31671728e-04 1.41058129e-04
+ 1.51113653e-04 1.61885998e-04 1.73426265e-04 1.85789196e-04
+ 1.99033435e-04 2.13221808e-04 2.28421619e-04 2.44704969e-04
+ 2.62149101e-04 2.80836761e-04 3.00856598e-04 3.22303575e-04
+ 3.45279431e-04 3.69893152e-04 3.96261495e-04 4.24509543e-04
+ 4.54771292e-04 4.87190291e-04 5.21920324e-04 5.59126134e-04
+ 5.98984212e-04 6.41683629e-04 6.87426932e-04 7.36431110e-04
+ 7.88928618e-04 8.45168483e-04 9.05417485e-04 9.69961421e-04
+ 1.03910646e-03 1.11318060e-03 1.19253521e-03 1.27754673e-03
+ 1.36861841e-03 1.46618227e-03 1.57070109e-03 1.68267069e-03
+ 1.80262219e-03 1.93112460e-03 2.06878749e-03 2.21626386e-03
+ 2.37425329e-03 2.54350521e-03 2.72482249e-03 2.91906522e-03
+ 3.12715481e-03 3.35007836e-03 3.58889332e-03 3.84473254e-03
+ 4.11880960e-03 4.41242463e-03 4.72697041e-03 5.06393902e-03
+ 5.42492890e-03 5.81165245e-03 6.22594411e-03 6.66976913e-03
+ 7.14523283e-03 7.65459062e-03 8.20025868e-03 8.78482543e-03
+ 9.41106384e-03 1.00819445e-02 1.08006498e-02 1.15705891e-02
+ 1.23954145e-02 1.32790387e-02 1.42256533e-02 1.52397487e-02
+ 1.63261352e-02 1.74899663e-02 1.87367627e-02 2.00724386e-02
+ 2.15033301e-02 2.30362247e-02 2.46783938e-02 2.64376272e-02
+ 2.83222699e-02 3.03412620e-02 3.25041807e-02 3.48212861e-02
+ 3.73035696e-02 3.99628060e-02 4.28116098e-02 4.58634945e-02
+ 4.91329370e-02 5.26354463e-02 5.63876367e-02 6.04073072e-02
+ 6.47135255e-02 6.93267185e-02 7.42687693e-02 7.95631210e-02
+ 8.52348880e-02 9.13109746e-02 9.78202035e-02 1.04793452e-01
+ 1.12263798e-01 1.20266677e-01 1.28840053e-01 1.38024594e-01
+ 1.47863868e-01 1.58404548e-01 1.69696635e-01 1.81793694e-01
+ 1.94753108e-01 2.08636352e-01 2.23509283e-01 2.39442450e-01
+ 2.56511436e-01 2.74797208e-01 2.94386506e-01 3.15372255e-01
+ 3.37854001e-01 3.61938390e-01 3.87739668e-01 4.15380225e-01
+ 4.44991178e-01 4.76712988e-01 5.10696131e-01 5.47101810e-01
+ 5.86102718e-01 6.27883859e-01 6.72643427e-01 7.20593742e-01
+ 7.71962261e-01 8.26992657e-01 8.85945970e-01 9.49101851e-01
+ 1.01675989e+00 1.08924102e+00 1.16688907e+00 1.25007237e+00
+ 1.33918550e+00 1.43465119e+00 1.53692228e+00 1.64648390e+00
+ 1.76385578e+00 1.88959467e+00 2.02429704e+00 2.16860185e+00
+ 2.32319362e+00 2.48880569e+00 2.66622364e+00 2.85628907e+00
+ 3.05990358e+00 3.27803303e+00
+'''
+beta0_str_U238 = '''
+0.00000000e+00 2.57878269e-02 5.15756538e-02 7.73634807e-02
+ 1.03151308e-01 1.28939135e-01 1.54726961e-01 1.80514788e-01
+ 2.06302615e-01 2.32090442e-01 2.57878269e-01 2.83666096e-01
+ 3.09453923e-01 3.35241750e-01 3.61029577e-01 3.86817404e-01
+ 4.12605231e-01 4.38393058e-01 4.64180884e-01 4.89968711e-01
+ 5.15756538e-01 5.41544365e-01 5.67332192e-01 5.93120019e-01
+ 6.18907846e-01 6.44695673e-01 6.70483500e-01 6.96271327e-01
+ 7.22059154e-01 7.47846980e-01 7.73634807e-01 7.99422634e-01
+ 8.25210461e-01 8.50998288e-01 8.76786115e-01 9.02573942e-01
+ 9.28361769e-01 9.54149596e-01 9.79937423e-01 1.00572525e+00
+ 1.03151308e+00 1.05730090e+00 1.08308873e+00 1.10887656e+00
+ 1.13466438e+00 1.16045221e+00 1.18624004e+00 1.21202786e+00
+ 1.23781569e+00 1.26360352e+00 1.28939135e+00 1.31517917e+00
+ 1.34096700e+00 1.36675483e+00 1.39254265e+00 1.41833048e+00
+ 1.44411831e+00 1.46990613e+00 1.49569396e+00 1.52148179e+00
+ 1.54726961e+00 1.57305744e+00 1.59884527e+00 1.62463310e+00
+ 1.65042092e+00 1.67620875e+00 1.70199658e+00 1.72778440e+00
+ 1.75357223e+00 1.77936006e+00 1.80514788e+00 1.83093571e+00
+ 1.85672354e+00 1.88251136e+00 1.90829919e+00 1.93408702e+00
+ 1.95987485e+00 1.98566267e+00 2.01145050e+00 2.03723833e+00
+ 2.06302615e+00 2.08881398e+00 2.11460181e+00 2.14038963e+00
+ 2.16617746e+00 2.19196529e+00 2.21775311e+00 2.24354094e+00
+ 2.26932877e+00 2.29511660e+00 2.32090442e+00 2.34669225e+00
+ 2.37248008e+00 2.39826790e+00 2.42405573e+00 2.44984356e+00
+ 2.47563138e+00 2.50141921e+00 2.52720704e+00 2.55299486e+00
+ 2.57878269e+00 2.60457052e+00 2.63035835e+00 2.65614617e+00
+ 2.68193400e+00 2.70772183e+00 2.73350965e+00 2.75929748e+00
+ 2.78508531e+00 2.81087313e+00 2.83666096e+00 2.86244879e+00
+ 2.88823661e+00 2.91402444e+00 2.93981227e+00 2.96560009e+00
+ 2.99138792e+00 3.01717575e+00 3.04296358e+00 3.06875140e+00
+ 3.09453923e+00 3.26083370e+00 3.43606452e+00 3.62071189e+00
+ 3.81528185e+00 4.02030762e+00 4.23635107e+00 4.46400427e+00
+ 4.70389111e+00 4.95666900e+00 5.22303068e+00 5.50370611e+00
+ 5.79946450e+00 6.11111635e+00 6.43951577e+00 6.78556272e+00
+ 7.15020557e+00 7.53444360e+00 7.93932983e+00 8.36597386e+00
+ 8.81554490e+00 9.28927500e+00 9.78846243e+00 1.03144752e+01
+ 1.08687549e+01 1.14528205e+01 1.20682726e+01 1.27167979e+01
+ 1.34001737e+01 1.41202728e+01 1.48790686e+01 1.56786406e+01
+ 1.65211800e+01 1.74089958e+01 1.83445212e+01 1.93303198e+01
+ 2.03690933e+01 2.14636884e+01 2.26171050e+01 2.38325039e+01
+ 2.51132159e+01 2.64627509e+01 2.78848073e+01 2.93832822e+01
+ 3.09622822e+01 3.26261345e+01 3.43793991e+01 3.62268806e+01
+ 3.81736422e+01 4.02250189e+01 4.23866326e+01 4.46644071e+01
+ 4.70645848e+01 4.95937434e+01 5.22588139e+01 5.50671002e+01
+ 5.80262982e+01 6.11445178e+01 6.44303043e+01 6.78926626e+01
+ 7.15410812e+01 7.53855587e+01 7.94366309e+01 8.37053998e+01
+ 8.82035639e+01 9.29434505e+01 9.79380494e+01 1.03201048e+02
+ 1.08746870e+02 1.14590714e+02 1.20748594e+02 1.27237387e+02
+ 1.34074875e+02 1.41279796e+02 1.48871895e+02 1.56871979e+02
+ 1.65301972e+02 1.74184976e+02 1.83545335e+02 1.93408702e+02
+'''
+alpha0_U238 = np.fromstring(alpha0_str_U238, dtype=np.float64, sep=' ')
+beta0_U238 = np.fromstring(beta0_str_U238, dtype=np.float64, sep=' ')
+
+interv_in_energy_U238 = 6.956193E-04
+rho_in_energy_U238_str = '''
+0.000000E+00 1.041128E-01 3.759952E-01 8.354039E-01
+1.469796E+00 2.335578E+00 3.467660E+00 4.841392E+00
+6.492841E+00 8.608376E+00 1.131303E+01 1.504441E+01
+2.006807E+01 2.750471E+01 4.171597E+01 1.585670E+02
+1.978483E+02 1.144621E+02 7.555927E+01 4.831100E+01
+4.389081E+01 4.246484E+01 4.103699E+01 3.986249E+01
+3.827959E+01 3.592088E+01 3.272170E+01 3.914602E+01
+8.144694E+01 9.693959E+01 5.503795E+01 2.619253E+01
+1.763331E+01 1.475875E+01 1.522465E+01 1.213117E+01
+6.175029E+00 2.483519E+00 1.445581E+00 1.423177E+00
+1.502350E+00 1.718768E+00 2.211346E+00 3.061686E+00
+3.550530E+00 3.34990.5 / incident_neutron_energy * np.sqrt(M / (np.pi * const["neutron mass in u"][0] * kbT))06960E-01 1.452214E-01 1.246671E-01
+9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
+7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
+1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
+3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
+2.653572E-02 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 7.105193E-03 5.274518E-02 1.324974E-01
+2.310275E-01 4.042710E-01 6.421137E-01 8.073457E-01
+9.162074E-01 1.077923E+00 1.142595E+00 1.092532E+00
+1.060668E+00 1.000020E+00 8.769838E-01 7.610532E-01
+6.898200E-01 6.324347E-01 5.857072E-01 5.563076E-01
+5.468099E-01 5.515587E-01 4.871045E-01 3.198787E-01
+1.132118E-01 2.066306E-03 0.000000E+00
+'''
+rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
+                                   sep=' ')
 
 class Beta():
     """
@@ -827,13 +952,13 @@ class Sab():
         Quadratic interpolation to get the probability of the new beta value
         for all the alpha existing in the S(alpha, -beta) matrix:
         .. math::
-            P\left(\mid\beta_new\mid, \alpha_k\right)\right\} \text{ for }k=0, 1, ...
+            \left\{ \mid\beta_{new}\mid = P\left(\mid\beta_new\mid, \alpha_k\right)\right\} \text{ for }k=0, 1, ...
 
         The method do not make extrapolation.
 
         Parameters
         ----------
-        beta_new : "float" or "np.array"
+        beta_new : "float" or 1D iterable
             New beta values.
         add : "bool", optional
             Optional argument to add the output to the existing S(alpha, -beta)
@@ -892,13 +1017,143 @@ class Sab():
                                                                       bounds_error=True,
                                                                       kind="quadratic"),
                                        axis=1)
-        beta_vector = pd.DataFrame.from_records(beta_values.values,
-                                                index=beta_values.index,
-                                                columns=pd.Index(beta_new_, name="beta"))
+        beta_df = pd.DataFrame.from_records(beta_values.values,
+                                            index=beta_values.index,
+                                            columns=pd.Index(beta_new_, name="beta"))
         if add:
-            return Sab(pd.concat([beta_vector, Sab_matrix], axis=1))
+            return Sab(pd.concat([beta_df, Sab_matrix], axis=1))
         else:
-            return beta_vector
+            return beta_df
+
+    def get_alpha(self, alpha_new, add=False):
+        """
+        
+
+        Parameters
+        ----------
+        alpha_new : "float" or 1D iterable
+            New alpha values.
+        add : "bool", optional
+            Optional argument to add the output to the existing S(alpha, -beta)
+            matrix or only get the pd.Dataframe. The default is False.
+
+        Returns
+        -------
+        "pd.Dataframe" or "Sab"
+            pd.Dataframe with the requested probabilities for the new alpha for
+            all the existing alpha. If add is True, the pd.Dataframe is merge
+            in the S(alpha, -beta) matrix.
+
+        Example
+        -------
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> alpha_new = 0.00013
+        >>> S_mat.get_alpha(alpha_new).iloc[::, 0:10]
+        beta     0.000000  0.025237  0.050474  0.075712  0.100949  0.126186  0.151423  0.176660  0.201898  0.227135
+        alpha
+        0.00013  0.000498  0.000504  0.000467  0.000461  0.000462  0.000472   0.00049  0.000509  0.000528  0.000553
+
+        >>> alpha_new = [1.25e-4, 1.35e-4]
+        >>> S_mat.get_alpha(alpha_new).iloc[::, 0:10]
+        beta      0.000000  0.025237  0.050474  0.075712  0.100949  0.126186  0.151423  0.176660  0.201898  0.227135
+        alpha
+        0.000125  0.000479  0.000484  0.000449  0.000444  0.000445  0.000454  0.000471  0.000490  0.000508  0.000532
+        0.000135  0.000517  0.000523  0.000485  0.000479  0.000480  0.000491  0.000509  0.000529  0.000548  0.000574
+
+        >>> alpha_new = [1.25e-4, 1.35e-4]
+        >>> S_mat.get_beta(alpha_new, add=True).data.iloc[0:4, 0:10]
+        beta	    0.000000	0.025237	0.050474	0.075712	0.100949	0.126186	0.151423	0.176660	0.201898	0.227135
+        alpha										
+        0.000112	0.000430	0.000435	0.000403	0.000399	0.000399	0.000408	0.000423	0.000440	0.000456	0.000478
+        0.000120	0.000460	0.000466	0.000432	0.000427	0.000428	0.000437	0.000454	0.000471	0.000489	0.000512
+        0.000125	0.000479	0.000484	0.000449	0.000444	0.000445	0.000454	0.000471	0.000490	0.000508	0.000532
+        0.000129	0.000493	0.000499	0.000463	0.000457	0.000458	0.000468	0.000486	0.000505	0.000523	0.000548
+        0.000135	0.000517	0.000523	0.000485	0.000479	0.000480	0.000491	0.000509	0.000529	0.000548	0.000574
+        """
+        alpha_new_ = alpha_new if hasattr(alpha_new, '__len__') else [alpha_new]
+        alpha_vector = []
+        for new_alpha in alpha_new_:
+            single_alpha_vector = self.get_single_alpha(new_alpha).to_frame()
+            single_alpha_vector.columns.name = "alpha"
+            alpha_vector.append(single_alpha_vector)
+        alpha_new_df = pd.concat(alpha_vector, axis=1).T
+        if add:
+            Sab_matrix = self.data
+            return Sab(pd.concat([Sab_matrix, alpha_new_df]))
+        else:
+            return alpha_new_df
+
+    def get_single_alpha(self, alpha_new) -> pd.Series:
+        """
+        Interpolate S(alpha, -beta) using unit base interpolation to get the
+        probabilities for the new alpha values:
+        .. math::
+            \left\{ \mid\alpha_{new}\mid = P\left(\mid\beta_{k}\mid, \alpha_{new}\right) \text{ for }k=0, 1, ...
+
+        Parameters
+        ----------
+        alpha_new : "float"
+            Alpha value to get interpolated.
+
+        Example
+        -------
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> alpha_new = 0.00013
+        >>> alpha_vector = S_mat.get_single_alpha(alpha_new)
+        >>> alpha_vector.iloc[0:10]
+        beta
+        0.000000    0.000498
+        0.025237    0.000504
+        0.050474    0.000467
+        0.075712    0.000461
+        0.100949    0.000462
+        0.126186    0.000472
+        0.151423    0.000490
+        0.176660    0.000509
+        0.201898    0.000528
+        0.227135    0.000553
+        Name: 0.00013, dtype: float64
+
+        Check the contrains:
+        >>> debye_weller = pdos.DebyeWallerCoeff(T)
+        >>> round(integrate(alpha_vector * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debye_weller * alpha_new)), 6)
+        1.00562
+
+        >>> round(integrate(alpha_vector * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
+        0.000131
+        """
+        alpha_grid = self.alpha.data
+        beta = self.beta.data
+        upper_bound = alpha_grid.searchsorted(alpha_new, side="right")
+        alpha_0 = alpha_grid[upper_bound- 1]
+        alpha_2 = alpha_grid[upper_bound]
+        prob = self.data.loc[[alpha_0, alpha_2]].T
+
+        if hasattr(self, "DebyeWallerCoeff"):
+            debye_weller = self.DebyeWallerCoeff
+            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (1 - np.exp(-debye_weller * x.name)))
+        else:
+            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
+
+        q = proportionality_factor(alpha_new, alpha_0, alpha_2, mode="linlog")
+        alpha_new_escale = (1 - q) * prob_norm.loc[::, alpha_0] + q * prob_norm.loc[::, alpha_2]
+        alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
+        if hasattr(self, "DebyeWallerCoeff"):
+            alpha_new_vector *= (1 - np.exp(- debye_weller * alpha_new))
+        alpha_new_vector.name = alpha_new
+        return alpha_new_vector
 
     def get_inelastic_Xs(self, T, m, boundXs, incident_neutron_energy) -> pd.DataFrame:
         """
@@ -1027,3 +1282,13 @@ def check_tau_n(tau_n, beta) -> None:
     if integrate(pd.Series(tau_n, index=beta)) < 1.e-5:
         raise ValueError("Tau function doesnt satisfy the normalization condition")
     return
+
+
+def proportionality_factor(alpha, alpha_i, alpha_i_plus_one, mode="linlog"):
+    if mode == "linlog":
+        q = np.log(alpha / alpha_i) / np.log(alpha_i_plus_one / alpha_i)
+    elif mode == "linlin":
+        q = (alpha - alpha_i) / (alpha_i_plus_one - alpha_i)
+    elif mode == "const":
+        q = 1
+    return q

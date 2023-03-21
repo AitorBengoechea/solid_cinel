@@ -1067,7 +1067,7 @@ class Sab():
         0.000135  0.000517  0.000523  0.000485  0.000479  0.000480  0.000491  0.000509  0.000529  0.000548  0.000574
 
         >>> alpha_new = [1.25e-4, 1.35e-4]
-        >>> S_mat.get_beta(alpha_new, add=True).data.iloc[0:4, 0:10]
+        >>> S_mat.get_alpha(alpha_new, add=True).data.iloc[0:5, 0:10]
         beta	    0.000000	0.025237	0.050474	0.075712	0.100949	0.126186	0.151423	0.176660	0.201898	0.227135
         alpha										
         0.000112	0.000430	0.000435	0.000403	0.000399	0.000399	0.000408	0.000423	0.000440	0.000456	0.000478
@@ -1084,8 +1084,7 @@ class Sab():
             alpha_vector.append(single_alpha_vector)
         alpha_new_df = pd.concat(alpha_vector, axis=1).T
         if add:
-            Sab_matrix = self.data
-            return Sab(pd.concat([Sab_matrix, alpha_new_df]))
+            return Sab(pd.concat([self.data, alpha_new_df]))
         else:
             return alpha_new_df
 
@@ -1135,6 +1134,13 @@ class Sab():
         0.000131
         """
         alpha_grid = self.alpha.data
+        if alpha_new > alpha_grid.max():
+            raise SyntaxError("alpha out of range(alpha_max = "
+                               + str(alpha_grid.max()) + ")")
+        elif alpha_new < alpha_grid.min():
+            raise SyntaxError("alpha out of range (alpha_min = "
+                               + str(alpha_grid.min()) + ")")
+
         beta = self.beta.data
         upper_bound = alpha_grid.searchsorted(alpha_new, side="right")
         alpha_0 = alpha_grid[upper_bound- 1]
@@ -1149,6 +1155,7 @@ class Sab():
 
         q = proportionality_factor(alpha_new, alpha_0, alpha_2, mode="linlog")
         alpha_new_escale = (1 - q) * prob_norm.loc[::, alpha_0] + q * prob_norm.loc[::, alpha_2]
+
         alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
         if hasattr(self, "DebyeWallerCoeff"):
             alpha_new_vector *= (1 - np.exp(- debye_weller * alpha_new))

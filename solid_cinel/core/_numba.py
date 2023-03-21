@@ -3,6 +3,10 @@ import numpy as np
 from numba import prange
 from numba import cuda
 import math
+from scipy.constants import physical_constants as const
+
+kb = const["Boltzmann constant in eV/K"][0]
+m = const["neutron mass in u"][0]
 
 
 @nb.jit(nopython=True, nogil=True)
@@ -337,3 +341,61 @@ def interp1(x1, y1, x2, y2, x, mode):
         return y1 * math.exp(math.log(x / x1) * math.log(y2 / y1) / math.log(x2 / x1))
     else:
         raise ValueError('Undefined interpolation mode, please check.')
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+def get_alpha(Eout, Ein, T, M, mu) -> np.array:
+    """
+    Get all the posible alpha values from the parameters of the function:
+    .. math::
+        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
+
+    Parameters
+    ----------
+    Eout : 1D iterable
+        Output energy of the neutron.
+    Ein : 1D iterable
+        Incidente energy of the neutron.
+    T : 1D iterable
+        Temperature in K.
+    M : "float"
+        Mass in amu of the scatterer.
+    mu : 1D iterable
+        Cosine of the scattering angle.
+    """
+    alpha = []
+    for i in prange(len(T)):
+        for j in prange(len(Ein)):
+            for k in prange(len(Eout)):
+                for ll in prange(len(mu)):
+                    alpha_value = Eout[k] + Ein[j]
+                    alpha_value -= 2 * mu[ll] * np.sqrt(Eout[k] * Ein[j])
+                    alpha_value /= (M * kb * T[i] / m)
+                    alpha.append(alpha_value)
+    return np.array(alpha)
+
+
+@nb.jit(nopython=True, nogil=False, parallel=True)
+def get_beta(Eout, Ein, T) -> np.array:
+    """
+    Get all the posible beta values from the parameters of the function:
+    .. math::
+        \beta=\dfrac{E_{out} - E_{in}}{k_BT}
+
+    Parameters
+    ----------
+    Eout : 1D iterable
+        Output energy of the neutron.
+    Ein : 1D iterable
+        Incidente energy of the neutron.
+    T : 1D iterable
+        Temperature in K.
+    """
+    beta = []
+    for i in prange(len(T)):
+        for j in prange(len(Ein)):
+            for k in prange(len(Eout)):
+                beta_value = Eout[k] - Ein[j]
+                beta_value /= kb * T[i]
+                beta.append(beta_value)
+    return np.array(beta)

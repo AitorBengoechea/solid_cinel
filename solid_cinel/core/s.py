@@ -444,32 +444,36 @@ class Sab():
 
     @property
     def data(self) -> pd.DataFrame:
-        """Dataframe with the S(alpha, beta) matrix values."""
+        """Dataframe with the S(alpha, -beta) matrix values."""
         return self._data
 
     @data.setter
     def data(self, df):
         """
-        Construct the S(alpha, beta) matrix and check if the data achieve the
+        Construct the S(alpha, -beta) matrix and check if the data achieve the
         normalization and sum rule constrain.
 
         Parameters
         ----------
         df : 2D iterable
-            Iterable containing the S(alpha, beta) matrix.
+            Iterable containing the S(alpha, -beta) matrix.
         """
         df_ = pd.DataFrame(df).sort_index(axis=0).sort_index(axis=1)
         df_.index.name = "alpha"
         df_.columns.name = "beta"
         # Normalization constrains:
-        self.normalization_check(df_)
+        if hasattr(self, "DebyeWallerCoeff"):
+            self.normalization_check(df_,
+                                     debye_waller_coeff=self.DebyeWallerCoeff)
+        else:
+            self.normalization_check(df_)
         self.sum_rule_check(df_)
         # DataFrame:
         self._data = df_
 
     def to_sym(self, detail_balance=True) -> pd.DataFrame:
         """
-        Generate the symmetric S(alpha, beta) matrix from the asymmetric
+        Generate the symmetric S(alpha, -beta) matrix from the asymmetric
         S(alpha, -beta) matrix.
 
         Parameters
@@ -519,9 +523,6 @@ class Sab():
             beta grid.
         model : 'str', optional
             The model to calculate matrix values. The default is "FGM".
-        T : 'float', optional
-            Option to scale beta and alpha grid with the method scale_grid. The
-            default is None.
         w_t: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
@@ -531,18 +532,18 @@ class Sab():
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha_grid = Alpha.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
-        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
-        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
-        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
-        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
-        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
-        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
-        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
-        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
-        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
-        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
-        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+        0.001050	  8.701463	8.417992 7.524148	6.213536	    4.740815
+        0.001087  8.553363	8.285768	 7.435678	6.181592	    4.760714
+        0.001125	  8.407781	8.155251	 7.346923	6.147319	    4.777252
+        0.001164	  8.264674	8.026439	 7.257961	6.110841	    4.790511
+        0.001205	  8.124000	7.899326	 7.168869	6.072279	    4.800575
+        0.001247	  7.985718	7.773908	 7.079717	6.031753	    4.807533
+        0.001291	  7.849787	7.650178	 6.990574	5.989379	    4.811476
+        0.001336	  7.716166	7.528129	 6.901504	5.945271	    4.812500
+        0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
+        0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
 
@@ -660,6 +661,11 @@ class Sab():
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+
+        # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
+        # interpolation and normalization check
+        cls.DebyeWallerCoeff = debye_waller_coeff
+
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
         S_values, iter_sum = cls._S_from_tau1(tau1, debye_waller_coeff,
@@ -787,7 +793,7 @@ class Sab():
         return
 
     @staticmethod
-    def normalization_check(S, pdos=None, T=None) -> None:
+    def normalization_check(S, debye_waller_coeff=None) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the normalization constrain.
         .. math::
@@ -810,9 +816,9 @@ class Sab():
 
         """
         normalization = S.apply(_normalization, axis="columns")
-        if pdos and T:
-            normalization /= (1 - np.exp(S.index.values * pdos.DebyeWallerCoeff(T)))
-        if (abs(normalization - 1.0) > 5.0e-3).any():
+        if debye_waller_coeff:
+            normalization /= (1 - np.exp(- S.index.values * debye_waller_coeff))
+        if (abs(normalization - 1.0) > 1.0e-2).any():
             warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 

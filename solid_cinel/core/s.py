@@ -819,8 +819,86 @@ class Sab():
         if debye_waller_coeff:
             normalization /= (1 - np.exp(- S.index.values * debye_waller_coeff))
         if (abs(normalization - 1.0) > 1.0e-2).any():
-            warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
+            warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
+
+    def get_beta(self, beta_new, add=False):
+        """
+        Quadratic interpolation to get the probability of the new beta value
+        for all the alpha existing in the S(alpha, -beta) matrix:
+        .. math::
+            P\left(\mid\beta_new\mid, \alpha_k\right)\right\} \text{ for }k=0, 1, ...
+
+        The method do not make extrapolation.
+
+        Parameters
+        ----------
+        beta_new : "float" or "np.array"
+            New beta values.
+        add : "bool", optional
+            Optional argument to add the output to the existing S(alpha, -beta)
+            matrix or only get the pd.Dataframe. The default is False.
+
+        Returns
+        -------
+        "pd.Dataframe" or "Sab"
+            pd.Dataframe with the requested probabilities for the new betas for
+            all the existing alpha. If add is True, the pd.Dataframe is merge
+            in the S(alpha, -beta) matrix.
+
+        Example
+        -------
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> alpha = Alpha(alpha0_).scale(T).data
+        >>> beta = Beta(beta0_).scale(T).data
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
+        >>> beta_new = 0.01
+        >>> S_mat.get_beta(beta_new).iloc[0:10]
+        beta          0.01
+        alpha
+        0.004893  0.005423
+        0.009786  0.010765
+        0.014680  0.016027
+        0.019573  0.021208
+        0.024466  0.026309
+        0.029359  0.031331
+        0.034253  0.036275
+        0.039146  0.041141
+        0.044039  0.045929
+        0.048932  0.050641
+
+        >>> beta_new = [0.01, 0.03]
+        >>> S_mat.get_beta(beta_new, add=True).data.iloc[0:10, 0:4]
+        beta      0.000000  0.010000  0.024466  0.030000
+        alpha
+        0.004893  0.005396  0.005423  0.005462  0.005477
+        0.009786  0.010712  0.010765  0.010842  0.010872
+        0.014680  0.015948  0.016027  0.016140  0.016184
+        0.019573  0.021104  0.021208  0.021357  0.021414
+        0.024466  0.026181  0.026309  0.026493  0.026563
+        0.029359  0.031179  0.031331  0.031549  0.031632
+        0.034253  0.036100  0.036275  0.036526  0.036621
+        0.039146  0.040943  0.041141  0.041423  0.041530
+        0.044039  0.045710  0.045929  0.046243  0.046361
+        0.048932  0.050400  0.050641  0.050984  0.051114
+        """
+        beta_new_ = beta_new if hasattr(beta_new, '__len__') else [beta_new]
+        Sab_matrix = self.data
+        beta_values = Sab_matrix.apply(lambda x: reshape_differential(x.index,
+                                                                      x.values,
+                                                                      beta_new_,
+                                                                      bounds_error=True,
+                                                                      kind="quadratic"),
+                                       axis=1)
+        beta_vector = pd.DataFrame.from_records(beta_values.values,
+                                                index=beta_values.index,
+                                                columns=pd.Index(beta_new_, name="beta"))
+        if add:
+            return Sab(pd.concat([beta_vector, Sab_matrix], axis=1))
+        else:
+            return beta_vector
 
     def get_inelastic_Xs(self, T, m, boundXs, incident_neutron_energy) -> pd.DataFrame:
         """

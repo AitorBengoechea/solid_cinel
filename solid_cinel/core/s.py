@@ -300,7 +300,7 @@ class Beta():
         T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
         return cls(get_beta(Eout_, Ein_, T_))
 
-    def get_output_energy(self, T, incident_neutron_energy) -> pd.Series:
+    def get_Eout(self, T, Ein) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible
         output energies for a incident neutron energy and that beta grid.
@@ -311,7 +311,7 @@ class Beta():
         ----------
         T : 'float'
             Temperature in K.
-        incident_neutron_energy : 'float'
+        Ein : 'float'
             Incident neutron energy in eV.
 
         Example
@@ -319,19 +319,19 @@ class Beta():
         >>> T = 800
         >>> incident_neutron_energy = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
-        >>> beta_grid.get_output_energy(T, incident_neutron_energy).iloc[0:5]
+        >>> beta_grid.get_Eout(T, incident_neutron_energy).iloc[0:5]
         beta
         0.000000    0.331180
         0.009175    0.331812
         0.018350    0.332445
         0.027524    0.333077
         0.036699    0.333710
-        Name: output energy, dtype: float64
+        Name: Eout, dtype: float64
         """
         beta = self.data
-        output_energy = beta * kb * T + incident_neutron_energy
-        return pd.Series(output_energy,
-                         name="output energy",
+        Eout = beta * kb * T + Ein
+        return pd.Series(Eout,
+                         name="Eout",
                          index=self.to_index)
 
     def scale(self, T, therm=0.0253):
@@ -449,7 +449,7 @@ class Alpha():
         mu = np.cos(theta * np.pi / 180) if hasattr(theta, '__len__') else np.cos(np.array([theta]) * np.pi / 180)
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
-    def get_theta(self, T, incident_neutron_energy, M, beta_grid) -> pd.Series:
+    def get_theta(self, T, Ein, M, beta_grid) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible scattering angles
         for a scattering atom, temperature and incident neutron energy.
@@ -461,7 +461,7 @@ class Alpha():
         ----------
         T : 'float'
             Temperature in K.
-        incident_neutron_energy : 'float'
+        Ein : 'float'
             Incident neutron energy in eV.
         m : 'float'
             Atom mass, amu.
@@ -504,15 +504,15 @@ class Alpha():
         A = M / m
 
         beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        E_prima = beta.get_output_energy(T, incident_neutron_energy).values
+        E_prima = beta.get_Eout(T, Ein).values
 
         if len(E_prima) > len(alpha):
             E_prima = E_prima[:len(alpha)]
         elif len(E_prima) < len(alpha):
             alpha = alpha[:len(E_prima)]
 
-        mu = E_prima + incident_neutron_energy - alpha * A * kb * T
-        mu /= 2 * np.sqrt(E_prima * incident_neutron_energy)
+        mu = E_prima + Ein - alpha * A * kb * T
+        mu /= 2 * np.sqrt(E_prima * Ein)
         mu = np.arccos(mu[abs(mu) <= 1])
         return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
 
@@ -1247,7 +1247,7 @@ class Sab():
         0.226045  1.930542  1.939419  1.947155  1.954222  1.960724
         """
         # Get the output energies: and the scatterig angle
-        E_prima = self.beta.get_output_energy(T, Ein).values
+        E_prima = self.beta.get_Eout(T, Ein).values
         theta = self.alpha.get_theta(T, Ein, M, self.beta).values
 
         vector = boundXs / (2 * kb * T) * np.sqrt(E_prima / Ein)

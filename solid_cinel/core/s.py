@@ -281,17 +281,17 @@ class Beta():
         ----------
         Eout : 1D iterable or 'float'
             Neutron output energies in eV.
-        Ein : 'float'
+        Ein : 1D iterable or 'float'
             Neutron incident energy in eV.
-        T : 'float'
+        T : 1D iterable or 'float'
             Temperature in Kelvin.
 
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
-        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> Beta.from_parameters(output_energy, incident_neutron_energy, T).data.round(6)
+        >>> Ein = 0.33118
+        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> Beta.from_parameters(Eout, Ein, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
@@ -313,7 +313,6 @@ class Beta():
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
         >>> beta_grid.get_dE(T).iloc[0:5]
         beta
@@ -326,7 +325,7 @@ class Beta():
         """
         return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
 
-    def get_Eout(self, T, Ein) -> pd.Series:
+    def get_Eout(self, T, Ein, side="upscattering") -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible
         output energies for a incident neutron energy and that beta grid.
@@ -339,13 +338,19 @@ class Beta():
             Temperature in K.
         Ein : 'float'
             Incident neutron energy in eV.
+        side : 'str', optional
+            Argument to chose the outgoing energy grid side. The default is
+            the "upscatterign" side. Available options are:
+                - "upscattering" : Eout > Ein
+                - "downscattering" : Eout < Ein
+                - "full": "upscattering" side + "downscattering" side.
 
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
+        >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
-        >>> beta_grid.get_Eout(T, incident_neutron_energy).iloc[0:5]
+        >>> beta_grid.get_Eout(T, Ein).iloc[0:5]
         beta
         0.000000    0.331180
         0.009175    0.331812
@@ -353,9 +358,46 @@ class Beta():
         0.027524    0.333077
         0.036699    0.333710
         Name: Eout, dtype: float64
+
+        >>> beta_grid.get_Eout(T, Ein, side="downscattering").iloc[0:5]
+        beta
+        -0.000000    0.331180
+        -0.009175    0.330547
+        -0.018350    0.329915
+        -0.027524    0.329282
+        -0.036699    0.328650
+        Name: Eout, dtype: float64
+
+        >>> beta_grid.get_Eout(T, Ein, side="full").iloc[104:113]
+        beta
+        -0.036699    0.328650
+        -0.027524    0.329282
+        -0.018350    0.329915
+        -0.009175    0.330547
+         0.000000    0.331180
+         0.009175    0.331812
+         0.018350    0.332445
+         0.027524    0.333077
+         0.036699    0.333710
+        Name: Eout, dtype: float64
         """
-        Eout = Ein + self.get_dE(T)
-        return Eout.rename("Eout")
+        dE = self.get_dE(T).rename("Eout")
+
+        Eout_positive = Ein + dE
+        if side == "upscattering":
+            return Eout_positive
+
+        Eout_negative = Ein - dE
+        Eout_negative.index *= -1
+        Eout_negative = Eout_negative[Eout_negative >= 0]
+        if side == "downscattering":
+            return Eout_negative
+
+        if side == "full":
+            Eout = pd.concat([Eout_negative.iloc[1::], Eout_positive]).sort_index()
+            return Eout
+        else:
+            raise SyntaxError("Side option not available")
 
     def scale(self, T, therm=0.0253):
         """
@@ -461,11 +503,11 @@ class Alpha():
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
-        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> Ein = 0.33118
+        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
         >>> m = 26.98153433356103
         >>> theta = 0.101125 * 180 / np.pi
-        >>> Alpha.from_parameters(output_energy, incident_neutron_energy, T, m, theta).data.round(6)
+        >>> Alpha.from_parameters(Eout, Ein, T, m, theta).data.round(6)
         array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
@@ -494,11 +536,11 @@ class Alpha():
         Example
         -------
         >>> T = 800
-        >>> m = 26.98153433356103
-        >>> incident_neutron_energy = 0.33118
+        >>> M = 26.98153433356103
+        >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
         >>> alpha_grid = Alpha(alpha0_).scale(T)
-        >>> alpha_grid.get_theta(T, incident_neutron_energy, m, beta_grid).iloc[0:5].round(6)
+        >>> alpha_grid.get_theta(T, Ein, M, beta_grid).iloc[0:5].round(6)
         alpha
         0.001835    0.101125
         0.003670    0.143002
@@ -508,13 +550,13 @@ class Alpha():
         Name: mu, dtype: float64
 
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
-        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> beta_grid = Beta.from_parameters(output_energy, incident_neutron_energy, T)
-        >>> m = 26.98153433356103
+        >>> Ein = 0.33118
+        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> beta_grid = Beta.from_parameters(Eout, Ein, T)
+        >>> M = 26.98153433356103
         >>> theta = 45
-        >>> alpha = Alpha.from_parameters(output_energy, incident_neutron_energy, T, m, theta)
-        >>> theta = alpha.get_theta(T, incident_neutron_energy, m, beta_grid)
+        >>> alpha = Alpha.from_parameters(Eout, Ein, T, M, theta)
+        >>> theta = alpha.get_theta(T, Ein, M, beta_grid)
         >>> import numpy as np
         >>> theta * 180 / np.pi
         alpha
@@ -1233,6 +1275,25 @@ class Sab():
             interp_Alpha_Beta.loc[::, beta_ < 0] *= np.exp(beta_[beta_ < 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
 
+    def get_value_from_Ein_theta(self, Ein, theta) -> pd.DataFrame:
+        """
+        
+
+        Parameters
+        ----------
+        Ein : TYPE
+            DESCRIPTION.
+        theta : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        Eout = self.beta
+        return
+
     def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
         """
         Get inelastic scattering for a atom with a certain bound Xs and mass
@@ -1254,15 +1315,15 @@ class Sab():
         Example
         -------
         >>> T = 800
-        >>> m = 26.98153433356103
+        >>> M = 26.98153433356103
         >>> boundXs = 1.5030808051112423
-        >>> incident_neutron_energy = 0.33118
+        >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T).data
         >>> alpha_grid = Alpha(alpha0_).scale(T).data
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
-        >>> Sab.get_inelastic_Xs(T, m, boundXs, incident_neutron_energy).iloc[:5, :5].round(6)
+        >>> Sab.get_inelastic_Xs(T, M, boundXs, Ein).iloc[:5, :5].round(6)
         E_out     0.331180  0.331812  0.332445  0.333077  0.333710
         theta
         0.101125  0.414306  0.416519  0.418685  0.420825  0.422894

@@ -12,6 +12,9 @@ import pandas as pd
 import scipy as sp
 import warnings
 
+kb = const["Boltzmann constant in eV/K"][0]
+m = const["neutron mass in u"][0]
+
 # Examples variables:
 rho_in_energy_str = '''
     0 .0066 .0264 .0594 .1055 .1649 .2374 .3232 .4221
@@ -193,7 +196,7 @@ class Beta():
     """
 
     def __init__(self, array):
-        self.data = np.sort(array)
+        self.data = np.unique(array)
 
     @property
     def to_index(self) -> pd.Index:
@@ -230,10 +233,9 @@ class Beta():
         >>> Beta.generate_grid(300, num_grid=10).data.round(6)
         array([  0.      ,   0.515756,   1.031513,   1.547269,   2.063025,
                  2.578782,   3.094538,  12.280683,  48.735922, 193.408635])
-        """
-        kT = const["Boltzmann constant in eV/K"][0] * T
-        mid_beta = mid_E / kT
-        max_beta = thermal_threshold / kT
+        """ 
+        mid_beta = mid_E / (kb * T)
+        max_beta = thermal_threshold / (kb * T)
         first_half = np.linspace(0, mid_beta,
                                  num=int(num_grid * 0.6),
                                  endpoint=False)
@@ -248,7 +250,7 @@ class Beta():
             return cls(beta_grid)
 
     @classmethod
-    def from_energy_grid(cls, energy_grid, T):
+    def from_dE(cls, energy_grid, T):
         """
         Tranform a energy grid into a beta grid. (use in pdos.py)
         .. math::
@@ -265,11 +267,10 @@ class Beta():
         -------
         >>> energy_grid = np.arange(len(rho_in_energy)) * interv_in_energy
         >>> T = 300
-        >>> Beta.from_energy_grid(energy_grid, T).data[0:5].round(6)
+        >>> Beta.from_dE(energy_grid, T).data[0:5].round(6)
         array([0.      , 0.030945, 0.061891, 0.092836, 0.123782])
         """
-        kbT = const["Boltzmann constant in eV/K"][0] * T
-        return cls(np.array(energy_grid) / kbT)
+        return cls(np.array(energy_grid) / (kb * T))
 
     @classmethod
     def from_parameters(cls, Eout, Ein, T):
@@ -328,8 +329,7 @@ class Beta():
         Name: output energy, dtype: float64
         """
         beta = self.data
-        kbT = const["Boltzmann constant in eV/K"][0] * T
-        output_energy = beta * kbT + incident_neutron_energy
+        output_energy = beta * kb * T + incident_neutron_energy
         return pd.Series(output_energy,
                          name="output energy",
                          index=self.to_index)
@@ -355,13 +355,13 @@ class Beta():
         array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
                2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
         """
-        kbT = const["Boltzmann constant in eV/K"][0] * T
-        scale_grid = self.data * therm / kbT
+        scale_grid = self.data * therm / (kb * T)
         return Beta(scale_grid)
-    
+
+
 class Alpha():
     def __init__(self, array):
-        self.data = np.sort(array)
+        self.data = np.unique(array)
 
     @property
     def to_index(self) -> pd.Index:
@@ -369,7 +369,7 @@ class Alpha():
         return pd.Index(self.data, name="alpha")
 
     @classmethod
-    def generate_grid(cls, T, atom_mass, num_grid=300, min_E=2.8e-3,
+    def generate_grid(cls, T, M, num_grid=300, min_E=2.8e-3,
                   thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
         """
         Generate a alpha grid for a given temperature and atomic mass.
@@ -378,8 +378,8 @@ class Alpha():
         ----------
         T : 'float'
             Temperature in K.
-        atom_mass : 'float'
-            atomic mass in amu.
+        M : 'float'
+            atomic mass of scatterer in amu.
         num_grid : 'int', optional
             Number of grid. The default is 400.
         mid_E : 'float', optional
@@ -402,8 +402,7 @@ class Alpha():
                1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
                9.5985550e+00, 3.0013001e+01])
         """
-        A = atom_mass / const["neutron mass in u"][0]
-        AkT = A * const["Boltzmann constant in eV/K"][0] * T
+        AkT = M * kb * T / m
         min_alpha = min_E / 4 / AkT
         max_alpha = 4 * thermal_threshold / AkT
         alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
@@ -450,7 +449,7 @@ class Alpha():
         mu = np.cos(theta * np.pi / 180) if hasattr(theta, '__len__') else np.cos(np.array([theta]) * np.pi / 180)
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
-    def get_theta(self, T, incident_neutron_energy, m, beta_grid) -> pd.Series:
+    def get_theta(self, T, incident_neutron_energy, M, beta_grid) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible scattering angles
         for a scattering atom, temperature and incident neutron energy.
@@ -502,7 +501,7 @@ class Alpha():
         Name: mu, dtype: float64
         """
         alpha = self.data
-        A = m / const["neutron mass in u"][0]
+        A = M / m
 
         beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
         E_prima = beta.get_output_energy(T, incident_neutron_energy).values
@@ -512,15 +511,15 @@ class Alpha():
         elif len(E_prima) < len(alpha):
             alpha = alpha[:len(E_prima)]
 
-        mu = E_prima + incident_neutron_energy - alpha * A * const["Boltzmann constant in eV/K"][0] * T
-        mu /= (2 * np.sqrt(E_prima * incident_neutron_energy))
+        mu = E_prima + incident_neutron_energy - alpha * A * kb * T
+        mu /= 2 * np.sqrt(E_prima * incident_neutron_energy)
         mu = np.arccos(mu[abs(mu) <= 1])
         return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
 
     def scale(self, T, therm=0.0253):
         """
         Scale alpha or beta spectrum.
-    
+
         Parameters
         ----------
         grid : 'np.ndarray' of 1D or 2D
@@ -529,7 +528,7 @@ class Alpha():
             Temperature in K.
         therm : 'float', optional
             factor for regrid alpha and beta. The default is 0.0253.
-    
+
         Example
         -------
         >>> T = 300
@@ -587,11 +586,7 @@ class Sab():
         df_.index.name = "alpha"
         df_.columns.name = "beta"
         # Normalization constrains:
-        if hasattr(self, "DebyeWallerCoeff"):
-            self.normalization_check(df_,
-                                     debye_waller_coeff=self.DebyeWallerCoeff)
-        else:
-            self.normalization_check(df_)
+        self.normalization_check(df_)
         self.sum_rule_check(df_)
         # DataFrame:
         self._data = df_
@@ -917,8 +912,7 @@ class Sab():
             warnings.warn("Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
-    @staticmethod
-    def normalization_check(S, debye_waller_coeff=None) -> None:
+    def normalization_check(self, S) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the normalization constrain.
         .. math::
@@ -941,8 +935,8 @@ class Sab():
 
         """
         normalization = S.apply(_normalization, axis="columns")
-        if debye_waller_coeff:
-            normalization /= (1 - np.exp(- S.index.values * debye_waller_coeff))
+        if hasattr(self, "DebyeWallerCoeff"):
+            normalization /= (1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
         if (abs(normalization - 1.0) > 1.0e-2).any():
             warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
@@ -1010,18 +1004,17 @@ class Sab():
         0.048932  0.050400  0.050641  0.050984  0.051114
         """
         beta_new_ = beta_new if hasattr(beta_new, '__len__') else [beta_new]
-        Sab_matrix = self.data
-        beta_values = Sab_matrix.apply(lambda x: reshape_differential(x.index,
-                                                                      x.values,
-                                                                      beta_new_,
-                                                                      bounds_error=True,
-                                                                      kind="quadratic"),
-                                       axis=1)
+        beta_values = self.data.apply(lambda x: reshape_differential(x.index,
+                                                                     x.values,
+                                                                     beta_new_,
+                                                                     bounds_error=True,
+                                                                     kind="quadratic"),
+                                      axis=1)
         beta_df = pd.DataFrame.from_records(beta_values.values,
                                             index=beta_values.index,
                                             columns=pd.Index(beta_new_, name="beta"))
         if add:
-            return Sab(pd.concat([beta_df, Sab_matrix], axis=1))
+            return Sab(pd.concat([beta_df, self.data], axis=1))
         else:
             return beta_df
 
@@ -1031,7 +1024,7 @@ class Sab():
         for all the beta existing in the S(alpha, -beta) matrix.
         .. math::
             \left\{ \mid\alpha_{new}\mid = P\left(\mid\beta_{k}\mid, \alpha_{new}\right) \text{ for }k=0, 1, ...
-        
+
         The method do not make extrapolation.
 
         Parameters
@@ -1143,16 +1136,16 @@ class Sab():
         alpha_grid = self.alpha.data
         if alpha_new > alpha_grid.max():
             raise SyntaxError("alpha out of range(alpha_max = "
-                               + str(alpha_grid.max()) + ")")
+                              + str(alpha_grid.max()) + ")")
         elif alpha_new < alpha_grid.min():
             raise SyntaxError("alpha out of range (alpha_min = "
-                               + str(alpha_grid.min()) + ")")
+                              + str(alpha_grid.min()) + ")")
         elif alpha_new in alpha_grid:
             return self.data.loc[alpha_new]
 
         beta = self.beta.data
         upper_bound = alpha_grid.searchsorted(alpha_new, side="right")
-        alpha_0 = alpha_grid[upper_bound- 1]
+        alpha_0 = alpha_grid[upper_bound - 1]
         alpha_2 = alpha_grid[upper_bound]
         prob = self.data.loc[[alpha_0, alpha_2]].T
 
@@ -1179,7 +1172,7 @@ class Sab():
         .. math::
             Beta < 0:
                 \left\{ \mid\alpha\mid = P\left(- \mid\beta\mid, \alpha\right)
-            Beta > 0: 
+            Beta > 0:
                 \left\{ \mid\alpha\mid = P\left(-\mid\beta\mid, \alpha\right) * exp(-\mid\beta_{new}\mid)
 
         Parameters
@@ -1207,7 +1200,7 @@ class Sab():
         0.000135  0.000503  0.000521  0.000526  0.000518
         """
         alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
-        beta_ = np.array(beta) if (beta, '__len__') else np.array([beta])
+        beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
         interp_Alpha_Beta = self.get_alpha(alpha_)\
                                 .get_beta(abs(beta_))\
                                 .set_axis(pd.Index(beta_, name="beta"), axis=1)
@@ -1215,7 +1208,7 @@ class Sab():
             interp_Alpha_Beta.loc[::, beta_ < 0] *= np.exp(beta_[beta_ < 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
 
-    def get_inelastic_Xs(self, T, m, boundXs, incident_neutron_energy) -> pd.DataFrame:
+    def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
         """
         Get inelastic scattering for a atom with a certain bound Xs and mass
         and for a certain incident energy.
@@ -1230,7 +1223,7 @@ class Sab():
             Atom mass, amu.
         boundXs : 'float'
             Bound total scattering cross section in barn.
-        incident_neutron_energy : 'float'
+        Ein : 'float'
             Incident neutron energy in eV.
 
         Example
@@ -1254,10 +1247,10 @@ class Sab():
         0.226045  1.930542  1.939419  1.947155  1.954222  1.960724
         """
         # Get the output energies: and the scatterig angle
-        E_prima = self.beta.get_output_energy(T, incident_neutron_energy).values
-        theta = self.alpha.get_theta(T, incident_neutron_energy, m, self.beta).values
+        E_prima = self.beta.get_output_energy(T, Ein).values
+        theta = self.alpha.get_theta(T, Ein, M, self.beta).values
 
-        vector = boundXs / (2 * const["Boltzmann constant in eV/K"][0] * T) * np.sqrt(E_prima / incident_neutron_energy)
+        vector = boundXs / (2 * kb * T) * np.sqrt(E_prima / Ein)
 
         inelastic_xs = vector * self.data.iloc[:len(theta), ::]
         inelastic_xs.index = pd.Index(theta, name="theta")

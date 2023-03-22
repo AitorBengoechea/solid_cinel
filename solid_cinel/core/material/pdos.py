@@ -173,7 +173,7 @@ class Pdos():
         Name: rho, dtype: float64
         """
         grid = self.rho.index.values
-        self.beta = Beta.from_energy_grid(grid, T)
+        self.beta = Beta.from_dE(grid, T)
         return Pdos(self.rho.values, index=self.beta.to_index)
 
     def plot(self) -> matplotlib:

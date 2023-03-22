@@ -505,9 +505,9 @@ class Alpha():
         >>> T = 800
         >>> Ein = 0.33118
         >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> m = 26.98153433356103
+        >>> M = 26.98153433356103
         >>> theta = 0.101125 * 180 / np.pi
-        >>> Alpha.from_parameters(Eout, Ein, T, m, theta).data.round(6)
+        >>> Alpha.from_parameters(Eout, Ein, T, M, theta).data.round(6)
         array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
@@ -784,6 +784,10 @@ class Sab():
         0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
+        # Save the Phonon Density of States for extrapolation
+        cls.pdos = pdos
+
+        # Start the calculation:
         ratio = pdos.Teff(T) / T
 
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_s - beta_grid[j]) ** 2 / (4 * ratio * w_s * alpha_grid[i])) / np.sqrt(4 * np.pi * w_s * alpha_grid[i] * ratio)
@@ -852,6 +856,9 @@ class Sab():
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
         cls.DebyeWallerCoeff = debye_waller_coeff
+
+        # Save the Phonon Density of States for extrapolation
+        cls.pdos = pdos
 
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
@@ -1263,36 +1270,103 @@ class Sab():
         >>> S_mat.get_value_from_Alpha_Beta(alpha_new, beta_new)
         beta         -0.03     -0.01      0.01      0.03
         alpha
-        0.000125  0.000465  0.000483  0.000487  0.000479
-        0.000135  0.000503  0.000521  0.000526  0.000518
+        0.000125  0.000479  0.000487  0.000483  0.000465
+        0.000135  0.000518  0.000526  0.000521  0.000503
         """
         alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
         beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
         interp_Alpha_Beta = self.get_alpha(alpha_)\
                                 .get_beta(abs(beta_))\
                                 .set_axis(pd.Index(beta_, name="beta"), axis=1)
-        if (beta_ < 0).any():
-            interp_Alpha_Beta.loc[::, beta_ < 0] *= np.exp(beta_[beta_ < 0])
+        if (beta_ > 0).any():
+            interp_Alpha_Beta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
 
-    def get_value_from_Ein_theta(self, Ein, theta) -> pd.DataFrame:
+    def get_matrix_from_parameters(self, Eout, Ein, T, M, theta,
+                                   extrapolation="sct") -> pd.DataFrame:
         """
-        
+        Based on the set of variables introduced, interpolate the existing
+        S(alpha, -beta) to make a new S(alpha, beta) matrix with the alpha and
+        beta values created from the set of variables. If the alpha or beta
+        values created from the set of varibales are outside of the range of
+        the S(alpha, -beta) matrix, the method extrapolate the values using
+        free gas model or short time colission aproximation.
 
         Parameters
         ----------
-        Ein : TYPE
-            DESCRIPTION.
-        theta : TYPE
-            DESCRIPTION.
+        Eout : 1D iterable or 'float'
+            Neutron output energies in eV.
+        Ein : 1D iterable or 'float'
+            Neutron incident energy in eV.
+        T : 1D iterable or 'float'
+            Temperature in Kelvin.
+        M : 'float'
+            Atom mass, amu
+        theta : 1D iterable or 'float'
+            scattering angle in Degrees.
+        extrapolation : "bool", optional
+            Optional argument to chose the model of extrapolation. The default
+            model is "sct". The available models are:
+                - "sct": Short Collision Time.
+                - "fgm": Free Gas Model.
 
-        Returns
+        Example
         -------
-        None.
+        Create the S(alpha, -beta) matrix:
+        >>> T = 300
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Sab_matrix = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
 
+        Only interpolation (sum rule check):
+        >>> Ein = 6.6
+        >>> theta = 60
+        >>> M = 238.05077040419212
+        >>> Eout = Sab_matrix.beta.get_Eout(T, Ein, side="full").values
+        >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
+        >>> from solid_cinel.core.generic import integrate
+        >>> Sab_intep.apply(lambda x: integrate (x * x.index), axis=1).iloc[::40]
+        alpha
+        0.811392   -0.812439
+        1.033521   -1.035315
+        1.075407   -1.076916
+        1.077535   -1.079099
+        1.079667   -1.081283
+        1.081804   -1.083466
+        1.083945   -1.085649
+        1.086090   -1.087833
+        1.088532   -1.090313
+        1.137942   -1.139335
+        dtype: float64
         """
-        Eout = self.beta
-        return
+        # Create alpha and beta grid:
+        param_alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, theta).data
+        param_beta_grid = Beta.from_parameters(Eout, Ein, T).data
+
+        # Create the masks for interpolation:
+        alpha_mask = (self.alpha.data.max() >= param_alpha_grid) & (self.alpha.data.min() <= param_alpha_grid)
+        beta_mask = (self.beta.data.max() >= abs(param_beta_grid)) & (self.beta.data.min() <= abs(param_beta_grid))
+
+        # Interpolation:
+        Sab_interp = self.get_value_from_Alpha_Beta(param_alpha_grid[alpha_mask],
+                                                    param_beta_grid[beta_mask])
+
+        # Check if extrapolation is need:
+        if not all(alpha_mask) or not all(beta_mask):
+            if extrapolation == "sct":
+                Sab_new = self.from_sct(param_alpha_grid, param_beta_grid,
+                                        T, self.pdos)
+            elif extrapolation == "fgm":
+                Sab_new = self.from_fgm(param_alpha_grid, param_beta_grid)
+            else:
+                raise SyntaxError("Model not available")
+            Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[beta_mask]] = Sab_interp.values
+        else:
+            Sab_new = Sab_interp
+
+        return Sab_new
 
     def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
         """

@@ -6,11 +6,14 @@ Created on Thu Oct 20 11:46:42 2022
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import tau_n_CPU
+from solid_cinel.core._numba import tau_n_CPU, get_beta, get_alpha
 import numpy as np
 import pandas as pd
 import scipy as sp
 import warnings
+
+kb = const["Boltzmann constant in eV/K"][0]
+m = const["neutron mass in u"][0]
 
 # Examples variables:
 rho_in_energy_str = '''
@@ -61,14 +64,138 @@ beta0_str = '''
 '''
 beta0_ = np.fromstring(beta0_str, dtype=np.float64, sep=' ')
 
+alpha0_str_U238 = '''
+ 1.14731156e-04 1.22909925e-04 1.31671728e-04 1.41058129e-04
+ 1.51113653e-04 1.61885998e-04 1.73426265e-04 1.85789196e-04
+ 1.99033435e-04 2.13221808e-04 2.28421619e-04 2.44704969e-04
+ 2.62149101e-04 2.80836761e-04 3.00856598e-04 3.22303575e-04
+ 3.45279431e-04 3.69893152e-04 3.96261495e-04 4.24509543e-04
+ 4.54771292e-04 4.87190291e-04 5.21920324e-04 5.59126134e-04
+ 5.98984212e-04 6.41683629e-04 6.87426932e-04 7.36431110e-04
+ 7.88928618e-04 8.45168483e-04 9.05417485e-04 9.69961421e-04
+ 1.03910646e-03 1.11318060e-03 1.19253521e-03 1.27754673e-03
+ 1.36861841e-03 1.46618227e-03 1.57070109e-03 1.68267069e-03
+ 1.80262219e-03 1.93112460e-03 2.06878749e-03 2.21626386e-03
+ 2.37425329e-03 2.54350521e-03 2.72482249e-03 2.91906522e-03
+ 3.12715481e-03 3.35007836e-03 3.58889332e-03 3.84473254e-03
+ 4.11880960e-03 4.41242463e-03 4.72697041e-03 5.06393902e-03
+ 5.42492890e-03 5.81165245e-03 6.22594411e-03 6.66976913e-03
+ 7.14523283e-03 7.65459062e-03 8.20025868e-03 8.78482543e-03
+ 9.41106384e-03 1.00819445e-02 1.08006498e-02 1.15705891e-02
+ 1.23954145e-02 1.32790387e-02 1.42256533e-02 1.52397487e-02
+ 1.63261352e-02 1.74899663e-02 1.87367627e-02 2.00724386e-02
+ 2.15033301e-02 2.30362247e-02 2.46783938e-02 2.64376272e-02
+ 2.83222699e-02 3.03412620e-02 3.25041807e-02 3.48212861e-02
+ 3.73035696e-02 3.99628060e-02 4.28116098e-02 4.58634945e-02
+ 4.91329370e-02 5.26354463e-02 5.63876367e-02 6.04073072e-02
+ 6.47135255e-02 6.93267185e-02 7.42687693e-02 7.95631210e-02
+ 8.52348880e-02 9.13109746e-02 9.78202035e-02 1.04793452e-01
+ 1.12263798e-01 1.20266677e-01 1.28840053e-01 1.38024594e-01
+ 1.47863868e-01 1.58404548e-01 1.69696635e-01 1.81793694e-01
+ 1.94753108e-01 2.08636352e-01 2.23509283e-01 2.39442450e-01
+ 2.56511436e-01 2.74797208e-01 2.94386506e-01 3.15372255e-01
+ 3.37854001e-01 3.61938390e-01 3.87739668e-01 4.15380225e-01
+ 4.44991178e-01 4.76712988e-01 5.10696131e-01 5.47101810e-01
+ 5.86102718e-01 6.27883859e-01 6.72643427e-01 7.20593742e-01
+ 7.71962261e-01 8.26992657e-01 8.85945970e-01 9.49101851e-01
+ 1.01675989e+00 1.08924102e+00 1.16688907e+00 1.25007237e+00
+ 1.33918550e+00 1.43465119e+00 1.53692228e+00 1.64648390e+00
+ 1.76385578e+00 1.88959467e+00 2.02429704e+00 2.16860185e+00
+ 2.32319362e+00 2.48880569e+00 2.66622364e+00 2.85628907e+00
+ 3.05990358e+00 3.27803303e+00
+'''
+beta0_str_U238 = '''
+0.00000000e+00 2.57878269e-02 5.15756538e-02 7.73634807e-02
+ 1.03151308e-01 1.28939135e-01 1.54726961e-01 1.80514788e-01
+ 2.06302615e-01 2.32090442e-01 2.57878269e-01 2.83666096e-01
+ 3.09453923e-01 3.35241750e-01 3.61029577e-01 3.86817404e-01
+ 4.12605231e-01 4.38393058e-01 4.64180884e-01 4.89968711e-01
+ 5.15756538e-01 5.41544365e-01 5.67332192e-01 5.93120019e-01
+ 6.18907846e-01 6.44695673e-01 6.70483500e-01 6.96271327e-01
+ 7.22059154e-01 7.47846980e-01 7.73634807e-01 7.99422634e-01
+ 8.25210461e-01 8.50998288e-01 8.76786115e-01 9.02573942e-01
+ 9.28361769e-01 9.54149596e-01 9.79937423e-01 1.00572525e+00
+ 1.03151308e+00 1.05730090e+00 1.08308873e+00 1.10887656e+00
+ 1.13466438e+00 1.16045221e+00 1.18624004e+00 1.21202786e+00
+ 1.23781569e+00 1.26360352e+00 1.28939135e+00 1.31517917e+00
+ 1.34096700e+00 1.36675483e+00 1.39254265e+00 1.41833048e+00
+ 1.44411831e+00 1.46990613e+00 1.49569396e+00 1.52148179e+00
+ 1.54726961e+00 1.57305744e+00 1.59884527e+00 1.62463310e+00
+ 1.65042092e+00 1.67620875e+00 1.70199658e+00 1.72778440e+00
+ 1.75357223e+00 1.77936006e+00 1.80514788e+00 1.83093571e+00
+ 1.85672354e+00 1.88251136e+00 1.90829919e+00 1.93408702e+00
+ 1.95987485e+00 1.98566267e+00 2.01145050e+00 2.03723833e+00
+ 2.06302615e+00 2.08881398e+00 2.11460181e+00 2.14038963e+00
+ 2.16617746e+00 2.19196529e+00 2.21775311e+00 2.24354094e+00
+ 2.26932877e+00 2.29511660e+00 2.32090442e+00 2.34669225e+00
+ 2.37248008e+00 2.39826790e+00 2.42405573e+00 2.44984356e+00
+ 2.47563138e+00 2.50141921e+00 2.52720704e+00 2.55299486e+00
+ 2.57878269e+00 2.60457052e+00 2.63035835e+00 2.65614617e+00
+ 2.68193400e+00 2.70772183e+00 2.73350965e+00 2.75929748e+00
+ 2.78508531e+00 2.81087313e+00 2.83666096e+00 2.86244879e+00
+ 2.88823661e+00 2.91402444e+00 2.93981227e+00 2.96560009e+00
+ 2.99138792e+00 3.01717575e+00 3.04296358e+00 3.06875140e+00
+ 3.09453923e+00 3.26083370e+00 3.43606452e+00 3.62071189e+00
+ 3.81528185e+00 4.02030762e+00 4.23635107e+00 4.46400427e+00
+ 4.70389111e+00 4.95666900e+00 5.22303068e+00 5.50370611e+00
+ 5.79946450e+00 6.11111635e+00 6.43951577e+00 6.78556272e+00
+ 7.15020557e+00 7.53444360e+00 7.93932983e+00 8.36597386e+00
+ 8.81554490e+00 9.28927500e+00 9.78846243e+00 1.03144752e+01
+ 1.08687549e+01 1.14528205e+01 1.20682726e+01 1.27167979e+01
+ 1.34001737e+01 1.41202728e+01 1.48790686e+01 1.56786406e+01
+ 1.65211800e+01 1.74089958e+01 1.83445212e+01 1.93303198e+01
+ 2.03690933e+01 2.14636884e+01 2.26171050e+01 2.38325039e+01
+ 2.51132159e+01 2.64627509e+01 2.78848073e+01 2.93832822e+01
+ 3.09622822e+01 3.26261345e+01 3.43793991e+01 3.62268806e+01
+ 3.81736422e+01 4.02250189e+01 4.23866326e+01 4.46644071e+01
+ 4.70645848e+01 4.95937434e+01 5.22588139e+01 5.50671002e+01
+ 5.80262982e+01 6.11445178e+01 6.44303043e+01 6.78926626e+01
+ 7.15410812e+01 7.53855587e+01 7.94366309e+01 8.37053998e+01
+ 8.82035639e+01 9.29434505e+01 9.79380494e+01 1.03201048e+02
+ 1.08746870e+02 1.14590714e+02 1.20748594e+02 1.27237387e+02
+ 1.34074875e+02 1.41279796e+02 1.48871895e+02 1.56871979e+02
+ 1.65301972e+02 1.74184976e+02 1.83545335e+02 1.93408702e+02
+'''
+alpha0_U238 = np.fromstring(alpha0_str_U238, dtype=np.float64, sep=' ')
+beta0_U238 = np.fromstring(beta0_str_U238, dtype=np.float64, sep=' ')
+
+interv_in_energy_U238 = 6.956193E-04
+rho_in_energy_U238_str = '''
+0.000000E+00 1.041128E-01 3.759952E-01 8.354039E-01
+1.469796E+00 2.335578E+00 3.467660E+00 4.841392E+00
+6.492841E+00 8.608376E+00 1.131303E+01 1.504441E+01
+2.006807E+01 2.750471E+01 4.171597E+01 1.585670E+02
+1.978483E+02 1.144621E+02 7.555927E+01 4.831100E+01
+4.389081E+01 4.246484E+01 4.103699E+01 3.986249E+01
+3.827959E+01 3.592088E+01 3.272170E+01 3.914602E+01
+8.144694E+01 9.693959E+01 5.503795E+01 2.619253E+01
+1.763331E+01 1.475875E+01 1.522465E+01 1.213117E+01
+6.175029E+00 2.483519E+00 1.445581E+00 1.423177E+00
+1.502350E+00 1.718768E+00 2.211346E+00 3.061686E+00
+3.550530E+00 3.34990.5 / incident_neutron_energy * np.sqrt(M / (np.pi * const["neutron mass in u"][0] * kbT))06960E-01 1.452214E-01 1.246671E-01
+9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
+7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
+1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
+3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
+2.653572E-02 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
+0.000000E+00 7.105193E-03 5.274518E-02 1.324974E-01
+2.310275E-01 4.042710E-01 6.421137E-01 8.073457E-01
+9.162074E-01 1.077923E+00 1.142595E+00 1.092532E+00
+1.060668E+00 1.000020E+00 8.769838E-01 7.610532E-01
+6.898200E-01 6.324347E-01 5.857072E-01 5.563076E-01
+5.468099E-01 5.515587E-01 4.871045E-01 3.198787E-01
+1.132118E-01 2.066306E-03 0.000000E+00
+'''
+rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
+                                   sep=' ')
+
 
 class Beta():
-    """
-    Class with all the method for the creation and manipulation of beta grids.
-    """
+    """Class with all the method for the creation and manipulation of beta grids."""
 
     def __init__(self, array):
-        self.data = np.sort(array)
+        self.data = np.unique(array)
 
     @property
     def to_index(self) -> pd.Index:
@@ -105,10 +232,9 @@ class Beta():
         >>> Beta.generate_grid(300, num_grid=10).data.round(6)
         array([  0.      ,   0.515756,   1.031513,   1.547269,   2.063025,
                  2.578782,   3.094538,  12.280683,  48.735922, 193.408635])
-        """
-        kT = const["Boltzmann constant in eV/K"][0] * T
-        mid_beta = mid_E / kT
-        max_beta = thermal_threshold / kT
+        """ 
+        mid_beta = mid_E / (kb * T)
+        max_beta = thermal_threshold / (kb * T)
         first_half = np.linspace(0, mid_beta,
                                  num=int(num_grid * 0.6),
                                  endpoint=False)
@@ -123,11 +249,11 @@ class Beta():
             return cls(beta_grid)
 
     @classmethod
-    def from_energy_grid(cls, energy_grid, T):
+    def from_dE(cls, energy_grid, T):
         """
         Tranform a energy grid into a beta grid. (use in pdos.py)
         .. math::
-            \beta=\dfrac{E}{k_BT}
+            \beta=\dfrac{dE}{k_BT}
 
         Parameters
         ----------
@@ -140,23 +266,22 @@ class Beta():
         -------
         >>> energy_grid = np.arange(len(rho_in_energy)) * interv_in_energy
         >>> T = 300
-        >>> Beta.from_energy_grid(energy_grid, T).data[0:5].round(6)
+        >>> Beta.from_dE(energy_grid, T).data[0:5].round(6)
         array([0.      , 0.030945, 0.061891, 0.092836, 0.123782])
         """
-        kbT = const["Boltzmann constant in eV/K"][0] * T
-        return cls(np.array(energy_grid) / kbT)
+        return cls(np.array(energy_grid) / (kb * T))
 
     @classmethod
-    def from_output_energy(cls, output_energy, incident_neutron_energy, T):
+    def from_parameters(cls, Eout, Ein, T):
         """
         Generate a beta grid based on the output energies and the incident
         neutron energy.
 
         Parameters
         ----------
-        output_energy : 1D iterable or 'float'
+        Eout : 1D iterable or 'float'
             Neutron output energies in eV.
-        incident_neutron_energy : 'float'
+        Ein : 'float'
             Neutron incident energy in eV.
         T : 'float'
             Temperature in Kelvin.
@@ -166,15 +291,42 @@ class Beta():
         >>> T = 800
         >>> incident_neutron_energy = 0.33118
         >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> Beta.from_output_energy(output_energy, incident_neutron_energy, T).data.round(6)
+        >>> Beta.from_parameters(output_energy, incident_neutron_energy, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
-        output_energy_ = np.array(output_energy)
-        kbT = const["Boltzmann constant in eV/K"][0] * T
-        beta = (output_energy_ - incident_neutron_energy) / kbT
-        return cls(beta)
+        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
+        Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
+        T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
+        return cls(get_beta(Eout_, Ein_, T_))
 
-    def get_output_energy(self, T, incident_neutron_energy) -> pd.Series:
+    def get_dE(self, T) -> pd.Series:
+        """
+        Get the dE from a beta grid:
+        .. math::
+            dE = \beta k_B T
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+
+        Example
+        -------
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> beta_grid = Beta(beta0_).scale(T)
+        >>> beta_grid.get_dE(T).iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.009175    0.000633
+        0.018350    0.001265
+        0.027524    0.001898
+        0.036699    0.002530
+        Name: dE, dtype: float64
+        """
+        return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
+
+    def get_Eout(self, T, Ein) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible
         output energies for a incident neutron energy and that beta grid.
@@ -185,7 +337,7 @@ class Beta():
         ----------
         T : 'float'
             Temperature in K.
-        incident_neutron_energy : 'float'
+        Ein : 'float'
             Incident neutron energy in eV.
 
         Example
@@ -193,26 +345,22 @@ class Beta():
         >>> T = 800
         >>> incident_neutron_energy = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
-        >>> beta_grid.get_output_energy(T, incident_neutron_energy).iloc[0:5]
+        >>> beta_grid.get_Eout(T, incident_neutron_energy).iloc[0:5]
         beta
         0.000000    0.331180
         0.009175    0.331812
         0.018350    0.332445
         0.027524    0.333077
         0.036699    0.333710
-        Name: output energy, dtype: float64
+        Name: Eout, dtype: float64
         """
-        beta = self.data
-        kbT = const["Boltzmann constant in eV/K"][0] * T
-        output_energy = beta * kbT + incident_neutron_energy
-        return pd.Series(output_energy,
-                         name="output energy",
-                         index=self.to_index)
+        Eout = Ein + self.get_dE(T)
+        return Eout.rename("Eout")
 
     def scale(self, T, therm=0.0253):
         """
         Scale alpha or beta spectrum.
-    
+
         Parameters
         ----------
         grid : 'np.ndarray' of 1D or 2D
@@ -221,7 +369,7 @@ class Beta():
             Temperature in K.
         therm : 'float', optional
             factor for regrid alpha and beta. The default is 0.0253.
-    
+
         Example
         -------
         >>> T = 300
@@ -230,13 +378,15 @@ class Beta():
         array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
                2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
         """
-        kbT = const["Boltzmann constant in eV/K"][0] * T
-        scale_grid = self.data * therm / kbT
+        scale_grid = self.data * therm / (kb * T)
         return Beta(scale_grid)
-    
+
+
 class Alpha():
+    """Class with all the method for the creation and manipulation of alpha grids."""
+
     def __init__(self, array):
-        self.data = np.sort(array)
+        self.data = np.unique(array)
 
     @property
     def to_index(self) -> pd.Index:
@@ -244,7 +394,7 @@ class Alpha():
         return pd.Index(self.data, name="alpha")
 
     @classmethod
-    def generate_grid(cls, T, atom_mass, num_grid=300, min_E=2.8e-3,
+    def generate_grid(cls, T, M, num_grid=300, min_E=2.8e-3,
                   thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
         """
         Generate a alpha grid for a given temperature and atomic mass.
@@ -253,8 +403,8 @@ class Alpha():
         ----------
         T : 'float'
             Temperature in K.
-        atom_mass : 'float'
-            atomic mass in amu.
+        M : 'float'
+            atomic mass of scatterer in amu.
         num_grid : 'int', optional
             Number of grid. The default is 400.
         mid_E : 'float', optional
@@ -277,8 +427,7 @@ class Alpha():
                1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
                9.5985550e+00, 3.0013001e+01])
         """
-        A = atom_mass / const["neutron mass in u"][0]
-        AkT = A * const["Boltzmann constant in eV/K"][0] * T
+        AkT = M * kb * T / m
         min_alpha = min_E / 4 / AkT
         max_alpha = 4 * thermal_threshold / AkT
         alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
@@ -289,22 +438,24 @@ class Alpha():
             return cls(alpha_grid)
 
     @classmethod
-    def from_output_energy(cls, output_energy, incident_neutron_energy, T,
-                           m, theta):
+    def from_parameters(cls, Eout, Ein, T, M, theta):
         """
-        
+        Generate the alpha values for the given combination of the input
+        parameters:
+        .. math::
+            \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
 
         Parameters
         ----------
-        output_energy : 1D iterable or 'float'
+        Eout : 1D iterable or 'float'
             Neutron output energies in eV.
-        incident_neutron_energy : 'float'
+        Ein : 1D iterable or 'float'
             Neutron incident energy in eV.
-        T : 'float'
+        T : 1D iterable or 'float'
             Temperature in Kelvin.
-        m : 'float'
+        M : 'float'
             Atom mass, amu
-        theta : 'float'
+        theta : 1D iterable or 'float'
             scattering angle in Degrees.
 
         Example
@@ -314,18 +465,16 @@ class Alpha():
         >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
         >>> m = 26.98153433356103
         >>> theta = 0.101125 * 180 / np.pi
-        >>> Alpha.from_output_energy(output_energy, incident_neutron_energy, T, m, theta).data.round(6)
+        >>> Alpha.from_parameters(output_energy, incident_neutron_energy, T, m, theta).data.round(6)
         array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
-        output_energy_ = np.array(output_energy)
-        A = m / const["neutron mass in u"][0]
-        AkT = A * const["Boltzmann constant in eV/K"][0] * T
-        mu = np.cos(theta * np.pi / 180)
-        alpha = (output_energy_ + incident_neutron_energy - 2 * mu * np.sqrt(output_energy_ * incident_neutron_energy))
-        alpha /= AkT
-        return cls(alpha)
+        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
+        Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
+        T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
+        mu = np.cos(theta * np.pi / 180) if hasattr(theta, '__len__') else np.cos(np.array([theta]) * np.pi / 180)
+        return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
-    def get_theta(self, T, incident_neutron_energy, m, beta_grid) -> pd.Series:
+    def get_theta(self, T, Ein, M, beta_grid) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible scattering angles
         for a scattering atom, temperature and incident neutron energy.
@@ -337,7 +486,7 @@ class Alpha():
         ----------
         T : 'float'
             Temperature in K.
-        incident_neutron_energy : 'float'
+        Ein : 'float'
             Incident neutron energy in eV.
         m : 'float'
             Atom mass, amu.
@@ -361,10 +510,10 @@ class Alpha():
         >>> T = 800
         >>> incident_neutron_energy = 0.33118
         >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> beta_grid = Beta.from_output_energy(output_energy, incident_neutron_energy, T)
+        >>> beta_grid = Beta.from_parameters(output_energy, incident_neutron_energy, T)
         >>> m = 26.98153433356103
         >>> theta = 45
-        >>> alpha = Alpha.from_output_energy(output_energy, incident_neutron_energy, T, m, theta)
+        >>> alpha = Alpha.from_parameters(output_energy, incident_neutron_energy, T, m, theta)
         >>> theta = alpha.get_theta(T, incident_neutron_energy, m, beta_grid)
         >>> import numpy as np
         >>> theta * 180 / np.pi
@@ -377,25 +526,25 @@ class Alpha():
         Name: mu, dtype: float64
         """
         alpha = self.data
-        A = m / const["neutron mass in u"][0]
+        A = M / m
 
         beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        E_prima = beta.get_output_energy(T, incident_neutron_energy).values
+        E_prima = beta.get_Eout(T, Ein).values
 
         if len(E_prima) > len(alpha):
             E_prima = E_prima[:len(alpha)]
         elif len(E_prima) < len(alpha):
             alpha = alpha[:len(E_prima)]
 
-        mu = E_prima + incident_neutron_energy - alpha * A * const["Boltzmann constant in eV/K"][0] * T
-        mu /= (2 * np.sqrt(E_prima * incident_neutron_energy))
+        mu = E_prima + Ein - alpha * A * kb * T
+        mu /= 2 * np.sqrt(E_prima * Ein)
         mu = np.arccos(mu[abs(mu) <= 1])
         return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
 
     def scale(self, T, therm=0.0253):
         """
         Scale alpha or beta spectrum.
-    
+
         Parameters
         ----------
         grid : 'np.ndarray' of 1D or 2D
@@ -404,7 +553,7 @@ class Alpha():
             Temperature in K.
         therm : 'float', optional
             factor for regrid alpha and beta. The default is 0.0253.
-    
+
         Example
         -------
         >>> T = 300
@@ -444,19 +593,19 @@ class Sab():
 
     @property
     def data(self) -> pd.DataFrame:
-        """Dataframe with the S(alpha, beta) matrix values."""
+        """Dataframe with the S(alpha, -beta) matrix values."""
         return self._data
 
     @data.setter
     def data(self, df):
         """
-        Construct the S(alpha, beta) matrix and check if the data achieve the
+        Construct the S(alpha, -beta) matrix and check if the data achieve the
         normalization and sum rule constrain.
 
         Parameters
         ----------
         df : 2D iterable
-            Iterable containing the S(alpha, beta) matrix.
+            Iterable containing the S(alpha, -beta) matrix.
         """
         df_ = pd.DataFrame(df).sort_index(axis=0).sort_index(axis=1)
         df_.index.name = "alpha"
@@ -469,7 +618,7 @@ class Sab():
 
     def to_sym(self, detail_balance=True) -> pd.DataFrame:
         """
-        Generate the symmetric S(alpha, beta) matrix from the asymmetric
+        Generate the symmetric S(alpha, -beta) matrix from the asymmetric
         S(alpha, -beta) matrix.
 
         Parameters
@@ -519,9 +668,6 @@ class Sab():
             beta grid.
         model : 'str', optional
             The model to calculate matrix values. The default is "FGM".
-        T : 'float', optional
-            Option to scale beta and alpha grid with the method scale_grid. The
-            default is None.
         w_t: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
@@ -531,18 +677,18 @@ class Sab():
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha_grid = Alpha.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
-        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
-        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
-        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
-        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
-        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
-        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
-        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
-        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
-        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
-        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
-        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+        0.001050	  8.701463	8.417992 7.524148	6.213536	    4.740815
+        0.001087  8.553363	8.285768	 7.435678	6.181592	    4.760714
+        0.001125	  8.407781	8.155251	 7.346923	6.147319	    4.777252
+        0.001164	  8.264674	8.026439	 7.257961	6.110841	    4.790511
+        0.001205	  8.124000	7.899326	 7.168869	6.072279	    4.800575
+        0.001247	  7.985718	7.773908	 7.079717	6.031753	    4.807533
+        0.001291	  7.849787	7.650178	 6.990574	5.989379	    4.811476
+        0.001336	  7.716166	7.528129	 6.901504	5.945271	    4.812500
+        0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
+        0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
         f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
 
@@ -660,6 +806,11 @@ class Sab():
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+
+        # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
+        # interpolation and normalization check
+        cls.DebyeWallerCoeff = debye_waller_coeff
+
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
         S_values, iter_sum = cls._S_from_tau1(tau1, debye_waller_coeff,
@@ -786,8 +937,7 @@ class Sab():
             warnings.warn("Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
-    @staticmethod
-    def normalization_check(S, pdos=None, T=None) -> None:
+    def normalization_check(self, S) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the normalization constrain.
         .. math::
@@ -810,13 +960,280 @@ class Sab():
 
         """
         normalization = S.apply(_normalization, axis="columns")
-        if pdos and T:
-            normalization /= (1 - np.exp(S.index.values * pdos.DebyeWallerCoeff(T)))
-        if (abs(normalization - 1.0) > 5.0e-3).any():
-            warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
+        if hasattr(self, "DebyeWallerCoeff"):
+            normalization /= (1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
+        if (abs(normalization - 1.0) > 1.0e-2).any():
+            warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
-    def get_inelastic_Xs(self, T, m, boundXs, incident_neutron_energy) -> pd.DataFrame:
+    def get_beta(self, beta_new, add=False):
+        """
+        Quadratic interpolation to get the probability of the new beta value
+        for all the alpha existing in the S(alpha, -beta) matrix:
+        .. math::
+            \left\{ \mid\beta_{new}\mid = P\left(\mid\beta_new\mid, \alpha_k\right)\right\} \text{ for }k=0, 1, ...
+
+        The method do not make extrapolation.
+
+        Parameters
+        ----------
+        beta_new : "float" or 1D iterable
+            New beta values.
+        add : "bool", optional
+            Optional argument to add the output to the existing S(alpha, -beta)
+            matrix or only get the pd.Dataframe. The default is False.
+
+        Returns
+        -------
+        "pd.Dataframe" or "Sab"
+            pd.Dataframe with the requested probabilities for the new betas for
+            all the existing alpha. If add is True, the pd.Dataframe is merge
+            in the S(alpha, -beta) matrix.
+
+        Example
+        -------
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> alpha = Alpha(alpha0_).scale(T).data
+        >>> beta = Beta(beta0_).scale(T).data
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
+        >>> beta_new = 0.01
+        >>> S_mat.get_beta(beta_new).iloc[0:10]
+        beta          0.01
+        alpha
+        0.004893  0.005423
+        0.009786  0.010765
+        0.014680  0.016027
+        0.019573  0.021208
+        0.024466  0.026309
+        0.029359  0.031331
+        0.034253  0.036275
+        0.039146  0.041141
+        0.044039  0.045929
+        0.048932  0.050641
+
+        >>> beta_new = [0.01, 0.03]
+        >>> S_mat.get_beta(beta_new, add=True).data.iloc[0:10, 0:4]
+        beta      0.000000  0.010000  0.024466  0.030000
+        alpha
+        0.004893  0.005396  0.005423  0.005462  0.005477
+        0.009786  0.010712  0.010765  0.010842  0.010872
+        0.014680  0.015948  0.016027  0.016140  0.016184
+        0.019573  0.021104  0.021208  0.021357  0.021414
+        0.024466  0.026181  0.026309  0.026493  0.026563
+        0.029359  0.031179  0.031331  0.031549  0.031632
+        0.034253  0.036100  0.036275  0.036526  0.036621
+        0.039146  0.040943  0.041141  0.041423  0.041530
+        0.044039  0.045710  0.045929  0.046243  0.046361
+        0.048932  0.050400  0.050641  0.050984  0.051114
+        """
+        beta_new_ = beta_new if hasattr(beta_new, '__len__') else [beta_new]
+        beta_values = self.data.apply(lambda x: reshape_differential(x.index,
+                                                                     x.values,
+                                                                     beta_new_,
+                                                                     bounds_error=True,
+                                                                     kind="quadratic"),
+                                      axis=1)
+        beta_df = pd.DataFrame.from_records(beta_values.values,
+                                            index=beta_values.index,
+                                            columns=pd.Index(beta_new_, name="beta"))
+        if add:
+            return Sab(pd.concat([beta_df, self.data], axis=1))
+        else:
+            return beta_df
+
+    def get_alpha(self, alpha_new, add=False):
+        """
+        Unit base interpolation to get the probability of the new alpha values
+        for all the beta existing in the S(alpha, -beta) matrix.
+        .. math::
+            \left\{ \mid\alpha_{new}\mid = P\left(\mid\beta_{k}\mid, \alpha_{new}\right) \text{ for }k=0, 1, ...
+
+        The method do not make extrapolation.
+
+        Parameters
+        ----------
+        alpha_new : "float" or 1D iterable
+            New alpha values.
+        add : "bool", optional
+            Optional argument to add the output to the existing S(alpha, -beta)
+            matrix or only get the pd.Dataframe. The default is False.
+
+        Returns
+        -------
+        "pd.Dataframe" or "Sab"
+            pd.Dataframe with the requested probabilities for the new alpha for
+            all the existing alpha. If add is True, the pd.Dataframe is merge
+            in the S(alpha, -beta) matrix.
+
+        Example
+        -------
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> alpha_new = 0.00013
+        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5]
+        beta     0.000000  0.025237  0.050474  0.075712  0.100949
+        alpha
+        0.00013  0.000498  0.000504  0.000467  0.000461  0.000462
+
+        >>> alpha_new = [1.25e-4, 1.35e-4]
+        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5]
+        beta      0.000000  0.025237  0.050474  0.075712  0.100949
+        alpha
+        0.000125  0.000479  0.000484  0.000449  0.000444  0.000445
+        0.000135  0.000517  0.000523  0.000485  0.000479  0.000480
+
+        >>> alpha_new = [1.25e-4, 1.35e-4]
+        >>> S_mat.get_alpha(alpha_new, add=True).data.iloc[0:5, 0:5]
+        beta	    0.000000	0.025237	0.050474	0.075712	0.100949
+        alpha
+        0.000112	0.000430	0.000435	0.000403	0.000399	0.000399
+        0.000120	0.000460	0.000466	0.000432	0.000427	0.000428
+        0.000125	0.000479	0.000484	0.000449	0.000444	0.000445
+        0.000129	0.000493	0.000499	0.000463	0.000457	0.000458
+        0.000135	0.000517	0.000523	0.000485	0.000479	0.000480
+        """
+        alpha_new_ = alpha_new if hasattr(alpha_new, '__len__') else [alpha_new]
+        alpha_vector = []
+        for new_alpha in alpha_new_:
+            single_alpha_vector = self._get_single_alpha(new_alpha)
+            single_alpha_vector.columns.name = "alpha"
+            alpha_vector.append(single_alpha_vector)
+        alpha_new_df = pd.concat(alpha_vector, axis=1).T
+        if add:
+            return Sab(pd.concat([self.data, alpha_new_df]))
+        else:
+            return Sab(alpha_new_df)
+
+    def _get_single_alpha(self, alpha_new) -> pd.Series:
+        """
+        Interpolate S(alpha, -beta) using unit base interpolation to get the
+        probabilities for the new alpha values:
+        .. math::
+            \left\{ \mid\alpha_{new}\mid = P\left(\mid\beta_{k}\mid, \alpha_{new}\right) \text{ for }k=0, 1, ...
+
+        The method do not make extrapolation.
+
+        Parameters
+        ----------
+        alpha_new : "float"
+            Alpha value to get interpolated.
+
+        Example
+        -------
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> alpha_new = 0.00013
+        >>> alpha_vector = S_mat._get_single_alpha(alpha_new)
+        >>> alpha_vector.iloc[0:10]
+                  0.00013
+        beta
+        0.000000  0.000498
+        0.025237  0.000504
+        0.050474  0.000467
+        0.075712  0.000461
+        0.100949  0.000462
+        0.126186  0.000472
+        0.151423  0.000490
+        0.176660  0.000509
+        0.201898  0.000528
+        0.227135  0.000553
+
+        Check the contrains:
+        >>> debye_weller = pdos.DebyeWallerCoeff(T)
+        >>> round(integrate(alpha_vector.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debye_weller * alpha_new)), 6)
+        1.00562
+
+        >>> round(integrate(alpha_vector.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
+        0.000131
+        """
+        alpha_grid = self.alpha.data
+        if alpha_new > alpha_grid.max():
+            raise SyntaxError("alpha out of range(alpha_max = "
+                              + str(alpha_grid.max()) + ")")
+        elif alpha_new < alpha_grid.min():
+            raise SyntaxError("alpha out of range (alpha_min = "
+                              + str(alpha_grid.min()) + ")")
+        elif alpha_new in alpha_grid:
+            return self.data.loc[alpha_new]
+
+        beta = self.beta.data
+        upper_bound = alpha_grid.searchsorted(alpha_new, side="right")
+        alpha_0 = alpha_grid[upper_bound - 1]
+        alpha_2 = alpha_grid[upper_bound]
+        prob = self.data.loc[[alpha_0, alpha_2]].T
+
+        if hasattr(self, "DebyeWallerCoeff"):
+            debye_weller = self.DebyeWallerCoeff
+            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (1 - np.exp(-debye_weller * x.name)))
+        else:
+            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
+
+        q = proportionality_factor(alpha_new, alpha_0, alpha_2, mode="linlog")
+        alpha_new_escale = (1 - q) * prob_norm.loc[::, alpha_0] + q * prob_norm.loc[::, alpha_2]
+
+        alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
+        if hasattr(self, "DebyeWallerCoeff"):
+            alpha_new_vector *= (1 - np.exp(- debye_weller * alpha_new))
+        alpha_new_vector.name = alpha_new
+        return alpha_new_vector.to_frame()
+
+    def get_value_from_Alpha_Beta(self, alpha, beta) -> pd.DataFrame:
+        """
+        Get intepolated values for the beta and alpha values from the
+        S(alpha, beta) matrix. This method take into account the sing of the
+        beta that is introduced.
+        .. math::
+            Beta < 0:
+                \left\{ \mid\alpha\mid = P\left(- \mid\beta\mid, \alpha\right)
+            Beta > 0:
+                \left\{ \mid\alpha\mid = P\left(-\mid\beta\mid, \alpha\right) * exp(-\mid\beta_{new}\mid)
+
+        Parameters
+        ----------
+        alpha : "float" or 1D iterable
+            Alpha values to interpolate.
+        beta : "float" or 1D iterable
+            Beta values to interpolate.
+
+        Example
+        -------
+        >>> T = 300
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> alpha_new = [1.25e-4, 1.35e-4]
+        >>> beta_new = [0.01, 0.03, -0.01, -0.03]
+        >>> S_mat.get_value_from_Alpha_Beta(alpha_new, beta_new)
+        beta         -0.03     -0.01      0.01      0.03
+        alpha
+        0.000125  0.000465  0.000483  0.000487  0.000479
+        0.000135  0.000503  0.000521  0.000526  0.000518
+        """
+        alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
+        beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
+        interp_Alpha_Beta = self.get_alpha(alpha_)\
+                                .get_beta(abs(beta_))\
+                                .set_axis(pd.Index(beta_, name="beta"), axis=1)
+        if (beta_ < 0).any():
+            interp_Alpha_Beta.loc[::, beta_ < 0] *= np.exp(beta_[beta_ < 0])
+        return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
+
+    def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
         """
         Get inelastic scattering for a atom with a certain bound Xs and mass
         and for a certain incident energy.
@@ -831,7 +1248,7 @@ class Sab():
             Atom mass, amu.
         boundXs : 'float'
             Bound total scattering cross section in barn.
-        incident_neutron_energy : 'float'
+        Ein : 'float'
             Incident neutron energy in eV.
 
         Example
@@ -855,10 +1272,10 @@ class Sab():
         0.226045  1.930542  1.939419  1.947155  1.954222  1.960724
         """
         # Get the output energies: and the scatterig angle
-        E_prima = self.beta.get_output_energy(T, incident_neutron_energy).values
-        theta = self.alpha.get_theta(T, incident_neutron_energy, m, self.beta).values
+        E_prima = self.beta.get_Eout(T, Ein).values
+        theta = self.alpha.get_theta(T, Ein, M, self.beta).values
 
-        vector = boundXs / (2 * const["Boltzmann constant in eV/K"][0] * T) * np.sqrt(E_prima / incident_neutron_energy)
+        vector = boundXs / (2 * kb * T) * np.sqrt(E_prima / Ein)
 
         inelastic_xs = vector * self.data.iloc[:len(theta), ::]
         inelastic_xs.index = pd.Index(theta, name="theta")
@@ -943,3 +1360,29 @@ def check_tau_n(tau_n, beta) -> None:
     if integrate(pd.Series(tau_n, index=beta)) < 1.e-5:
         raise ValueError("Tau function doesnt satisfy the normalization condition")
     return
+
+
+def proportionality_factor(alpha, alpha_i, alpha_i_plus_one, mode="linlog") -> float:
+    """
+    Get the proportionality factor for unit-base interpolation
+
+    Parameters
+    ----------
+    alpha : "float"
+        DESCRIPTION.
+    alpha_i : "float"
+        DESCRIPTION.
+    alpha_i_plus_one : "float"
+        DESCRIPTION.
+    mode : "str", optional
+        Is define by how the probability table is interpolated. The default is
+        "linlog".
+
+    """
+    if mode == "linlog":
+        q = np.log(alpha / alpha_i) / np.log(alpha_i_plus_one / alpha_i)
+    elif mode == "linlin":
+        q = (alpha - alpha_i) / (alpha_i_plus_one - alpha_i)
+    elif mode == "const":
+        q = 1
+    return q

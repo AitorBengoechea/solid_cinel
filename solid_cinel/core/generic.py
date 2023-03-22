@@ -42,7 +42,7 @@ def integrate(series, kind="trapezoidal") -> float:
     return y_norm
 
 
-def reshape_differential(x, y, xnew):
+def reshape_differential(x, y, xnew, kind="slinear", bounds_error=False):
     """
     Linearly interpolate array over new energy grid structure.
     Extrapolated values are replaced by zeros.
@@ -65,8 +65,8 @@ def reshape_differential(x, y, xnew):
                                   y,
                                   axis=0,
                                   copy=False,
-                                  kind="slinear",
-                                  bounds_error=False,
+                                  kind=kind,
+                                  bounds_error=bounds_error,
                                   fill_value=0.,
                                   assume_sorted=True,
                                   )

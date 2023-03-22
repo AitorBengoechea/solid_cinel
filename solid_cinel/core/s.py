@@ -190,10 +190,9 @@ rho_in_energy_U238_str = '''
 rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 
+
 class Beta():
-    """
-    Class with all the method for the creation and manipulation of beta grids.
-    """
+    """Class with all the method for the creation and manipulation of beta grids."""
 
     def __init__(self, array):
         self.data = np.unique(array)
@@ -300,6 +299,33 @@ class Beta():
         T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
         return cls(get_beta(Eout_, Ein_, T_))
 
+    def get_dE(self, T) -> pd.Series:
+        """
+        Get the dE from a beta grid:
+        .. math::
+            dE = \beta k_B T
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+
+        Example
+        -------
+        >>> T = 800
+        >>> incident_neutron_energy = 0.33118
+        >>> beta_grid = Beta(beta0_).scale(T)
+        >>> beta_grid.get_dE(T).iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.009175    0.000633
+        0.018350    0.001265
+        0.027524    0.001898
+        0.036699    0.002530
+        Name: dE, dtype: float64
+        """
+        return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
+
     def get_Eout(self, T, Ein) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible
@@ -328,16 +354,13 @@ class Beta():
         0.036699    0.333710
         Name: Eout, dtype: float64
         """
-        beta = self.data
-        Eout = beta * kb * T + Ein
-        return pd.Series(Eout,
-                         name="Eout",
-                         index=self.to_index)
+        Eout = Ein + self.get_dE(T)
+        return Eout.rename("Eout")
 
     def scale(self, T, therm=0.0253):
         """
         Scale alpha or beta spectrum.
-    
+
         Parameters
         ----------
         grid : 'np.ndarray' of 1D or 2D
@@ -346,7 +369,7 @@ class Beta():
             Temperature in K.
         therm : 'float', optional
             factor for regrid alpha and beta. The default is 0.0253.
-    
+
         Example
         -------
         >>> T = 300
@@ -360,6 +383,8 @@ class Beta():
 
 
 class Alpha():
+    """Class with all the method for the creation and manipulation of alpha grids."""
+
     def __init__(self, array):
         self.data = np.unique(array)
 
@@ -1077,7 +1102,7 @@ class Sab():
         alpha_new_ = alpha_new if hasattr(alpha_new, '__len__') else [alpha_new]
         alpha_vector = []
         for new_alpha in alpha_new_:
-            single_alpha_vector = self.get_single_alpha(new_alpha).to_frame()
+            single_alpha_vector = self._get_single_alpha(new_alpha)
             single_alpha_vector.columns.name = "alpha"
             alpha_vector.append(single_alpha_vector)
         alpha_new_df = pd.concat(alpha_vector, axis=1).T
@@ -1086,7 +1111,7 @@ class Sab():
         else:
             return Sab(alpha_new_df)
 
-    def get_single_alpha(self, alpha_new) -> pd.Series:
+    def _get_single_alpha(self, alpha_new) -> pd.Series:
         """
         Interpolate S(alpha, -beta) using unit base interpolation to get the
         probabilities for the new alpha values:
@@ -1110,27 +1135,27 @@ class Sab():
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
         >>> alpha_new = 0.00013
-        >>> alpha_vector = S_mat.get_single_alpha(alpha_new)
+        >>> alpha_vector = S_mat._get_single_alpha(alpha_new)
         >>> alpha_vector.iloc[0:10]
+                  0.00013
         beta
-        0.000000    0.000498
-        0.025237    0.000504
-        0.050474    0.000467
-        0.075712    0.000461
-        0.100949    0.000462
-        0.126186    0.000472
-        0.151423    0.000490
-        0.176660    0.000509
-        0.201898    0.000528
-        0.227135    0.000553
-        Name: 0.00013, dtype: float64
+        0.000000  0.000498
+        0.025237  0.000504
+        0.050474  0.000467
+        0.075712  0.000461
+        0.100949  0.000462
+        0.126186  0.000472
+        0.151423  0.000490
+        0.176660  0.000509
+        0.201898  0.000528
+        0.227135  0.000553
 
         Check the contrains:
         >>> debye_weller = pdos.DebyeWallerCoeff(T)
-        >>> round(integrate(alpha_vector * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debye_weller * alpha_new)), 6)
+        >>> round(integrate(alpha_vector.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debye_weller * alpha_new)), 6)
         1.00562
 
-        >>> round(integrate(alpha_vector * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
+        >>> round(integrate(alpha_vector.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
         0.000131
         """
         alpha_grid = self.alpha.data
@@ -1162,7 +1187,7 @@ class Sab():
         if hasattr(self, "DebyeWallerCoeff"):
             alpha_new_vector *= (1 - np.exp(- debye_weller * alpha_new))
         alpha_new_vector.name = alpha_new
-        return alpha_new_vector
+        return alpha_new_vector.to_frame()
 
     def get_value_from_Alpha_Beta(self, alpha, beta) -> pd.DataFrame:
         """

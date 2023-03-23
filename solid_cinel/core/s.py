@@ -1415,9 +1415,11 @@ class Sab():
 
         return Sab_new
 
-    def get_matrix_from_Ein_theta(self, Ein, theta, T, M, extrapolation="sct") -> pd.DataFrame:
+    def get_scattering_func(self, Ein, theta, T, M, extrapolation="sct") -> pd.DataFrame:
         """
-        
+        Return the scattering function from S(alpha, beta) matrix:
+        .. math::
+            S(\theta, Eout)= \frac{1}{2k_B T}\sqrt{\dfrac{E^\prime}{E}}S(\alpha(\theta, Eout, Ein, T, M),\beta(Eout, Ein, T))
 
         Parameters
         ----------
@@ -1445,30 +1447,35 @@ class Sab():
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
         >>> Sab_matrix = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
 
-        Only interpolation (sum rule check):
+        Only interpolation:
         >>> Ein = 6.6
         >>> theta = np.linspace(1, 179, num=5)
         >>> M = 238.05077040419212
-        >>> Sab_interp = Sab_matrix.get_matrix_from_Ein_theta(Ein, theta, T, M)
+        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
         >>> Sab_interp.iloc[::, 198:203]
-        Eout   6.599348  6.600000  6.600652  6.601305  6.601957
-        theta
-        1.0    0.001379  0.001364  0.001346  0.001217  0.001173
-        45.5   0.330188  0.331851  0.321933  0.308491  0.297787
-        90.0   0.115634  0.114187  0.112740  0.111295  0.109850
-        134.5  0.060028  0.059295  0.058524  0.057758  0.056998
-        179.0  0.047312  0.046734  0.046126  0.045523  0.044925
+        Eout	6.599348	6.600000	6.600652	6.601305	6.601957
+        theta					
+        1.0	    0.026893	0.026602	0.026264	0.023732	0.022887
+        45.5	6.440034	6.472782	6.279656	6.017741	5.809228
+        90.0	2.255336	2.227227	2.199121	2.171028	2.142957
+        134.5	1.170795	1.156554	1.141573	1.126691	1.111910
+        179.0	0.922784	0.911547	0.899738	0.888019	0.876389
         """
         Eout = self.beta.get_Eout(T, Ein, side="full").values
-        theta_df = {}
-        Eout_ind = pd.Index(Eout, name="Eout")
+        energy_vect = np.sqrt(Eout / Ein)
+        A = M / m
+        energy_vect *= ((A + 1) / A)**2
+        energy_vect /= 2 * kb * T
+        scattering_funct = {}
         theta_ = theta if hasattr(theta, '__len__') else [theta]
+        energy_sqrt = np.sqrt(Eout / Ein)
         for single_theta in theta_:
             Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein, T, M, single_theta,  extrapolation=extrapolation)
-            theta_df[single_theta] = pd.Series(np.diag(Sab_interp_single_theta), index=Eout_ind)
-        theta_df = pd.DataFrame(theta_df).T
-        theta_df.index.name = "theta"
-        return theta_df
+            scattering_funct[single_theta] = np.diag(Sab_interp_single_theta) * energy_vect
+        scattering_funct = pd.DataFrame(scattering_funct,
+                                        index=pd.Index(Eout, name="Eout"),
+                                        columns=pd.Index(theta_, name="theta"))
+        return scattering_funct.T
 
     def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
         """

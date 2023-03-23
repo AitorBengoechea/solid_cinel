@@ -7,6 +7,7 @@ from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU, get_beta, get_alpha
+from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta
 import numpy as np
 import pandas as pd
 import scipy as sp
@@ -202,6 +203,18 @@ class Beta():
         """Tranform the Beta class data into a pandas Index."""
         return pd.Index(self.data, name="beta")
 
+    @property
+    def kind(self) -> str:
+        """
+        Analise the beta grid to know if the beta grid contains only absolute
+        values or mix (positive and negative) values.
+        """
+        if (self.data >= 0).all():
+            kind = "abs"
+        else:
+            kind = "mix"
+        return kind
+
     @classmethod
     def generate_grid(cls, T, num_grid=400, mid_E=0.08,
                       thermal_threshold=5., scale=False, **kwargs):
@@ -276,22 +289,24 @@ class Beta():
         """
         Generate a beta grid based on the output energies and the incident
         neutron energy.
+        .. math::
+            \beta=\dfrac{E_{out} - E_{in}}{k_BT}
 
         Parameters
         ----------
         Eout : 1D iterable or 'float'
             Neutron output energies in eV.
-        Ein : 'float'
+        Ein : 1D iterable or 'float'
             Neutron incident energy in eV.
-        T : 'float'
+        T : 1D iterable or 'float'
             Temperature in Kelvin.
 
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
-        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> Beta.from_parameters(output_energy, incident_neutron_energy, T).data.round(6)
+        >>> Ein = 0.33118
+        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> Beta.from_parameters(Eout, Ein, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
@@ -313,7 +328,6 @@ class Beta():
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
         >>> beta_grid.get_dE(T).iloc[0:5]
         beta
@@ -326,7 +340,7 @@ class Beta():
         """
         return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
 
-    def get_Eout(self, T, Ein) -> pd.Series:
+    def get_Eout(self, T, Ein, side="upscattering") -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible
         output energies for a incident neutron energy and that beta grid.
@@ -339,13 +353,19 @@ class Beta():
             Temperature in K.
         Ein : 'float'
             Incident neutron energy in eV.
+        side : 'str', optional
+            Argument to chose the outgoing energy grid side. The default is
+            the "upscatterign" side. Available options are:
+                - "upscattering" : Eout > Ein
+                - "downscattering" : Eout < Ein
+                - "full": "upscattering" side + "downscattering" side.
 
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
+        >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
-        >>> beta_grid.get_Eout(T, incident_neutron_energy).iloc[0:5]
+        >>> beta_grid.get_Eout(T, Ein).iloc[0:5]
         beta
         0.000000    0.331180
         0.009175    0.331812
@@ -353,9 +373,46 @@ class Beta():
         0.027524    0.333077
         0.036699    0.333710
         Name: Eout, dtype: float64
+
+        >>> beta_grid.get_Eout(T, Ein, side="downscattering").iloc[0:5]
+        beta
+        -0.000000    0.331180
+        -0.009175    0.330547
+        -0.018350    0.329915
+        -0.027524    0.329282
+        -0.036699    0.328650
+        Name: Eout, dtype: float64
+
+        >>> beta_grid.get_Eout(T, Ein, side="full").iloc[104:113]
+        beta
+        -0.036699    0.328650
+        -0.027524    0.329282
+        -0.018350    0.329915
+        -0.009175    0.330547
+         0.000000    0.331180
+         0.009175    0.331812
+         0.018350    0.332445
+         0.027524    0.333077
+         0.036699    0.333710
+        Name: Eout, dtype: float64
         """
-        Eout = Ein + self.get_dE(T)
-        return Eout.rename("Eout")
+        dE = self.get_dE(T).rename("Eout")
+
+        Eout_positive = Ein + dE
+        if side == "upscattering":
+            return Eout_positive
+
+        Eout_negative = Ein - dE
+        Eout_negative.index *= -1
+        Eout_negative = Eout_negative[Eout_negative >= 0]
+        if side == "downscattering":
+            return Eout_negative
+
+        if side == "full":
+            Eout = pd.concat([Eout_negative.iloc[1::], Eout_positive]).sort_index()
+            return Eout
+        else:
+            raise SyntaxError("Side option not available")
 
     def scale(self, T, therm=0.0253):
         """
@@ -461,11 +518,11 @@ class Alpha():
         Example
         -------
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
-        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> m = 26.98153433356103
+        >>> Ein = 0.33118
+        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> M = 26.98153433356103
         >>> theta = 0.101125 * 180 / np.pi
-        >>> Alpha.from_parameters(output_energy, incident_neutron_energy, T, m, theta).data.round(6)
+        >>> Alpha.from_parameters(Eout, Ein, T, M, theta).data.round(6)
         array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
@@ -494,11 +551,11 @@ class Alpha():
         Example
         -------
         >>> T = 800
-        >>> m = 26.98153433356103
-        >>> incident_neutron_energy = 0.33118
+        >>> M = 26.98153433356103
+        >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
         >>> alpha_grid = Alpha(alpha0_).scale(T)
-        >>> alpha_grid.get_theta(T, incident_neutron_energy, m, beta_grid).iloc[0:5].round(6)
+        >>> alpha_grid.get_theta(T, Ein, M, beta_grid).iloc[0:5].round(6)
         alpha
         0.001835    0.101125
         0.003670    0.143002
@@ -508,13 +565,13 @@ class Alpha():
         Name: mu, dtype: float64
 
         >>> T = 800
-        >>> incident_neutron_energy = 0.33118
-        >>> output_energy = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> beta_grid = Beta.from_parameters(output_energy, incident_neutron_energy, T)
-        >>> m = 26.98153433356103
+        >>> Ein = 0.33118
+        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> beta_grid = Beta.from_parameters(Eout, Ein, T)
+        >>> M = 26.98153433356103
         >>> theta = 45
-        >>> alpha = Alpha.from_parameters(output_energy, incident_neutron_energy, T, m, theta)
-        >>> theta = alpha.get_theta(T, incident_neutron_energy, m, beta_grid)
+        >>> alpha = Alpha.from_parameters(Eout, Ein, T, M, theta)
+        >>> theta = alpha.get_theta(T, Ein, M, beta_grid)
         >>> import numpy as np
         >>> theta * 180 / np.pi
         alpha
@@ -654,7 +711,7 @@ class Sab():
         return S_sym
 
     @classmethod
-    def from_fgm(cls, alpha_grid, beta_grid, T=None, w_t=1):
+    def from_fgm(cls, alpha_grid, beta_grid, T=None, wt=1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
         .. math::
@@ -665,10 +722,10 @@ class Sab():
         alpha_grid : 1D iterable
             Alpha grid.
         beta_grid : 1D iterable
-            beta grid.
+            Absolute beta grid.
         model : 'str', optional
             The model to calculate matrix values. The default is "FGM".
-        w_t: 'float', optional
+        wt: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
         Example
@@ -690,16 +747,18 @@ class Sab():
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
-
-        S_values = np.fromfunction(np.vectorize(f),
-                                   (len(alpha_grid), len(beta_grid)),
-                                   dtype=int
-                                   )
-        return cls(S_values, index=alpha_grid, columns=beta_grid)
+        beta_grid_ = Beta(beta_grid)
+        alpha_grid_ = Alpha(alpha_grid)
+        if beta_grid_.kind == "abs":
+            S_values = get_S_fgm_from_alpha_beta(alpha_grid_.data,
+                                                 - beta_grid_.data, # S(alpha, -beta)
+                                                 wt)
+        else:
+            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
+        return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
-    def from_sct(cls, alpha_grid, beta_grid, T, pdos, w_s=1):
+    def from_sct(cls, alpha_grid, beta_grid, T, pdos, ws=1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
         .. math::
@@ -715,7 +774,7 @@ class Sab():
             Temperature in K.
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
-        w_s: 'float', optional
+        ws: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
         Example
@@ -742,15 +801,23 @@ class Sab():
         0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
+        # Save the Phonon Density of States for extrapolation
+        cls.pdos = pdos
+
+        # Start the calculation:
         ratio = pdos.Teff(T) / T
 
-        f = lambda i, j: np.exp(-(alpha_grid[i] * w_s - beta_grid[j]) ** 2 / (4 * ratio * w_s * alpha_grid[i])) / np.sqrt(4 * np.pi * w_s * alpha_grid[i] * ratio)
+        beta_grid_ = Beta(beta_grid)
+        alpha_grid_ = Alpha(alpha_grid)
+        if beta_grid_.kind == "abs":
+            S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
+                                                 - beta_grid_.data,  # S(alpha, -beta)
+                                                 ratio,
+                                                 ws)
+        else:
+            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
 
-        S_values = np.fromfunction(np.vectorize(f),
-                                   (len(alpha_grid), len(beta_grid)),
-                                   dtype=int
-                                   )
-        return cls(S_values, index=alpha_grid, columns=beta_grid)
+        return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
     def from_pdos(cls, alpha_grid, beta_grid, T, pdos,
@@ -810,6 +877,9 @@ class Sab():
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
         cls.DebyeWallerCoeff = debye_waller_coeff
+
+        # Save the Phonon Density of States for extrapolation
+        cls.pdos = pdos
 
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
@@ -1221,17 +1291,190 @@ class Sab():
         >>> S_mat.get_value_from_Alpha_Beta(alpha_new, beta_new)
         beta         -0.03     -0.01      0.01      0.03
         alpha
-        0.000125  0.000465  0.000483  0.000487  0.000479
-        0.000135  0.000503  0.000521  0.000526  0.000518
+        0.000125  0.000479  0.000487  0.000483  0.000465
+        0.000135  0.000518  0.000526  0.000521  0.000503
         """
         alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
         beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
         interp_Alpha_Beta = self.get_alpha(alpha_)\
                                 .get_beta(abs(beta_))\
                                 .set_axis(pd.Index(beta_, name="beta"), axis=1)
-        if (beta_ < 0).any():
-            interp_Alpha_Beta.loc[::, beta_ < 0] *= np.exp(beta_[beta_ < 0])
+        if (beta_ > 0).any():
+            interp_Alpha_Beta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
+
+    def get_matrix_from_parameters(self, Eout, Ein, T, M, theta,
+                                   extrapolation="sct") -> pd.DataFrame:
+        """
+        Based on the set of variables introduced, interpolate the existing
+        S(alpha, -beta) to make a new S(alpha, beta) matrix with the alpha and
+        beta values created from the set of variables. If the alpha or beta
+        values created from the set of varibales are outside of the range of
+        the S(alpha, -beta) matrix, the method extrapolate the values using
+        free gas model or short time colission aproximation.
+
+        Parameters
+        ----------
+        Eout : 1D iterable or 'float'
+            Neutron output energies in eV.
+        Ein : 1D iterable or 'float'
+            Neutron incident energy in eV.
+        T : 1D iterable or 'float'
+            Temperature in Kelvin.
+        M : 'float'
+            Atom mass, amu
+        theta : 1D iterable or 'float'
+            scattering angle in Degrees.
+        extrapolation : "bool", optional
+            Optional argument to chose the model of extrapolation. The default
+            model is "sct". The available models are:
+                - "sct": Short Collision Time.
+                - "fgm": Free Gas Model.
+
+        Example
+        -------
+        Create the S(alpha, -beta) matrix:
+        >>> T = 300
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Sab_matrix = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+
+        Only interpolation (sum rule check):
+        >>> Ein = 6.6
+        >>> theta = 60
+        >>> M = 238.05077040419212
+        >>> Eout = Sab_matrix.beta.get_Eout(T, Ein, side="full").values
+        >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
+        >>> from solid_cinel.core.generic import integrate
+        >>> Sab_intep.apply(lambda x: integrate(x * x.index), axis=1).iloc[::40]
+        alpha
+        0.811392   -0.812439
+        1.033521   -1.035315
+        1.075407   -1.076916
+        1.077535   -1.079099
+        1.079667   -1.081283
+        1.081804   -1.083466
+        1.083945   -1.085649
+        1.086090   -1.087833
+        1.088532   -1.090313
+        1.137942   -1.139335
+        dtype: float64
+
+        Extrapolation (last alpha is extrapolated):
+        >>> Eout = np.concatenate([Eout, np.array([12.0, 13.0])])
+        >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
+        >>> Sab_intep.apply(lambda x: integrate(x * x.index), axis=1).iloc[::40]
+        alpha
+        0.811392   -0.812439
+        1.033521   -1.035315
+        1.075407   -1.076916
+        1.077535   -1.079099
+        1.079667   -1.081283
+        1.081804   -1.083466
+        1.083945   -1.085649
+        1.086090   -1.087833
+        1.088532   -1.090313
+        1.137942   -1.139335
+        1.694279   -1.696591
+        dtype: float64
+        """
+        # Create alpha and beta grid:
+        param_alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, theta).data
+        param_beta_grid = Beta.from_parameters(Eout, Ein, T).data
+
+        # Create the masks for interpolation:
+        alpha_mask = (self.alpha.data.max() >= param_alpha_grid) & (self.alpha.data.min() <= param_alpha_grid)
+        beta_mask = (self.beta.data.max() >= abs(param_beta_grid)) & (self.beta.data.min() <= abs(param_beta_grid))
+
+        # Interpolation:
+        Sab_interp = self.get_value_from_Alpha_Beta(param_alpha_grid[alpha_mask],
+                                                    param_beta_grid[beta_mask])
+
+        # Check if extrapolation is need:
+        if not all(alpha_mask) or not all(beta_mask):
+            if extrapolation == "sct":
+                Tratio = self.pdos.Teff(T) / T
+                Sab_values = get_S_sct_from_alpha_beta(param_alpha_grid,
+                                                       param_beta_grid,
+                                                       Tratio,
+                                                       1.0)
+            elif extrapolation == "fgm":
+                Sab_values = get_S_fgm_from_alpha_beta(param_alpha_grid,
+                                                       param_beta_grid,
+                                                       1.0)
+            else:
+                raise SyntaxError("Model not available")
+            Sab_new = pd.DataFrame(Sab_values,
+                                   index=pd.Index(param_alpha_grid, name="alpha"),
+                                   columns=pd.Index(param_beta_grid, name="beta"))
+            Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[beta_mask]] = Sab_interp.values
+        else:
+            Sab_new = Sab_interp
+
+        return Sab_new
+
+    def get_scattering_func(self, Ein, theta, T, M, extrapolation="sct") -> pd.DataFrame:
+        """
+        Return the scattering function from S(alpha, beta) matrix:
+        .. math::
+            S(\theta, Eout)= \frac{1}{2k_B T}\sqrt{\dfrac{E^\prime}{E}}S(\alpha(\theta, Eout, Ein, T, M),\beta(Eout, Ein, T))
+
+        Parameters
+        ----------
+        Ein : 1D iterable or 'float'
+            Neutron incident energy in eV.
+        T : 1D iterable or 'float'
+            Temperature in Kelvin.
+        M : 'float'
+            Atom mass, amu
+        theta : 1D iterable or 'float'
+            scattering angle in Degrees.
+        extrapolation : "bool", optional
+            Optional argument to chose the model of extrapolation. The default
+            model is "sct". The available models are:
+                - "sct": Short Collision Time.
+                - "fgm": Free Gas Model
+
+        Example
+        -------
+        Create the S(alpha, -beta) matrix:
+        >>> T = 300
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Sab_matrix = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+
+        Only interpolation:
+        >>> Ein = 6.6
+        >>> theta = np.linspace(1, 179, num=5)
+        >>> M = 238.05077040419212
+        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
+        >>> Sab_interp.iloc[::, 198:203]
+        Eout	6.599348	6.600000	6.600652	6.601305	6.601957
+        theta					
+        1.0	    0.026893	0.026602	0.026264	0.023732	0.022887
+        45.5	6.440034	6.472782	6.279656	6.017741	5.809228
+        90.0	2.255336	2.227227	2.199121	2.171028	2.142957
+        134.5	1.170795	1.156554	1.141573	1.126691	1.111910
+        179.0	0.922784	0.911547	0.899738	0.888019	0.876389
+        """
+        Eout = self.beta.get_Eout(T, Ein, side="full").values
+        energy_vect = np.sqrt(Eout / Ein)
+        A = M / m
+        energy_vect *= ((A + 1) / A)**2
+        energy_vect /= 2 * kb * T
+        scattering_funct = {}
+        theta_ = theta if hasattr(theta, '__len__') else [theta]
+        for single_theta in theta_:
+            Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein, T, M, single_theta,  extrapolation=extrapolation)
+            scattering_funct[single_theta] = np.diag(Sab_interp_single_theta) * energy_vect
+        scattering_funct = pd.DataFrame(scattering_funct,
+                                        index=pd.Index(Eout, name="Eout"),
+                                        columns=pd.Index(theta_, name="theta"))
+        return scattering_funct.T
 
     def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
         """
@@ -1254,15 +1497,15 @@ class Sab():
         Example
         -------
         >>> T = 800
-        >>> m = 26.98153433356103
+        >>> M = 26.98153433356103
         >>> boundXs = 1.5030808051112423
-        >>> incident_neutron_energy = 0.33118
+        >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T).data
         >>> alpha_grid = Alpha(alpha0_).scale(T).data
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
-        >>> Sab.get_inelastic_Xs(T, m, boundXs, incident_neutron_energy).iloc[:5, :5].round(6)
+        >>> Sab.get_inelastic_Xs(T, M, boundXs, Ein).iloc[:5, :5].round(6)
         E_out     0.331180  0.331812  0.332445  0.333077  0.333710
         theta
         0.101125  0.414306  0.416519  0.418685  0.420825  0.422894
@@ -1369,11 +1612,11 @@ def proportionality_factor(alpha, alpha_i, alpha_i_plus_one, mode="linlog") -> f
     Parameters
     ----------
     alpha : "float"
-        DESCRIPTION.
+        Alpha value to be interpolated.
     alpha_i : "float"
-        DESCRIPTION.
+        lower alpha bound.
     alpha_i_plus_one : "float"
-        DESCRIPTION.
+        upper alpha bound.
     mode : "str", optional
         Is define by how the probability table is interpolated. The default is
         "linlog".

@@ -1468,7 +1468,6 @@ class Sab():
         energy_vect /= 2 * kb * T
         scattering_funct = {}
         theta_ = theta if hasattr(theta, '__len__') else [theta]
-        energy_sqrt = np.sqrt(Eout / Ein)
         for single_theta in theta_:
             Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein, T, M, single_theta,  extrapolation=extrapolation)
             scattering_funct[single_theta] = np.diag(Sab_interp_single_theta) * energy_vect

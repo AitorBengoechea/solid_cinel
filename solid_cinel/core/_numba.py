@@ -375,7 +375,7 @@ def get_alpha(Eout, Ein, T, M, mu) -> np.array:
     return np.array(alpha)
 
 
-@nb.jit(nopython=True, nogil=False, parallel=True)
+@nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
 def get_beta(Eout, Ein, T) -> np.array:
     """
     Get all the posible beta values from the parameters of the function:
@@ -425,7 +425,7 @@ def get_S_fgm_from_alpha_beta(alpha, beta, wt) -> np.array:
     return Sab
 
 
-@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def get_S_fgm_from_parameters(Eout, Ein, T, M, theta, wt) -> np.array:
     """
     Generate the S(alpha, beta) matrix values using Free Gas Model from base
@@ -486,7 +486,7 @@ def get_S_sct_from_alpha_beta(alpha, beta, Tratio, ws) -> np.array:
     return Sab
 
 
-@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def get_S_sct_from_parameters(Eout, Ein, T, M, theta, ws, Teff):
     """
     Generate the S(alpha, beta) matrix values using Short Collision Time from

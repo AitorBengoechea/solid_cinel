@@ -1415,6 +1415,61 @@ class Sab():
 
         return Sab_new
 
+    def get_matrix_from_Ein_theta(self, Ein, theta, T, M, extrapolation="sct") -> pd.DataFrame:
+        """
+        
+
+        Parameters
+        ----------
+        Ein : 1D iterable or 'float'
+            Neutron incident energy in eV.
+        T : 1D iterable or 'float'
+            Temperature in Kelvin.
+        M : 'float'
+            Atom mass, amu
+        theta : 1D iterable or 'float'
+            scattering angle in Degrees.
+        extrapolation : "bool", optional
+            Optional argument to chose the model of extrapolation. The default
+            model is "sct". The available models are:
+                - "sct": Short Collision Time.
+                - "fgm": Free Gas Model
+
+        Example
+        -------
+        Create the S(alpha, -beta) matrix:
+        >>> T = 300
+        >>> beta_grid = Beta(beta0_U238).scale(T)
+        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
+        >>> from solid_cinel.core.material.pdos import Pdos
+        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Sab_matrix = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+
+        Only interpolation (sum rule check):
+        >>> Ein = 6.6
+        >>> theta = np.linspace(1, 179, num=5)
+        >>> M = 238.05077040419212
+        >>> Sab_interp = Sab_matrix.get_matrix_from_Ein_theta(Ein, theta, T, M)
+        >>> Sab_interp.iloc[::, 198:203]
+        Eout   6.599348  6.600000  6.600652  6.601305  6.601957
+        theta
+        1.0    0.001379  0.001364  0.001346  0.001217  0.001173
+        45.5   0.330188  0.331851  0.321933  0.308491  0.297787
+        90.0   0.115634  0.114187  0.112740  0.111295  0.109850
+        134.5  0.060028  0.059295  0.058524  0.057758  0.056998
+        179.0  0.047312  0.046734  0.046126  0.045523  0.044925
+        """
+        Eout = self.beta.get_Eout(T, Ein, side="full").values
+        theta_df = {}
+        Eout_ind = pd.Index(Eout, name="Eout")
+        theta_ = theta if hasattr(theta, '__len__') else [theta]
+        for single_theta in theta_:
+            Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein, T, M, single_theta,  extrapolation=extrapolation)
+            theta_df[single_theta] = pd.Series(np.diag(Sab_interp_single_theta), index=Eout_ind)
+        theta_df = pd.DataFrame(theta_df).T
+        theta_df.index.name = "theta"
+        return theta_df
+
     def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
         """
         Get inelastic scattering for a atom with a certain bound Xs and mass

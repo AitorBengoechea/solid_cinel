@@ -399,3 +399,125 @@ def get_beta(Eout, Ein, T) -> np.array:
                 beta_value /= kb * T[i]
                 beta.append(beta_value)
     return np.array(beta)
+
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+def get_S_fgm_from_alpha_beta(alpha, beta, wt) -> np.array:
+    """
+    Get the S(alpha, beta) matrix values using Free Gas Model.
+    .. math::
+        S(\alpha,\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)
+
+    Parameters
+    ----------
+    alpha : 1D iterable
+        alpha grid values.
+    beta : 1D iterable
+        beta grid values.
+    w_t: 'float', optional
+        normalization for continuous (vibrational) part. For solid is 1.
+    """
+    Sab = np.zeros((len(alpha), len(beta)))
+    for i in prange(len(alpha)):
+        for j in prange(len(beta)):
+            Sab[i, j] = np.exp(-(wt * alpha[i] + beta[j]) ** 2 / (4 * wt * alpha[i]))
+            Sab[i, j] /= np.sqrt(4 * np.pi * alpha[i] * wt)
+    return Sab
+
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+def get_S_fgm_from_parameters(Eout, Ein, T, M, theta, wt) -> np.array:
+    """
+    Generate the S(alpha, beta) matrix values using Free Gas Model from base
+    parameters:
+    .. math::
+        \beta=\dfrac{E_{out} - E_{in}}{k_BT}
+        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
+        S(\alpha,\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)
+
+    Parameters
+    ----------
+    Eout : 1D iterable or 'float'
+        Neutron output energies in eV.
+    Ein : 'float'
+        Neutron incident energy in eV.
+    T : 'float'
+        Temperature in Kelvin.
+    M : 'float'
+        Atom mass, amu
+    theta : 1D iterable or 'float'
+        scattering angle in Degrees.
+    w_t: 'float', optional
+        normalization for continuous (vibrational) part. For solid is 1.
+    """
+    Sab = np.zeros((len(theta), len(Eout)))
+    for j in prange(len(theta)):
+        for i in prange(len(Eout)):
+            beta = get_beta(Eout[i], Ein, T)[0]
+            alpha = get_alpha(Eout[i], Ein, T, M, np.cos(theta[j]))[0]
+            Sab[j, i] = get_S_fgm_from_alpha_beta(alpha, beta, wt)
+    return Sab
+
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+def get_S_sct_from_alpha_beta(alpha, beta, Tratio, ws) -> np.array:
+    """
+    Generate S(alpha, beta) matrix using Short Collision Time:
+    .. math::
+        S(\alpha, \beta)=\dfrac{1}{\sqrt{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\mid\beta\mid - \omega_{s}\alpha)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T} - \frac{\mid\beta\mid - \beta}{2}\right)
+
+    Parameters
+    ----------
+    alpha : 1D iterable
+        alpha grid values.
+    beta : 1D iterable
+        beta grid values
+    Tratio : "float"
+        Effective temperature divide by the temperature.
+    ws: 'float', optional
+        normalization for continuous (vibrational) part. For solid is 1.
+    """
+    Sab = np.zeros((len(alpha), len(beta)))
+    for i in prange(len(alpha)):
+        for j in prange(len(beta)):
+            Sab[i, j] = np.exp(-(abs(beta[j]) - alpha[i] * ws) ** 2 / (4 * alpha[i] * ws * Tratio))
+            Sab[i, j] *= np.exp(- (abs(beta[j]) + beta[j]) / 2)
+            Sab[i, j] /= np.sqrt(4 * np.pi * ws * alpha[i] * Tratio)
+    return Sab
+
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+def get_S_sct_from_parameters(Eout, Ein, T, M, theta, ws, Teff):
+    """
+    Generate the S(alpha, beta) matrix values using Short Collision Time from
+    base parameters:
+    .. math::
+        \beta=\dfrac{E_{out} - E_{in}}{k_BT}
+        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
+        S(\alpha, \beta)=\dfrac{1}{\sqrt{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\mid\beta\mid - \omega_{s}\alpha)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T} - \frac{\mid\beta\mid - \beta}{2}\right)
+
+    Parameters
+    ----------
+    Eout : 1D iterable or 'float'
+        Neutron output energies in eV.
+    Ein : 'float'
+        Neutron incident energy in eV.
+    T : 'float'
+        Temperature in Kelvin.
+    M : 'float'
+        Atom mass, amu
+    theta : 1D iterable or 'float'
+        scattering angle in Degrees.
+    ws : 'float', optional
+        normalization for continuous (vibrational) part. For solid is 1.
+    Teff : "float"
+        Effective temperature.
+    """
+    Sab = np.zeros((len(theta), len(Eout)))
+    Tratio = Teff / T
+    for j in prange(len(theta)):
+        for i in prange(len(Eout)):
+            beta = get_beta(Eout[i], Ein, T)[0]
+            alpha = get_alpha(Eout[i], Ein, T, M, np.cos(theta[j]))[0]
+            Sab[j, i] = get_S_sct_from_alpha_beta(alpha, beta, Tratio, ws)
+    return Sab

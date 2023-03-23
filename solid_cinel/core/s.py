@@ -7,6 +7,7 @@ from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU, get_beta, get_alpha
+from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta
 import numpy as np
 import pandas as pd
 import scipy as sp
@@ -202,6 +203,18 @@ class Beta():
         """Tranform the Beta class data into a pandas Index."""
         return pd.Index(self.data, name="beta")
 
+    @property
+    def kind(self) -> str:
+        """
+        Analise the beta grid to know if the beta grid contains only absolute
+        values or mix (positive and negative) values.
+        """
+        if (self.data >= 0).all():
+            kind = "abs"
+        else:
+            kind = "mix"
+        return kind
+
     @classmethod
     def generate_grid(cls, T, num_grid=400, mid_E=0.08,
                       thermal_threshold=5., scale=False, **kwargs):
@@ -276,6 +289,8 @@ class Beta():
         """
         Generate a beta grid based on the output energies and the incident
         neutron energy.
+        .. math::
+            \beta=\dfrac{E_{out} - E_{in}}{k_BT}
 
         Parameters
         ----------
@@ -696,7 +711,7 @@ class Sab():
         return S_sym
 
     @classmethod
-    def from_fgm(cls, alpha_grid, beta_grid, T=None, w_t=1):
+    def from_fgm(cls, alpha_grid, beta_grid, T=None, wt=1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
         .. math::
@@ -707,10 +722,10 @@ class Sab():
         alpha_grid : 1D iterable
             Alpha grid.
         beta_grid : 1D iterable
-            beta grid.
+            Absolute beta grid.
         model : 'str', optional
             The model to calculate matrix values. The default is "FGM".
-        w_t: 'float', optional
+        wt: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
         Example
@@ -732,16 +747,18 @@ class Sab():
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        f = lambda i, j: np.exp(-(alpha_grid[i] * w_t - beta_grid[j]) ** 2 / (4 * w_t * alpha_grid[i])) / np.sqrt(4 * np.pi * w_t * alpha_grid[i])
-
-        S_values = np.fromfunction(np.vectorize(f),
-                                   (len(alpha_grid), len(beta_grid)),
-                                   dtype=int
-                                   )
-        return cls(S_values, index=alpha_grid, columns=beta_grid)
+        beta_grid_ = Beta(beta_grid)
+        alpha_grid_ = Alpha(alpha_grid)
+        if beta_grid_.kind == "abs":
+            S_values = get_S_fgm_from_alpha_beta(alpha_grid_.data,
+                                                 - beta_grid_.data, # S(alpha, -beta)
+                                                 wt)
+        else:
+            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
+        return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
-    def from_sct(cls, alpha_grid, beta_grid, T, pdos, w_s=1):
+    def from_sct(cls, alpha_grid, beta_grid, T, pdos, ws=1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
         .. math::
@@ -757,7 +774,7 @@ class Sab():
             Temperature in K.
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
-        w_s: 'float', optional
+        ws: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
         Example
@@ -790,13 +807,17 @@ class Sab():
         # Start the calculation:
         ratio = pdos.Teff(T) / T
 
-        f = lambda i, j: np.exp(-(alpha_grid[i] * w_s - beta_grid[j]) ** 2 / (4 * ratio * w_s * alpha_grid[i])) / np.sqrt(4 * np.pi * w_s * alpha_grid[i] * ratio)
+        beta_grid_ = Beta(beta_grid)
+        alpha_grid_ = Alpha(alpha_grid)
+        if beta_grid_.kind == "abs":
+            S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
+                                                 - beta_grid_.data,  # S(alpha, -beta)
+                                                 ratio,
+                                                 ws)
+        else:
+            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
 
-        S_values = np.fromfunction(np.vectorize(f),
-                                   (len(alpha_grid), len(beta_grid)),
-                                   dtype=int
-                                   )
-        return cls(S_values, index=alpha_grid, columns=beta_grid)
+        return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
     def from_pdos(cls, alpha_grid, beta_grid, T, pdos,
@@ -1327,7 +1348,7 @@ class Sab():
         >>> Eout = Sab_matrix.beta.get_Eout(T, Ein, side="full").values
         >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
         >>> from solid_cinel.core.generic import integrate
-        >>> Sab_intep.apply(lambda x: integrate (x * x.index), axis=1).iloc[::40]
+        >>> Sab_intep.apply(lambda x: integrate(x * x.index), axis=1).iloc[::40]
         alpha
         0.811392   -0.812439
         1.033521   -1.035315
@@ -1339,6 +1360,24 @@ class Sab():
         1.086090   -1.087833
         1.088532   -1.090313
         1.137942   -1.139335
+        dtype: float64
+
+        Extrapolation (last alpha is extrapolated):
+        >>> Eout = np.concatenate([Eout, np.array([12.0, 13.0])])
+        >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
+        >>> Sab_intep.apply(lambda x: integrate(x * x.index), axis=1).iloc[::40]
+        alpha
+        0.811392   -0.812439
+        1.033521   -1.035315
+        1.075407   -1.076916
+        1.077535   -1.079099
+        1.079667   -1.081283
+        1.081804   -1.083466
+        1.083945   -1.085649
+        1.086090   -1.087833
+        1.088532   -1.090313
+        1.137942   -1.139335
+        1.694279   -1.696591
         dtype: float64
         """
         # Create alpha and beta grid:
@@ -1356,12 +1395,20 @@ class Sab():
         # Check if extrapolation is need:
         if not all(alpha_mask) or not all(beta_mask):
             if extrapolation == "sct":
-                Sab_new = self.from_sct(param_alpha_grid, param_beta_grid,
-                                        T, self.pdos)
+                Tratio = self.pdos.Teff(T) / T
+                Sab_values = get_S_sct_from_alpha_beta(param_alpha_grid,
+                                                       param_beta_grid,
+                                                       Tratio,
+                                                       1.0)
             elif extrapolation == "fgm":
-                Sab_new = self.from_fgm(param_alpha_grid, param_beta_grid)
+                Sab_values = get_S_fgm_from_alpha_beta(param_alpha_grid,
+                                                       param_beta_grid,
+                                                       1.0)
             else:
                 raise SyntaxError("Model not available")
+            Sab_new = pd.DataFrame(Sab_values,
+                                   index=pd.Index(param_alpha_grid, name="alpha"),
+                                   columns=pd.Index(param_beta_grid, name="beta"))
             Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[beta_mask]] = Sab_interp.values
         else:
             Sab_new = Sab_interp
@@ -1504,11 +1551,11 @@ def proportionality_factor(alpha, alpha_i, alpha_i_plus_one, mode="linlog") -> f
     Parameters
     ----------
     alpha : "float"
-        DESCRIPTION.
+        Alpha value to be interpolated.
     alpha_i : "float"
-        DESCRIPTION.
+        lower alpha bound.
     alpha_i_plus_one : "float"
-        DESCRIPTION.
+        upper alpha bound.
     mode : "str", optional
         Is define by how the probability table is interpolated. The default is
         "linlog".

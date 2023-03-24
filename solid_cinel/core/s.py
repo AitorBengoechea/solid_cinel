@@ -686,8 +686,8 @@ class Sab():
 
         Example
         -------
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha_grid = Alpha.generate_grid(300, 26).data
+        >>> beta_grid = Beta.generate_grid(300)
+        >>> alpha_grid = Alpha.generate_grid(300, 26)
         >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -719,9 +719,9 @@ class Sab():
 
         Parameters
         ----------
-        alpha_grid : 1D iterable
+        alpha_grid : 1D iterable or "Alpha"
             Alpha grid.
-        beta_grid : 1D iterable
+        beta_grid : 1D iterable or "Beta"
             Absolute beta grid.
         model : 'str', optional
             The model to calculate matrix values. The default is "FGM".
@@ -731,8 +731,8 @@ class Sab():
         Example
         -------
         FGM:
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha_grid = Alpha.generate_grid(300, 26).data
+        >>> beta_grid = Beta.generate_grid(300)
+        >>> alpha_grid = Alpha.generate_grid(300, 26)
         >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
         beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
@@ -747,8 +747,8 @@ class Sab():
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        beta_grid_ = Beta(beta_grid)
-        alpha_grid_ = Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_fgm_from_alpha_beta(alpha_grid_.data,
                                                  - beta_grid_.data, # S(alpha, -beta)
@@ -766,9 +766,9 @@ class Sab():
 
         Parameters
         ----------
-        alpha_grid : 1D iterable
+        alpha_grid : 1D iterable or "Alpha"
             Alpha grid.
-        beta_grid : 1D iterable
+        beta_grid : 1D iterable or "Beta"
             beta grid.
         T : 'float'
             Temperature in K.
@@ -784,8 +784,8 @@ class Sab():
         >>> T = 300
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> beta_grid = Beta.generate_grid(T).data
-        >>> alpha_grid = Alpha.generate_grid(T, 26).data
+        >>> beta_grid = Beta.generate_grid(T)
+        >>> alpha_grid = Alpha.generate_grid(T, 26)
         >>> S = Sab.from_sct(alpha_grid, beta_grid, T, pdos)
         >>> S.data.iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
@@ -807,8 +807,8 @@ class Sab():
         # Start the calculation:
         ratio = pdos.Teff(T) / T
 
-        beta_grid_ = Beta(beta_grid)
-        alpha_grid_ = Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
                                                  - beta_grid_.data,  # S(alpha, -beta)
@@ -839,9 +839,9 @@ class Sab():
             Pdos object.
         T : 'float'
             Temperature in K.
-        alpha_grid : 1D iterable
+        alpha_grid : 1D iterable or "Alpha"
             Alpha grid.
-        beta_grid : 1D iterable
+        beta_grid : 1D iterable or "Beta"
             beta grid.
         threshold : 'float', optional
             Minimun value to take into account in the creation of tau_n
@@ -855,8 +855,8 @@ class Sab():
         >>> T = 800
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T).data
-        >>> beta = Beta(beta0_).scale(T).data
+        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
@@ -872,6 +872,8 @@ class Sab():
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
@@ -883,8 +885,10 @@ class Sab():
 
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
-        S_values, iter_sum = cls._S_from_tau1(tau1, debye_waller_coeff,
-                                              alpha_grid, beta_grid)
+        S_values, iter_sum = cls._S_from_tau1(tau1,
+                                              debye_waller_coeff,
+                                              alpha_grid_.data,
+                                              beta_grid_.data)
         if nphonon > 1:
             tau1 = tau_n_minus_1 = tau1.values
             for n in range(1, nphonon):
@@ -895,16 +899,16 @@ class Sab():
 
                 # Interpolate tau_n(-beta):
                 tau_n_reshape = reshape_differential(beta_tau_n, tau_n,
-                                                     beta_grid)
+                                                     beta_grid_.data)
 
                 # Compute S(alpha, -beta) for tau_n reshape
-                iter_sum += np.log(alpha_grid * debye_waller_coeff / (n + 1))
-                alpha_mul = np.exp(-alpha_grid * debye_waller_coeff + iter_sum)
+                iter_sum += np.log(alpha_grid_.data * debye_waller_coeff / (n + 1))
+                alpha_mul = np.exp(-alpha_grid_.data * debye_waller_coeff + iter_sum)
                 S_values += np.outer(alpha_mul, tau_n_reshape)
 
                 # Next tau_n
                 tau_n_minus_1 = tau_n
-        return cls(S_values, columns=beta_grid, index=alpha_grid)
+        return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @staticmethod
     def _S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid):
@@ -939,9 +943,9 @@ class Sab():
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> tau1 = pdos._get_tau_1(T)
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> beta_grid = Beta(beta0_).scale(T).data
-        >>> S_mat, iter_sum = Sab._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
+        >>> alpha_grid = Alpha(alpha0_).scale(T)
+        >>> beta_grid = Beta(beta0_).scale(T)
+        >>> S_mat, iter_sum = Sab._S_from_tau1(tau1, debye_waller_coeff, alpha_grid.data, beta_grid.data)
         >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5]
               0         1         2         3         4
         0  0.036967  0.037137  0.037308  0.037478  0.037644
@@ -1065,8 +1069,8 @@ class Sab():
         >>> T = 300
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T).data
-        >>> beta = Beta(beta0_).scale(T).data
+        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> beta_new = 0.01
         >>> S_mat.get_beta(beta_new).iloc[0:10]
@@ -1145,7 +1149,7 @@ class Sab():
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alpha_new = 0.00013
         >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5]
         beta     0.000000  0.025237  0.050474  0.075712  0.100949
@@ -1201,7 +1205,7 @@ class Sab():
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alpha_new = 0.00013
         >>> alpha_vector = S_mat._get_single_alpha(alpha_new)
         >>> alpha_vector.iloc[0:10]
@@ -1283,7 +1287,7 @@ class Sab():
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alpha_new = [1.25e-4, 1.35e-4]
         >>> beta_new = [0.01, 0.03, -0.01, -0.03]
         >>> S_mat.get_value_from_Alpha_Beta(alpha_new, beta_new)
@@ -1337,7 +1341,7 @@ class Sab():
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Sab_matrix = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
 
         Only interpolation (sum rule check):
         >>> Ein = 6.6
@@ -1437,13 +1441,13 @@ class Sab():
 
         Example
         -------
-        Create the S(alpha, -beta) matrix:
+        Create the S(alpha, -beta) with clm:
         >>> T = 300
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Sab_matrix = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
+        >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
 
         Only interpolation:
         >>> Ein = 6.6
@@ -1458,11 +1462,34 @@ class Sab():
         90.0	2.255336	2.227227	2.199121	2.171028	2.142957
         134.5	1.170795	1.156554	1.141573	1.126691	1.111910
         179.0	0.922784	0.911547	0.899738	0.888019	0.876389
+
+        Create S(alpha, -beta) with fgm:
+        >>> Sab_matrix = Sab.from_fgm(alpha_grid, beta_grid)
+        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
+        >>> Sab_interp.iloc[::, 198:203]
+        Eout     6.599348    6.600000    6.600652   6.601305  6.601957
+        theta
+        1.0    188.865923  291.958542  184.160018  47.547845  5.046000
+        45.5     5.891717    5.819368    5.745076   5.668940  5.591058
+        90.0     2.206110    2.178604    2.151124   2.123677  2.096272
+        134.5    1.170795    1.156554    1.141573   1.126691  1.111910
+        179.0    0.922784    0.911547    0.899738   0.888019  0.876389
+        
+        Create the S(alpha, -beta) with sct:
+        >>> Sab_matrix = Sab.from_sct(alpha_grid, beta_grid,  T, pdos)
+        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
+        >>> Sab_interp.iloc[::, 198:203]
+        Eout     6.599348    6.600000    6.600652   6.601305  6.601957
+        theta
+        1.0    188.485078  287.789507  183.785006  49.270922  5.567497
+        45.5     5.832225    5.762629    5.687067   5.609810  5.530955
+        90.0     2.207412    2.180667    2.152396   2.124188  2.096049
+        134.5    1.170795    1.156554    1.141573   1.126691  1.111910
+        179.0    0.922784    0.911547    0.899738   0.888019  0.876389
         """
         Eout = self.beta.get_Eout(T, Ein, side="full").values
         energy_vect = np.sqrt(Eout / Ein)
-        A = M / m
-        energy_vect *= (1 + 1 / A)**2
+        energy_vect *= (1 + m / M)**2
         energy_vect /= 2 * kb * T
         scattering_funct = {}
         theta_ = theta if hasattr(theta, '__len__') else [theta]
@@ -1498,8 +1525,8 @@ class Sab():
         >>> M = 26.98153433356103
         >>> boundXs = 1.5030808051112423
         >>> Ein = 0.33118
-        >>> beta_grid = Beta(beta0_).scale(T).data
-        >>> alpha_grid = Alpha(alpha0_).scale(T).data
+        >>> beta_grid = Beta(beta0_).scale(T)
+        >>> alpha_grid = Alpha(alpha0_).scale(T)
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
@@ -1541,8 +1568,8 @@ def _sum_rule(x) -> float:
 
     Example
     -------
-    >>> beta_grid = Beta.generate_grid(300).data
-    >>> alpha_grid = Alpha.generate_grid(300, 26).data
+    >>> beta_grid = Beta.generate_grid(300)
+    >>> alpha_grid = Alpha.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
     >>> _sum_rule(s.iloc[1, ::]).round(6)
     0.001087
@@ -1569,8 +1596,8 @@ def _normalization(x) -> float:
 
     Example
     -------
-    >>> beta_grid = Beta.generate_grid(300).data
-    >>> alpha_grid = Alpha.generate_grid(300, 26).data
+    >>> beta_grid = Beta.generate_grid(300)
+    >>> alpha_grid = Alpha.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
     >>> _normalization(s.iloc[0, ::]).round(6)
     1.0

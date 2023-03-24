@@ -1172,16 +1172,14 @@ class Sab():
         alpha_new_ = alpha_new if hasattr(alpha_new, '__len__') else [alpha_new]
         alpha_vector = []
         for new_alpha in alpha_new_:
-            single_alpha_vector = self._get_single_alpha(new_alpha)
-            single_alpha_vector.columns.name = "alpha"
-            alpha_vector.append(single_alpha_vector)
+            alpha_vector.append(self._get_single_alpha(new_alpha))
         alpha_new_df = pd.concat(alpha_vector, axis=1).T
         if add:
             return Sab(pd.concat([self.data, alpha_new_df]))
         else:
             return Sab(alpha_new_df)
 
-    def _get_single_alpha(self, alpha_new) -> pd.Series:
+    def _get_single_alpha(self, alpha_new) -> pd.DataFrame:
         """
         Interpolate S(alpha, -beta) using unit base interpolation to get the
         probabilities for the new alpha values:
@@ -1207,7 +1205,7 @@ class Sab():
         >>> alpha_new = 0.00013
         >>> alpha_vector = S_mat._get_single_alpha(alpha_new)
         >>> alpha_vector.iloc[0:10]
-                  0.00013
+        alpha     0.00013
         beta
         0.000000  0.000498
         0.025237  0.000504
@@ -1256,8 +1254,8 @@ class Sab():
         alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
         if hasattr(self, "DebyeWallerCoeff"):
             alpha_new_vector *= (1 - np.exp(- debye_weller * alpha_new))
-        alpha_new_vector.name = alpha_new
-        return alpha_new_vector.to_frame()
+        return pd.DataFrame(alpha_new_vector,
+                            columns=pd.Index([alpha_new], name="alpha"))
 
     def get_value_from_Alpha_Beta(self, alpha, beta) -> pd.DataFrame:
         """

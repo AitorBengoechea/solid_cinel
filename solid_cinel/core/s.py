@@ -1462,7 +1462,7 @@ class Sab():
         Eout = self.beta.get_Eout(T, Ein, side="full").values
         energy_vect = np.sqrt(Eout / Ein)
         A = M / m
-        energy_vect *= ((A + 1) / A)**2
+        energy_vect *= (1 + 1 / A)**2
         energy_vect /= 2 * kb * T
         scattering_funct = {}
         theta_ = theta if hasattr(theta, '__len__') else [theta]

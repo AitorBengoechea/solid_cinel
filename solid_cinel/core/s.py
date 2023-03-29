@@ -684,11 +684,11 @@ class Sab():
             Relationships between upscatter and downscatter. The default is
             True.
 
-        Example
+        :Example:
         -------
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha_grid = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
+        >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.701463  8.363896  7.427755  6.094516  4.620122

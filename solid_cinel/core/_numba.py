@@ -310,7 +310,7 @@ def convolSab(alphai, SabSolid_alpha, delta_beta, SabDiff, Nb, beta,
     return SabComb_alpha
 
 @nb.jit(nopython=True)
-def integrate_trapz(y, x):
+def integrate_trapz(y:np.array, x:np.array):
     return 0.5 * ((x[1:] - x[:-1]) * (y[1:] + y[:-1])).sum()
 
 @nb.jit(nopython=True)

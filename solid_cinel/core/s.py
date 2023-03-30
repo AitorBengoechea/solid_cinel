@@ -267,9 +267,6 @@ class Sab:
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha_grid = Alpha.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        >>> beta_grid = Beta.generate_grid(300)
-        >>> alpha_grid = Alpha.generate_grid(300, 26)
-        >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6)
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
@@ -292,7 +289,7 @@ class Sab:
         return S_sym
 
     @classmethod
-    def from_fgm(cls, alpha_grid: Alpha | Iterable[:] ,
+    def from_fgm(cls, alpha_grid: Alpha | Iterable[:],
                  beta_grid: Beta | Iterable[:], T=None, wt: float=1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
@@ -321,9 +318,6 @@ class Sab:
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha_grid = Alpha.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        >>> beta_grid = Beta.generate_grid(300)
-        >>> alpha_grid = Alpha.generate_grid(300, 26)
-        >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
         beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
         0.001050	  8.701463	8.417992 7.524148	6.213536	    4.740815

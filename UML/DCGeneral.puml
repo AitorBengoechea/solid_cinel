@@ -1,0 +1,88 @@
+@startuml
+class core.beta.Beta {
+  - kind
+  - to_index
+  - generate_grid()
+  - from_dE()
+  - from_parameters()
+  - get_Eout()
+  - scale()
+}
+
+class core.alpha.Alpha {
+ - to_index
+ - generate_grid()
+ - from_parameters()
+ - get_theta()
+ - scale()
+}
+class core.s.Sab {
+- alpha
+- beta
+- to_sym()
+- from_fgm()
+- from_sct()
+- from_pdos()
+- get_beta()
+- get_alpha()
+- get_value_from_Alpha_beta()
+- get_matrix_from_parameters()
+- get_scattering_func()
+- get_scattering_func()
+}
+Alpha *-- Sab : contains
+Beta *-- Sab : contains
+
+class core.material.pdos.Pdos{
+- rho
+- from_data()
+- to_beta_grid(T)
+- plot()
+- P(T)
+- Teff(T)
+- DebyeWallerCoeff(T)
+- get_tau(T, nphonon, beta)
+}
+class core.material.material_composition.Atom{
++ A
++ Z
++ atom_mass
++ b: {"b_coh": b_coh, "b_incoh": b_incoh}
+- name
+- zam
+- boundXs
+- boundIncXs
+-freeXs
+}
+core.material.material_composition.Atom *-- core.material.material_composition.Molecule : contains
+class core.material.material_composition.Molecule{
+- name
+}
+class core.material.crystal_symmetry.Crystal_structure{
++ length
++ angles
+- operator
+- dir_vector
+- unit_cell_volume
+- reciproc_vec
+}
+class core.material.solid.Solid{
+- unit_pos
+- atom_pos
+- atom_number
+}
+core.material.material_composition.Molecule *-- core.material.solid.Solid : contains
+core.material.crystal_symmetry.Crystal_structure *-- core.material.solid.Solid : contains
+
+class core.target_material.Target_mat{
+- get_Bfact()
+- get_multiplicity()
+- get_BraggEdges()
+- get_coherent_Xs()
+- get_Sab()
+- get_Inelastic_XS()
+}
+core.material.solid.Solid *-- core.target_material.Target_mat : contains
+core.material.pdos.Pdos *-- core.target_material.Target_mat : contains
+core.s.Sab *-- core.target_material.Target_mat : contains
+@enduml

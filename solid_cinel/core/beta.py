@@ -355,7 +355,7 @@ class Beta:
         return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
 
     def get_Eout(self, T: float, Ein: Iterable[:] | float,
-                 side="upscattering") -> pd.Series:
+                 side: str = "upscattering") -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible
         output energies for a incident neutron energy and that beta grid.

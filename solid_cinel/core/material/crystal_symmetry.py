@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
+from collections.abc import Iterable
 
 class Crystal_structure():
-    def __init__(self, length, angles):
+    def __init__(self, length: Iterable[:], angles: Iterable[:]):
         if len(length) != 3:
             ValueError("The direct vector lengths array do not have the apropiate lenght")
         if len(angles) != 3:
@@ -15,9 +16,14 @@ class Crystal_structure():
                                 name="direct vectors angles")
 
     @property
-    def operator(self) -> np.ndarray:
+    def operator(self) -> pd.DataFrame:
         """
         Generate the operator for obteining the direct lattice vectors.
+
+        Returns
+        -------
+        "pd.DataFrame"
+             The operator for obteining the direct lattice vectors
 
         Example
         -------
@@ -43,7 +49,7 @@ class Crystal_structure():
         c = np.array([np.cos(angles["beta"]),
                       np.cos(angles["alpha"]) - np.cos(angles["beta"]) * np.cos(angles["gamma"]),
                       1.0])
-        c[1] /=  np.sin(angles["gamma"])
+        c[1] /= np.sin(angles["gamma"])
         c[2] *= np.sqrt(1. - c[0] ** 2 - c[1] ** 2)
         return pd.DataFrame([a, b, c], index=["a1", "a2", "a3"],
                             columns=["x", "y", "z"])
@@ -52,6 +58,11 @@ class Crystal_structure():
     def dir_vec(self) -> pd.DataFrame:
         """
         Vectors of the direct lattice with the keys ["a1", "a2", "a3"].
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Direct lattice vectors.
 
         Example
         -------
@@ -75,6 +86,11 @@ class Crystal_structure():
         """
         Unit cell volume.
 
+        Returns
+        -------
+        "float"
+            Unit cell volume
+
         Example
         -------
         Object initialization:
@@ -90,9 +106,14 @@ class Crystal_structure():
         return np.dot(vec.loc["a1"], np.cross(vec.loc["a2"], vec.loc["a3"]))
 
     @property
-    def reciproc_vec(self):
+    def reciproc_vec(self) -> pd.DataFrame:
         """
         Lattice reciprocal vectors.
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Reciprocal lattice vectors
 
         Example
         -------

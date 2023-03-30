@@ -6,8 +6,12 @@ Created on Thu Oct 20 11:46:42 2022
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import tau_n_CPU, get_beta, get_alpha
+from solid_cinel.core._numba import tau_n_CPU, get_alpha
 from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta
+from solid_cinel.core.material.pdos import Pdos
+from solid_cinel.core.beta import Beta
+from solid_cinel.core.alpha import Alpha
+from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 import scipy as sp
@@ -192,438 +196,7 @@ rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 
 
-class Beta():
-    """Class with all the method for the creation and manipulation of beta grids."""
-
-    def __init__(self, array):
-        self.data = np.unique(array)
-
-    @property
-    def to_index(self) -> pd.Index:
-        """Tranform the Beta class data into a pandas Index."""
-        return pd.Index(self.data, name="beta")
-
-    @property
-    def kind(self) -> str:
-        """
-        Analise the beta grid to know if the beta grid contains only absolute
-        values or mix (positive and negative) values.
-        """
-        if (self.data >= 0).all():
-            kind = "abs"
-        else:
-            kind = "mix"
-        return kind
-
-    @classmethod
-    def generate_grid(cls, T, num_grid=400, mid_E=0.08,
-                      thermal_threshold=5., scale=False, **kwargs):
-        """
-        Generate beta grid for a given temperature
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        num_grid : 'int', optional
-            Number of grid. The default is 400.
-        mid_E : 'float', optional
-            minimum of energy transfer in eV. The default is 0.08.
-        thermal_threshold : 'float', optional
-            thermal energy threshold in eV. The default is 5.
-        scale : 'bool', optional
-            Option to scale beta and alpha grid with the method scale_grid. The
-            default is False.
-
-        Parameters for scale_grid
-        -------------------------
-        therm : 'float', optional
-            factor for regrid alpha and beta. The default is 0.0253.
-
-        Example
-        -------
-        >>> Beta.generate_grid(300, num_grid=10).data.round(6)
-        array([  0.      ,   0.515756,   1.031513,   1.547269,   2.063025,
-                 2.578782,   3.094538,  12.280683,  48.735922, 193.408635])
-        """ 
-        mid_beta = mid_E / (kb * T)
-        max_beta = thermal_threshold / (kb * T)
-        first_half = np.linspace(0, mid_beta,
-                                 num=int(num_grid * 0.6),
-                                 endpoint=False)
-        second_half = np.logspace(np.log10(mid_beta), np.log10(max_beta),
-                                  num=int(num_grid * 0.4),
-                                  endpoint=True)
-        beta_grid = np.concatenate((first_half, second_half))
-
-        if scale:
-            return cls(beta_grid).scale(T, **kwargs)
-        else:
-            return cls(beta_grid)
-
-    @classmethod
-    def from_dE(cls, energy_grid, T):
-        """
-        Tranform a energy grid into a beta grid. (use in pdos.py)
-        .. math::
-            \beta=\dfrac{dE}{k_BT}
-
-        Parameters
-        ----------
-        energy_grid : 1D iterable
-            Energy grid.
-        T : 'float'
-            Temperature in Kelvin.
-
-        Example
-        -------
-        >>> energy_grid = np.arange(len(rho_in_energy)) * interv_in_energy
-        >>> T = 300
-        >>> Beta.from_dE(energy_grid, T).data[0:5].round(6)
-        array([0.      , 0.030945, 0.061891, 0.092836, 0.123782])
-        """
-        return cls(np.array(energy_grid) / (kb * T))
-
-    @classmethod
-    def from_parameters(cls, Eout, Ein, T):
-        """
-        Generate a beta grid based on the output energies and the incident
-        neutron energy.
-        .. math::
-            \beta=\dfrac{E_{out} - E_{in}}{k_BT}
-
-        Parameters
-        ----------
-        Eout : 1D iterable or 'float'
-            Neutron output energies in eV.
-        Ein : 1D iterable or 'float'
-            Neutron incident energy in eV.
-        T : 1D iterable or 'float'
-            Temperature in Kelvin.
-
-        Example
-        -------
-        >>> T = 800
-        >>> Ein = 0.33118
-        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> Beta.from_parameters(Eout, Ein, T).data.round(6)
-        array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
-        """
-        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-        Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
-        T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
-        return cls(get_beta(Eout_, Ein_, T_))
-
-    def get_dE(self, T) -> pd.Series:
-        """
-        Get the dE from a beta grid:
-        .. math::
-            dE = \beta k_B T
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-
-        Example
-        -------
-        >>> T = 800
-        >>> beta_grid = Beta(beta0_).scale(T)
-        >>> beta_grid.get_dE(T).iloc[0:5]
-        beta
-        0.000000    0.000000
-        0.009175    0.000633
-        0.018350    0.001265
-        0.027524    0.001898
-        0.036699    0.002530
-        Name: dE, dtype: float64
-        """
-        return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
-
-    def get_Eout(self, T, Ein, side="upscattering") -> pd.Series:
-        """
-        Based on the S(alpha, -beta) matrix, get the posible
-        output energies for a incident neutron energy and that beta grid.
-        .. math::
-            E^\prime = \beta k_B T + E
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        Ein : 'float'
-            Incident neutron energy in eV.
-        side : 'str', optional
-            Argument to chose the outgoing energy grid side. The default is
-            the "upscatterign" side. Available options are:
-                - "upscattering" : Eout > Ein
-                - "downscattering" : Eout < Ein
-                - "full": "upscattering" side + "downscattering" side.
-
-        Example
-        -------
-        >>> T = 800
-        >>> Ein = 0.33118
-        >>> beta_grid = Beta(beta0_).scale(T)
-        >>> beta_grid.get_Eout(T, Ein).iloc[0:5]
-        beta
-        0.000000    0.331180
-        0.009175    0.331812
-        0.018350    0.332445
-        0.027524    0.333077
-        0.036699    0.333710
-        Name: Eout, dtype: float64
-
-        >>> beta_grid.get_Eout(T, Ein, side="downscattering").iloc[0:5]
-        beta
-        -0.000000    0.331180
-        -0.009175    0.330547
-        -0.018350    0.329915
-        -0.027524    0.329282
-        -0.036699    0.328650
-        Name: Eout, dtype: float64
-
-        >>> beta_grid.get_Eout(T, Ein, side="full").iloc[104:113]
-        beta
-        -0.036699    0.328650
-        -0.027524    0.329282
-        -0.018350    0.329915
-        -0.009175    0.330547
-         0.000000    0.331180
-         0.009175    0.331812
-         0.018350    0.332445
-         0.027524    0.333077
-         0.036699    0.333710
-        Name: Eout, dtype: float64
-        """
-        dE = self.get_dE(T).rename("Eout")
-
-        Eout_positive = Ein + dE
-        if side == "upscattering":
-            return Eout_positive
-
-        Eout_negative = Ein - dE
-        Eout_negative.index *= -1
-        Eout_negative = Eout_negative[Eout_negative >= 0]
-        if side == "downscattering":
-            return Eout_negative
-
-        if side == "full":
-            Eout = pd.concat([Eout_negative.iloc[1::], Eout_positive]).sort_index()
-            return Eout
-        else:
-            raise SyntaxError("Side option not available")
-
-    def scale(self, T, therm=0.0253):
-        """
-        Scale alpha or beta spectrum.
-
-        Parameters
-        ----------
-        grid : 'np.ndarray' of 1D or 2D
-            Alpha o Beta grid.
-        T : 'float'
-            Temperature in K.
-        therm : 'float', optional
-            factor for regrid alpha and beta. The default is 0.0253.
-
-        Example
-        -------
-        >>> T = 300
-        >>> beta0 = Beta.generate_grid(T, num_grid=10)
-        >>> beta0.scale(T).data.round(6)
-        array([  0.      ,   0.504744,   1.009488,   1.514231,   2.018975,
-               2.523719,   3.028463,  12.018462,  47.695298, 189.278915])
-        """
-        scale_grid = self.data * therm / (kb * T)
-        return Beta(scale_grid)
-
-
-class Alpha():
-    """Class with all the method for the creation and manipulation of alpha grids."""
-
-    def __init__(self, array):
-        self.data = np.unique(array)
-
-    @property
-    def to_index(self) -> pd.Index:
-        """Tranform the Beta class data into a pandas Index."""
-        return pd.Index(self.data, name="alpha")
-
-    @classmethod
-    def generate_grid(cls, T, M, num_grid=300, min_E=2.8e-3,
-                  thermal_threshold=5., scale=False, **kwargs) -> np.ndarray:
-        """
-        Generate a alpha grid for a given temperature and atomic mass.
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        M : 'float'
-            atomic mass of scatterer in amu.
-        num_grid : 'int', optional
-            Number of grid. The default is 400.
-        mid_E : 'float', optional
-            minimum of energy transfer in eV. The default is 0.08.
-        thermal_threshold : 'float', optional
-            thermal energy threshold in eV. The default is 5.
-        scale : 'bool', optional
-            Option to scale beta and alpha grid with the method scale_grid. The
-            default is False.
-            
-        Parameters for scale_grid
-        -------------------------
-        therm : 'float', optional
-            factor for regrid alpha and beta. The default is 0.0253.
-
-        Example
-        -------
-        >>> Alpha.generate_grid(300, 26, num_grid=10).data.round(6)
-        array([1.0500000e-03, 3.2850000e-03, 1.0270000e-02, 3.2114000e-02,
-               1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
-               9.5985550e+00, 3.0013001e+01])
-        """
-        AkT = M * kb * T / m
-        min_alpha = min_E / 4 / AkT
-        max_alpha = 4 * thermal_threshold / AkT
-        alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
-                                 num=num_grid)
-        if scale:
-            return cls(alpha_grid).scale(T, **kwargs)
-        else:
-            return cls(alpha_grid)
-
-    @classmethod
-    def from_parameters(cls, Eout, Ein, T, M, theta):
-        """
-        Generate the alpha values for the given combination of the input
-        parameters:
-        .. math::
-            \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
-
-        Parameters
-        ----------
-        Eout : 1D iterable or 'float'
-            Neutron output energies in eV.
-        Ein : 1D iterable or 'float'
-            Neutron incident energy in eV.
-        T : 1D iterable or 'float'
-            Temperature in Kelvin.
-        M : 'float'
-            Atom mass, amu
-        theta : 1D iterable or 'float'
-            scattering angle in Degrees.
-
-        Example
-        -------
-        >>> T = 800
-        >>> Ein = 0.33118
-        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> M = 26.98153433356103
-        >>> theta = 0.101125 * 180 / np.pi
-        >>> Alpha.from_parameters(Eout, Ein, T, M, theta).data.round(6)
-        array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
-        """
-        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-        Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
-        T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
-        mu = np.cos(theta * np.pi / 180) if hasattr(theta, '__len__') else np.cos(np.array([theta]) * np.pi / 180)
-        return cls(get_alpha(Eout_, Ein_, T_, M, mu))
-
-    def get_theta(self, T, Ein, M, beta_grid) -> pd.Series:
-        """
-        Based on the S(alpha, -beta) matrix, get the posible scattering angles
-        for a scattering atom, temperature and incident neutron energy.
-        .. math::
-            \mu = \frac{E^\prime + E - \alpha Ak_BT}{2\sqrt{E^\prime E}}
-            \theta = \arccos(\mu)
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        Ein : 'float'
-            Incident neutron energy in eV.
-        m : 'float'
-            Atom mass, amu.
-
-        Example
-        -------
-        >>> T = 800
-        >>> M = 26.98153433356103
-        >>> Ein = 0.33118
-        >>> beta_grid = Beta(beta0_).scale(T)
-        >>> alpha_grid = Alpha(alpha0_).scale(T)
-        >>> alpha_grid.get_theta(T, Ein, M, beta_grid).iloc[0:5].round(6)
-        alpha
-        0.001835    0.101125
-        0.003670    0.143002
-        0.005505    0.175125
-        0.007340    0.202199
-        0.009175    0.226045
-        Name: mu, dtype: float64
-
-        >>> T = 800
-        >>> Ein = 0.33118
-        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> beta_grid = Beta.from_parameters(Eout, Ein, T)
-        >>> M = 26.98153433356103
-        >>> theta = 45
-        >>> alpha = Alpha.from_parameters(Eout, Ein, T, M, theta)
-        >>> theta = alpha.get_theta(T, Ein, M, beta_grid)
-        >>> import numpy as np
-        >>> theta * 180 / np.pi
-        alpha
-        0.105201    45.0
-        0.105302    45.0
-        0.105403    45.0
-        0.105504    45.0
-        0.105605    45.0
-        Name: mu, dtype: float64
-        """
-        alpha = self.data
-        A = M / m
-
-        beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        E_prima = beta.get_Eout(T, Ein).values
-
-        if len(E_prima) > len(alpha):
-            E_prima = E_prima[:len(alpha)]
-        elif len(E_prima) < len(alpha):
-            alpha = alpha[:len(E_prima)]
-
-        mu = E_prima + Ein - alpha * A * kb * T
-        mu /= 2 * np.sqrt(E_prima * Ein)
-        mu = np.arccos(mu[abs(mu) <= 1])
-        return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
-
-    def scale(self, T, therm=0.0253):
-        """
-        Scale alpha or beta spectrum.
-
-        Parameters
-        ----------
-        grid : 'np.ndarray' of 1D or 2D
-            Alpha o Beta grid.
-        T : 'float'
-            Temperature in K.
-        therm : 'float', optional
-            factor for regrid alpha and beta. The default is 0.0253.
-
-        Example
-        -------
-        >>> T = 300
-        >>> alpha0 = Alpha.generate_grid(T, 26, num_grid=10)
-        >>> alpha0.scale(T).data.round(6)
-        array([1.0280000e-03, 3.2140000e-03, 1.0051000e-02, 3.1428000e-02,
-               9.8269000e-02, 3.0727100e-01, 9.6078300e-01, 3.0041990e+00,
-               9.3936040e+00, 2.9372154e+01])
-        """
-        return Alpha(Beta(self.data).scale(T, therm=therm).data)
-
-
-class Sab():
+class Sab:
     """
     Class containing all the methods and properties of a asymmetric
     S(alpha, beta) matrix.
@@ -673,7 +246,7 @@ class Sab():
         # DataFrame:
         self._data = df_
 
-    def to_sym(self, detail_balance=True) -> pd.DataFrame:
+    def to_sym(self, detail_balance: bool=True) -> pd.DataFrame:
         """
         Generate the symmetric S(alpha, -beta) matrix from the asymmetric
         S(alpha, -beta) matrix.
@@ -684,8 +257,13 @@ class Sab():
             Relationships between upscatter and downscatter. The default is
             True.
 
-        :Example:
+        Returns
         -------
+        "pd.DataFrame"
+            Dataframe containing the symmetric S(alpha, -beta) matrix.
+
+        Example:
+        --------
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha_grid = Alpha.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
@@ -728,12 +306,17 @@ class Sab():
         wt: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
+        Returns
+        -------
+        "Sab"
+            S(alpha, -beta) based on Free Gas Model.
+
         Example
         -------
         FGM:
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha_grid = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6)
+        >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
         0.001050	  8.701463	8.417992 7.524148	6.213536	    4.740815
@@ -758,7 +341,9 @@ class Sab():
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
-    def from_sct(cls, alpha_grid, beta_grid, T, pdos, ws=1):
+    def from_sct(cls, alpha_grid: Alpha | Iterable[:],
+                 beta_grid: Beta | Iterable[:], T: float, pdos: Pdos,
+                 ws: float=1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
         .. math::
@@ -777,17 +362,21 @@ class Sab():
         ws: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
 
+        Returns
+        -------
+        "Sab"
+            S(alpha, -beta) based on Short Collision Time
+
         Example
         -------
         SCT:
         Dont fit the normalization and sum rule with the correct precision
         >>> T = 300
-        >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> beta_grid = Beta.generate_grid(T).data
         >>> alpha_grid = Alpha.generate_grid(T, 26).data
         >>> S = Sab.from_sct(alpha_grid, beta_grid, T, pdos)
-        >>> S.data.iloc[:10, :5].round(6)
+        >>> S.data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
@@ -807,8 +396,8 @@ class Sab():
         # Start the calculation:
         ratio = pdos.Teff(T) / T
 
-        beta_grid_ = Beta(beta_grid)
-        alpha_grid_ = Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
                                                  - beta_grid_.data,  # S(alpha, -beta)

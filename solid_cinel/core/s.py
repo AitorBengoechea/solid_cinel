@@ -6,7 +6,7 @@ Created on Thu Oct 20 11:46:42 2022
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import tau_n_CPU, get_alpha
+from solid_cinel.core._numba import tau_n_CPU
 from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.beta import Beta
@@ -227,7 +227,7 @@ class Sab:
         return self._data
 
     @data.setter
-    def data(self, df):
+    def data(self, df: Iterable[:, :]):
         """
         Construct the S(alpha, -beta) matrix and check if the data achieve the
         normalization and sum rule constrain.
@@ -289,7 +289,8 @@ class Sab:
         return S_sym
 
     @classmethod
-    def from_fgm(cls, alpha_grid, beta_grid, T=None, wt=1):
+    def from_fgm(cls, alpha_grid: Alpha | Iterable[:] ,
+                 beta_grid: Beta | Iterable[:], T=None, wt: float=1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
         .. math::
@@ -330,8 +331,8 @@ class Sab:
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        beta_grid_ = Beta(beta_grid)
-        alpha_grid_ = Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_fgm_from_alpha_beta(alpha_grid_.data,
                                                  - beta_grid_.data, # S(alpha, -beta)
@@ -409,8 +410,9 @@ class Sab:
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
-    def from_pdos(cls, alpha_grid, beta_grid, T, pdos,
-                  threshold=0.0, nphonon=1000):
+    def from_pdos(cls, alpha_grid: Alpha | Iterable[:],
+                  beta_grid: Beta | Iterable[:], T: float, pdos: Pdos,
+                  threshold: float=0.0, nphonon: int=1000):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -439,6 +441,11 @@ class Sab:
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
 
+        Returns
+        -------
+        "Sab"
+            S(alpha, -beta) based on Phonon Density Of States model.
+
         Example
         -------
         >>> T = 800
@@ -447,7 +454,7 @@ class Sab:
         >>> alpha = Alpha(alpha0_).scale(T).data
         >>> beta = Beta(beta0_).scale(T).data
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
-        >>> S_mat.data.round(6).iloc[:10, :5]
+        >>> S_mat.data.round(6).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -496,7 +503,8 @@ class Sab:
         return cls(S_values, columns=beta_grid, index=alpha_grid)
 
     @staticmethod
-    def _S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid):
+    def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float, alpha_grid: Iterable[:],
+                     beta_grid: Iterable[:]):
         """
         Generate S(alpha, -beta) matrix using first phonon expansion.
         .. math::
@@ -531,7 +539,7 @@ class Sab:
         >>> alpha_grid = Alpha(alpha0_).scale(T).data
         >>> beta_grid = Beta(beta0_).scale(T).data
         >>> S_mat, iter_sum = Sab._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
-        >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5]
+        >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
               0         1         2         3         4
         0  0.036967  0.037137  0.037308  0.037478  0.037644
         1  0.070694  0.071019  0.071345  0.071671  0.071988
@@ -566,7 +574,7 @@ class Sab:
         return S_values, iter_sum
 
     @staticmethod
-    def sum_rule_check(S) -> None:
+    def sum_rule_check(S: pd.DataFrame) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the sum rule constrain.
         .. math::
@@ -582,6 +590,12 @@ class Sab:
         S : 'pd.DataFrame'
             S(alpha, beta) matrix.
 
+        Returns
+        -------
+        "None"
+            If the sum rule is not satisfied with good accuracy a warning is
+            raise. If the accuracy is very low, a ValueError will be raise.
+
         Raises
         ------
         ValueError
@@ -596,7 +610,7 @@ class Sab:
             warnings.warn("Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
-    def normalization_check(self, S) -> None:
+    def normalization_check(self, S: pd.DataFrame) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the normalization constrain.
         .. math::
@@ -612,6 +626,12 @@ class Sab:
         S : 'pd.DataFrame'
             S(alpha, beta) matrix.
 
+        Returns
+        -------
+        "None"
+            If the normalization is not satisfied with good accuracy a warning
+            is raise. If the accuracy is very low, a ValueError will be raise.
+
         Raises
         ------
         ValueError
@@ -625,7 +645,8 @@ class Sab:
             warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
-    def get_beta(self, beta_new, add=False):
+    def get_beta(self, beta_new: Iterable[:] | float,
+                 add: bool=False) -> pd.DataFrame:
         """
         Quadratic interpolation to get the probability of the new beta value
         for all the alpha existing in the S(alpha, -beta) matrix:
@@ -673,7 +694,7 @@ class Sab:
         0.048932  0.050641
 
         >>> beta_new = [0.01, 0.03]
-        >>> S_mat.get_beta(beta_new, add=True).data.iloc[0:10, 0:4]
+        >>> S_mat.get_beta(beta_new, add=True).data.iloc[0:10, 0:4] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.010000  0.024466  0.030000
         alpha
         0.004893  0.005396  0.005423  0.005462  0.005477
@@ -702,7 +723,7 @@ class Sab:
         else:
             return beta_df
 
-    def get_alpha(self, alpha_new, add=False):
+    def get_alpha(self, alpha_new: Iterable[:] | float, add=False) -> pd.DataFrame:
         """
         Unit base interpolation to get the probability of the new alpha values
         for all the beta existing in the S(alpha, -beta) matrix.
@@ -729,27 +750,25 @@ class Sab:
         Example
         -------
         >>> T = 300
-        >>> from solid_cinel.core.material.pdos import Pdos
-        >>> from solid_cinel.core.s import Alpha, Beta
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
         >>> alpha_new = 0.00013
-        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5]
+        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta     0.000000  0.025237  0.050474  0.075712  0.100949
         alpha
         0.00013  0.000498  0.000504  0.000467  0.000461  0.000462
 
         >>> alpha_new = [1.25e-4, 1.35e-4]
-        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5]
+        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.025237  0.050474  0.075712  0.100949
         alpha
         0.000125  0.000479  0.000484  0.000449  0.000444  0.000445
         0.000135  0.000517  0.000523  0.000485  0.000479  0.000480
 
         >>> alpha_new = [1.25e-4, 1.35e-4]
-        >>> S_mat.get_alpha(alpha_new, add=True).data.iloc[0:5, 0:5]
+        >>> S_mat.get_alpha(alpha_new, add=True).data.iloc[0:5, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta	    0.000000	0.025237	0.050474	0.075712	0.100949
         alpha
         0.000112	0.000430	0.000435	0.000403	0.000399	0.000399
@@ -770,7 +789,7 @@ class Sab:
         else:
             return Sab(alpha_new_df)
 
-    def _get_single_alpha(self, alpha_new) -> pd.Series:
+    def _get_single_alpha(self, alpha_new: float) -> pd.DataFrame:
         """
         Interpolate S(alpha, -beta) using unit base interpolation to get the
         probabilities for the new alpha values:
@@ -784,18 +803,21 @@ class Sab:
         alpha_new : "float"
             Alpha value to get interpolated.
 
+        Returns
+        -------
+        "pd.Series"
+            Interpolated beta grid vector for the introduced alpha.
+
         Example
         -------
         >>> T = 300
-        >>> from solid_cinel.core.material.pdos import Pdos
-        >>> from solid_cinel.core.s import Alpha, Beta
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
         >>> alpha_new = 0.00013
         >>> alpha_vector = S_mat._get_single_alpha(alpha_new)
-        >>> alpha_vector.iloc[0:10]
+        >>> alpha_vector.iloc[0:10]  #doctest: +NORMALIZE_WHITESPACE
                   0.00013
         beta
         0.000000  0.000498
@@ -848,7 +870,8 @@ class Sab:
         alpha_new_vector.name = alpha_new
         return alpha_new_vector.to_frame()
 
-    def get_value_from_Alpha_Beta(self, alpha, beta) -> pd.DataFrame:
+    def get_value_from_Alpha_Beta(self, alpha: Iterable[:] | float,
+                                  beta: Iterable[:] | float) -> pd.DataFrame:
         """
         Get intepolated values for the beta and alpha values from the
         S(alpha, beta) matrix. This method take into account the sing of the
@@ -866,18 +889,21 @@ class Sab:
         beta : "float" or 1D iterable
             Beta values to interpolate.
 
+        Returns
+        -------
+        "pd.Dataframe"
+            Interpolated S(alpha, beta)
+
         Example
         -------
         >>> T = 300
-        >>> from solid_cinel.core.material.pdos import Pdos
-        >>> from solid_cinel.core.s import Alpha, Beta
         >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha_grid.data, beta_grid.data, T, pdos, threshold=1.0e-14)
         >>> alpha_new = [1.25e-4, 1.35e-4]
         >>> beta_new = [0.01, 0.03, -0.01, -0.03]
-        >>> S_mat.get_value_from_Alpha_Beta(alpha_new, beta_new)
+        >>> S_mat.get_value_from_Alpha_Beta(alpha_new, beta_new) #doctest: +NORMALIZE_WHITESPACE
         beta         -0.03     -0.01      0.01      0.03
         alpha
         0.000125  0.000479  0.000487  0.000483  0.000465
@@ -892,7 +918,12 @@ class Sab:
             interp_Alpha_Beta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
 
-    def get_matrix_from_parameters(self, Eout, Ein, T, M, theta,
+    def get_matrix_from_parameters(self,
+                                   Eout: Iterable[:] | float,
+                                   Ein: Iterable[:] | float,
+                                   T: Iterable[:] | float,
+                                   M: float,
+                                   theta: Iterable[:] | float,
                                    extrapolation="sct") -> pd.DataFrame:
         """
         Based on the set of variables introduced, interpolate the existing
@@ -919,6 +950,11 @@ class Sab:
             model is "sct". The available models are:
                 - "sct": Short Collision Time.
                 - "fgm": Free Gas Model.
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Interpolated S(alpha, beta) based on parameters
 
         Example
         -------
@@ -1004,7 +1040,9 @@ class Sab:
 
         return Sab_new
 
-    def get_scattering_func(self, Ein, theta, T, M, extrapolation="sct") -> pd.DataFrame:
+    def get_scattering_func(self, Ein: Iterable[:] | float,
+                            theta: Iterable[:] | float, T: Iterable[:] | float,
+                            M: float, extrapolation="sct") -> pd.DataFrame:
         """
         Return the scattering function from S(alpha, beta) matrix:
         .. math::
@@ -1026,6 +1064,11 @@ class Sab:
                 - "sct": Short Collision Time.
                 - "fgm": Free Gas Model
 
+        Returns
+        -------
+        "pd.DataFrame"
+            the scattering function from S(alpha, beta) matrix
+
         Example
         -------
         Create the S(alpha, -beta) matrix:
@@ -1041,7 +1084,7 @@ class Sab:
         >>> theta = np.linspace(1, 179, num=5)
         >>> M = 238.05077040419212
         >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
-        >>> Sab_interp.iloc[::, 198:203]
+        >>> Sab_interp.iloc[::, 198:203]  #doctest: +NORMALIZE_WHITESPACE
         Eout	6.599348	6.600000	6.600652	6.601305	6.601957
         theta					
         1.0	    0.026893	0.026602	0.026264	0.023732	0.022887
@@ -1049,6 +1092,30 @@ class Sab:
         90.0	2.255336	2.227227	2.199121	2.171028	2.142957
         134.5	1.170795	1.156554	1.141573	1.126691	1.111910
         179.0	0.922784	0.911547	0.899738	0.888019	0.876389
+
+        Create S(alpha, -beta) with fgm:
+        >>> Sab_matrix = Sab.from_fgm(alpha_grid, beta_grid)
+        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
+        >>> Sab_interp.iloc[::, 198:203] #doctest: +NORMALIZE_WHITESPACE
+        Eout     6.599348    6.600000    6.600652   6.601305  6.601957
+        theta
+        1.0    188.865923  291.958542  184.160018  47.547845  5.046000
+        45.5     5.891717    5.819368    5.745076   5.668940  5.591058
+        90.0     2.206110    2.178604    2.151124   2.123677  2.096272
+        134.5    1.170795    1.156554    1.141573   1.126691  1.111910
+        179.0    0.922784    0.911547    0.899738   0.888019  0.876389
+
+        Create the S(alpha, -beta) with sct:
+        >>> Sab_matrix = Sab.from_sct(alpha_grid, beta_grid,  T, pdos)
+        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
+        >>> Sab_interp.iloc[::, 198:203] #doctest: +NORMALIZE_WHITESPACE
+        Eout     6.599348    6.600000    6.600652   6.601305  6.601957
+        theta
+        1.0    188.485078  287.789507  183.785006  49.270922  5.567497
+        45.5     5.832225    5.762629    5.687067   5.609810  5.530955
+        90.0     2.207412    2.180667    2.152396   2.124188  2.096049
+        134.5    1.170795    1.156554    1.141573   1.126691  1.111910
+        179.0    0.922784    0.911547    0.899738   0.888019  0.876389
         """
         Eout = self.beta.get_Eout(T, Ein, side="full").values
         energy_vect = np.sqrt(Eout / Ein)
@@ -1065,7 +1132,8 @@ class Sab:
                                         columns=pd.Index(theta_, name="theta"))
         return scattering_funct.T
 
-    def get_inelastic_Xs(self, T, M, boundXs, Ein) -> pd.DataFrame:
+    def get_inelastic_Xs(self, T: float, M: float, boundXs: float,
+                         Ein: float) -> pd.DataFrame:
         """
         Get inelastic scattering for a atom with a certain bound Xs and mass
         and for a certain incident energy.
@@ -1094,7 +1162,7 @@ class Sab:
         >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
         >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
-        >>> Sab.get_inelastic_Xs(T, M, boundXs, Ein).iloc[:5, :5].round(6)
+        >>> Sab.get_inelastic_Xs(T, M, boundXs, Ein).iloc[:5, :5].round(6)  #doctest: +NORMALIZE_WHITESPACE
         E_out     0.331180  0.331812  0.332445  0.333077  0.333710
         theta
         0.101125  0.414306  0.416519  0.418685  0.420825  0.422894
@@ -1115,7 +1183,7 @@ class Sab:
         return inelastic_xs
 
 
-def _sum_rule(x) -> float:
+def _sum_rule(x: pd.Series) -> float:
     """
     Calculate the sum rule value for a fix alpha value.
 
@@ -1123,7 +1191,6 @@ def _sum_rule(x) -> float:
     ----------
     x : 'pd.Series'
         S(alpha, beta) matrix values for fix alpha.
-
 
     Returns
     -------
@@ -1144,7 +1211,7 @@ def _sum_rule(x) -> float:
     return sum_rule_values
 
 
-def _normalization(x) -> float:
+def _normalization(x: pd.Series) -> float:
     """
     Normalization rule value for a fix alpha value of the S(alpha, beta) matrix.
 
@@ -1172,7 +1239,7 @@ def _normalization(x) -> float:
     return integrate(S)
 
 
-def check_tau_n(tau_n, beta) -> None:
+def check_tau_n(tau_n: Iterable[:], beta: Iterable[:]) -> None:
     """
     Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
     normalized to the unity.
@@ -1184,6 +1251,12 @@ def check_tau_n(tau_n, beta) -> None:
     beta : 1D iterable
         beta grid.
 
+    Returns
+    -------
+    "None"
+        If the normalization is not satisfied with good accuracy a warning
+        is raise. If the accuracy is very low, a ValueError will be raise.
+
     Raises
     ------
     ValueError
@@ -1194,7 +1267,8 @@ def check_tau_n(tau_n, beta) -> None:
     return
 
 
-def proportionality_factor(alpha, alpha_i, alpha_i_plus_one, mode="linlog") -> float:
+def proportionality_factor(alpha: float, alpha_i: float,
+                           alpha_i_plus_one: float, mode: str="linlog") -> float:
     """
     Get the proportionality factor for unit-base interpolation
 
@@ -1210,6 +1284,10 @@ def proportionality_factor(alpha, alpha_i, alpha_i_plus_one, mode="linlog") -> f
         Is define by how the probability table is interpolated. The default is
         "linlog".
 
+    Returns
+    -------
+    "float"
+        Proportionality factor for unit-base interpolation
     """
     if mode == "linlog":
         q = np.log(alpha / alpha_i) / np.log(alpha_i_plus_one / alpha_i)

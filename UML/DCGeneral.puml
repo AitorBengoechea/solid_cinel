@@ -1,5 +1,6 @@
 @startuml
 class core.beta.Beta {
+Class dedicated to the generation and manipulation of a beta grid
   - kind
   - to_index
   - generate_grid()
@@ -10,6 +11,7 @@ class core.beta.Beta {
 }
 
 class core.alpha.Alpha {
+Class dedicated to the generation and manipulation of a alpha grid
  - to_index
  - generate_grid()
  - from_parameters()
@@ -17,6 +19,7 @@ class core.alpha.Alpha {
  - scale()
 }
 class core.s.Sab {
+Class dedicated to the generation and manipulation of S(alpha, -beta) matrix
 - alpha
 - beta
 - to_sym()
@@ -34,6 +37,7 @@ Alpha *-- Sab : contains
 Beta *-- Sab : contains
 
 class core.material.pdos.Pdos{
+phonon density of states of a material
 - rho
 - from_data()
 - to_beta_grid(T)
@@ -44,6 +48,7 @@ class core.material.pdos.Pdos{
 - get_tau(T, nphonon, beta)
 }
 class core.material.material_composition.Atom{
+Objective: Save in one object all the basic properties of the atom:
 + A
 + Z
 + atom_mass
@@ -56,9 +61,12 @@ class core.material.material_composition.Atom{
 }
 core.material.material_composition.Atom *-- core.material.material_composition.Molecule : contains
 class core.material.material_composition.Molecule{
+Objective: Save in one class all the atomic properties of the different atoms
+of the molecule.
 - name
 }
 class core.material.crystal_symmetry.Crystal_structure{
+Objective: Save the all related to crystal structure in a class
 + length
 + angles
 - operator
@@ -67,6 +75,7 @@ class core.material.crystal_symmetry.Crystal_structure{
 - reciproc_vec
 }
 class core.material.solid.Solid{
+Combination of molecule in a specific position in space
 - unit_pos
 - atom_pos
 - atom_number
@@ -75,6 +84,7 @@ core.material.material_composition.Molecule *-- core.material.solid.Solid : cont
 core.material.crystal_symmetry.Crystal_structure *-- core.material.solid.Solid : contains
 
 class core.target_material.Target_mat{
+Real target material
 - get_Bfact()
 - get_multiplicity()
 - get_BraggEdges()
@@ -85,4 +95,10 @@ class core.target_material.Target_mat{
 core.material.solid.Solid *-- core.target_material.Target_mat : contains
 core.material.pdos.Pdos *-- core.target_material.Target_mat : contains
 core.s.Sab *-- core.target_material.Target_mat : contains
+class UserInputChoice{
++ T
++ Ein
++ theta
+}
+UserInputChoice -> core.target_material.Target_mat
 @enduml

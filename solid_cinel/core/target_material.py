@@ -8,6 +8,7 @@ Created on Thu Oct 20 11:46:42 2022
 from solid_cinel.core.material.solid import Solid, hkl_max_value
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.s import Sab
+from collections.abc import Iterable
 from solid_cinel.core._numba import hklloop
 from solid_cinel.cinematic.lab import Neutron
 from scipy.constants import physical_constants as const
@@ -19,6 +20,12 @@ import collections
 import pytest
 collections.Callable = collections.abc.Callable
 
+# Constants:
+h = const["reduced Planck constant in eV s"][0]
+m_to_eV = const["atomic mass unit-electron volt relationship"][0]
+mn_to_MeV = const["neutron mass energy equivalent in MeV"][0]
+kb = const["Boltzmann constant in eV/K"][0]
+c = sp.constants.c
 
 # Examples variables:
 # 1 atom
@@ -207,14 +214,14 @@ class Target_mat(Solid, Pdos):
             Preferred orientation of the target.
         unit_pos : 1D iterable
             Unitary positions of atoms in the lattice unit cell.
-        atom_mass : float
+        atom_mass : "float"
             Atom mass, amu.
-        b_coh : float
+        b_coh : "float"
             Bound coherent scattering length (fm).
-        b_incoh : float
+        b_incoh : "float"
             Bound incoherent scattering length (fm).
 
-        Parameters for pdos
+        Parameters for Pdos
         ------------------------
         rho : list of 1D iterable
             rho values for each element.
@@ -238,18 +245,23 @@ class Target_mat(Solid, Pdos):
                 pdos[elements_name[i]] = atom_pdos
         self.pdos = pd.Series(pdos)
 
-    def get_Bfact(self, T, anstrom=True) -> float:
+    def get_Bfact(self, T: float, anstrom: bool = True) -> float:
         """
         Calculate mean square displacement for a certain pdos information.
         .. math::
-            B_j= \dfrac{4\pi^2\hbar^2}{M_jk_BT}\lambda_s
+            B_j= \frac{4\pi^2\hbar^2}{M_jk_BT}\lambda_s
 
         Parameters
         ----------
-        T : 'int'
+        T : 'float'
             Temperature in K
         anstrom : 'bool', optional
             Option to obtain the B unit in A^2. The default is True.
+
+        Returns
+        -------
+        "float"
+            Mean square displacement.
 
         Examples
         --------
@@ -278,8 +290,8 @@ class Target_mat(Solid, Pdos):
         U238    0.340297
         dtype: float64
         """
-        constant = (4 * sp.constants.c ** 2 * np.pi**2) * const["reduced Planck constant in eV s"][0] ** 2
-        constant /= const["atomic mass unit-electron volt relationship"][0] * const["Boltzmann constant in eV/K"][0]
+        constant = (4 * c ** 2 * np.pi**2) * h ** 2
+        constant /= m_to_eV * kb
         atom_masses = self.atoms.apply(lambda x: x.atom_mass)
 
         def get_Bfac(single_pdos):
@@ -290,7 +302,8 @@ class Target_mat(Solid, Pdos):
 
         return self.pdos.apply(get_Bfac) / atom_masses
 
-    def get_multiplicity(self, T, energy_cut, precision=[6, 6]) -> pd.DataFrame:
+    def get_multiplicity(self, T: float, energy_cut: float,
+                         precision: list = [6, 6]) -> pd.DataFrame:
         """
         Obtain hkl data for the solid in a certain temperature and for a neutron
         certain energy filtering with the multiplicity.
@@ -305,6 +318,11 @@ class Target_mat(Solid, Pdos):
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
 
+        Returns
+        -------
+        "pd.DataFrame"
+            Multiplicity, d, Fsq and orientation of bragg planes.
+
         Examples
         --------
         Object initialization:
@@ -316,7 +334,7 @@ class Target_mat(Solid, Pdos):
         >>> multiplicity = Al.get_multiplicity(T, E)
         >>> multiplicity.shape[0]
         678
-        >>> multiplicity.iloc[:10]
+        >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0
@@ -329,7 +347,8 @@ class Target_mat(Solid, Pdos):
             2  0.926839  0.101369          82.388621          24.0
           3 2  0.824661  0.097189          90.000000          24.0
             3  0.777498  0.094765          70.528779          32.0
-        >>> multiplicity.round(6).iloc[667:677]
+
+        >>> multiplicity.round(6).iloc[667:677] #doctest: +NORMALIZE_WHITESPACE
                          d  Fsq  Orientation angle  Multiplicity
         h  k  l
         31 19 18  0.091254  0.0          87.009863         168.0
@@ -358,7 +377,8 @@ class Target_mat(Solid, Pdos):
         return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
     @staticmethod
-    def _get_pddf(data, kind=None, pddf_val=None) -> pd.DataFrame:
+    def _get_pddf(data: pd.DataFrame, kind: str = None,
+                  pddf_val: str = None) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the Pole Density Distribution Function.
         March-dollase:
@@ -386,6 +406,11 @@ class Target_mat(Solid, Pdos):
                 - altomare: shape(1, 2)
                 - cvc: shape(1, 2)
 
+        Returns
+        -------
+        "pd.DataFrame"
+            Pole Density Distribution Function column
+
         Example
         -------
         Object initialization:
@@ -393,7 +418,7 @@ class Target_mat(Solid, Pdos):
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> multiplicity.iloc[:10]
+        >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0
@@ -408,7 +433,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> Target_mat._get_pddf(multiplicity).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity  PDDF
         h k l
         1 1 0  2.019999  0.115016                0.0           6.0   1.0
@@ -423,7 +448,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765                0.0          32.0   1.0
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat._get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  0.464758
@@ -438,7 +463,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0  1.193243
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat._get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  1.716531
@@ -453,7 +478,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0  1.459426
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat._get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10]
+        >>> Target_mat._get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  0.206522
@@ -486,7 +511,7 @@ class Target_mat(Solid, Pdos):
         return data
 
     @staticmethod
-    def _get_difrac_angles(data, energy_cut) -> pd.DataFrame:
+    def _get_difrac_angles(data: pd.DataFrame, energy_cut: float) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the difraction angles(ª) vs hkl data
         .. math::
@@ -499,6 +524,11 @@ class Target_mat(Solid, Pdos):
         energy_cut : 'float'
             Energy cut for d espace in eV
 
+        Returns
+        -------
+        "pd.DataFrame"
+            Difraction angle column.
+
         Example
         -------
         Object initialization:
@@ -506,7 +536,7 @@ class Target_mat(Solid, Pdos):
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> multiplicity.iloc[:10]
+        >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0
@@ -521,7 +551,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> Target_mat._get_difrac_angles(multiplicity, E).iloc[:10]
+        >>> Target_mat._get_difrac_angles(multiplicity, E).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity     theta
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0   5.350060
@@ -536,17 +566,18 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0  13.929091
 
         """
-        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2
-        constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
+        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
         constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         d = data.loc[:, "d"]
-        angle_value = np.clip(1 - np.pi ** 2 * constant / (d ** 2 * energy_cut), -1, 1)
+        angle_value = np.clip(1 - np.pi ** 2 * constant / (d ** 2 * energy_cut),
+                              -1, 1)
         data["theta"] = np.arccos(angle_value) * 180 / np.pi
         return data
 
     @staticmethod
-    def _get_BraggEdges_Xs(data, unit_cell_vol, atom_number,
-                          threshold=1.e-30) -> pd.DataFrame:
+    def _get_BraggEdges_Xs(data: pd.DataFrame, unit_cell_vol: float,
+                           atom_number: int,
+                           threshold: float = 1.e-30) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the cross section related with the
         Bragg Edges.
@@ -564,6 +595,11 @@ class Target_mat(Solid, Pdos):
         threshold : 'float', optional
             Minimun value of xs. The default is 1.e-30.
 
+        Returns
+        -------
+        "pd.DataFrame"
+            Xs related to the Bragg Edges.
+
         Example
         -------
         Object initialization:
@@ -573,7 +609,7 @@ class Target_mat(Solid, Pdos):
         >>> unit_cell_vol = Al.unit_cell_vol
         >>> atom_number = Al.atom_number
         >>> BraggEdges = Al.get_BraggEdges(T, E, xs=False, theta=False)
-        >>> BraggEdges.iloc[:10]
+        >>> BraggEdges.iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity  PDDF         E
         h k l
         1 1 1  2.332494  0.115989                0.0           8.0   1.0  0.003759
@@ -588,7 +624,7 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765                0.0          32.0   1.0  0.033831
 
         Test the results:
-        >>> Target_mat._get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]
+        >>> Target_mat._get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
         h  k  l
         1  1  1    0.005370
               0    0.003459
@@ -602,8 +638,7 @@ class Target_mat(Solid, Pdos):
               3    0.005850
         Name: Xs, dtype: float64
         """
-        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2
-        constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
+        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
         constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         if "PDDF" not in data.columns:
             Target_mat.get_pddf(data)
@@ -614,8 +649,8 @@ class Target_mat(Solid, Pdos):
             data["Xs"][data["Xs"] < threshold] = 0.0
         return data
 
-    def get_BraggEdges(self, *args, xs=True, file_BraggEdges=None,
-                       theta=True, **kwargs) -> pd.DataFrame:
+    def get_BraggEdges(self, *args, xs: bool = True, file_BraggEdges: str = None,
+                       theta: bool = True, **kwargs) -> pd.DataFrame:
         """
         Get BraggEdges.
         .. math::
@@ -662,13 +697,18 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
+        "pd.DataFrame"
+            DataFrame with the selected information.
+
+        Example
+        -------
         Object initialization:
         >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
 
         Test the results:
-        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, :4]
+        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, :4] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity
         h k l
         1 1 1  2.332494  0.115989                0.0           8.0
@@ -682,7 +722,7 @@ class Target_mat(Solid, Pdos):
           3 2  0.824661  0.097189                0.0          24.0
             3  0.777498  0.094765                0.0          32.0
 
-        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, 4::]
+        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, 4::] #doctest: +NORMALIZE_WHITESPACE
                PDDF         E        Xs      theta
         h k l
         1 1 1   1.0  0.003759  0.005370   4.632867
@@ -707,8 +747,7 @@ class Target_mat(Solid, Pdos):
                       )
 
         # Get Bragg Edges:
-        constant = const["reduced Planck constant in eV s"][0] ** 2 * sp.constants.c ** 2
-        constant /= (const["neutron mass energy equivalent in MeV"][0] * 1.0e6)
+        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
         constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         data["E"] = np.pi ** 2 * constant / (2 * data["d"] ** 2)
         data = data.sort_values(by=["E"])
@@ -735,8 +774,8 @@ class Target_mat(Solid, Pdos):
                         float_format="%20.10e")
         return data
 
-    def get_coherent_Xs(self, energy_cut, energy_sup, *args,
-                        file_Xs=None, **kwargs) -> pd.DataFrame:
+    def get_coherent_Xs(self, energy_cut: float, energy_sup: float, *args,
+                        file_Xs: str = None, **kwargs) -> pd.DataFrame:
         """
         Get coherent Xs.
 
@@ -785,6 +824,11 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
+        "pd.DataFrame"
+            Dataframe with the coherent xs for each atom of the objetc.
+
+        Examples
+        --------
         Object initialization:
         >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
@@ -793,7 +837,7 @@ class Target_mat(Solid, Pdos):
         Test the results:
         >>> energy_cut = 2.301
         >>> energy_sup = 10.0
-        >>> Al.get_coherent_Xs(energy_cut, energy_sup, T).round(6).iloc[:10]
+        >>> Al.get_coherent_Xs(energy_cut, energy_sup, T).round(6).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
         ZAM         130270
         MT               2
         E
@@ -837,7 +881,7 @@ class Target_mat(Solid, Pdos):
                       float_format="%20.10e")
         return xs
 
-    def _get_Sab_multiple(self, *args, model, **kwargs) -> pd.Series:
+    def _get_Sab_multiple(self, *args, model: str, **kwargs) -> pd.Series:
         """
         Generate S(alpha, -beta) matrix for the selected multiple atoms. The
         available options are:
@@ -884,6 +928,11 @@ class Target_mat(Solid, Pdos):
         nphonon : 'dict', optional
             Phonon expansion order. The default is 1000.
 
+        Returns
+        -------
+        "pd.Series"
+            S(alpha, -beta) matrix for multiple atoms
+
         Raises
         ------
         ValueError
@@ -901,26 +950,33 @@ class Target_mat(Solid, Pdos):
         groups = self.pdos.groupby(by=index)
         if model.lower() == "fgm":
             w_t = {key: kwargs.get("w_t", {}).get(key, 1) for key in index}
-            T = kwargs.pop("T", None)
-            Sab_matrix = groups.apply(lambda x: Sab.from_fgm(alpha_grid[x.name], beta_grid[x.name],
-                                                  w_t=w_t[x.name], T=T))
+            Sab_matrix = groups.apply(lambda x: Sab.from_fgm(alpha_grid[x.name],
+                                                             beta_grid[x.name],
+                                                             w_t = w_t[x.name]))
         else:
             T = args[2]
             scale = kwargs.pop("scale", False)
             if model.lower() == "sct":
                 w_s = {key: kwargs.get("w_s", {}).get(key, 1) for key in index}
-                Sab_matrix = groups.apply(lambda x: Sab.from_sct(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
-                                                        w_s=w_s[x.name]))
+                Sab_matrix = groups.apply(lambda x: Sab.from_sct(alpha_grid[x.name],
+                                                                 beta_grid[x.name],
+                                                                 T,
+                                                                 x[x.name],
+                                                                 w_s = w_s[x.name]))
             elif model.lower() == "phonon expansion":
                 threshold = {key: kwargs.get("threshold", {}).get(key, 0.0) for key in index}
                 nphonon = {key: kwargs.get("nphonon", {}).get(key, 1000) for key in index}
-                Sab_matrix = groups.apply(lambda x: Sab.from_pdos(alpha_grid[x.name], beta_grid[x.name], T, x[x.name],
-                                                         threshold=threshold[x.name], nphonon=nphonon[x.name]))
+                Sab_matrix = groups.apply(lambda x: Sab.from_pdos(alpha_grid[x.name],
+                                                                  beta_grid[x.name],
+                                                                  T,
+                                                                  x[x.name],
+                                                                  threshold = threshold[x.name],
+                                                                  nphonon = nphonon[x.name]))
             else:
                 raise ValueError("The selected model is not available")
         return Sab_matrix
 
-    def _get_Sab_single(self, *args, model, **kwargs) -> pd.Series:
+    def _get_Sab_single(self, *args, model: str, **kwargs) -> pd.Series:
         """
         Generate S(alpha, -beta) matrix for the selected atom. The
         available options are:
@@ -971,6 +1027,11 @@ class Target_mat(Solid, Pdos):
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
 
+        Returns
+        -------
+        "pd.Series"
+            S(alpha, -beta) matrix for a atom
+
         Raises
         ------
         ValueError
@@ -994,7 +1055,8 @@ class Target_mat(Solid, Pdos):
             Sab_matrix = self.pdos.apply(lambda x: method(*args, x, **kwargs))
         return Sab_matrix
 
-    def get_Sab(self, *args, model="phonon expansion", **kwargs):
+    def get_Sab(self, *args, model: str = "phonon expansion",
+                **kwargs) -> pd.Series:
         """
         Generate S(alpha, -beta) matrix for the selected material. The
         available options are:
@@ -1045,6 +1107,11 @@ class Target_mat(Solid, Pdos):
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
 
+        Returns
+        -------
+        "pd.Series"
+            S(alpha, -beta) matrix for a selected material
+
         Raises
         ------
         ValueError
@@ -1063,10 +1130,11 @@ class Target_mat(Solid, Pdos):
         Test the results:
         FGM:
         >>> T = 300
-        >>> from solid_cinel.core.s import Alpha, Beta
+        >>> from solid_cinel.core.alpha import Alpha
+        >>> from solid_cinel.core.beta import Beta
         >>> beta_grid = Beta.generate_grid(T).data
         >>> alpha_grid = Alpha.generate_grid(T, 26).data
-        >>> Al.get_Sab(alpha_grid, beta_grid, model="fgm")["Al27"].data.iloc[:10, :5].round(6)
+        >>> Al.get_Sab(alpha_grid, beta_grid, model="fgm")["Al27"].data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
         0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
@@ -1084,7 +1152,7 @@ class Target_mat(Solid, Pdos):
         >>> T = 300
         >>> beta_grid = Beta.generate_grid(T).data
         >>> alpha_grid = Alpha.generate_grid(T, 26).data
-        >>> Al.get_Sab(alpha_grid, beta_grid, T, model="sct")["Al27"].data.iloc[:10, :5].round(6)
+        >>> Al.get_Sab(alpha_grid, beta_grid, T, model="sct")["Al27"].data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
@@ -1102,7 +1170,7 @@ class Target_mat(Solid, Pdos):
         >>> T = 800
         >>> beta_grid = Beta(beta0_).scale(T).data
         >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> Al.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion", threshold=1.0e-14)["Al27"].data.iloc[:10, :5].round(6)
+        >>> Al.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion", threshold=1.0e-14)["Al27"].data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -1122,7 +1190,8 @@ class Target_mat(Solid, Pdos):
             Sab = self._get_Sab_single(*args, model=model, **kwargs)
         return Sab
 
-    def get_inelastic_Xs(self, incident_neutron_energy, *args, **kwargs):
+    def get_inelastic_Xs(self, incident_neutron_energy: float,
+                         *args, **kwargs) -> pd.DataFrame:
         """
         Get inelastic Xs for the Target material based on the S(alpha, -beta)
         matrix selected by the user. The available options are:
@@ -1255,8 +1324,14 @@ class Target_mat(Solid, Pdos):
                                                               incident_neutron_energy))
 
 
-def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
-                   preferred_orientation, precision) -> pd.DataFrame:
+def numba_hkl_data(d_min: float,
+                   hkl_max: np.array,
+                   rec_vecs: np.array,
+                   Bfac: pd.Series,
+                   pos: pd.Series,
+                   csl: pd.Series,
+                   preferred_orientation: pd.Series,
+                   precision: np.array) -> pd.DataFrame:
     """
     Obtain hkl data for the solid in a certain temperature and for a neutron
     certain energy.
@@ -1281,6 +1356,11 @@ def numba_hkl_data(d_min, hkl_max, rec_vecs, Bfac, pos, csl,
         Array containing:
             0: Precision to reagroup in multiplicity the d_hkl
             1: Precision to reagroup in multiplicity the Fsq_hkl
+
+    Returns
+    -------
+    "pd.DataFrame"
+        Dataframe containing the hkl information.
 
     Examples
     --------

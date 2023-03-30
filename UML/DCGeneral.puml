@@ -31,7 +31,6 @@ Class dedicated to the generation and manipulation of S(alpha, -beta) matrix
 - get_value_from_Alpha_beta()
 - get_matrix_from_parameters()
 - get_scattering_func()
-- get_scattering_func()
 }
 Alpha *-- Sab : contains
 Beta *-- Sab : contains

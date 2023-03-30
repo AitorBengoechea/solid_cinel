@@ -6,14 +6,14 @@ Created on Thu Oct 20 11:46:42 2022
 
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU
-from solid_cinel.core.s import Beta
+from solid_cinel.core.beta import Beta
 import pandas as pd
 import numpy as np
 import scipy as sp
+from collections.abc import Iterable
 from scipy.constants import physical_constants as const
 from scipy.interpolate import interp1d
 import matplotlib
-import warnings
 
 # Examples variables:
 rho_in_energy_str = '''
@@ -28,7 +28,7 @@ rho_in_energy_str = '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
 
-class Pdos():
+class Pdos:
     """
     Object containing the method and properties of the phonon density of states
     """
@@ -58,7 +58,7 @@ class Pdos():
         return self.data
 
     @rho.setter
-    def rho(self, rho_data) -> pd.Series:
+    def rho(self, rho_data:pd.Series | Iterable[:]) -> pd.Series:
         """
         Data setter for rho to ensure the following properties of the data:
             - Shape of the data: 1 dimension
@@ -69,6 +69,11 @@ class Pdos():
         ----------
         rho : pd.Series
             rho values in energy.
+
+        Returns
+        -------
+        "pd.Series"
+            Rho normalize.
 
         Raises
         ------
@@ -96,7 +101,7 @@ class Pdos():
         self.data = rho_ / integrate(rho_)
 
     @classmethod
-    def from_data(cls, rho, interval_energy):
+    def from_data(cls, rho: Iterable[:], interval_energy:float):
         """
         Extract rho in energy from the introduced data.
 
@@ -106,6 +111,11 @@ class Pdos():
             rho values.
         interval_energy : 'float'
             Energy interval in eV.
+
+        Returns
+        -------
+        "Pdos"
+            Rho normalize object.
 
         Examples
         --------
@@ -132,7 +142,7 @@ class Pdos():
         index.name = "E"
         return cls(rho_, index=index)
 
-    def to_beta_grid(self, T):
+    def to_beta_grid(self, T:float):
         """
         Change the energy grid of rho. Two options available:
             - Tranform energy grid in beta grid by introducing T
@@ -145,7 +155,7 @@ class Pdos():
 
         Returns
         -------
-        pdos
+        "Pdos"
             pdos object with the new grid.
 
         Examples
@@ -180,7 +190,7 @@ class Pdos():
         """Plot rho (y) vs grid (x)."""
         return self.data.plot(title='PDOS')
 
-    def P(self, T, threshold=1.e-6) -> pd.Series:
+    def P(self, T:float, threshold: float=1.e-6) -> pd.Series:
         """
         Calculate P function for LEAPR formalism with PDOS.
         .. math::
@@ -192,6 +202,11 @@ class Pdos():
             Temperature in K.
         threshold : 'float', optional
             Value to chech the initial DOS. The default is 1.e-6.
+
+        Returns
+        -------
+        "pd.Series"
+            P function.
 
         Raises
         ------
@@ -228,7 +243,7 @@ class Pdos():
         P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
         return pd.Series(P_values, index=self.beta.to_index, name="P")
 
-    def Teff(self, T, twt=None) -> float:
+    def Teff(self, T:float, twt: float=None) -> float:
         """
         Calculate the effective temperature for a certain pdos information.
         .. math::
@@ -240,6 +255,11 @@ class Pdos():
             Temperature in K.
         twt : 'float', optional
             Translational weight, for solid is zero. The default is None.
+
+        Returns
+        -------
+        "float"
+            Effective temperature for certain pdos.
 
         Example
         -------
@@ -260,7 +280,7 @@ class Pdos():
             Teff_weight += twt
         return Teff_weight * T
 
-    def DebyeWallerCoeff(self, T) -> float:
+    def DebyeWallerCoeff(self, T:float) -> float:
         """
         Calculate Debye Waller Coefficient in LEAPR formalism for a certain
         pdos information.
@@ -271,6 +291,11 @@ class Pdos():
         ----------
         T : 'float'
             Temperature in K.
+
+        Returns
+        -------
+        "float"
+            Debye Waller Coefficient.
 
         Examples
         --------
@@ -287,7 +312,7 @@ class Pdos():
         beta = self.beta.data
         return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
 
-    def _get_tau_1(self, T) -> pd.Series:
+    def _get_tau_1(self, T:float) -> pd.Series:
         """
         Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
 
@@ -295,6 +320,11 @@ class Pdos():
         ----------
         T : 'float'
             Temperature in K.
+
+        Returns
+        -------
+        "pd.Series"
+            Tau(-beta) function for the 1 phonon.
 
         Raises
         ------
@@ -330,7 +360,7 @@ class Pdos():
         return tau1
 
     @staticmethod
-    def _check_tau_norm(tau):
+    def _check_tau_norm(tau: pd.DataFrame) -> None:
         """
         Check if the tau functions are normalize
 
@@ -338,6 +368,12 @@ class Pdos():
         ----------
         tau : 'pd.DataFrame'
             tau functions.
+
+        Returns
+        -------
+        "None"
+            If tau function is normalize, return nothing. If the accuracy is
+            less than e-5, return a ValueError
 
         Raises
         ------
@@ -349,8 +385,9 @@ class Pdos():
             raise ValueError("Tau function doesnt satisfy the normalization condition")
         return 
 
-    def get_tau(self, T, nphonon=1000, beta=None, threshold=1.0e-14,
-                norm_check=True) -> pd.DataFrame:
+    def get_tau(self, T:float, nphonon: int = 1000, beta: Iterable[:] = None,
+                threshold: float = 1.0e-14,
+                norm_check: bool = True) -> pd.DataFrame:
         """
         Get tau function for the selected phonon expansion.
         .. math::
@@ -370,6 +407,13 @@ class Pdos():
             interpolate to the 1D iterable introduce. The default is None.
         threshold : 'float', optional
             Minimun value to take into account. The default is 1.0e-14.
+        norm_check : 'bool', optional
+            If normalization is check. The default is True.
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Tau function for certain phonon expansion.
 
         Examples
         --------
@@ -377,7 +421,7 @@ class Pdos():
         >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
 
         Test the results:
-        >>> p.get_tau(20, nphonon=1).iloc[:10]
+        >>> p.get_tau(20, nphonon=1).iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
         tau_n              1 
         beta
         0.000000    0.004250
@@ -391,7 +435,7 @@ class Pdos():
         3.713446    0.016167
         4.177627    0.018020
 
-        >>> p.get_tau(20, nphonon=5).iloc[:10]
+        >>> p.get_tau(20, nphonon=5).iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
         tau_n            1         2         3             4             5
         beta
         0.000000  0.004250  0.000120  0.000004  1.530025e-07  5.908313e-09
@@ -406,7 +450,7 @@ class Pdos():
         4.177627  0.018020  0.000743  0.000029  1.108981e-06  4.388966e-08
 
         >>> beta = [.000, .025, .050, .075, .100, .125, .150, .175, .200, .225]
-        >>> p.get_tau(20, nphonon=5, beta=beta)
+        >>> p.get_tau(20, nphonon=5, beta=beta)  #doctest: +NORMALIZE_WHITESPACE
         tau_n         1         2         3             4             5
         beta
         0.000  0.004250  0.000120  0.000004  1.530025e-07  5.908313e-09

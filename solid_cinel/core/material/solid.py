@@ -11,6 +11,7 @@ from scipy.optimize import minimize
 import numpy as np
 import pandas as pd
 import collections
+from collections.abc import Iterable
 import pytest
 collections.Callable = collections.abc.Callable
 
@@ -59,10 +60,12 @@ atom_mass = [15.99491399021626, 238.05077040419212]
 b_coh = [5.878374042670532, 8.62912188811068]
 b_incoh = [0.0, 0.19947114020071632]
 
+
 class Solid(Crystal_structure, Molecule):
     """Class to store the properties and methods for solid materials."""
 
-    def __init__(self, preferred_orientation, unit_pos,
+    def __init__(self, preferred_orientation: Iterable[:],
+                 unit_pos: dict | Iterable[:],
                  *args, **kwargs):
         """
         Initialize the crystaline structure formed by a single atom.
@@ -123,6 +126,12 @@ class Solid(Crystal_structure, Molecule):
         """
         Pandas series containnig atom position in a unit cell for each atom
 
+        Returns
+        -------
+        Pd.Series -> {"atom_name" : pd.DataFrame}
+            Pandas series containnig the dataframe of the atom position in a
+            unit cell for each atom.
+
         Example
         -------
         Object initialization:
@@ -173,9 +182,15 @@ class Solid(Crystal_structure, Molecule):
         self._unit_pos = pd.Series(_unit_pos)
 
     @property
-    def atom_pos(self) -> np.ndarray:
+    def atom_pos(self) -> pd.Series:
         """
         Position of atoms in the direct lattice
+
+        Returns
+        -------
+        "pd.Series"
+            Pandas series containnig the dataframe of the atom position in a
+            direct lattice cell for each atom.
 
         Example
         -------
@@ -221,6 +236,11 @@ class Solid(Crystal_structure, Molecule):
         """
         The number of atoms in the unit cell.
 
+        Returns
+        -------
+        "int"
+            Number of atom in a molecule
+
         Example
         -------
         Object initialization:
@@ -234,7 +254,8 @@ class Solid(Crystal_structure, Molecule):
         return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
 
 
-def hkl_max_value(rec_vecs, d_min, precision=1.0e-7) -> np.ndarray:
+def hkl_max_value(rec_vecs: np.array, d_min:float,
+                  precision: float = 1.0e-7) -> np.ndarray:
     """
     Get the maximun h, k and l integers for the constrain of d > d_min.
 
@@ -244,6 +265,12 @@ def hkl_max_value(rec_vecs, d_min, precision=1.0e-7) -> np.ndarray:
         Reciprocal vectors.
     d_min : 'float'
         The minimun d space.
+    precision: "float", optional
+        Precision of the minimization problem. The default is 1.0e-7.
+
+    Returns
+    "np.ndarray"
+        Array with the integers of the maximum hkl planes.
 
     Example
     -------

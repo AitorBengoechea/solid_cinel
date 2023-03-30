@@ -5,14 +5,16 @@ from io import StringIO
 import numpy as np
 import pandas as pd
 import collections
+from collections.abc import Iterable
 import pytest
 collections.Callable = collections.abc.Callable
 
 
-class Atom():
+class Atom:
     """Class to store properties of the atoms."""
 
-    def __init__(self, A, Z, atom_mass, b_coh, b_incoh):
+    def __init__(self, A: int , Z: int, atom_mass: float,
+                 b_coh: float, b_incoh: float):
         """
         Initialize the Atom class to describe a single atoms.
 
@@ -40,6 +42,11 @@ class Atom():
         """
         Material name: element + A.
 
+        Returns
+        -------
+        "str"
+            Element + A
+
         Example
         -------
         Object initialization:
@@ -52,14 +59,18 @@ class Atom():
 
         Test the results:
         >>> assert Al.name == "Al27"
-
         """
-        return ELEMENTS[self.Z] + str(self.A)
+        return f"{ELEMENTS[self.Z]}{self.A}"
 
     @property
     def zam(self) -> int:
         """
         Zam number of a atom.
+
+        Returns
+        -------
+        "int"
+            Zam number
 
         Example
         -------
@@ -82,6 +93,11 @@ class Atom():
         """
         Bound total scattering cross section in barn.
 
+        Returns
+        -------
+        "float"
+            Bound total scattering xs
+
         Example
         -------
         Object initialization:
@@ -102,6 +118,11 @@ class Atom():
         """
         Bound incoherent scattering cross section in barn.
 
+        Returns
+        -------
+        "float"
+            Bound incoherent scattering xs.
+
         Example
         -------
         Object initialization:
@@ -121,6 +142,11 @@ class Atom():
     def freeXs(self) -> float:
         """
         Free scattering cross section in barn.
+
+        Returns
+        -------
+        "float"
+            Free scattering xs.
 
         Example
         -------
@@ -145,7 +171,9 @@ class Molecule(Atom):
     the molecule
     """
 
-    def __init__(self, A, Z, atom_mass, b_coh, b_incoh, name=None):
+    def __init__(self, A: Iterable[:] | int, Z: Iterable[:] | int,
+                 atom_mass: Iterable[:] | float, b_coh: Iterable[:] | float,
+                 b_incoh: Iterable[:] | float, name: str=None):
         """
         Initialize the Molecule class to describe a molecule.
 
@@ -182,6 +210,11 @@ class Molecule(Atom):
         """
         Name of the molecule given by the user
 
+        Returns
+        -------
+        "str"
+            Name of the molecule.
+
         Example
         -------
         Object initialization:
@@ -201,11 +234,8 @@ class Molecule(Atom):
         return self._name
 
     @name.setter
-    def name(self, name):
-        if name is not None:
-            self._name = name
-        else:
-            self._name = "Molecule"
+    def name(self, name:str):
+        self._name = name if name is not None else "Molecule"
 
 def get_str_from_html(html) -> str:
     """

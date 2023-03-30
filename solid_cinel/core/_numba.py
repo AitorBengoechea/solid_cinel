@@ -10,8 +10,9 @@ m = const["neutron mass in u"][0]
 
 
 @nb.jit(nopython=True, nogil=True)
-def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
-            precision) -> dict:
+def hklloop(d_min: float, hkl_max: np.array, rec_vecs: np.array, Bfac: dict,
+            pos: dict, csl: dict, preferred_orientation: np.array,
+            precision: np.array) -> dict:
     """
     Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
     fill the condition of d_hkl > d_min
@@ -33,6 +34,16 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
         Dict with atomic position of elements in Target_Material object.
     csl : 'nb.typed.Dict'
         Coherent elastic length for each element of Target_Material object.
+    preferred_orientation: "np.array"
+        Array with the preferred orientation of the solid.
+    precision: "float"
+        Precision of the rounding in the calculation to merge different plane
+        values
+
+    Returns
+    --------
+    "dict"
+        Dictionary containing the hkl planes, the d_hkl, Fsq, orientation_angle.
     """
     hklM = {}
     hkldF = {}
@@ -51,7 +62,7 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
                 if d_hkl < d_min:  # d < d_min is excluded
                     continue
 
-                Fsq = Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos)  # Fsquared
+                Fsq = Fsq_hkl(vec_tau_hkl, Bfac, csl, pos)  # Fsquared
 
                 # same dspacing and Fsquared with precision will be regrouped
                 d_rnd = round(d_hkl, precision[0])
@@ -68,7 +79,7 @@ def hklloop(d_min, hkl_max, rec_vecs, Bfac, pos, csl, preferred_orientation,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos) -> float:
+def Fsq_hkl(vec_tau_hkl: np.array, Bfac: dict, csl:dict, pos:dict) -> float:
     """
     Get F_hkl:
     .. math::
@@ -76,12 +87,6 @@ def Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos) -> float:
 
     Parameters
     ----------
-    h : 'int'
-        h plane number.
-    k : 'int'
-        k plane number.
-    l : 'int'
-        l plane number.
     vec_tau_hkl : 'np.array'
         Reciprocal vectors
     Bfac : 'nb.typed.Dict'
@@ -90,6 +95,11 @@ def Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos) -> float:
         Dict with atomic position of elements in Target_Material object.
     csl : 'nb.typed.Dict'
         Coherent elastic length for each element of Target_Material object.
+
+    Returns
+    -------
+    "float"
+        Fsq_hkl value for that (h, k, l) plane
     """
     real = 0.
     imag = 0.
@@ -106,7 +116,8 @@ def Fsq_hkl(h, k, l, vec_tau_hkl, Bfac, csl, pos) -> float:
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold) -> np.array:
+def tau_n_CPU(delta_beta: float, tau1: np.array, tau_n_minus_1: np.array,
+              threshold: float) -> np.array:
     """
     Get the tau_{n}(-beta) function values.
 
@@ -197,8 +208,9 @@ def convolTaufunc(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def update_Sab_with_tau_n(n, alpha_grid, DebyeWallerCoeff,
-                          tau_n, Sab, iter_sum) -> np.array:
+def update_Sab_with_tau_n(n: int, alpha_grid: np.array, DebyeWallerCoeff: float,
+                          tau_n: np.array, Sab: np.array,
+                          iter_sum: np.array) -> np.array:
     """
     Iterative sum into a S(alpha, -beta) matrix of tau_n(-beta) functions. This
     function only add one term to term to the matrix.
@@ -344,7 +356,8 @@ def interp1(x1, y1, x2, y2, x, mode):
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_alpha(Eout, Ein, T, M, mu) -> np.array:
+def get_alpha(Eout: np.array, Ein: np.array, T: np.array, M: np.array,
+              mu: np.array) -> np.array:
     """
     Get all the posible alpha values from the parameters of the function:
     .. math::
@@ -362,6 +375,11 @@ def get_alpha(Eout, Ein, T, M, mu) -> np.array:
         Mass in amu of the scatterer.
     mu : 1D iterable
         Cosine of the scattering angle.
+
+    Returns
+    -------
+    "np.array"
+        Array containing all posible alpha values for the input parameters.
     """
     alpha = []
     for i in prange(len(T)):
@@ -376,7 +394,7 @@ def get_alpha(Eout, Ein, T, M, mu) -> np.array:
 
 
 @nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
-def get_beta(Eout, Ein, T) -> np.array:
+def get_beta(Eout: np.array, Ein: np.array, T: np.array) -> np.array:
     """
     Get all the posible beta values from the parameters of the function:
     .. math::
@@ -390,6 +408,11 @@ def get_beta(Eout, Ein, T) -> np.array:
         Incidente energy of the neutron.
     T : 1D iterable
         Temperature in K.
+
+    Returns
+    -------
+    "np.array"
+        Array containing all posible beta values for the input parameters.
     """
     beta = []
     for i in prange(len(T)):
@@ -402,7 +425,8 @@ def get_beta(Eout, Ein, T) -> np.array:
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
-def get_S_fgm_from_alpha_beta(alpha, beta, wt) -> np.array:
+def get_S_fgm_from_alpha_beta(alpha: np.array, beta: np.array,
+                              wt:float) -> np.array:
     """
     Get the S(alpha, beta) matrix values using Free Gas Model.
     .. math::
@@ -416,6 +440,11 @@ def get_S_fgm_from_alpha_beta(alpha, beta, wt) -> np.array:
         beta grid values.
     w_t: 'float', optional
         normalization for continuous (vibrational) part. For solid is 1.
+
+    Returns
+    -------
+    "np.array"
+        S(alpha, beta) matrix values.
     """
     Sab = np.zeros((len(alpha), len(beta)))
     for i in prange(len(alpha)):
@@ -426,7 +455,8 @@ def get_S_fgm_from_alpha_beta(alpha, beta, wt) -> np.array:
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_S_fgm_from_parameters(Eout, Ein, T, M, theta, wt) -> np.array:
+def get_S_fgm_from_parameters(Eout: np.array, Ein: float, T: float, M: float,
+                              theta: np.array, wt: float) -> np.array:
     """
     Generate the S(alpha, beta) matrix values using Free Gas Model from base
     parameters:
@@ -449,6 +479,11 @@ def get_S_fgm_from_parameters(Eout, Ein, T, M, theta, wt) -> np.array:
         scattering angle in Degrees.
     w_t: 'float', optional
         normalization for continuous (vibrational) part. For solid is 1.
+
+    Returns
+    -------
+    "np.array"
+        S(theta, Eout) matrix values.
     """
     Sab = np.zeros((len(theta), len(Eout)))
     for j in prange(len(theta)):
@@ -460,7 +495,8 @@ def get_S_fgm_from_parameters(Eout, Ein, T, M, theta, wt) -> np.array:
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
-def get_S_sct_from_alpha_beta(alpha, beta, Tratio, ws) -> np.array:
+def get_S_sct_from_alpha_beta(alpha: np.array, beta: np.array, Tratio: float,
+                              ws:float) -> np.array:
     """
     Generate S(alpha, beta) matrix using Short Collision Time:
     .. math::
@@ -476,6 +512,11 @@ def get_S_sct_from_alpha_beta(alpha, beta, Tratio, ws) -> np.array:
         Effective temperature divide by the temperature.
     ws: 'float', optional
         normalization for continuous (vibrational) part. For solid is 1.
+
+    Returns
+    -------
+    "np.array"
+        S(alpha, beta) matrix values.
     """
     Sab = np.zeros((len(alpha), len(beta)))
     for i in prange(len(alpha)):
@@ -487,7 +528,9 @@ def get_S_sct_from_alpha_beta(alpha, beta, Tratio, ws) -> np.array:
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_S_sct_from_parameters(Eout, Ein, T, M, theta, ws, Teff):
+def get_S_sct_from_parameters(Eout: np.array, Ein: float, T: float, M: float,
+                              theta: np.array, ws: float,
+                              Teff: float) -> np.array:
     """
     Generate the S(alpha, beta) matrix values using Short Collision Time from
     base parameters:
@@ -512,6 +555,11 @@ def get_S_sct_from_parameters(Eout, Ein, T, M, theta, ws, Teff):
         normalization for continuous (vibrational) part. For solid is 1.
     Teff : "float"
         Effective temperature.
+
+    Returns
+    -------
+    "np.array"
+        S(theta, Eout) matrix values.
     """
     Sab = np.zeros((len(theta), len(Eout)))
     Tratio = Teff / T

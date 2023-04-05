@@ -202,9 +202,9 @@ class Target_mat(Solid, Pdos):
 
         Parameters for Crys_atom
         ------------------------
-        A : ´int´
+        A : list[int]
             Atomic number.
-        Z : ´int´
+        Z : list[int]
             Number of protons.
         dir_vec_length : iterable or `np.array` of size (1, 3)
             Direct lattice vectors length in fm.
@@ -212,13 +212,13 @@ class Target_mat(Solid, Pdos):
             Direct lattice vectors angles in ª.
         preferred_orientation : iterable or `np.array` of size (1, 3)
             Preferred orientation of the target.
-        unit_pos : 1D iterable
+        unit_pos : dict{"element name": 1D iterable}
             Unitary positions of atoms in the lattice unit cell.
-        atom_mass : "float"
+        atom_mass : list[float]
             Atom mass, amu.
-        b_coh : "float"
+        b_coh : list[float]
             Bound coherent scattering length (fm).
-        b_incoh : "float"
+        b_incoh : list[float]
             Bound incoherent scattering length (fm).
 
         Parameters for Pdos

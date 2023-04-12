@@ -1352,7 +1352,7 @@ def numba_hkl_data(d_min: float,
         object.
     csl : 'pd.Series'
         Coherent elastic length for each element of Target_Material object.
-    precision: 'np.ndarray', (2):
+    precision: 'np.ndarray', (2,):
         Array containing:
             0: Precision to reagroup in multiplicity the d_hkl
             1: Precision to reagroup in multiplicity the Fsq_hkl

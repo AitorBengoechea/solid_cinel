@@ -11,7 +11,7 @@ from scipy.optimize import minimize
 import numpy as np
 import pandas as pd
 import collections
-from collections.abc import Iterable
+from typing import Iterable
 import pytest
 collections.Callable = collections.abc.Callable
 
@@ -64,8 +64,8 @@ b_incoh = [0.0, 0.19947114020071632]
 class Solid(Crystal_structure, Molecule):
     """Class to store the properties and methods for solid materials."""
 
-    def __init__(self, preferred_orientation: Iterable[:],
-                 unit_pos: dict | Iterable[:],
+    def __init__(self, preferred_orientation: Iterable[int],
+                 unit_pos: dict | Iterable[int],
                  *args, **kwargs):
         """
         Initialize the crystaline structure formed by a single atom.
@@ -254,7 +254,7 @@ class Solid(Crystal_structure, Molecule):
         return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
 
 
-def hkl_max_value(rec_vecs: np.array, d_min:float,
+def hkl_max_value(rec_vecs: np.array(list[int, int]), d_min:float,
                   precision: float = 1.0e-7) -> np.ndarray:
     """
     Get the maximun h, k and l integers for the constrain of d > d_min.

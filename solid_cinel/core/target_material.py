@@ -8,7 +8,7 @@ Created on Thu Oct 20 11:46:42 2022
 from solid_cinel.core.material.solid import Solid, hkl_max_value
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.s import Sab
-from collections.abc import Iterable
+from typing import Iterable
 from solid_cinel.core._numba import hklloop
 from solid_cinel.cinematic.lab import Neutron
 from scipy.constants import physical_constants as const

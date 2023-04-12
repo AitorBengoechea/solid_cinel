@@ -6,7 +6,7 @@ Created on Tue Nov 15 09:11:55 2022
 """
 import scipy as sp
 import pandas as pd
-from collections.abc import Iterable
+from typing import Iterable
 
 
 def integrate(series: pd.Series, kind="trapezoidal") -> float:
@@ -47,7 +47,7 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
     return y_norm
 
 
-def reshape_differential(x: Iterable[:], y: Iterable[:], xnew: Iterable[:],
+def reshape_differential(x: Iterable[int], y: Iterable[int], xnew: Iterable[int],
                          kind: str="slinear", bounds_error: bool=False):
     """
     Linearly interpolate array over new energy grid structure.

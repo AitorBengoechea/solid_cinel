@@ -79,7 +79,7 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl:dict, pos:dict) -> float:
+def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
     """
     Get F_hkl:
     .. math::
@@ -428,7 +428,7 @@ def get_beta(Eout: np.ndarray, Ein: np.ndarray,
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
 def get_S_fgm_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
-                              wt:float) -> np.ndarray:
+                              wt: float) -> np.ndarray:
     """
     Get the S(alpha, beta) matrix values using Free Gas Model.
     .. math::
@@ -499,7 +499,7 @@ def get_S_fgm_from_parameters(Eout: np.ndarray, Ein: float, T: float, M: float,
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
 def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
                               Tratio: float,
-                              ws:float) -> np.ndarray:
+                              ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time:
     .. math::

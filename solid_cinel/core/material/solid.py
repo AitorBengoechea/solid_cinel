@@ -11,7 +11,7 @@ from scipy.optimize import minimize
 import numpy as np
 import pandas as pd
 import collections
-from typing import Iterable
+from typing import Iterable, Union
 import pytest
 collections.Callable = collections.abc.Callable
 
@@ -65,7 +65,7 @@ class Solid(Crystal_structure, Molecule):
     """Class to store the properties and methods for solid materials."""
 
     def __init__(self, preferred_orientation: Iterable[int],
-                 unit_pos: dict | Iterable[int],
+                 unit_pos: Union[dict, Iterable[int]],
                  *args, **kwargs):
         """
         Initialize the crystaline structure formed by a single atom.
@@ -254,7 +254,7 @@ class Solid(Crystal_structure, Molecule):
         return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
 
 
-def hkl_max_value(rec_vecs: np.ndarray, d_min:float,
+def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
                   precision: float = 1.0e-7) -> np.ndarray:
     """
     Get the maximun h, k and l integers for the constrain of d > d_min.
@@ -269,7 +269,7 @@ def hkl_max_value(rec_vecs: np.ndarray, d_min:float,
         Precision of the minimization problem. The default is 1.0e-7.
 
     Returns
-    "np.ndarray"
+    "np.ndarray", (3,)
         Array with the integers of the maximum hkl planes.
 
     Example

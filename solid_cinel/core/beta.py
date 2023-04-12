@@ -1,5 +1,5 @@
 from solid_cinel.core._numba import get_beta
-from typing import Iterable
+from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
@@ -288,8 +288,8 @@ class Beta:
         return cls(np.array(energy_grid) / (kb * T))
 
     @classmethod
-    def from_parameters(cls, Eout: Iterable[int] | float,
-                        Ein: Iterable[int] | float,
+    def from_parameters(cls, Eout: Union[Iterable[int], float],
+                        Ein: Union[Iterable[int], float],
                         T: float):
         """
         Generate a beta grid based on the output energies and the incident
@@ -355,7 +355,7 @@ class Beta:
         """
         return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
 
-    def get_Eout(self, T: float, Ein: Iterable[int] | float,
+    def get_Eout(self, T: float, Ein: Union[Iterable[int], float],
                  side: str = "upscattering") -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible

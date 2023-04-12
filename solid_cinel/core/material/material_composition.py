@@ -5,7 +5,7 @@ from io import StringIO
 import numpy as np
 import pandas as pd
 import collections
-from typing import Iterable
+from typing import Iterable, Union
 import pytest
 collections.Callable = collections.abc.Callable
 
@@ -171,9 +171,9 @@ class Molecule(Atom):
     the molecule
     """
 
-    def __init__(self, A: Iterable[int] | int, Z: Iterable[int] | int,
-                 atom_mass: Iterable[int] | float, b_coh: Iterable[int] | float,
-                 b_incoh: Iterable[int] | float, name: str=None):
+    def __init__(self, A: Union[Iterable[int], int], Z: Union[Iterable[int], int],
+                 atom_mass: Union[Iterable[int], float], b_coh: Union[Iterable[int], float],
+                 b_incoh: Union[Iterable[int], float], name: str=None):
         """
         Initialize the Molecule class to describe a molecule.
 

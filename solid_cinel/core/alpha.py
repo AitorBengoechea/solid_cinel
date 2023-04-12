@@ -1,7 +1,7 @@
 from scipy.constants import physical_constants as const
 from solid_cinel.core._numba import get_alpha
 from solid_cinel.core.beta import Beta
-from typing import Iterable
+from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 
@@ -246,10 +246,10 @@ class Alpha:
             return cls(alpha_grid)
 
     @classmethod
-    def from_parameters(cls, Eout: Iterable[int] | float,
-                        Ein: Iterable[int] | float,
-                        T: Iterable[int] | float, M: float,
-                        theta: Iterable[int] | float):
+    def from_parameters(cls, Eout: Union[Iterable[int], float],
+                        Ein: Union[Iterable[int], float],
+                        T: Union[Iterable[int], float], M: float,
+                        theta: Union[Iterable[int], float]):
         """
         Generate the alpha values for the given combination of the input
         parameters:
@@ -294,7 +294,7 @@ class Alpha:
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
     def get_theta(self, T: float, Ein: float, M: float,
-                  beta_grid: Beta | Iterable[int]) -> pd.Series:
+                  beta_grid: Union[Beta, Iterable[int]]) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible scattering angles
         for a scattering atom, temperature and incident neutron energy.
@@ -304,6 +304,8 @@ class Alpha:
 
         Parameters
         ----------
+        beta_grid: 'Beta' or 1D iterable
+            Beta grid.
         T : 'float'
             Temperature in K.
         Ein : 'float'

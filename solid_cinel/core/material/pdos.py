@@ -10,7 +10,7 @@ from solid_cinel.core.beta import Beta
 import pandas as pd
 import numpy as np
 import scipy as sp
-from typing import Iterable
+from typing import Iterable, Union
 from scipy.constants import physical_constants as const
 from scipy.interpolate import interp1d
 import matplotlib
@@ -58,7 +58,7 @@ class Pdos:
         return self.data
 
     @rho.setter
-    def rho(self, rho_data:pd.Series | Iterable[int]) -> pd.Series:
+    def rho(self, rho_data: Union[pd.Series, Iterable[int]]) -> pd.Series:
         """
         Data setter for rho to ensure the following properties of the data:
             - Shape of the data: 1 dimension
@@ -101,7 +101,7 @@ class Pdos:
         self.data = rho_ / integrate(rho_)
 
     @classmethod
-    def from_data(cls, rho: Iterable[int], interval_energy:float):
+    def from_data(cls, rho: Iterable[int], interval_energy: float):
         """
         Extract rho in energy from the introduced data.
 
@@ -142,7 +142,7 @@ class Pdos:
         index.name = "E"
         return cls(rho_, index=index)
 
-    def to_beta_grid(self, T:float):
+    def to_beta_grid(self, T: float):
         """
         Change the energy grid of rho. Two options available:
             - Tranform energy grid in beta grid by introducing T
@@ -190,7 +190,7 @@ class Pdos:
         """Plot rho (y) vs grid (x)."""
         return self.data.plot(title='PDOS')
 
-    def P(self, T:float, threshold: float=1.e-6) -> pd.Series:
+    def P(self, T: float, threshold: float = 1.e-6) -> pd.Series:
         """
         Calculate P function for LEAPR formalism with PDOS.
         .. math::
@@ -243,7 +243,7 @@ class Pdos:
         P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
         return pd.Series(P_values, index=self.beta.to_index, name="P")
 
-    def Teff(self, T:float, twt: float=None) -> float:
+    def Teff(self, T: float, twt: float = None) -> float:
         """
         Calculate the effective temperature for a certain pdos information.
         .. math::
@@ -280,7 +280,7 @@ class Pdos:
             Teff_weight += twt
         return Teff_weight * T
 
-    def DebyeWallerCoeff(self, T:float) -> float:
+    def DebyeWallerCoeff(self, T: float) -> float:
         """
         Calculate Debye Waller Coefficient in LEAPR formalism for a certain
         pdos information.
@@ -312,7 +312,7 @@ class Pdos:
         beta = self.beta.data
         return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
 
-    def _get_tau_1(self, T:float) -> pd.Series:
+    def _get_tau_1(self, T: float) -> pd.Series:
         """
         Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
 
@@ -366,7 +366,7 @@ class Pdos:
 
         Parameters
         ----------
-        tau : 'pd.DataFrame'
+        tau : 'pd.DataFrame', (N, M)
             tau functions.
 
         Returns
@@ -378,14 +378,14 @@ class Pdos:
         Raises
         ------
         ValueError
-            The tau functions doenst satisfy the normalization.
+            The tau functions does not satisfy the normalization.
         """
         norm = tau.apply(lambda x: integrate(x * (1 + np.exp(-x.index.values))), axis=0)
         if (norm < 1.e-5).any():
             raise ValueError("Tau function doesnt satisfy the normalization condition")
         return 
 
-    def get_tau(self, T:float, nphonon: int = 1000, beta: Iterable[int] = None,
+    def get_tau(self, T: float, nphonon: int = 1000, beta: Iterable[int] = None,
                 threshold: float = 1.0e-14,
                 norm_check: bool = True) -> pd.DataFrame:
         """

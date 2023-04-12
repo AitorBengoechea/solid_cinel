@@ -509,7 +509,7 @@ class Sab:
     @staticmethod
     def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
                      alpha_grid: Iterable[int],
-                     beta_grid: Iterable[int]) -> tuple[np.ndarray, np.ndarray]:
+                     beta_grid: Iterable[int]) -> tuple:
         """
         Generate S(alpha, -beta) matrix using first phonon expansion.
         .. math::

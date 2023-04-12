@@ -171,9 +171,9 @@ class Molecule(Atom):
     the molecule
     """
 
-    def __init__(self, A: Iterable[:] | int, Z: Iterable[:] | int,
-                 atom_mass: Iterable[:] | float, b_coh: Iterable[:] | float,
-                 b_incoh: Iterable[:] | float, name: str=None):
+    def __init__(self, A: Iterable[int] | int, Z: Iterable[int] | int,
+                 atom_mass: Iterable[int] | float, b_coh: Iterable[int] | float,
+                 b_incoh: Iterable[int] | float, name: str=None):
         """
         Initialize the Molecule class to describe a molecule.
 

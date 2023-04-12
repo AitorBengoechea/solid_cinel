@@ -58,7 +58,7 @@ class Pdos:
         return self.data
 
     @rho.setter
-    def rho(self, rho_data:pd.Series | Iterable[:]) -> pd.Series:
+    def rho(self, rho_data:pd.Series | Iterable[int]) -> pd.Series:
         """
         Data setter for rho to ensure the following properties of the data:
             - Shape of the data: 1 dimension
@@ -101,7 +101,7 @@ class Pdos:
         self.data = rho_ / integrate(rho_)
 
     @classmethod
-    def from_data(cls, rho: Iterable[:], interval_energy:float):
+    def from_data(cls, rho: Iterable[int], interval_energy:float):
         """
         Extract rho in energy from the introduced data.
 
@@ -385,7 +385,7 @@ class Pdos:
             raise ValueError("Tau function doesnt satisfy the normalization condition")
         return 
 
-    def get_tau(self, T:float, nphonon: int = 1000, beta: Iterable[:] = None,
+    def get_tau(self, T:float, nphonon: int = 1000, beta: Iterable[int] = None,
                 threshold: float = 1.0e-14,
                 norm_check: bool = True) -> pd.DataFrame:
         """

@@ -246,7 +246,7 @@ class Sab:
         # DataFrame:
         self._data = df_
 
-    def to_sym(self, detail_balance: bool=True) -> pd.DataFrame:
+    def to_sym(self, detail_balance: bool = True) -> pd.DataFrame:
         """
         Generate the symmetric S(alpha, -beta) matrix from the asymmetric
         S(alpha, -beta) matrix.
@@ -510,7 +510,7 @@ class Sab:
     @staticmethod
     def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
                      alpha_grid: Iterable[int],
-                     beta_grid: Iterable[int]) -> tuple:
+                     beta_grid: Iterable[int]) -> tuple[np.ndarray, np.ndarray]:
         """
         Generate S(alpha, -beta) matrix using first phonon expansion.
         .. math::

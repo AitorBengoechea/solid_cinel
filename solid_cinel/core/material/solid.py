@@ -254,14 +254,14 @@ class Solid(Crystal_structure, Molecule):
         return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
 
 
-def hkl_max_value(rec_vecs: np.array(list[int, int]), d_min:float,
+def hkl_max_value(rec_vecs: np.ndarray, d_min:float,
                   precision: float = 1.0e-7) -> np.ndarray:
     """
     Get the maximun h, k and l integers for the constrain of d > d_min.
 
     Parameters
     ----------
-    rec_vecs : 2D 'np.ndarray'
+    rec_vecs : 'np.ndarray', (3, 3)
         Reciprocal vectors.
     d_min : 'float'
         The minimun d space.

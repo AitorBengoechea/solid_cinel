@@ -320,7 +320,7 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
-        "pd.DataFrame"
+        "pd.DataFrame", (N, 4)
             Multiplicity, d, Fsq and orientation of bragg planes.
 
         Examples
@@ -393,7 +393,7 @@ class Target_mat(Solid, Pdos):
 
         Parameters
         ----------
-        data: 'pd.DataFrame'
+        data: 'pd.DataFrame', (N, M)
             Frame with hkl data.
         kind : 'str', optional
             key to calculate PDDF. The default is None. Options:
@@ -408,7 +408,7 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
-        "pd.DataFrame"
+        "pd.DataFrame", (N, M + 1)
             Pole Density Distribution Function column
 
         Example
@@ -519,14 +519,14 @@ class Target_mat(Solid, Pdos):
 
         Parameters
         ----------
-        data: 'pd.DataFrame'
+        data: 'pd.DataFrame', (N, M)
             Frame with hkl data.
         energy_cut : 'float'
             Energy cut for d espace in eV
 
         Returns
         -------
-        "pd.DataFrame"
+        "pd.DataFrame", (N, M + 1)
             Difraction angle column.
 
         Example
@@ -586,7 +586,7 @@ class Target_mat(Solid, Pdos):
 
         Parameters
         ----------
-        data: 'pd.DataFrame'
+        data: 'pd.DataFrame', (N, M)
             Frame with hkl data.
         unit_cell_vol : 'float'
             Unit cell volume.
@@ -597,7 +597,7 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
-        "pd.DataFrame"
+        "pd.DataFrame", (N, M + 1)
             Xs related to the Bragg Edges.
 
         Example
@@ -697,7 +697,7 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
-        "pd.DataFrame"
+        "pd.DataFrame", (N, M)
             DataFrame with the selected information.
 
         Example
@@ -824,7 +824,7 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
-        "pd.DataFrame"
+        "pd.DataFrame", (N, M)
             Dataframe with the coherent xs for each atom of the objetc.
 
         Examples
@@ -1325,13 +1325,13 @@ class Target_mat(Solid, Pdos):
 
 
 def numba_hkl_data(d_min: float,
-                   hkl_max: np.array,
-                   rec_vecs: np.array,
+                   hkl_max: np.ndarray,
+                   rec_vecs: np.ndarray,
                    Bfac: pd.Series,
                    pos: pd.Series,
                    csl: pd.Series,
                    preferred_orientation: pd.Series,
-                   precision: np.array) -> pd.DataFrame:
+                   precision: np.ndarray) -> pd.DataFrame:
     """
     Obtain hkl data for the solid in a certain temperature and for a neutron
     certain energy.
@@ -1341,9 +1341,9 @@ def numba_hkl_data(d_min: float,
     ----------
     d_min : 'float'
         The minimum dspacing for the LEAPR module of NJOY
-    hkl_max : 'np.array'
+    hkl_max : 'np.ndarray', (3)
         Maximun h, k, l index for generating a d>d_min
-    rec_vecs : 'np.array'
+    rec_vecs : 'np.ndarray', (3, 3)
         Reciprocal vectors
     Bfac : 'pd.Series'
         Pandas series with the B factor for Target_Material object elements.
@@ -1352,7 +1352,7 @@ def numba_hkl_data(d_min: float,
         object.
     csl : 'pd.Series'
         Coherent elastic length for each element of Target_Material object.
-    precision: 'np.array':
+    precision: 'np.ndarray', (2):
         Array containing:
             0: Precision to reagroup in multiplicity the d_hkl
             1: Precision to reagroup in multiplicity the Fsq_hkl

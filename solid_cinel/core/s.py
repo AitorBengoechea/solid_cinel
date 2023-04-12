@@ -234,7 +234,7 @@ class Sab:
 
         Parameters
         ----------
-        df : 2D iterable
+        df : 2D iterable, (N, M)
             Iterable containing the S(alpha, -beta) matrix.
         """
         df_ = pd.DataFrame(df).sort_index(axis=0).sort_index(axis=1)
@@ -298,9 +298,9 @@ class Sab:
 
         Parameters
         ----------
-        alpha_grid : 1D iterable or "Alpha"
+        alpha_grid : 1D iterable or "Alpha", (N,)
             Alpha grid.
-        beta_grid : 1D iterable or "Beta"
+        beta_grid : 1D iterable or "Beta", (M,)
             Absolute beta grid.
         model : 'str', optional
             The model to calculate matrix values. The default is "FGM".
@@ -309,7 +309,7 @@ class Sab:
 
         Returns
         -------
-        "Sab"
+        "Sab", (N, M)
             S(alpha, -beta) based on Free Gas Model.
 
         Example
@@ -352,9 +352,9 @@ class Sab:
 
         Parameters
         ----------
-        alpha_grid : 1D iterable or "Alpha"
+        alpha_grid : 1D iterable or "Alpha", (N,)
             Alpha grid.
-        beta_grid : 1D iterable or "Beta"
+        beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
         T : 'float'
             Temperature in K.
@@ -365,7 +365,7 @@ class Sab:
 
         Returns
         -------
-        "Sab"
+        "Sab", (N, M)
             S(alpha, -beta) based on Short Collision Time
 
         Example
@@ -430,9 +430,9 @@ class Sab:
             Pdos object.
         T : 'float'
             Temperature in K.
-        alpha_grid : 1D iterable or "Alpha"
+        alpha_grid : 1D iterable or "Alpha", (N,)
             Alpha grid.
-        beta_grid : 1D iterable or "Beta"
+        beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
         threshold : 'float', optional
             Minimun value to take into account in the creation of tau_n
@@ -443,7 +443,7 @@ class Sab:
 
         Returns
         -------
-        "Sab"
+        "Sab", (N, M)
             S(alpha, -beta) based on Phonon Density Of States model.
 
         Example
@@ -508,7 +508,8 @@ class Sab:
 
     @staticmethod
     def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
-                     alpha_grid: Iterable[int], beta_grid: Iterable[int]):
+                     alpha_grid: Iterable[int],
+                     beta_grid: Iterable[int]) -> tuple[np.ndarray, np.ndarray]:
         """
         Generate S(alpha, -beta) matrix using first phonon expansion.
         .. math::
@@ -521,16 +522,16 @@ class Sab:
             values.
         debye_waller_coeff : 'float'
             Debye Waller Coefficient.
-        alpha_grid : 1D iterable
+        alpha_grid : 1D iterable, (N,)
             Alpha grid.
-        beta_grid : 1D iterable
+        beta_grid : 1D iterable, (M,)
             beta grid.
 
         Returns
         -------
-        S_values : 'np.array[:, :]'
+        S_values : 'np.ndarray', (N, M)
             S(alpha, -beta) matrix values for the firts phonon expansion.
-        iter_sum : 'np.array[:]'
+        iter_sum : 'np.ndarray', (N,)
             iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
 
         Example
@@ -591,7 +592,7 @@ class Sab:
 
         Parameters
         ----------
-        S : 'pd.DataFrame'
+        S : 'pd.DataFrame', (N, M)
             S(alpha, beta) matrix.
 
         Returns
@@ -627,7 +628,7 @@ class Sab:
 
         Parameters
         ----------
-        S : 'pd.DataFrame'
+        S : 'pd.DataFrame', (N, M)
             S(alpha, beta) matrix.
 
         Returns
@@ -1190,7 +1191,7 @@ def _sum_rule(x: pd.Series) -> float:
 
     Parameters
     ----------
-    x : 'pd.Series'
+    x : 'pd.Series', (N)
         S(alpha, beta) matrix values for fix alpha.
 
     Returns
@@ -1218,7 +1219,7 @@ def _normalization(x: pd.Series) -> float:
 
     Parameters
     ----------
-    x : 'pd.Series'
+    x : 'pd.Series', (N,)
         S(alpha, beta) matrix values for fix alpha.
 
     Returns
@@ -1247,9 +1248,9 @@ def check_tau_n(tau_n: Iterable[int], beta: Iterable[int]) -> None:
 
     Parameters
     ----------
-    tau_n : 1D iterable
+    tau_n : 1D iterable, (N,)
         tau_n function values.
-    beta : 1D iterable
+    beta : 1D iterable (N,)
         beta grid.
 
     Returns

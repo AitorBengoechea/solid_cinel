@@ -268,7 +268,7 @@ class Beta:
 
         Parameters
         ----------
-        energy_grid : 1D iterable
+        energy_grid : 1D iterable, (N,)
             Energy grid.
         T : 'float'
             Temperature in Kelvin.
@@ -367,7 +367,7 @@ class Beta:
         ----------
         T : 'float'
             Temperature in K.
-        Ein : 'float'
+        Ein : 1D iterable or 'float'
             Incident neutron energy in eV.
         side : 'str', optional
             Argument to chose the outgoing energy grid side. The default is

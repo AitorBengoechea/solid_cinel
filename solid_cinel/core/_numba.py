@@ -10,9 +10,9 @@ m = const["neutron mass in u"][0]
 
 
 @nb.jit(nopython=True, nogil=True)
-def hklloop(d_min: float, hkl_max: np.array, rec_vecs: np.array, Bfac: dict,
-            pos: dict, csl: dict, preferred_orientation: np.array,
-            precision: np.array) -> dict:
+def hklloop(d_min: float, hkl_max: np.array([int]), rec_vecs: np.array(list[int, int]),
+            Bfac: dict, pos: dict, csl: dict, preferred_orientation: np.array([int]),
+            precision: np.array([int])) -> dict:
     """
     Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
     fill the condition of d_hkl > d_min
@@ -79,7 +79,7 @@ def hklloop(d_min: float, hkl_max: np.array, rec_vecs: np.array, Bfac: dict,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def Fsq_hkl(vec_tau_hkl: np.array, Bfac: dict, csl:dict, pos:dict) -> float:
+def Fsq_hkl(vec_tau_hkl: np.array(list[int, int]), Bfac: dict, csl:dict, pos:dict) -> float:
     """
     Get F_hkl:
     .. math::
@@ -116,8 +116,9 @@ def Fsq_hkl(vec_tau_hkl: np.array, Bfac: dict, csl:dict, pos:dict) -> float:
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def tau_n_CPU(delta_beta: float, tau1: np.array, tau_n_minus_1: np.array,
-              threshold: float) -> np.array:
+def tau_n_CPU(delta_beta: float, tau1: np.array([int]),
+              tau_n_minus_1: np.array([int]),
+              threshold: float) -> np.array([int]):
     """
     Get the tau_{n}(-beta) function values.
 
@@ -208,9 +209,10 @@ def convolTaufunc(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def update_Sab_with_tau_n(n: int, alpha_grid: np.array, DebyeWallerCoeff: float,
-                          tau_n: np.array, Sab: np.array,
-                          iter_sum: np.array) -> np.array:
+def update_Sab_with_tau_n(n: int, alpha_grid: np.array([int]),
+                          DebyeWallerCoeff: float, tau_n: np.array([int]),
+                          Sab: np.array(list[int, int]),
+                          iter_sum: np.array([int])) -> tuple[np.array(list[int, int]), np.array([int])]:
     """
     Iterative sum into a S(alpha, -beta) matrix of tau_n(-beta) functions. This
     function only add one term to term to the matrix.
@@ -356,8 +358,9 @@ def interp1(x1, y1, x2, y2, x, mode):
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_alpha(Eout: np.array, Ein: np.array, T: np.array, M: np.array,
-              mu: np.array) -> np.array:
+def get_alpha(Eout: np.array([int]), Ein: np.array([int]),
+              T: np.array([int]), M: np.array([int]),
+              mu: np.array([int])) -> np.array([int]):
     """
     Get all the posible alpha values from the parameters of the function:
     .. math::
@@ -394,7 +397,8 @@ def get_alpha(Eout: np.array, Ein: np.array, T: np.array, M: np.array,
 
 
 @nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
-def get_beta(Eout: np.array, Ein: np.array, T: np.array) -> np.array:
+def get_beta(Eout: np.array(list[int]), Ein: np.array(list[int]),
+             T: np.array(list[int])) -> np.array(list[int]):
     """
     Get all the posible beta values from the parameters of the function:
     .. math::
@@ -425,8 +429,8 @@ def get_beta(Eout: np.array, Ein: np.array, T: np.array) -> np.array:
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
-def get_S_fgm_from_alpha_beta(alpha: np.array, beta: np.array,
-                              wt:float) -> np.array:
+def get_S_fgm_from_alpha_beta(alpha: np.array([int]), beta: np.array([int]),
+                              wt:float) -> np.array([int]):
     """
     Get the S(alpha, beta) matrix values using Free Gas Model.
     .. math::
@@ -455,8 +459,8 @@ def get_S_fgm_from_alpha_beta(alpha: np.array, beta: np.array,
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_S_fgm_from_parameters(Eout: np.array, Ein: float, T: float, M: float,
-                              theta: np.array, wt: float) -> np.array:
+def get_S_fgm_from_parameters(Eout: np.array([int]), Ein: float, T: float, M: float,
+                              theta: np.array([int]), wt: float) -> np.array([int]):
     """
     Generate the S(alpha, beta) matrix values using Free Gas Model from base
     parameters:
@@ -495,8 +499,9 @@ def get_S_fgm_from_parameters(Eout: np.array, Ein: float, T: float, M: float,
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
-def get_S_sct_from_alpha_beta(alpha: np.array, beta: np.array, Tratio: float,
-                              ws:float) -> np.array:
+def get_S_sct_from_alpha_beta(alpha: np.array([int]), beta: np.array([int]),
+                              Tratio: float,
+                              ws:float) -> np.array([int]):
     """
     Generate S(alpha, beta) matrix using Short Collision Time:
     .. math::
@@ -528,9 +533,9 @@ def get_S_sct_from_alpha_beta(alpha: np.array, beta: np.array, Tratio: float,
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_S_sct_from_parameters(Eout: np.array, Ein: float, T: float, M: float,
-                              theta: np.array, ws: float,
-                              Teff: float) -> np.array:
+def get_S_sct_from_parameters(Eout: np.array([int]), Ein: float, T: float, M: float,
+                              theta: np.array([int]), ws: float,
+                              Teff: float) -> np.array([int]):
     """
     Generate the S(alpha, beta) matrix values using Short Collision Time from
     base parameters:

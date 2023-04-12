@@ -6,7 +6,7 @@ Created on Tue Nov 15 09:11:55 2022
 """
 import scipy as sp
 import pandas as pd
-from collections.abc import Iterable
+from typing import Iterable
 
 
 def integrate(series: pd.Series, kind="trapezoidal") -> float:

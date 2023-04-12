@@ -11,7 +11,7 @@ from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_al
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.beta import Beta
 from solid_cinel.core.alpha import Alpha
-from collections.abc import Iterable
+from typing import Iterable
 import numpy as np
 import pandas as pd
 import scipy as sp

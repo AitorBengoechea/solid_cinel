@@ -10,7 +10,7 @@ from solid_cinel.core.beta import Beta
 import pandas as pd
 import numpy as np
 import scipy as sp
-from collections.abc import Iterable
+from typing import Iterable
 from scipy.constants import physical_constants as const
 from scipy.interpolate import interp1d
 import matplotlib

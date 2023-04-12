@@ -5,7 +5,7 @@ from io import StringIO
 import numpy as np
 import pandas as pd
 import collections
-from collections.abc import Iterable
+from typing import Iterable
 import pytest
 collections.Callable = collections.abc.Callable
 

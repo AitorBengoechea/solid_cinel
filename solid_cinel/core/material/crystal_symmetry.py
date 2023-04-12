@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from collections.abc import Iterable
+from typing import Iterable
 
 class Crystal_structure():
     def __init__(self, length: Iterable[:], angles: Iterable[:]):

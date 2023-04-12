@@ -211,7 +211,7 @@ def convolTaufunc(interv_in_beta, Tau1_neg, Taunm1_neg, Taun_neg):
 def update_Sab_with_tau_n(n: int, alpha_grid: np.ndarray,
                           DebyeWallerCoeff: float, tau_n: np.ndarray,
                           Sab: np.ndarray,
-                          iter_sum: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+                          iter_sum: np.ndarray) -> tuple:
     """
     Iterative sum into a S(alpha, -beta) matrix of tau_n(-beta) functions. This
     function only add one term to term to the matrix.

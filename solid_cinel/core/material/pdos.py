@@ -85,7 +85,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p = pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> assert sp.integrate.trapezoid(p.data.values, p.data.index) == 1.0
@@ -101,7 +101,7 @@ class Pdos:
         self.data = rho_ / integrate(rho_)
 
     @classmethod
-    def from_data(cls, rho: Iterable[int], interval_energy: float):
+    def from_dE(cls, rho: Iterable[int], interval_energy: float):
         """
         Extract rho in energy from the introduced data.
 
@@ -120,11 +120,11 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.rho.iloc[0:10]
-        E
+        dE
         0.0000    0.000000
         0.0008    0.041157
         0.0016    0.164629
@@ -139,7 +139,7 @@ class Pdos:
         """
         rho_ = np.array(rho)
         index = pd.Index(np.arange(len(rho_)) * interval_energy)
-        index.name = "E"
+        index.name = "dE"
         return cls(rho_, index=index)
 
     def to_beta_grid(self, T: float):
@@ -161,9 +161,9 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> p.rho.iloc[0:5]
-        E
+        dE
         0.0000    0.000000
         0.0008    0.041157
         0.0016    0.164629
@@ -216,7 +216,7 @@ class Pdos:
         Example
         -------
         Object initialization:
-        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> T = 300
@@ -247,7 +247,7 @@ class Pdos:
         """
         Calculate the effective temperature for a certain pdos information.
         .. math::
-            overline{T} = \left(w_t+\int_{0}^{\infty}\beta^2P(\beta)\cosh(\beta/2)d\beta\right)T
+            T_{eff} = w_t * T + \frac{1}{2k_B}\int_{0}^{\infty}\varepsilon \rho(\varepsilon)\coth\left(\frac{\varepsilon}{2k_BT}\right)d\varepsilon = \left(w_t+\int_{0}^{\infty}\beta^2P(\beta)\cosh(\beta/2)d\beta\right)T
 
         Parameters
         ----------
@@ -264,7 +264,7 @@ class Pdos:
         Example
         -------
         Object initialization:
-        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.Teff(T=20).round(4)
@@ -285,7 +285,13 @@ class Pdos:
         Calculate Debye Waller Coefficient in LEAPR formalism for a certain
         pdos information.
         .. math::
-            c=2\int_{0}^{\beta_{\textrm{max}}}P_s(\beta)\cosh(\dfrac{\beta}{2})d\beta
+            \lambda_s &=\int_{-\infty}^{\infty}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta \\
+                      &=\int_{-\infty}^{0}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta+\int_{0}^{\infty}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta \\
+                      &=-\int_{\infty}^{0}P_s(-\beta^\prime)\exp(\dfrac{\beta^\prime} {2})d\beta^\prime+\int_{0}^{\infty}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta \quad\textrm{($\beta^\prime=-\beta$)} \\
+                      &=\int_{0}^{\infty}P_s(\beta)\exp(\dfrac{\beta}{2})d\beta+\int_{0}^{\infty}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta \\
+                      &=\int_{0}^{\infty}P_s(\beta)\left(\exp(\dfrac{\beta}{2})+\exp(-\dfrac{\beta}{2})\right)d\beta \\
+                      &=2\int_{0}^{\infty}P_s(\beta)\cosh(\dfrac{\beta}{2})d\beta \\
+                      &=2\int_{0}^{\beta_{\textrm{max}}}P_s(\beta)\cosh(\dfrac{\beta}{2})d\beta
 
         Parameters
         ----------
@@ -300,7 +306,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.DebyeWallerCoeff(T=20).round(6)
@@ -315,6 +321,8 @@ class Pdos:
     def _get_tau_1(self, T: float) -> pd.Series:
         """
         Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
+        .. math::
+            \mathcal{T}_1(-\beta) = \exp(\beta)\mathcal{T}_1(\beta) =\dfrac{P(\beta)\exp(\beta/2)}{\lambda}
 
         Parameters
         ----------
@@ -334,7 +342,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p._get_tau_1(20).iloc[:10]
@@ -418,7 +426,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.get_tau(20, nphonon=1).iloc[:10]  #doctest: +NORMALIZE_WHITESPACE

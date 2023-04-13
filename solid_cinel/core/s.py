@@ -374,7 +374,7 @@ class Sab:
         SCT:
         Dont fit the normalization and sum rule with the correct precision
         >>> T = 300
-        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> beta_grid = Beta.generate_grid(T)
         >>> alpha_grid = Alpha.generate_grid(T, 26)
         >>> S = Sab.from_sct(alpha_grid, beta_grid, T, pdos)
@@ -451,7 +451,7 @@ class Sab:
         -------
         >>> T = 800
         >>> from solid_cinel.core.material.pdos import Pdos
-        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
@@ -539,7 +539,7 @@ class Sab:
         -------
         >>> T = 800
         >>> from solid_cinel.core.material.pdos import Pdos
-        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> tau1 = pdos._get_tau_1(T)
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
         >>> alpha_grid = Alpha(alpha0_).scale(T).data
@@ -680,7 +680,7 @@ class Sab:
         -------
         >>> T = 300
         >>> from solid_cinel.core.material.pdos import Pdos
-        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
@@ -757,7 +757,7 @@ class Sab:
         Example
         -------
         >>> T = 300
-        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
@@ -816,7 +816,7 @@ class Sab:
         Example
         -------
         >>> T = 300
-        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
@@ -902,7 +902,7 @@ class Sab:
         Example
         -------
         >>> T = 300
-        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
@@ -968,7 +968,7 @@ class Sab:
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> from solid_cinel.core.material.pdos import Pdos
-        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
 
         Only interpolation (sum rule check):
@@ -1082,7 +1082,7 @@ class Sab:
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
         >>> from solid_cinel.core.material.pdos import Pdos
-        >>> pdos = Pdos.from_data(rho_in_energy_U238, interv_in_energy_U238)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
 
         Only interpolation:
@@ -1165,7 +1165,7 @@ class Sab:
         >>> beta_grid = Beta(beta0_).scale(T)
         >>> alpha_grid = Alpha(alpha0_).scale(T)
         >>> from solid_cinel.core.material.pdos import Pdos
-        >>> pdos = Pdos.from_data(rho_in_energy, interv_in_energy)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
         >>> Sab.get_inelastic_Xs(T, M, boundXs, Ein).iloc[:5, :5].round(6)  #doctest: +NORMALIZE_WHITESPACE
         E_out     0.331180  0.331812  0.332445  0.333077  0.333710

@@ -20,8 +20,6 @@ jobs:
 
       - name: install general python dependencies
         run: pip install sphinx sphinx_rtd_theme numpydoc coveralls pytest-cov nbval
-      - name: Install public repository on Travis CI
-        run: pip install --user codecov
       - name: install solid cinel requirements
         run: pip install -r requirements.txt
       - name: install solid_cinel

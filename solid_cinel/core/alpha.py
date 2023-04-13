@@ -188,7 +188,7 @@ class Alpha:
     """Class with all the method for the creation and manipulation of alpha grids."""
 
     def __init__(self, array):
-        self.data = np.sort(array)
+        self.data = np.unique(array)
 
     @property
     def to_index(self) -> pd.Index:

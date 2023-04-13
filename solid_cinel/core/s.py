@@ -288,6 +288,32 @@ class Sab:
             S_sym = S_asym
         return S_sym
 
+    def to_full(self) -> pd.DataFrame:
+        """
+        Get the full S(alpha, beta) matrix
+
+        Returns
+        -------
+        'pd.DataFrame'
+            the full S(alpha, beta) matrix
+
+        Example
+        -------
+        >>> beta_grid = Beta.generate_grid(300)
+        >>> alpha_grid = Alpha.generate_grid(300, 26)
+        >>> Sab_matrix = Sab.from_fgm(alpha_grid, beta_grid)
+        >>> Sab_matrix_norm = Sab_matrix.data.apply(_normalization, axis=1)
+        >>> Sab_matrix_full = Sab_matrix.to_full()
+        >>> assert (Sab_matrix_full.apply(integrate, axis=1).round(6) == Sab_matrix_norm.round(6)).all()
+
+        >>> Sab_matrix_sum = Sab_matrix.data.apply(_sum_rule, axis=1)
+        >>> assert (Sab_matrix_full.apply(lambda x: - integrate(x * x.index), axis=1).round(6) == Sab_matrix_sum.round(6)).all()
+        """
+        beta = self.beta.to_index
+        Sab_negative = self.data.set_axis(-beta, axis=1).sort_index(axis=1)
+        Sab_positive = self.data.apply(lambda x: x * np.exp(-beta), axis=1)
+        return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
+
     @classmethod
     def from_fgm(cls, alpha_grid: Union[Alpha, Iterable[int]],
                  beta_grid: Union[Beta, Iterable[int]], T: float = None,

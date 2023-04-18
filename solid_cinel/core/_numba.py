@@ -656,7 +656,8 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         # Interpolate tau_n(-beta):
         tau_n_reshape = np.interp(beta, beta_tau_n, tau_n)
         # Bounds in nopython mode:
-        tau_n_reshape[beta > beta_tau_n.max()] = 0.0
+        if beta[-1] > len(tau_n) * delta_beta:
+            tau_n_reshape[beta > len(tau_n) * delta_beta] = 0.0
 
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))

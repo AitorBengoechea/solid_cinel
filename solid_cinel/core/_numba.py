@@ -601,7 +601,7 @@ def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
         raise ValueError("Tau function doesnt satisfy the normalization condition")
     return
 
-@nb.jit(nopython=False, nogil=False, cache=True, parallel=False)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
 def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
                                nphonon: int, tau1: np.ndarray, delta_beta: float,
                                threshold: float, DebyeWallerCoeff: float,
@@ -653,7 +653,10 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         check_tau_n(tau_n, delta_beta)
 
         # Interpolate tau_n(-beta):
-        tau_n_reshape = np.interp(beta, beta_tau_n, tau_n, right=0, left=0)
+        tau_n_reshape = np.interp(beta, beta_tau_n, tau_n)
+        # Bounds in nopython mode:
+        tau_n_reshape[beta > beta_tau_n.max()] = 0.0
+        tau_n_reshape[beta < beta_tau_n.min()] = 0.0
 
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))

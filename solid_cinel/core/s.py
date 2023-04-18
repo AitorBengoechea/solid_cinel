@@ -7,7 +7,7 @@ from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU
-from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta
+from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta, get_S_pdos_from_alpha_beta
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.beta import Beta
 from solid_cinel.core.alpha import Alpha
@@ -497,11 +497,10 @@ class Sab:
         """
         beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
         alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
-        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
-        cls.DebyeWallerCoeff = debye_waller_coeff
+        cls.DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
 
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos
@@ -509,28 +508,19 @@ class Sab:
         tau1 = pdos._get_tau_1(T)
         delta_beta = tau1.index[1]
         S_values, iter_sum = cls._S_from_tau1(tau1,
-                                              debye_waller_coeff,
+                                              cls.DebyeWallerCoeff,
                                               alpha_grid_.data,
                                               beta_grid_.data)
         if nphonon > 1:
-            tau1 = tau_n_minus_1 = tau1.values
-            for n in range(1, nphonon):
-                # Tau_n(-beta)
-                tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
-                beta_tau_n = np.arange(len(tau_n)) * delta_beta
-                check_tau_n(tau_n, beta_tau_n)
-
-                # Interpolate tau_n(-beta):
-                tau_n_reshape = reshape_differential(beta_tau_n, tau_n,
-                                                     beta_grid_.data)
-
-                # Compute S(alpha, -beta) for tau_n reshape
-                iter_sum += np.log(alpha_grid_.data * debye_waller_coeff / (n + 1))
-                alpha_mul = np.exp(-alpha_grid_.data * debye_waller_coeff + iter_sum)
-                S_values += np.outer(alpha_mul, tau_n_reshape)
-
-                # Next tau_n
-                tau_n_minus_1 = tau_n
+            S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
+                                                  beta_grid_.data,
+                                                  nphonon,
+                                                  tau1.values,
+                                                  delta_beta,
+                                                  threshold,
+                                                  cls.DebyeWallerCoeff,
+                                                  iter_sum,
+                                                  S_values)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @staticmethod
@@ -1268,34 +1258,6 @@ def _normalization(x: pd.Series) -> float:
     S_asymm_values = x.values
     S = pd.Series((1 + np.exp(-beta)) * S_asymm_values, index=beta)
     return integrate(S)
-
-
-def check_tau_n(tau_n: Iterable[int], beta: Iterable[int]) -> None:
-    """
-    Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
-    normalized to the unity.
-
-    Parameters
-    ----------
-    tau_n : 1D iterable, (N,)
-        tau_n function values.
-    beta : 1D iterable (N,)
-        beta grid.
-
-    Returns
-    -------
-    "None"
-        If the normalization is not satisfied with good accuracy a warning
-        is raise. If the accuracy is very low, a ValueError will be raise.
-
-    Raises
-    ------
-    ValueError
-        Tau function doesnt satisfy the normalization condition.
-    """
-    if integrate(pd.Series(tau_n, index=beta)) < 1.e-5:
-        raise ValueError("Tau function doesnt satisfy the normalization condition")
-    return
 
 
 def proportionality_factor(alpha: float, alpha_i: float,

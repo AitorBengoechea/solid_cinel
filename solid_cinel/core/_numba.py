@@ -572,3 +572,94 @@ def get_S_sct_from_parameters(Eout: np.ndarray, Ein: float, T: float, M: float,
             alpha = get_alpha(Eout[i], Ein, T, M, np.cos(theta[j]))[0]
             Sab[j, i] = get_S_sct_from_alpha_beta(alpha, beta, Tratio, ws)
     return Sab
+
+@nb.jit(nopython=True)
+def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
+    """
+    Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
+    normalized to the unity.
+
+    Parameters
+    ----------
+    tau_n : 1D iterable, (N,)
+        tau_n function values.
+    delta_beta : float
+        Space between beta grid points.
+
+    Returns
+    -------
+    "None"
+        If the normalization is not satisfied with good accuracy a warning
+        is raise. If the accuracy is very low, a ValueError will be raise.
+
+    Raises
+    ------
+    ValueError
+        Tau function doesnt satisfy the normalization condition.
+    """
+    if np.trapz(tau_n, dx=delta_beta) < 1.e-5:
+        raise ValueError("Tau function doesnt satisfy the normalization condition")
+    return
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
+def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
+                               nphonon: int, tau1: np.ndarray, delta_beta: float,
+                               threshold: float, DebyeWallerCoeff: float,
+                               iter_sum: np.ndarray, S_values: np.ndarray):
+    """
+    Generate S(alpha, -beta) matrix using phonon expansion.
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Numerical appoximation to get convergence in large exponentiation and
+    factorial numbers. Each element of the array is related with one alpha
+    and represent the following term of the previous equation:
+    ..math::
+        \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+    Parameters
+    ----------
+    alpha : 'np.ndarray', (N,)
+        alpha grid values.
+    beta : 'np.ndarray', (M,)
+        beta grid values.
+    nphonon : 'int', optional
+        Phonon expansion order.
+    tau1 : 1D iterable, (N,)
+        tau1 function values.
+    delta_beta : float
+        Space between beta grid points.
+    threshold : 'float', optional
+        Minimun value to take into account in the creation of tau_n
+        functions. For T>200 is convenient to set into 1.0e-14 to speed up
+        the calculations.
+    DebyeWallerCoeff : 'float'
+        Debye Waller Coefficient in LEAPR formalism.
+    iter_sum : 'np.ndarray', (N,)
+        iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
+    S_values : 'np.ndarray', (N, M)
+        Zero phonon expansion $S(\alpha,\,-\beta)=\exp(-\alpha\lambda)(\alpha\lambda)\mathcal{T}_1(-\beta)$
+
+    Returns
+    -------
+    'np.ndarray', (N, M)
+        S(alpha, beta) matrix values
+    """
+    tau_n_minus_1 = tau1
+    for n in range(1, nphonon):
+        # Tau_n(-beta)
+        tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
+        beta_tau_n = np.arange(len(tau_n)) * delta_beta
+        check_tau_n(tau_n, delta_beta)
+
+        # Interpolate tau_n(-beta):
+        tau_n_reshape = np.interp(beta, beta_tau_n, tau_n)
+
+        # Compute S(alpha, -beta) for tau_n reshape
+        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+        S_values += np.outer(alpha_mul, tau_n_reshape)
+
+        # Next tau_n
+        tau_n_minus_1 = tau_n
+    return S_values

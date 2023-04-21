@@ -667,6 +667,159 @@ class Sab:
             warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
+    def _get_single_momentum(self, n, T: float = None) -> pd.Series:
+        """
+        Get the n momentum of the S(alpha, -beta) matrix:
+        .. math::
+            \alpha_{moment}(n)=\int_{-\infty}^{\infty}\beta^n S(\alpha,\,\beta)d\beta
+
+        Parameters
+        ----------
+        n : 'int'
+            The momentum to calcualte.
+        T: 'float', optional
+            If a temperature is introduced, it means that the momentum is going to
+            be tranform into a energy in eV. The default is None.
+
+        Returns
+        -------
+        'pd.Series'
+            Pandas Series with the momentum value for each alpha of the
+            S(alpha, -beta) matrix.
+
+        Example
+        -------
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha_grid = Alpha.generate_grid(300, 26).data
+        >>> Sab_mat = Sab.from_fgm(alpha_grid, beta_grid)
+        >>> Sab_mat.get_momentum(2).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
+                            2
+        alpha
+        0.001050     0.000077
+        0.002941     0.000360
+        0.008233     0.001687
+        0.023048     0.007912
+        0.064523     0.037186
+        0.180632     0.175848
+        0.505683     0.845481
+        1.415669     4.235277
+        3.963193    23.178151
+        11.095036  145.220627
+
+        >>> Sab_mat.get_momentum(1).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
+                           1
+        alpha
+        0.001050   -0.001050
+        0.002941   -0.002941
+        0.008233   -0.008233
+        0.023048   -0.023048
+        0.064523   -0.064523
+        0.180632   -0.180632
+        0.505683   -0.505749
+        1.415669   -1.415937
+        3.963193   -3.963627
+        11.095036 -11.096278
+        """
+        momentum_df = self.data.apply(_sum_rule, axis="columns", n=n)
+        momentum_df.name = n
+        if not (n % 2) == 0:
+            momentum_df *= -1
+        if T:
+            momentum_df *= (kb * T) ** n
+        return momentum_df
+    def get_momentum(self, n: int, all: bool = False, T: float = None) -> pd.DataFrame:
+        """
+        Get the n momentum of the S(alpha, -beta) matrix:
+        .. math::
+            \alpha_{moment}(n)=\int_{-\infty}^{\infty}\beta^n S(\alpha,\,\beta)d\beta
+
+        Parameters
+        ----------
+        n : 'int'
+            The momentum to calcualte.
+        all : 'bool', optional
+            Optional argument to calculate all the moments until n. The default
+            is False.
+        T: 'float', optional
+            If a temperature is introduced, it means that the momentum is going to
+            be tranform into a energy in eV. The default is None.
+
+        Returns
+        -------
+        momentum_df: 'pd.DataFrame'
+            Dataframe with the moments values
+
+        Example
+        -------
+        1 momentum:
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha_grid = Alpha.generate_grid(300, 26).data
+        >>> Sab_mat = Sab.from_fgm(alpha_grid, beta_grid)
+        >>> Sab_mat.get_momentum(2).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
+                            2
+        alpha
+        0.001050     0.000077
+        0.002941     0.000360
+        0.008233     0.001687
+        0.023048     0.007912
+        0.064523     0.037186
+        0.180632     0.175848
+        0.505683     0.845481
+        1.415669     4.235277
+        3.963193    23.178151
+        11.095036  145.220627
+
+        >>> Sab_mat.get_momentum(2, T = 300).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
+                              2
+        alpha
+        0.001050   5.135575e-08
+        0.002941   2.405873e-07
+        0.008233   1.127426e-06
+        0.023048   5.287471e-06
+        0.064523   2.485224e-05
+        0.180632   1.175238e-04
+        0.505683   5.650571e-04
+        1.415669   2.830546e-03
+        3.963193   1.549056e-02
+        11.095036  9.705471e-02
+
+        2 momentum:
+        >>> Sab_mat.get_momentum(4, all=True).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
+                            1           2             3             4
+        alpha
+        0.001050    -0.001050    0.000077     -0.000007  6.458514e-07
+        0.002941    -0.002941    0.000360     -0.000052  8.473183e-06
+        0.008233    -0.008233    0.001687     -0.000407  1.112575e-04
+        0.023048    -0.023048    0.007912     -0.003199  1.464338e-03
+        0.064523    -0.064523    0.037186     -0.025248  1.940055e-02
+        0.180632    -0.180632    0.175848     -0.201662  2.617168e-01
+        0.505683    -0.505749    0.845481     -1.664099  3.704584e+00
+        1.415669    -1.415937    4.235277    -14.863639  5.882242e+01
+        3.963193    -3.963627   23.178151   -156.507316  1.176998e+03
+        11.095036  -11.096278  145.220627  -2104.633063  3.302225e+04
+
+        >>> Sab_mat.get_momentum(4, all=True, T=300).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
+                           1             2              3             4
+        alpha
+        0.001050   -0.000027  5.135575e-08  -1.144102e-10  2.884757e-13
+        0.002941   -0.000076  2.405873e-07  -8.969503e-10  3.784628e-12
+        0.008233   -0.000213  1.127426e-06  -7.035873e-09  4.969421e-11
+        0.023048   -0.000596  5.287471e-06  -5.527828e-08  6.540605e-10
+        0.064523   -0.001668  2.485224e-05  -4.362162e-07  8.665441e-09
+        0.180632   -0.004670  1.175238e-04  -3.484226e-06  1.168983e-07
+        0.505683   -0.013075  5.650571e-04  -2.875156e-05  1.654688e-06
+        1.415669   -0.036605  2.830546e-03  -2.568074e-04  2.627359e-05
+        3.963193   -0.102468  1.549056e-02  -2.704065e-03  5.257172e-04
+        11.095036  -0.286861  9.705471e-02  -3.636293e-02  1.474970e-02
+        """
+        if all:
+            momentum_df = {}
+            for n_ in range(1, n + 1):
+                momentum_df[n_] = self._get_single_momentum(n_, T=T)
+        else:
+            momentum_df = self._get_single_momentum(n, T=T)
+        return pd.DataFrame(momentum_df)
+
     def get_beta(self, beta_new: Union[Iterable[int], float],
                  add: bool = False) -> pd.DataFrame:
         """
@@ -1204,18 +1357,21 @@ class Sab:
         return inelastic_xs
 
 
-def _sum_rule(x: pd.Series) -> float:
+def _sum_rule(x: pd.Series, n: int=1) -> float:
     """
-    Calculate the sum rule value for a fix alpha value.
-
+    Calculate the "n" sum rule value for a fix alpha value.
+    .. math::
+        \int_{-\infty}^{\infty}\beta^n S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}\beta^n S(\alpha,\,-\beta)(1-\exp(-\beta))d\beta
     Parameters
     ----------
     x : 'pd.Series', (N)
         S(alpha, beta) matrix values for fix alpha.
+    n: 'int', optional
+        The number of the sum_rule
 
     Returns
     -------
-    sum_rule_values : "float"
+    "float"
         Sum rule value for a fix alpha.
 
     Example
@@ -1228,8 +1384,7 @@ def _sum_rule(x: pd.Series) -> float:
     """
     beta = x.index.values
     S_values = x.values
-    sum_rule_values = trapezoid(beta * S_values * (1 - np.exp(-beta)), beta)
-    return sum_rule_values
+    return trapezoid(np.power(beta, n) * S_values * (1 - np.exp(-beta)), beta)
 
 
 def _normalization(x: pd.Series) -> float:

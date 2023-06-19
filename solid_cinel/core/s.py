@@ -437,8 +437,8 @@ class Sab:
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
-    def from_pdos(cls, alpha_grid: Union[Alpha, Iterable[int]],
-                  beta_grid: Union[Beta, Iterable[int]], T: float, pdos: Pdos,
+    def from_pdos(cls, alpha_grid: Union[Alpha, Iterable],
+                  beta_grid: Union[Beta, Iterable], T: float, pdos: Pdos,
                   threshold: float = 0.0, nphonon: int = 1000):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.

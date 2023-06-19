@@ -246,10 +246,10 @@ class Alpha:
             return cls(alpha_grid)
 
     @classmethod
-    def from_parameters(cls, Eout: Union[Iterable[int], float],
-                        Ein: Union[Iterable[int], float],
-                        T: Union[Iterable[int], float], M: float,
-                        theta: Union[Iterable[int], float]):
+    def from_parameters(cls, Eout: Union[Iterable, float],
+                        Ein: Union[Iterable, float],
+                        T: Union[Iterable, float], M: float,
+                        theta: Union[Iterable, float]):
         """
         Generate the alpha values for the given combination of the input
         parameters:
@@ -294,7 +294,7 @@ class Alpha:
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
     def get_theta(self, T: float, Ein: float, M: float,
-                  beta_grid: Union[Beta, Iterable[int]]) -> pd.Series:
+                  beta_grid: Union[Beta, Iterable]) -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible scattering angles
         for a scattering atom, temperature and incident neutron energy.

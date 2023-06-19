@@ -64,8 +64,8 @@ b_incoh = [0.0, 0.19947114020071632]
 class Solid(Crystal_structure, Molecule):
     """Class to store the properties and methods for solid materials."""
 
-    def __init__(self, preferred_orientation: Iterable[int],
-                 unit_pos: Union[dict, Iterable[int]],
+    def __init__(self, preferred_orientation: Iterable,
+                 unit_pos: Union[dict, Iterable],
                  *args, **kwargs):
         """
         Initialize the crystaline structure formed by a single atom.

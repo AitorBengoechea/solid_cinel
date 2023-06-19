@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Iterable
 
 class Crystal_structure():
-    def __init__(self, length: Iterable[int], angles: Iterable[int]):
+    def __init__(self, length: Iterable, angles: Iterable):
         if len(length) != 3:
             ValueError("The direct vector lengths array do not have the apropiate lenght")
         if len(angles) != 3:
@@ -37,7 +37,8 @@ class Crystal_structure():
         Test the results:
         >>> assert all(cubic_vec[0].round(6) == np.array([1.      , 0.      , 0.]))
         >>> assert all(cubic_vec[1].round(6) == np.array([0.5     , 0.866025, 0.      ]))
-        >>> assert all(cubic_vec[2].round(6) == np.array([0.5     , 0.288675, 0.816497]))
+        >>> assert all(cubic_ls
+        vec[2].round(6) == np.array([0.5     , 0.288675, 0.816497]))
         """
         angles = self.angles
         a = np.array([1.,

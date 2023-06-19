@@ -227,7 +227,7 @@ class Sab:
         return self._data
 
     @data.setter
-    def data(self, df: Iterable[list[int, int]]):
+    def data(self, df: Iterable):
         """
         Construct the S(alpha, -beta) matrix and check if the data achieve the
         normalization and sum rule constrain.
@@ -315,8 +315,8 @@ class Sab:
         return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
 
     @classmethod
-    def from_fgm(cls, alpha_grid: Union[Alpha, Iterable[int]],
-                 beta_grid: Union[Beta, Iterable[int]], T: float = None,
+    def from_fgm(cls, alpha_grid: Union[Alpha, Iterable],
+                 beta_grid: Union[Beta, Iterable], T: float = None,
                  wt: float = 1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
@@ -437,8 +437,8 @@ class Sab:
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
-    def from_pdos(cls, alpha_grid: Union[Alpha, Iterable[int]],
-                  beta_grid: Union[Beta, Iterable[int]], T: float, pdos: Pdos,
+    def from_pdos(cls, alpha_grid: Union[Alpha, Iterable],
+                  beta_grid: Union[Beta, Iterable], T: float, pdos: Pdos,
                   threshold: float = 0.0, nphonon: int = 1000):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
@@ -525,8 +525,8 @@ class Sab:
 
     @staticmethod
     def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
-                     alpha_grid: Iterable[int],
-                     beta_grid: Iterable[int]) -> tuple[np.ndarray, np.ndarray]:
+                     alpha_grid: Iterable,
+                     beta_grid: Iterable) -> tuple:
         """
         Generate S(alpha, -beta) matrix using first phonon expansion.
         .. math::
@@ -820,7 +820,7 @@ class Sab:
             momentum_df = self._get_single_momentum(n, T=T)
         return pd.DataFrame(momentum_df)
 
-    def get_beta(self, beta_new: Union[Iterable[int], float],
+    def get_beta(self, beta_new: Union[Iterable, float],
                  add: bool = False) -> pd.DataFrame:
         """
         Quadratic interpolation to get the probability of the new beta value
@@ -898,7 +898,7 @@ class Sab:
         else:
             return beta_df
 
-    def get_alpha(self, alpha_new: Union[Iterable[int], float],
+    def get_alpha(self, alpha_new: Union[Iterable, float],
                   add: bool = False) -> pd.DataFrame:
         """
         Unit base interpolation to get the probability of the new alpha values
@@ -1044,8 +1044,8 @@ class Sab:
         return pd.DataFrame(alpha_new_vector,
                             columns=pd.Index([alpha_new], name="alpha"))
 
-    def get_value_from_Alpha_Beta(self, alpha: Union[Iterable[int], float],
-                                  beta: Union[Iterable[int], float]) -> pd.DataFrame:
+    def get_value_from_Alpha_Beta(self, alpha: Union[Iterable, float],
+                                  beta: Union[Iterable, float]) -> pd.DataFrame:
         """
         Get intepolated values for the beta and alpha values from the
         S(alpha, beta) matrix. This method take into account the sing of the
@@ -1093,11 +1093,11 @@ class Sab:
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
 
     def get_matrix_from_parameters(self,
-                                   Eout: Union[Iterable[int], float],
-                                   Ein: Union[Iterable[int], float],
-                                   T: Union[Iterable[int], float],
+                                   Eout: Union[Iterable, float],
+                                   Ein: Union[Iterable, float],
+                                   T: Union[Iterable, float],
                                    M: float,
-                                   theta: Union[Iterable[int], float],
+                                   theta: Union[Iterable, float],
                                    extrapolation: str = "sct") -> pd.DataFrame:
         """
         Based on the set of variables introduced, interpolate the existing
@@ -1214,9 +1214,9 @@ class Sab:
 
         return Sab_new
 
-    def get_scattering_func(self, Ein: Union[Iterable[int], float],
-                            theta: Union[Iterable[int], float],
-                            T: Union[Iterable[int], float],
+    def get_scattering_func(self, Ein: Union[Iterable, float],
+                            theta: Union[Iterable, float],
+                            T: Union[Iterable, float],
                             M: float, extrapolation: str = "sct") -> pd.DataFrame:
         """
         Return the scattering function from S(alpha, beta) matrix:

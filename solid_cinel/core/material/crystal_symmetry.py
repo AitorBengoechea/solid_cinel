@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Iterable
 
 class Crystal_structure():
-    def __init__(self, length: Iterable[int], angles: Iterable[int]):
+    def __init__(self, length: Iterable, angles: Iterable):
         if len(length) != 3:
             ValueError("The direct vector lengths array do not have the apropiate lenght")
         if len(angles) != 3:

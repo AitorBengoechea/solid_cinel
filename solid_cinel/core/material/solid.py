@@ -62,7 +62,49 @@ b_incoh = [0.0, 0.19947114020071632]
 
 
 class Solid(Crystal_structure, Molecule):
-    """Class to store the properties and methods for solid materials."""
+    """
+    Class to store the properties and methods for solid materials
+
+    Attributes
+    ----------
+    preferred_orientation : `np.array` of size (1, 3)
+        Preferred orientation of the target.
+    unit_pos : 'dict' or 1D iterable
+        Unitary positions of atoms in the lattice unit cell. Two options:
+        Single atom: 1D iterable
+        Multiple atoms: 'dict'
+            {"atom name" : [atom positions]}
+    length : `np.array` of size (1, 3)
+        Direct lattice vectors length in fm.
+    angles: `np.array` of size (1, 3)
+        Direct lattice vectors angles in ª.
+    symmetry : 'str', optional
+        Symmetry of the solid, by default "cubic"
+    A : 1D iterable of 'int' or 'int'
+        Atomic number.
+    Z : 1D iterable of 'int' or 'int'
+        Number of protons.
+    atom_mass : 1D iterable of 'float' or 'float'
+        Atom mass, amu.
+    b_coh : 1D iterable of 'float' or 'float'
+        Coherent scattering length, fm.
+    b_incoh : 1D iterable of 'float' or 'float'
+        Incoherent scattering length, fm.
+    energy_sup : 'float'
+        Energy of the incident neutron, eV.
+    energy_cut : 'float'
+        Energy cut-off, eV.
+
+    Properties
+    ----------
+    unit_pos: pd.Series
+        atom position in a unit cell for each atom
+    atom_pos: pd.Series
+        Position of atoms in the direct lattice
+    atom_number: int
+        Number of atoms in the unit cell
+
+    """
 
     def __init__(self, preferred_orientation: Iterable,
                  unit_pos: Union[dict, Iterable],

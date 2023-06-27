@@ -11,7 +11,35 @@ collections.Callable = collections.abc.Callable
 
 
 class Atom:
-    """Class to store properties of the atoms."""
+    """
+    Class to store properties of the atoms
+
+    Attributes
+    ----------
+    A : 'int'
+        Atomic number.
+    Z : 'int'
+        Number of protons.
+    atom_mass : 'float'
+        Atom mass, amu.
+    b : 'dict'
+        Dictionary with the bound coherent and incoherent scattering lengths
+        (fm)
+
+    Properties
+    ----------
+    name : 'str'
+        Material name: element + A
+    zam: 'int'
+        (Z * 1000 + A) * 10
+    boundXs: float
+        Bound total scattering xs in barns
+    boundIncXs: float
+        Bound incoherent scattering xs in barns
+    freeXs: float
+        Free total scattering xs in barns
+
+    """
 
     def __init__(self, A: int , Z: int, atom_mass: float,
                  b_coh: float, b_incoh: float):
@@ -169,6 +197,21 @@ class Molecule(Atom):
     """
     Class to store the properties and method for all the atom of
     the molecule
+
+    Attributes
+    ----------
+    A : 1D iterable of 'int' or 'int'
+        Atomic number.
+    Z : 1D iterable of 'int' or 'int'
+        Number of protons.
+    atom_mass : 1D iterable of 'float' or 'float'
+        Atom mass, amu.
+    b_coh : 1D iterable of 'float' or 'float'
+        Bound coherent scattering length (fm).
+    b_incoh : 1D iterable of 'float' or 'float'
+        Bound incoherent scattering length (fm).
+    name : 'str', optional
+        Molecule name
     """
 
     def __init__(self, A: Union[Iterable, int], Z: Union[Iterable, int],

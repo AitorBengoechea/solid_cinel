@@ -31,6 +31,29 @@ interv_in_energy = 0.0008
 class Pdos:
     """
     Object containing the method and properties of the phonon density of states
+    in energy.
+
+    Properties
+    ----------
+    rho : 'pd.Series'
+        Pandas Series containing the rho values in energy (index).
+
+    Methods
+    -------
+    from_dE: Pdos
+        Create a pdos object from a rho in energy
+    to_beta_grid: Pdos
+        Change the energy grid of rho for a beta grid
+    plot: None
+        Plot the pdos data
+    P: pd.Series
+        Calculate P function for LEAPR formalism with PDOS
+    Teff: float
+        Calculate the effective temperature
+    DebyeWaller: float
+        Calculate the Debye-Waller factor for LEAPR formalism with PDOS
+    get_tau: pd.DataFrame
+        Calculate the tau_n functions
     """
 
     def __init__(self, *args, **kwargs):
@@ -283,7 +306,7 @@ class Pdos:
     def DebyeWallerCoeff(self, T: float) -> float:
         """
         Calculate Debye Waller Coefficient in LEAPR formalism for a certain
-        pdos information.
+        pdos information
         .. math::
             \lambda_s &=\int_{-\infty}^{\infty}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta \\
                       &=\int_{-\infty}^{0}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta+\int_{0}^{\infty}P_s(\beta)\exp(-\dfrac{\beta}{2})d\beta \\

@@ -5,9 +5,10 @@ Created on Tue Nov 15 09:11:55 2022
 @author: AB272525
 """
 import scipy as sp
+import numpy as np
 import pandas as pd
 from typing import Iterable
-
+from scipy.stats import qmc
 
 def integrate(series: pd.Series, kind="trapezoidal") -> float:
     """
@@ -93,3 +94,23 @@ def reshape_differential(x: Iterable[int], y: Iterable[int], xnew: Iterable[int]
                                   assume_sorted=True,
                                   )
     return foo(xnew)
+
+
+def sampling(d:int, n:int) -> np.array:
+    """
+    Generate a latin hypercube sampling between 0 and 1.
+
+    Parameters
+    ----------
+    d : "int"
+        Dimension of the sampling
+    n : "int"
+        Number of samples
+
+    Returns
+    -------
+    "np.array"
+        Array of random numbers between 0 and 1 based on LHS
+    """
+    samples = qmc.LatinHypercube(d=d).random(n=n)
+    return samples if d > 1 else samples[:, 0]

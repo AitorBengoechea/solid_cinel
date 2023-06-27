@@ -199,10 +199,62 @@ rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
 class Sab:
     """
     Class containing all the methods and properties of a asymmetric
-    S(alpha, beta) matrix.
+    S(alpha, beta) matrix
+
+    Attributes
+    ----------
+    data : pd.DataFrame
+        Dataframe with the S(alpha, -beta) matrix values.
+    alpha : Alpha
+        Initialize the Alpha class with the information of S(alpha, beta)
+    beta : Beta
+        Initialize the Beta class with the information of S(alpha, beta)
+
+    Methods
+    -------
+    to_sym -> pd.DataFrame
+        Return the symmetric S(alpha, -beta) matrix
+    to_full -> pd.DataFrame
+        Return the full S(alpha, beta) matrix
+    from_fgm -> Sab
+        Return the S(alpha, beta) matrix from the FGM model
+    from_sct -> Sab
+        Return the S(alpha, beta) matrix from the SCT model
+    from_pdos -> Sab
+        Return the S(alpha, beta) matrix from the PDOS model
+    sum_rule_check -> bool
+        Check if the sum rule is satisfied
+    normalization_check -> bool
+        Check if the normalization is satisfied
+    get_momentum -> Sab or pd.DataFrame
+        Return the S(alpha, beta) matrix n momentum
+    get_beta -> Sab or pd.DataFrame
+        Quadratic interpolation to get the probability of the new beta value
+    get_alpha -> Sab or pd.DataFrame
+        Unit base interpolation to get the probability of the new alpha values
+    get_value_from_alpha_beta -> pd.DataFrame
+        Return the S(alpha, beta) matrix value for a given alpha and beta
+    get_matrix_from_parameters -> Sab or pd.DataFrame
+        Based on the set of variables introduced, interpolate the existing
+        S(alpha, -beta) to make a new S(alpha, beta) matrix with the alpha and
+        beta values created from the set of variables
+    get_scattering_function -> pd.DataFrame
+        Return the scattering function from S(alpha, beta) matrix
+    get_inelastic_Xs -> pd.DataFrame
+        Return the inelastic cross section from S(alpha, beta) matrix
     """
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the S(alpha, beta) matrix class
+
+        Parameters
+        ----------
+        args : "np.array"
+            Array containing the S(alpha, -beta) matrix.
+        kwargs : "dict"
+            Dictionary containing the S(alpha, -beta) matrix.
+        """
         self.data = pd.DataFrame(*args, **kwargs)
 
     @property

@@ -185,9 +185,40 @@ rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
 
 
 class Alpha:
-    """Class with all the method for the creation and manipulation of alpha grids."""
+    """
+    Class with all the method for the creation and manipulation of alpha
+    grids
 
-    def __init__(self, array):
+    Attributes
+    ----------
+    data : 'np.ndarray'
+        Array of alpha values.
+    to_index : 'pd.Index'
+        pandas Index of alpha values.
+
+    Methods
+    -------
+    generate_grid -> 'Alpha
+        Generate a alpha grid for a given temperature and atomic mass
+    from_parameters -> 'Alpha'
+        Generate the alpha values for the given combination of the input
+        parameters
+    scale -> 'Alpha'
+        Scale alpha or beta spectrum
+    get_theta -> pd.Series
+        Based on the S(alpha, -beta) matrix, get the posible scattering angles
+        for a scattering atom, temperature and incident neutron energy.
+     """
+
+    def __init__(self, array: Iterable):
+        """
+        Initialize the Alpha class
+
+        Parameters
+        ----------
+        array : Iterable
+            Array of alpha values
+        """
         self.data = np.unique(array)
 
     @property

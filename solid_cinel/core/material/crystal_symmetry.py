@@ -3,7 +3,39 @@ import pandas as pd
 from typing import Iterable
 
 class Crystal_structure():
-    def __init__(self, length: Iterable[int], angles: Iterable[int]):
+    """
+    Class for the crystal structure
+
+    Attributes
+    ----------
+    length : pd.Series
+        direct vector lengths
+    angles : pd.Series
+        direct vector angles
+
+    Properties
+    ----------
+    operator -> pd.DataFrame
+        Generate the operator for obteining the direct lattice vectors
+    dir_vec -> pd.DataFrame
+        Vectors of the direct lattice with the keys ["a1", "a2", "a3"]
+    reciproc_vec -> pd.DataFrame
+        Vectors of the reciprocal lattice with the keys ["b1", "b2", "b3"]
+    unit_cell_vol -> float
+        Unit cell volume
+    """
+    def __init__(self, length: Iterable, angles: Iterable):
+        """
+        Initialize the crystal structure class with the direct vector lengths
+        and angles
+
+        Parameters
+        ----------
+        length : Iterable, (3,)
+            direct vector lengths
+        angles : Iterable, (3,)
+            direct vector angles in degrees
+        """
         if len(length) != 3:
             ValueError("The direct vector lengths array do not have the apropiate lenght")
         if len(angles) != 3:

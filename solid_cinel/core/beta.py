@@ -183,9 +183,49 @@ rho_in_energy_U238_str = '''
 rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 class Beta:
-    """Class with all the method for the creation and manipulation of beta grids."""
+    """
+    Class with all the method for the creation and manipulation of beta grids
 
-    def __init__(self, array):
+    Parameters
+    ----------
+    array : Iterable
+        Iterable with the beta grid data
+
+    Attributes
+    ----------
+    data : "np.ndarray"
+        Array with the beta grid data
+    to_index : "pd.Index"
+        Transform the Beta class data into a pandas Index
+    kind : "str"
+        Analise the beta grid to know if the beta grid contains only absolute
+        values or mix (positive and negative) values
+
+    Methods
+    -------
+    generate_grid -> "Beta"
+        Generate beta grid for a given temperature
+    from_dE -> "Beta"
+        Generate beta grid for a given temperature using the dE grid
+    from_parameters -> "Beta"
+        Generate beta grid for user parameters
+    get_dE -> "pd.Series"
+        Return the dE grid for a given beta grid
+    get_Eout -> "pd.Series"
+        Return the Eout grid for a given beta grid
+    scale -> "Beta"
+        Scale the beta grid to a given temperature
+    """
+
+    def __init__(self, array: Iterable):
+        """
+        Initialize the Beta class
+
+        Parameters
+        ----------
+        array : Iterable
+            Iterable with the beta grid data
+        """
         self.data = np.unique(array)
 
     @property

@@ -194,7 +194,54 @@ b_incoh = [0.0, 0.19947114020071632]
 
 
 class Target_mat(Solid, Pdos):
-    """Class to store all the Target material methods and atributtes."""
+    """
+    Class to store all the Target material methods and attributes
+
+    Attributes
+    ----------
+    A : list[int]
+        Atomic number.
+    Z : list[int]
+        Number of protons.
+    dir_vec_length : iterable or `np.array` of size (1, 3)
+        Direct lattice vectors length in fm.
+    preferred_orientation : iterable or `np.array` of size (1, 3)
+        Direct lattice vectors angles in ª.
+    preferred_orientation : iterable or `np.array` of size (1, 3)
+        Preferred orientation of the target.
+    unit_pos : dict{"element name": 1D iterable}
+        Unitary positions of atoms in the lattice unit cell.
+    atom_mass : list[float]
+        Atom mass, amu.
+    b_coh : list[float]
+        Bound coherent scattering length (fm).
+    b_incoh : list[float]
+        Bound incoherent scattering length (fm).
+    rho_in_energy : list[1D iterable]
+        Density of states in energy, eV.
+    interv_in_energy : list[1D iterable]
+        Energy intervals in which the density of states is defined, eV.
+    energy_sup : float
+        Upper limit of the energy range, eV.
+    energy_cut : float
+        Energy cut for the density of states, eV.
+
+    Methods
+    -------
+    get_Bfact: float or pd.Series
+        Calculate mean square displacement for a certain pdos information
+    get_multiplicity: pd.DataFrame
+        Obtain hkl data for the solid in a certain temperature and for a neutron
+        certain energy filtering with the multiplicity
+    get_BraggEdges: pd.DataFrame
+        Get Bragg Edges
+    get_coherent_Xs: pd.DataFrame
+        Get coherent xs for the materials in the class
+    get_Sab: pd.Series
+        Generate S(alpha, -beta) matrix for the materials in the class
+    get_inelastic_Xs: pd.DataFrame
+        Get inelastic Xs for the Target material based on the S(alpha, -beta)
+    """
 
     def __init__(self, *args):
         """
@@ -245,7 +292,7 @@ class Target_mat(Solid, Pdos):
                 pdos[elements_name[i]] = atom_pdos
         self.pdos = pd.Series(pdos)
 
-    def get_Bfact(self, T: float, anstrom: bool = True) -> float:
+    def get_Bfact(self, T: float, anstrom: bool = True) -> [float, pd.Series]:
         """
         Calculate mean square displacement for a certain pdos information.
         .. math::
@@ -260,7 +307,7 @@ class Target_mat(Solid, Pdos):
 
         Returns
         -------
-        "float"
+        "float" or "pd.Series"
             Mean square displacement.
 
         Examples

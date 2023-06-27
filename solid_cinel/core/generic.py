@@ -48,7 +48,7 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
     return y_norm
 
 
-def reshape_differential(x: Iterable[int], y: Iterable[int], xnew: Iterable[int],
+def reshape_differential(x: Iterable, y: Iterable, xnew: Iterable,
                          kind: str="slinear", bounds_error: bool=False):
     """
     Linearly interpolate array over new energy grid structure.

@@ -300,7 +300,7 @@ class Beta:
             return cls(beta_grid)
 
     @classmethod
-    def from_dE(cls, energy_grid: Iterable[int], T: float):
+    def from_dE(cls, energy_grid: Iterable, T: float):
         """
         Tranform a energy grid into a beta grid. (use in pdos.py)
         .. math::
@@ -328,8 +328,8 @@ class Beta:
         return cls(np.array(energy_grid) / (kb * T))
 
     @classmethod
-    def from_parameters(cls, Eout: Union[Iterable[int], float],
-                        Ein: Union[Iterable[int], float],
+    def from_parameters(cls, Eout: Union[Iterable, float],
+                        Ein: Union[Iterable, float],
                         T: float):
         """
         Generate a beta grid based on the output energies and the incident
@@ -395,7 +395,7 @@ class Beta:
         """
         return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
 
-    def get_Eout(self, T: float, Ein: Union[Iterable[int], float],
+    def get_Eout(self, T: float, Ein: Union[Iterable, float],
                  side: str = "upscattering") -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible

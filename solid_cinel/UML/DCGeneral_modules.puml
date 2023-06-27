@@ -1,0 +1,41 @@
+@startuml
+class core.beta.Beta {
+Generation and manipulation of a beta grid
+}
+
+class core.alpha.Alpha {
+Generation and manipulation of a alpha grid
+}
+class core.s.Sab {
+Generation and manipulation of S(alpha, -beta) matrix
+}
+Alpha *-- Sab : contains
+Beta *-- Sab : contains
+
+class core.material.pdos.Pdos{
+phonon density of states of a material
+}
+class core.material.material_composition.Atom{
+Basic properties of the atom:
+}
+core.material.material_composition.Atom *-- core.material.material_composition.Molecule : contains
+class core.material.material_composition.Molecule{
+Atomic properties of the different atoms
+of the molecule.
+}
+class core.material.crystal_symmetry.Crystal_structure{
+Crystal structure of the solid
+}
+class core.material.solid.Solid{
+Combination of molecules in a specific position in space
+}
+core.material.material_composition.Molecule *-- core.material.solid.Solid : contains
+core.material.crystal_symmetry.Crystal_structure *-- core.material.solid.Solid : contains
+
+class core.target_material.Target_mat{
+Real target material
+}
+core.material.solid.Solid *-- core.target_material.Target_mat : contains
+core.material.pdos.Pdos *-- core.target_material.Target_mat : contains
+core.s.Sab *-- core.target_material.Target_mat : contains
+@enduml

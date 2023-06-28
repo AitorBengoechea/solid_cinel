@@ -10,7 +10,7 @@ from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.s import Sab
 from typing import Iterable
 from solid_cinel.core._numba import hklloop
-from solid_cinel.cinematic.SVT import Neutron
+from solid_cinel.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np

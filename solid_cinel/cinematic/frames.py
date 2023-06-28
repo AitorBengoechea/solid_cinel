@@ -4,11 +4,12 @@ Created on Tue Jun 27 10:15:29 2023
 
 @author: Aitor Bengoechea
 """
-from scipy.constants import physical_constants as const
-from scipy.stats import maxwell, qmc
-from solid_cinel.core.generic import sampling
-import pandas as pd
 import numpy as np
+import pandas as pd
+from scipy.constants import physical_constants as const
+
+from solid_cinel.cinematic.particles import Neutron, Nucleus, Particle
+from solid_cinel.core.generic import sampling
 
 # Constants
 amu_to_ev = const["atomic mass unit-electron volt relationship"][0]
@@ -20,188 +21,6 @@ v_nucleus = np.array([267.27496695, 142.98091635])
 mu = np.array([0.711655, -0.49416719])
 muCm = np.array([0.91124234, -0.40826203])
 phiCm = np.array([2.60926315, -2.12445998])
-
-
-# SVT
-class Particle:
-    """
-    Class to store common properties of all the particles
-
-    Attributes
-    ----------
-    m : "float"
-        Mass of the particle in ev * s^2 / m^2
-    """
-    def __init__(self, m: float):
-        """
-        Initialize the class Particle
-
-        Parameters
-        ----------
-        m : "float"
-            Mass of the particle in Amu
-        """
-        self.m = m * amu_to_ev / c ** 2
-        pass
-
-
-class Neutron(Particle):
-    """
-    Class to store kinematics properties of the neutrons
-
-    Attributes
-    ----------
-    E : "float"
-        Energy of the neutron in eV
-
-    Methods
-    -------
-    from_v -> "Neutron"
-        Initialize the class Neutron from the velocity of the neutron
-
-    Properties
-    ----------
-    v -> "float"
-        Velocity of the neutron in m/s
-    wavelength -> "float"
-        Wavelength of the neutron in Angstrom
-    d_min -> "float"
-        Minimum distance for the LEAPR module of NJOY in Angstrom
-    """
-    def __init__(self, E: float):
-        """
-        Initialize the class Neutron
-        Parameters
-        ----------
-        E : Energy of the neutron in eV
-        """
-        super().__init__(const["neutron mass in u"][0])
-        self.E = E
-
-    @classmethod
-    def from_v(cls, v: float):
-        """
-        Initialize the class Neutron from the velocity of the neutron
-
-        Parameters
-        ----------
-        v : float
-            Velocity of the neutron in m/s
-
-        Returns
-        -------
-        "Neutron"
-            Neutron with the velocity v
-
-        Example
-        -------
-        >>> v = 35534.004895483995
-        >>> v_class = Neutron.from_v(v)
-        >>> assert round(v, 2) == round(v_class.v, 2)
-        """
-        m_neutron = const["neutron mass in u"][0] * amu_to_ev / c ** 2
-        return cls(v ** 2 * m_neutron / 2)
-
-    @property
-    def v(self) -> float:
-        """
-        Velocity of the neutron in m/s
-
-        Returns
-        -------
-        "float"
-            Velocity of the neutron in m/s
-
-        Example
-        -------
-        >>> E = 6.6
-        >>> v = 35534.004895483995
-        >>> E_class = Neutron.from_v(v)
-        >>> assert round(E, 2) == round(E_class.E, 2)
-        """
-        return np.sqrt(2 * self.E / self.m)
-
-    @property
-    def wavelength(self) -> float:
-        """
-        Wavelength of the neutron in Angstrom
-
-        Returns
-        -------
-        "float"
-            Wavelength of the neutron in Angstrom
-        """
-        walength = 2 * np.pi * const["reduced Planck constant in eV s"][0] / np.sqrt(2 * self.m * self.E)
-        return walength * 1.0e10
-
-    @property
-    def d_min(self) -> float:
-        """
-        Minimum distance for the LEAPR module of NJOY in Angstrom
-
-        Returns
-        -------
-        "float"
-            Minimum distance for the LEAPR module of NJOY in Angstrom
-        """
-        return 0.5 * self.wavelength * 0.95
-
-
-class Nucleus(Particle):
-    """
-    Class to store the cinematic properties nucleus in a crytal
-
-    Attributes
-    ----------
-    m : "float"
-        Mass of the nucleus in ev * s^2 / m^2
-    sampling : "np.array"
-        Array of random numbers between 0 and 1 to sample the Maxwell-Boltzmann
-        velocity distribution
-
-    Methods
-    -------
-    v : "float"
-        Velocity of the nucleus in m/s according to the Maxwell-Boltzmann distribution
-    """
-    def __init__(self, M: float, samples: int = 1000):
-        """
-        Initialize the class Nucleus
-
-        Parameters
-        ----------
-        M : "float"
-            Mass of the nucleus in Amu
-        samples : "int", optional
-            Number of samples to generate random velocities of the nucleus
-            according to Maxwell-Boltzmann distribution, by default 1000.
-        """
-        super().__init__(m=M)
-        self.samples = samples
-        pass
-
-    def v(self, T: float, d: int = 1) -> np.array:
-        """
-        Random Velocity of the nucleus in m/s according to the Maxwell-Boltzmann
-        distribution
-        .. math::
-            f(v) = \left(\frac{M}{2\pi k_BT}\right)^{3/2}exp\left(-\frac{M}{2k_B T}(v^\prime)^2\right)
-
-        Parameters
-        ----------
-        T : "float"
-            Temperature of the nucleus in K
-        d : "int", optional
-            Number of dimensions of the sampling, by default 1
-
-        Returns
-        -------
-        "np.array", (samples,)
-            Array of random velocities of the nucleus in m/s according to the
-            Maxwell-Boltzmann velocity distribution
-        """
-        a = np.sqrt(kb * T / self.m)
-        return maxwell(scale=a).ppf(sampling(d, self.samples))
 
 
 class Cm:
@@ -480,6 +299,8 @@ class Lab:
             Velocity of the nucleus in the LAB frame according to the
             Maxwell-Boltzmann velocity distribution. By default None, so it is
             randomly calculated in Nucleus class.
+        E_nucleus : "np.array", optional
+            Energy of the nucleus in Ev
         samples : "int", optional
             Number of samples to generate random velocities of the nucleus if
             the previous arguments are not provided, by default 1000.
@@ -488,6 +309,7 @@ class Lab:
         self.muCm = muCm if hasattr(muCm, "__len__") else Cm(samples).mu
         self.phiCm = phiCm if hasattr(phiCm, "__len__") else Cm(samples).mu
         self.v_nucleus = v_nucleus if hasattr(v_nucleus, "__len__") else Nucleus(M, samples=samples).v(T)
+        self.E_nucleus = Nucleus(M).get_E(self.v_nucleus)
         self.samples = len(self.mu)  # For consistency
         self.Tr = Tr(M, T, mu=self.mu, muCm=self.muCm, v_nucleus=self.v_nucleus, samples=self.samples)
         pass
@@ -622,7 +444,8 @@ class Lab:
         muprime += self.v_nucleus ** 2
         return muprime / (v_neutron * v_neutron_prime)
 
-    def run(self, Eneutron: float) -> pd.DataFrame:
+    def run(self, Eneutron: float, v: bool = True, E: bool = True,
+            degree: bool = False) -> pd.DataFrame:
         """
         Run the calculation of the kinematics of the collision
 
@@ -630,6 +453,13 @@ class Lab:
         ----------
         Eneutron : "float"
             Energy of the neutron in the LAB frame in eV
+        v : "bool", optional
+            If True, the velocities are going to be showed in the DataFrame
+        E : "bool", optional
+            If True, the energies are going to be showed in the DataFrame
+        degree : "bool", optional
+            If True, the angles are going to be showed in degrees in the
+            DataFrame
 
         Returns
         -------
@@ -641,14 +471,36 @@ class Lab:
         >>> lab = Lab(238, 300, v_nucleus = v_nucleus, mu = mu, muCm = muCm, phiCm = phiCm)
         >>> E = 6.6
         >>> lab.run(E).round(2)
-             mu  muCm  v_nucleus  Tr_vprime  v_neutron_prime  E_neutron_prime  muprime
-        0  0.71  0.91     267.27   35331.11         35437.77             6.56     0.91
-        1 -0.49 -0.41     142.98   35393.54         35362.94             6.54    -0.41
+             mu  muprime  v_nucleus  v_neutron_prime  E_nucleus  E_neutron_prime
+        0  0.71     0.91     267.27         35437.77       0.09             6.56
+        1 -0.49    -0.41     142.98         35362.94       0.03             6.54
+
+        >>> lab.run(E, degree = True).round(2)
+           theta  thetaprime  v_nucleus  v_neutron_prime  E_nucleus  E_neutron_prime
+        0   0.78        0.42     267.27         35437.77       0.09             6.56
+        1   2.09        1.99     142.98         35362.94       0.03             6.54
+
+        >>> lab.run(E, v = False).round(2)
+             mu  muprime  E_nucleus  E_neutron_prime
+        0  0.71     0.91       0.09             6.56
+        1 -0.49    -0.41       0.03             6.54
+
+        >>> lab.run(E, E = False).round(2)
+             mu  muprime  v_nucleus  v_neutron_prime
+        0  0.71     0.91     267.27         35437.77
+        1 -0.49    -0.41     142.98         35362.94
         """
-        return pd.DataFrame({"mu": self.mu,
-                             "muCm": self.muCm,
-                             "v_nucleus": self.v_nucleus,
-                             "Tr_vprime" : self.Tr.vprime(Eneutron),
-                             "v_neutron_prime": self.vprime(Eneutron),
-                             "E_neutron_prime": Neutron.from_v(self.vprime(Eneutron)).E,
-                             "muprime": self.muprime(Eneutron)}).dropna()
+        if degree:
+            result = {"theta": np.arccos(self.mu),
+                      "thetaprime": np.arccos(self.muprime(Eneutron))}
+        else:
+            result = {"mu": self.mu,
+                      "muprime": self.muprime(Eneutron)}
+        if v:
+            result["v_nucleus"] = self.v_nucleus
+            result["v_neutron_prime"] = self.vprime(Eneutron)
+        if E:
+            result["E_nucleus"] = self.E_nucleus
+            result["E_neutron_prime"] = Neutron.from_v(self.vprime(Eneutron)).E
+
+        return pd.DataFrame(result).dropna()

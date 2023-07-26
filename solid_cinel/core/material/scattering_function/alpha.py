@@ -1,6 +1,6 @@
 from scipy.constants import physical_constants as const
 from solid_cinel.core._numba import get_alpha
-from solid_cinel.core.beta import Beta
+from solid_cinel.core.material.scattering_function.beta import Beta
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd

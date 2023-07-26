@@ -5,14 +5,14 @@ Created on Thu Nov  3 14:24:18 2022
 @author: AB272525
 """
 
-from solid_cinel.core.material.material_composition import Molecule
-from solid_cinel.core.material.crystal_symmetry import Crystal_structure
+from solid_cinel.core.material.structure.material_composition import Molecule
+from solid_cinel.core.material.structure.crystal_symmetry import Crystal_structure
 from scipy.optimize import minimize
 import numpy as np
 import pandas as pd
 import collections
 from typing import Iterable, Union
-import pytest
+
 collections.Callable = collections.abc.Callable
 
 # Example variables:

@@ -5,19 +5,20 @@ Created on Thu Oct 20 11:46:42 2022
 @author: Aitor Bengoechea
 """
 
-from solid_cinel.core.material.solid import Solid, hkl_max_value
-from solid_cinel.core.material.pdos import Pdos
-from solid_cinel.core.s import Sab
-from typing import Iterable
+from solid_cinel.core.material.structure.solid import Solid, hkl_max_value
+from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.scattering_function.s import Sab
+from solid_cinel.core.material.scattering_function.alpha import Alpha
+from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core._numba import hklloop
-from solid_cinel.cinematic.frames import Neutron
+from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np
 import pandas as pd
 import numba as nb
 import collections
-import pytest
+
 collections.Callable = collections.abc.Callable
 
 # Constants:
@@ -1177,8 +1178,6 @@ class Target_mat(Solid, Pdos):
         Test the results:
         FGM:
         >>> T = 300
-        >>> from solid_cinel.core.alpha import Alpha
-        >>> from solid_cinel.core.beta import Beta
         >>> beta_grid = Beta.generate_grid(T).data
         >>> alpha_grid = Alpha.generate_grid(T, 26).data
         >>> Al.get_Sab(alpha_grid, beta_grid, model="fgm")["Al27"].data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
@@ -1308,7 +1307,6 @@ class Target_mat(Solid, Pdos):
 
         FGM:
         >>> T = 300
-        >>> from solid_cinel.core.s import Alpha, Beta
         >>> beta_grid = Beta.generate_grid(T).scale(T).data
         >>> alpha_grid = Alpha.generate_grid(T, 26).scale(T).data
         >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha_grid, beta_grid, model="fgm", T=T).iloc[:10, :5].round(6)

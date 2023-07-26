@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
 
-from solid_cinel.cinematic.particles import Neutron, Nucleus, Particle
+from solid_cinel.core.cinematic.particles import Neutron, Nucleus, Particle
 from solid_cinel.core.generic import sampling
 
 # Constants

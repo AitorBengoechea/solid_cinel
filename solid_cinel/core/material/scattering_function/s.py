@@ -6,15 +6,13 @@ Created on Thu Oct 20 11:46:42 2022
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import tau_n_CPU
 from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta, get_S_pdos_from_alpha_beta
-from solid_cinel.core.material.pdos import Pdos
-from solid_cinel.core.beta import Beta
-from solid_cinel.core.alpha import Alpha
+from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.scattering_function.beta import Beta
+from solid_cinel.core.material.scattering_function.alpha import Alpha
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
-import scipy as sp
 import warnings
 
 kb = const["Boltzmann constant in eV/K"][0]
@@ -528,7 +526,6 @@ class Sab:
         Example
         -------
         >>> T = 800
-        >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
@@ -606,7 +603,6 @@ class Sab:
         Example
         -------
         >>> T = 800
-        >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> tau1 = pdos._get_tau_1(T)
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
@@ -900,7 +896,6 @@ class Sab:
         Example
         -------
         >>> T = 300
-        >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
@@ -1188,7 +1183,6 @@ class Sab:
         >>> T = 300
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
 
@@ -1198,7 +1192,6 @@ class Sab:
         >>> M = 238.05077040419212
         >>> Eout = Sab_matrix.beta.get_Eout(T, Ein, side="full").values
         >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
-        >>> from solid_cinel.core.generic import integrate
         >>> Sab_intep.apply(lambda x: integrate(x * x.index), axis=1).iloc[::40]
         alpha
         0.811392   -0.812439
@@ -1302,7 +1295,6 @@ class Sab:
         >>> T = 300
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
 
@@ -1385,7 +1377,6 @@ class Sab:
         >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)
         >>> alpha_grid = Alpha(alpha0_).scale(T)
-        >>> from solid_cinel.core.material.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
         >>> Sab.get_inelastic_Xs(T, M, boundXs, Ein).iloc[:5, :5].round(6)  #doctest: +NORMALIZE_WHITESPACE

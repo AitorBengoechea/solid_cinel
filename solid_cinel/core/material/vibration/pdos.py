@@ -6,13 +6,11 @@ Created on Thu Oct 20 11:46:42 2022
 
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core._numba import tau_n_CPU
-from solid_cinel.core.beta import Beta
+from solid_cinel.core.material.scattering_function.beta import Beta
 import pandas as pd
 import numpy as np
 import scipy as sp
 from typing import Iterable, Union
-from scipy.constants import physical_constants as const
-from scipy.interpolate import interp1d
 import matplotlib
 
 # Examples variables:

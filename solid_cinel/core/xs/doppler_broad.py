@@ -11,11 +11,8 @@ m = const["neutron mass in u"][0]
 # Examples variables:
 # 0K xs data for U238:
 wd = os.getcwd()
-if os.name == 'nt':
-    os.chdir("../../data/xs/U238/")
-else:
-    os.chdir("../../data/xs/U238/".replace('/', '\'))
-
+os.chdir(__file__)
+os.chdir("../../data/xs/U238/")
 xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None,
                          engine="python").set_index(0).drop([2], axis=1)
 os.chdir(wd)

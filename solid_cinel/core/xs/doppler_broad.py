@@ -14,7 +14,7 @@ wd = os.getcwd()
 if os.name == 'nt':
     os.chdir("../../data/xs/U238/")
 else:
-    os.chdir("../../data/xs/U238/".replace('/', '\\'))
+    os.chdir("../../data/xs/U238/".replace('/', '\'))
 
 xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None,
                          engine="python").set_index(0).drop([2], axis=1)

@@ -1,5 +1,5 @@
 from .core import *
-from .cinematic import *
+from solid_cinel.core.cinematic import *
 from .data import *
 from .cinel import *
 

@@ -8,7 +8,7 @@ Created on Wed Nov 30 15:00:47 2022
 import numpy as np
 import pandas as pd
 from solid_cinel import Target_mat
-from solid_cinel.core.s import Alpha, Beta
+from solid_cinel.core.material.scattering_function.s import Alpha, Beta
 from scipy.integrate import trapezoid
 import pytest
 import os

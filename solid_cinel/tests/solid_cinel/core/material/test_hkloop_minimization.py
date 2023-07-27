@@ -5,11 +5,10 @@ Created on Mon Nov 21 14:13:08 2022
 @author: AB272525
 """
 
-from solid_cinel.core.material.crystal_symmetry import Crystal_structure
-from solid_cinel.core.material.solid import Solid, hkl_max_value
+from solid_cinel.core.material.structure.crystal_symmetry import Crystal_structure
+from solid_cinel.core.material.structure.solid import hkl_max_value
 import numba as nb
 import numpy as np
-import pandas as pd
 import pytest
 
 

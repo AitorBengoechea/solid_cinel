@@ -49,7 +49,7 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')] # Remove duplicated index
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Generate Broadening test results:
     >>> Ein = 36.68723
@@ -105,7 +105,7 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')] # Remove duplicated index
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Generate Broadening test results:
     >>> Ein = 36.68723

@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import reshape_differential, integrate
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFuncSD
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -70,7 +71,7 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
 
 
 def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
-           T: float) -> pd.Series:
+           T: float, integral: bool = False) -> pd.Series:
     """
     Calculate the outgoin energy defferential Doppler broadened cross section at
     a given temperature and for an incident energy and mass using sigma1
@@ -133,10 +134,4 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     >>> round(integrate(xs_broad), 2)
     7905.42
     """
-    exp_negative = pd.Series(np.exp(- M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout))**2),
-                             index=pd.Index(Eout, name="Eout"), name=Ein)
-    exp_positive = pd.Series(np.exp(- M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout))**2),
-                             index=pd.Index(Eout, name="Eout"), name=Ein)
-    xs_0K_ = reshape_differential(xs_0K.index.values, xs_0K.values, Eout)[::, 0]
-    xs_broad = xs_0K_ * (exp_negative - exp_positive) * np.sqrt(Eout)
-    return 0.5 * xs_broad / Ein * np.sqrt(M / (np.pi * m * kb * T))
+    return ScatFuncSD.from_MD(Ein, Eout, M, T).convolve(xs_0K, integral=integral)

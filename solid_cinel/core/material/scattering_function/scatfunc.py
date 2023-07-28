@@ -54,7 +54,7 @@ class ScatFuncSD:
         """
         pdf_ = pd.Series(pdf).sort_index()
         normalization = integrate(pdf_)
-        if abs(normalization - 1) >= 0.1:
+        if abs(normalization - 1) >= 0.1 and pdf_.name >= 0.005:
             raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
         elif abs(normalization - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")

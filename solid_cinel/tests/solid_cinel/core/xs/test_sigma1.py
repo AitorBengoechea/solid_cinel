@@ -3,11 +3,11 @@ import os
 import numpy as np
 import pandas as pd
 from solid_cinel.core.xs.doppler_broad import get_DB
-from solid_cinel.core.generic import integrate
 
-M = 238.05077040419212
+
 @pytest.mark.parametrize("T", [300, 1000])
 def test_sigma1(T):
+    M = 238.05077040419212
     wd = os.getcwd()
     os.chdir(__file__.replace("test_sigma1.py", ""))
     # Get test data:

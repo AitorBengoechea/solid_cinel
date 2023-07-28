@@ -60,7 +60,7 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
 
     # SIGMA1:
     >>> algorithm = "sigma1"
-    >>> round(get_DB(xs_0K, Ein, Eout, M, T, algorithm=algorithm, integral=True), 2)
+    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm=algorithm, integral=True), 2)
     7905.42
 
     """
@@ -70,8 +70,8 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     return
 
 
-def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
-           T: float, integral: bool = False) -> pd.Series:
+def sigma1(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.array,
+           integral: bool = False) -> pd.Series:
     """
     Calculate the outgoin energy defferential Doppler broadened cross section at
     a given temperature and for an incident energy and mass using sigma1
@@ -113,7 +113,7 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
     >>> M = 238.05077040419212
     >>> T = 300
-    >>> xs_broad = sigma1(xs_0K, Ein, Eout, M, T)
+    >>> xs_broad = sigma1(xs_0K, Ein, M, T, Eout)
 
     # Differential value test:
     >>> xs_broad.iloc[::100]
@@ -131,7 +131,7 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     Name: 36.68723, dtype: float64
 
     # Integral value test:
-    >>> round(sigma1(xs_0K, Ein, Eout, M, T, integral = True), 2)
+    >>> round(sigma1(xs_0K, Ein, M, T, Eout, integral = True), 2)
     7905.42
     """
-    return ScatFuncSD.from_MD(Ein, Eout, M, T).convolve(xs_0K, integral=integral)
+    return ScatFuncSD.from_MD(Ein, M, T, Eout).convolve(xs_0K, integral=integral)

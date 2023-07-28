@@ -61,7 +61,7 @@ class ScatFuncSD:
         self._data = pdf_
 
     @classmethod
-    def from_MD(cls,  Ein: float, Eout: np.array, M: float, T: float):
+    def from_MD(cls, Ein: float, M: float, T: float, Eout: np.array):
         """
         Calculate the scattering function using Maxwellian velocity distribution
         and angular integration
@@ -72,12 +72,12 @@ class ScatFuncSD:
         ----------
         Ein : float
             Incident energy of the neutron
-        Eout : np.array
-            Outgoing energy grid
         M : float
             Mass of the material in amu
         T : float
             Temperature of the material in K
+        Eout : np.array
+            Outgoing energy grid
 
         Returns
         -------
@@ -93,7 +93,7 @@ class ScatFuncSD:
         >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> pdf = ScatFuncSD.from_MD(Ein, Eout, M, T)
+        >>> pdf = ScatFuncSD.from_MD(Ein, M, T, Eout)
         >>> pdf.data.iloc[::100]
         Eout
         35.953485    8.937086e-15
@@ -147,7 +147,7 @@ class ScatFuncSD:
         >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> scattering_function = ScatFuncSD.from_MD(Ein, Eout, M, T)
+        >>> scattering_function = ScatFuncSD.from_MD(Ein, M, T, Eout)
 
         # Convolve with 0K cross section:
         >>> scattering_function.convolve(xs_0K).iloc[::100]
@@ -183,9 +183,56 @@ class ScatFuncDD:
     """
     Double Differencial (angle, Outgoing energy) scattering function base class
     """
-    def __int__(self):
-        pass
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the ScatFuncSD class
 
+        Parameters
+        ----------
+        args : Iterable
+            The scattering function data
+        kwargs : dict
+            Optional arguments for the construction of the pd.Series
+        """
+        self.data = pd.DataFrame(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        The scattering function data
+
+        Returns
+        -------
+        pd.Series
+            The scattering function data
+        """
+        return self._data
+
+    @data.setter
+    def data(self, dd_pdf: Iterable):
+        """
+        Set the scattering function data and check the normalization
+
+        Parameters
+        ----------
+        dd_pdf : pd.Series
+            Double differential scattering function data
+
+        """
+        dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
+        dd_pdf_.index.name = "mu"
+        dd_pdf_.columns.name = "Eout"
+        normalization = integrate(dd_pdf_.apply(integrate))
+        if abs(normalization - 1) >= 0.1 and dd_pdf_.name >= 0.005:
+            raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
+        elif abs(normalization - 1) >= 0.01:
+            warnings.warn("Normalizaton not satisfied with 1% accuracy")
+        self._data = dd_pdf_
+
+    @classmethod
+    def from_Sab(cls, Ein: float, M: float, T: float, Eout: np.array,
+                 mu: np.array):
+        return
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """

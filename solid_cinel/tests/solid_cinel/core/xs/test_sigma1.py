@@ -38,7 +38,7 @@ def test_sigma1(T):
                                      np.log10(2 * Ein),
                                      num=1500, endpoint=True)
         E_out = np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
-        xs_broad = integrate(get_DB(xs_0K, Ein, E_out, M, T, algorithm="sigma1"))
+        xs_broad = get_DB(xs_0K, Ein, E_out, M, T, algorithm="sigma1", integral=True)
         assert abs(1 - xs_broad/xs_test.loc[Ein].values) < 0.8
 
 

@@ -60,7 +60,7 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
 
     # SIGMA1:
     >>> algorithm = "sigma1"
-    >>> round(integrate(get_DB(xs_0K, Ein, Eout, M, T, algorithm=algorithm)), 2)
+    >>> round(get_DB(xs_0K, Ein, Eout, M, T, algorithm=algorithm, integral=True), 2)
     7905.42
 
     """
@@ -131,7 +131,7 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     Name: 36.68723, dtype: float64
 
     # Integral value test:
-    >>> round(integrate(xs_broad), 2)
+    >>> round(sigma1(xs_0K, Ein, Eout, M, T, integral = True), 2)
     7905.42
     """
     return ScatFuncSD.from_MD(Ein, Eout, M, T).convolve(xs_0K, integral=integral)

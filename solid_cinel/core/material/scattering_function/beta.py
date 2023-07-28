@@ -244,6 +244,13 @@ class Beta:
         else:
             kind = "mix"
         return kind
+    @property
+    def unique(self):
+        """Return the absolute unique values of the beta grid."""
+        if self.kind == "mix":
+            return self(abs(self.data))
+        else:
+            return self
 
     @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,

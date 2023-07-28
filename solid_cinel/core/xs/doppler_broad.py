@@ -8,16 +8,6 @@ from solid_cinel.core.generic import reshape_differential, integrate
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
-# Examples variables:
-# 0K xs data for U238:
-wd = os.getcwd()
-os.chdir(__file__.replace("doppler_broad.py", ""))
-os.chdir("../../data/xs/U238/")
-xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None,
-                         engine="python").set_index(0).drop([2], axis=1)
-os.chdir(wd)
-xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')] # Remove duplicated index
-
 def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     """
     Calculate the Double differential or singe differential dopper broadened
@@ -53,6 +43,15 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
 
     Examples
     --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
+    >>> os.chdir(wd)
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')] # Remove duplicated index
+
+    # Generate Broadening test results:
     >>> Ein = 36.68723
     >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
     >>> M = 238.05077040419212
@@ -100,6 +99,15 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
 
     Examples
     --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
+    >>> os.chdir(wd)
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')] # Remove duplicated index
+
+    # Generate Broadening test results:
     >>> Ein = 36.68723
     >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
     >>> M = 238.05077040419212

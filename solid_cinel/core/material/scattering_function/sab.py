@@ -572,6 +572,130 @@ class Sab:
                                                   S_values)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
+    @classmethod
+    def from_model(cls, *args, model: str = "pdos", **kwargs):
+        """
+        Create Sab object from different models. The models available are:
+            - "phonon expansion": Phonon expansion model.
+            - "fgm": Free Gas Model.
+            - "sct": Short Collision Time model.
+
+        Parameters
+        ----------
+        model : 'str'
+            The model to calculate matrix values. The default is "pdos". The
+            available models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model
+                - "sct" : Short Collision Time model
+
+        Parameters for FGM model:
+        -------------------------
+        alpha_grid : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            Absolute beta grid.
+        model : 'str', optional
+            The model to calculate matrix values. The default is "FGM".
+        wt: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for SCT model:
+        -------------------------
+        alpha_grid : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for Phonon Expansion model:
+        --------------------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float'
+            Temperature in K.
+        alpha_grid : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        Sab
+            S(alpha, -beta) matrix based on the chosen model.
+
+        Examples
+        --------
+        FGM:
+        >>> T = 300
+        >>> beta_grid = Beta.generate_grid(T).data
+        >>> alpha_grid = Alpha.generate_grid(T, 26).data
+        >>> Sab.from_model(alpha_grid, beta_grid, model="fgm").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        alpha
+        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
+        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
+        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
+        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
+        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
+        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
+        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
+        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
+        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
+        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+
+        SCT:
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="sct").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
+        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
+        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
+        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
+        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
+        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
+        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
+        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
+        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
+        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
+
+        Phonon Expansion:
+        >>> T = 800
+        >>> beta_grid = Beta(beta0_).scale(T).data
+        >>> alpha_grid = Alpha(alpha0_).scale(T).data
+        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="pdos", threshold=1.0e-14).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+        """
+        if model.lower() == "fgm":
+            return cls.from_fgm(*args, **kwargs)
+        elif model.lower() == "sct":
+            return cls.from_sct(*args, **kwargs)
+        elif model.lower() == "pdos":
+            return cls.from_pdos(*args, **kwargs)
+
     @staticmethod
     def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
                      alpha_grid: Iterable,

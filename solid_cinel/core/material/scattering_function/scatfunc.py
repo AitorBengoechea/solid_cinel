@@ -191,8 +191,9 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
     """
     Scattering function base class
     """
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         pass
+
 
 
 

@@ -430,16 +430,13 @@ class ScatFuncDD:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         """
-        awr = ((M / m + 1) / (M / m)) ** 2
         beta = Beta.from_parameters(Eout, Ein, T)
         dd_pdf = {}
         for angle in theta:
             alpha = Alpha.from_parameters(Eout, Ein, T, M, angle)
-            sab = Sab.from_pdos(alpha, beta, T, pdos, threshold=threshold,
-                                nphonon=nphonon)
-            angular_dd_pdf = np.diag(sab.data) * awr * np.sqrt(Eout / Ein)
-            angular_dd_pdf /= 2 * kb * T
-            dd_pdf[np.cos(angle * np.pi / 180)] = angular_dd_pdf
+            angular_dd_pdf = Sab.from_pdos(alpha, beta.unique, T, pdos, threshold=threshold,
+                                nphonon=nphonon).to_ScatFunc(Ein, T, M, mu=None)
+            dd_pdf[np.cos(angle * np.pi / 180)] = angular_dd_pdf.loc[beta.data]
         return dd_pdf
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):

@@ -365,16 +365,59 @@ class Sab:
         Sab_positive = self.data.apply(lambda x: x * np.exp(-beta), axis=1)
         return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
 
-    def to_ScatFunc(self) -> pd.Series:
+    def to_ScatFunc(self, Ein, T, M, mu=None) -> pd.Series:
         """
         Get the scattering function from the S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        Ein : 'float'
+            Incident energy in eV.
+        T : 'float'
+            Temperature in K.
+        mu : 'float', optional
+            The Cosine of the scattering angle used for the creation of the
+            S(alpha, -beta) table. The default is None.
+
         Returns
         -------
+        'pd.Series'
+            Scattering function of these S(alpha, -beta) table
 
+        Example
+        -------
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha_grid = Alpha.generate_grid(300, 26).data
+        >>> Sab.from_fgm(alpha_grid, beta_grid).to_ScatFunc(7.2, 300, 26).iloc[295:305].round(6) #doctest: +NORMALIZE_WHITESPACE
+        Eout
+        7.198667    100.181707
+        7.199000    127.528189
+        7.199333    153.327750
+        7.199667    172.925131
+        7.200000    181.604950
+        7.200333    170.717666
+        7.200667    149.438145
+        7.201000    122.706410
+        7.201333     95.163376
+        7.201667     70.151820
+        dtype: float64
         """
-        sab_diag_negative = pd.Series(np.diag(self.data),
-                                      index=self.beta.data)
-        return
+        sab_diag = np.diag(self.data)
+        beta = self.beta.data[:len(sab_diag)]
+        sab_diag_negative = pd.Series(sab_diag,
+                                      index=Ein - beta * kb * T)
+        # Avoid negative energy:
+        sab_diag_negative = sab_diag_negative.loc[sab_diag_negative.index >= 0]
+        sab_diag_positive = pd.Series(np.diag(self.data) * np.exp(-beta),
+                                      index=Ein + beta * kb * T)
+        scattfunc = pd.concat([sab_diag_negative, sab_diag_positive.iloc[1::]])
+        # Apply normalization constrains:
+        awr = ((M / m + 1) / (M / m)) ** 2
+        scattfunc *= awr * np.sqrt(scattfunc.index.values / Ein) / (2 * kb * T)
+        scattfunc.index.name = 'Eout'
+        if mu:
+            scattfunc.name = mu
+        return scattfunc.sort_index()
 
     @classmethod
     def from_fgm(cls, alpha_grid: Union[Alpha, Iterable],

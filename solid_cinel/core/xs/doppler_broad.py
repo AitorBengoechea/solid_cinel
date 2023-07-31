@@ -28,9 +28,9 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     xs_0K : pd.Series
         0K xs data for the given material
     Ein : float
-        Incident energy of the neutron
+        The incident energy of the neutron in eV
     Eout : np.array
-        Outgoing energy grid
+        The neutron outgoing energy grid in eV
     M : float
         Mass of the material in amu
     T : float
@@ -84,9 +84,9 @@ def sigma1(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.array,
     xs_0K : pd.Series
         0K xs data for the given material
     Ein : float
-        Incident energy of the neutron
+        The incident energy of the neutron in eV
     Eout : np.array
-        Outgoing energy grid
+        The neutron outgoing energy grid in eV
     M : float
         Mass of the material in amu
     T : float

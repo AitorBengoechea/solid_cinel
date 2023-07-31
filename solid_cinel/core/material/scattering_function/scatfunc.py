@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
+from solid_cinel.core.material.scattering_function.beta import Beta
 from typing import Iterable
 import warnings
 
@@ -71,13 +72,13 @@ class ScatFuncSD:
         Parameters
         ----------
         Ein : float
-            Incident energy of the neutron
+            The incident energy of the neutron in eV
         M : float
             Mass of the material in amu
         T : float
             Temperature of the material in K
         Eout : np.array
-            Outgoing energy grid
+            The neutron outgoing energy grid in eV
 
         Returns
         -------
@@ -231,7 +232,60 @@ class ScatFuncDD:
 
     @classmethod
     def from_Sab(cls, Ein: float, M: float, T: float, Eout: np.array,
-                 mu: np.array):
+                 theta: np.array, *args, model: str = "fgm", **kwargs):
+        """
+        Generate the scattering function from a S(alpha, beta) table
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        theta : np.array
+            Grid of cosine of the scattering angle
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+
+        Returns
+        -------
+
+        """
+        beta = Beta.from_parameters(Ein, M, T, Eout)
+        theta_ = theta if hasattr(theta, '__len__') else [theta]
+        mu = np.cos(theta_)
+        dd_pdf = {}
+        for angle in theta_:
+            alpha = Alpha.from_parameters(Ein, M, T, Eout, angle)
+            sab = Sab.from_model(alpha, beta, *args, model=model, **kwargs)
+            dd_pdf[np.cos(angle * np.pi / 180)] = sab.to_dd_pdf(Eout, mu)
         return
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):

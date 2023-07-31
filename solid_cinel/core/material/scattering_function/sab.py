@@ -503,14 +503,14 @@ class Sab:
 
         Parameters
         ----------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        T : 'float'
-            Temperature in K.
         alpha_grid : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
         threshold : 'float', optional
             Minimun value to take into account in the creation of tau_n
             functions. For T>200 is convenient to set into 1.0e-14 to speed up

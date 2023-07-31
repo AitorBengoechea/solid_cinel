@@ -428,7 +428,6 @@ class ScatFuncDD:
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> pd.DataFrame(ScatFuncDD.from_Sab_pdos(Ein, M, T, Eout, theta, pdos))
 
         """
         awr = ((M / m + 1) / (M / m)) ** 2

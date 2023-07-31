@@ -365,6 +365,17 @@ class Sab:
         Sab_positive = self.data.apply(lambda x: x * np.exp(-beta), axis=1)
         return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
 
+    def to_ScatFunc(self) -> pd.Series:
+        """
+        Get the scattering function from the S(alpha, -beta) matrix.
+        Returns
+        -------
+
+        """
+        sab_diag_negative = pd.Series(np.diag(self.data),
+                                      index=self.beta.data)
+        return
+
     @classmethod
     def from_fgm(cls, alpha_grid: Union[Alpha, Iterable],
                  beta_grid: Union[Beta, Iterable], T: float = None,

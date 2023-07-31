@@ -6,7 +6,8 @@ Created on Thu Oct 20 11:46:42 2022
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta, get_S_pdos_from_alpha_beta
+from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, \
+    get_S_sct_from_alpha_beta, get_S_pdos_from_alpha_beta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
@@ -408,14 +409,18 @@ class Sab:
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
+            beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
+            alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_fgm_from_alpha_beta(alpha_grid_.data,
-                                                 - beta_grid_.data, # S(alpha, -beta)
+                                                 - beta_grid_.data,
+                                                 # S(alpha, -beta)
                                                  wt)
         else:
-            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
+            raise ValueError(
+                "The beta grid contains negative values and the input is the absolute beta grid")
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
@@ -474,15 +479,19 @@ class Sab:
         # Start the calculation:
         ratio = pdos.Teff(T) / T
 
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
+            beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
+            alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
-                                                 - beta_grid_.data,  # S(alpha, -beta)
+                                                 - beta_grid_.data,
+                                                 # S(alpha, -beta)
                                                  ratio,
                                                  ws)
         else:
-            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
+            raise ValueError(
+                "The beta grid contains negative values and the input is the absolute beta grid")
 
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
@@ -544,8 +553,10 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
+            beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
+            alpha_grid)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
@@ -773,7 +784,7 @@ class Sab:
         Check if the S(alpha, beta) matrix satifies the sum rule constrain.
         .. math::
             \int_{-\infty}^{\infty}\beta S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(1-\exp(-\beta))d\beta = \alpha
-        
+
         For SCT and for phonon expansion, the normalization is only satisfy to
         large alpha values, for the rest:
         .. math::
@@ -801,7 +812,8 @@ class Sab:
         if (abs(1 - abs(sum_rule)) > 0.6).any():
             raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
         if (abs(1 - abs(sum_rule)) > 1.0e-3).any():
-            warnings.warn("Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
+            warnings.warn(
+                "Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
     def normalization_check(self, S: pd.DataFrame) -> None:
@@ -834,9 +846,11 @@ class Sab:
         """
         normalization = S.apply(_normalization, axis="columns")
         if hasattr(self, "DebyeWallerCoeff"):
-            normalization /= (1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
+            normalization /= (
+                        1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
         if (abs(normalization - 1.0) > 1.0e-2).any():
-            warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
+            warnings.warn(
+                "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
     def _get_single_momentum(self, n, T: float = None) -> pd.Series:
@@ -899,7 +913,9 @@ class Sab:
         if T:
             momentum_df *= (kb * T) ** n
         return momentum_df
-    def get_momentum(self, n: int, all: bool = False, T: float = None) -> pd.DataFrame:
+
+    def get_momentum(self, n: int, all: bool = False,
+                     T: float = None) -> pd.DataFrame:
         """
         Get the n momentum of the S(alpha, -beta) matrix:
         .. math::
@@ -1063,7 +1079,8 @@ class Sab:
                                       axis=1)
         beta_df = pd.DataFrame.from_records(beta_values.values,
                                             index=beta_values.index,
-                                            columns=pd.Index(beta_new_, name="beta"))
+                                            columns=pd.Index(beta_new_,
+                                                             name="beta"))
         if add:
             return Sab(pd.concat([beta_df, self.data], axis=1))
         else:
@@ -1202,12 +1219,14 @@ class Sab:
 
         if hasattr(self, "DebyeWallerCoeff"):
             debye_weller = self.DebyeWallerCoeff
-            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (1 - np.exp(-debye_weller * x.name)))
+            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (
+                        1 - np.exp(-debye_weller * x.name)))
         else:
             prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
 
         q = proportionality_factor(alpha_new, alpha_0, alpha_2, mode="linlog")
-        alpha_new_escale = (1 - q) * prob_norm.loc[::, alpha_0] + q * prob_norm.loc[::, alpha_2]
+        alpha_new_escale = (1 - q) * prob_norm.loc[::,
+                                     alpha_0] + q * prob_norm.loc[::, alpha_2]
 
         alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
         if hasattr(self, "DebyeWallerCoeff"):
@@ -1256,9 +1275,9 @@ class Sab:
         """
         alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
         beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
-        interp_Alpha_Beta = self.get_alpha(alpha_)\
-                                .get_beta(abs(beta_))\
-                                .set_axis(pd.Index(beta_, name="beta"), axis=1)
+        interp_Alpha_Beta = self.get_alpha(alpha_) \
+            .get_beta(abs(beta_)) \
+            .set_axis(pd.Index(beta_, name="beta"), axis=1)
         if (beta_ > 0).any():
             interp_Alpha_Beta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
@@ -1353,12 +1372,15 @@ class Sab:
         param_beta_grid = Beta.from_parameters(Eout, Ein, T).data
 
         # Create the masks for interpolation:
-        alpha_mask = (self.alpha.data.max() >= param_alpha_grid) & (self.alpha.data.min() <= param_alpha_grid)
-        beta_mask = (self.beta.data.max() >= abs(param_beta_grid)) & (self.beta.data.min() <= abs(param_beta_grid))
+        alpha_mask = (self.alpha.data.max() >= param_alpha_grid) & (
+                    self.alpha.data.min() <= param_alpha_grid)
+        beta_mask = (self.beta.data.max() >= abs(param_beta_grid)) & (
+                    self.beta.data.min() <= abs(param_beta_grid))
 
         # Interpolation:
-        Sab_interp = self.get_value_from_Alpha_Beta(param_alpha_grid[alpha_mask],
-                                                    param_beta_grid[beta_mask])
+        Sab_interp = self.get_value_from_Alpha_Beta(
+            param_alpha_grid[alpha_mask],
+            param_beta_grid[beta_mask])
 
         # Check if extrapolation is need:
         if not all(alpha_mask) or not all(beta_mask):
@@ -1375,9 +1397,12 @@ class Sab:
             else:
                 raise SyntaxError("Model not available")
             Sab_new = pd.DataFrame(Sab_values,
-                                   index=pd.Index(param_alpha_grid, name="alpha"),
-                                   columns=pd.Index(param_beta_grid, name="beta"))
-            Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[beta_mask]] = Sab_interp.values
+                                   index=pd.Index(param_alpha_grid,
+                                                  name="alpha"),
+                                   columns=pd.Index(param_beta_grid,
+                                                    name="beta"))
+            Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[
+                beta_mask]] = Sab_interp.values
         else:
             Sab_new = Sab_interp
 
@@ -1386,7 +1411,8 @@ class Sab:
     def get_scattering_func(self, Ein: Union[Iterable, float],
                             theta: Union[Iterable, float],
                             T: Union[Iterable, float],
-                            M: float, extrapolation: str = "sct") -> pd.DataFrame:
+                            M: float,
+                            extrapolation: str = "sct") -> pd.DataFrame:
         """
         Return the scattering function from S(alpha, beta) matrix:
         .. math::
@@ -1429,7 +1455,7 @@ class Sab:
         >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
         >>> Sab_interp.iloc[::, 198:203]  #doctest: +NORMALIZE_WHITESPACE
         Eout	6.599348	6.600000	6.600652	6.601305	6.601957
-        theta					
+        theta
         1.0	    0.026893	0.026602	0.026264	0.023732	0.022887
         45.5	6.440034	6.472782	6.279656	6.017741	5.809228
         90.0	2.255336	2.227227	2.199121	2.171028	2.142957
@@ -1462,13 +1488,17 @@ class Sab:
         """
         Eout = self.beta.get_Eout(T, Ein, side="full").values
         energy_vect = np.sqrt(Eout / Ein)
-        energy_vect *= (1 + m / M)**2
+        energy_vect *= (1 + m / M) ** 2
         energy_vect /= 2 * kb * T
         scattering_funct = {}
         theta_ = theta if hasattr(theta, '__len__') else [theta]
         for single_theta in theta_:
-            Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein, T, M, single_theta,  extrapolation=extrapolation)
-            scattering_funct[single_theta] = np.diag(Sab_interp_single_theta) * energy_vect
+            Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein,
+                                                                      T, M,
+                                                                      single_theta,
+                                                                      extrapolation=extrapolation)
+            scattering_funct[single_theta] = np.diag(
+                Sab_interp_single_theta) * energy_vect
         scattering_funct = pd.DataFrame(scattering_funct,
                                         index=pd.Index(Eout, name="Eout"),
                                         columns=pd.Index(theta_, name="theta"))
@@ -1524,7 +1554,7 @@ class Sab:
         return inelastic_xs
 
 
-def _sum_rule(x: pd.Series, n: int=1) -> float:
+def _sum_rule(x: pd.Series, n: int = 1) -> float:
     """
     Calculate the "n" sum rule value for a fix alpha value.
     .. math::
@@ -1583,7 +1613,8 @@ def _normalization(x: pd.Series) -> float:
 
 
 def proportionality_factor(alpha: float, alpha_i: float,
-                           alpha_i_plus_one: float, mode: str = "linlog") -> float:
+                           alpha_i_plus_one: float,
+                           mode: str = "linlog") -> float:
     """
     Get the proportionality factor for unit-base interpolation
 

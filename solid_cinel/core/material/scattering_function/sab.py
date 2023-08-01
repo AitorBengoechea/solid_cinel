@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Created on Thu Oct 20 11:46:42 2022
-@author: Aitor Bengoechea
+Python file for working with S(alpha, -beta) matrixs.
+
+@author: AB272525
 """
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
@@ -198,7 +198,7 @@ rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
 class Sab:
     """
     Class containing all the methods and properties of a asymmetric
-    S(alpha, beta) matrix
+    S(alpha, beta) matrix.
 
     Attributes
     ----------
@@ -245,7 +245,7 @@ class Sab:
 
     def __init__(self, *args, **kwargs):
         """
-        Initialize the S(alpha, beta) matrix class
+        Initialize the S(alpha, beta) matrix class.
 
         Parameters
         ----------
@@ -260,14 +260,14 @@ class Sab:
     def alpha(self) -> Alpha:
         """
         Initialize the Alpha class with the information of S(alpha, beta)
-        matrix
+        matrix.
         """
         return Alpha(self.data.index.values)
 
     @property
     def beta(self) -> Beta:
         """
-        Initialize the Beta class with the information of S(alpha, beta)
+        Initialize the Beta class with the information of S(alpha, -beta).
         matrix
         """
         return Beta(self.data.columns.values)
@@ -341,7 +341,7 @@ class Sab:
 
     def to_full(self) -> pd.DataFrame:
         """
-        Get the full S(alpha, beta) matrix
+        Get the full S(alpha, beta) matrix.
 
         Returns
         -------
@@ -1124,8 +1124,7 @@ class Sab:
             prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
 
         q = proportionality_factor(alpha_new, alpha_0, alpha_2, mode="linlog")
-        alpha_new_escale = (1 - q) * prob_norm.loc[::,
-                                     alpha_0] + q * prob_norm.loc[::, alpha_2]
+        alpha_new_escale = (1 - q) * prob_norm.loc[::, alpha_0] + q * prob_norm.loc[::, alpha_2]
 
         alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
         if hasattr(self, "DebyeWallerCoeff"):
@@ -1244,7 +1243,7 @@ def proportionality_factor(alpha: float, alpha_i: float,
                            alpha_i_plus_one: float,
                            mode: str = "linlog") -> float:
     """
-    Get the proportionality factor for unit-base interpolation
+    Get the proportionality factor for unit-base interpolation.
 
     Parameters
     ----------
@@ -1448,4 +1447,3 @@ def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     if np.trapz(tau_n, dx=delta_beta) < 1.e-5:
         raise ValueError("Tau function doesnt satisfy the normalization condition")
     return
-

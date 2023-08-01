@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 """
-Created on Thu Oct 20 11:46:42 2022
-@author: Aitor Bengoechea
-"""
+Python file for working with Phonon Density Of States.
 
-from solid_cinel.core.generic import integrate, reshape_differential
+@author: AB272525
+"""
+from solid_cinel.core.generic import integrate
 from solid_cinel.core.material.scattering_function.beta import Beta
 import pandas as pd
 import numpy as np
@@ -24,6 +23,7 @@ rho_in_energy_str = '''
 '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
+
 
 class Pdos:
     """
@@ -55,7 +55,7 @@ class Pdos:
 
     def __init__(self, *args, **kwargs):
         """
-        Initialization of the pdos object
+        Initialize of the pdos object.
 
         Parameters
         ----------

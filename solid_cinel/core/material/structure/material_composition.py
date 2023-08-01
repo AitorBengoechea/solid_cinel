@@ -1,18 +1,20 @@
+"""
+Python file for working with material composition.
+
+@author: AB272525
+"""
 from solid_cinel.data.elements import ELEMENTS
 from scipy.constants import physical_constants as const
-from urllib.request import urlopen, Request, urlretrieve
-from io import StringIO
 import numpy as np
 import pandas as pd
 import collections
 from typing import Iterable, Union
-import pytest
 collections.Callable = collections.abc.Callable
 
 
 class Atom:
     """
-    Class to store properties of the atoms
+    Class to store properties of the atoms.
 
     Attributes
     ----------
@@ -41,7 +43,7 @@ class Atom:
 
     """
 
-    def __init__(self, A: int , Z: int, atom_mass: float,
+    def __init__(self, A: int, Z: int, atom_mass: float,
                  b_coh: float, b_incoh: float):
         """
         Initialize the Atom class to describe a single atoms.
@@ -196,7 +198,7 @@ class Atom:
 class Molecule(Atom):
     """
     Class to store the properties and method for all the atom of
-    the molecule
+    the molecule.
 
     Attributes
     ----------
@@ -251,7 +253,7 @@ class Molecule(Atom):
     @property
     def name(self) -> str:
         """
-        Name of the molecule given by the user
+        Name of the molecule given by the user.
 
         Returns
         -------
@@ -277,47 +279,5 @@ class Molecule(Atom):
         return self._name
 
     @name.setter
-    def name(self, name:str):
+    def name(self, name: str):
         self._name = name if name is not None else "Molecule"
-
-def get_str_from_html(html) -> str:
-    """
-    Get a the str from a html page.
-
-    Parameters
-    ----------
-    html : 'str'
-        The html page.
-
-    """
-    user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7'
-    headers = {'User-Agent': user_agent}
-    request = Request(html, None, headers)
-    response = urlopen(request)
-    return response.read().decode("utf-8")
-
-def get_atom_data(A, Z, source) -> pd.DataFrame:
-    """
-    Get atom data from internet.
-
-    Parameters
-    ----------
-    A : 'int'
-        Atomic number.
-    Z : 'int'
-        Number of protons.
-    source : _type_
-        _description_
-
-    Examples
-    --------
-    """
-    if source.lower() == "nist":
-        html = f"https://www.ncnr.nist.gov/resources/n-lengths/elements/{ELEMENTS[Z].lower()}.html"
-        data_str = get_str_from_html(html)
-        data_str = data_str[data_str.find("cross sections<tr>") + 19:]
-        data_str = data_str[:data_str.find("</table>")]
-        data_str = data_str.replace("<th>", "").replace("<td>", "").replace("---", "0.0").replace("<tr>", "")
-        StringData = StringIO(data_str)
-        data =pd.read_csv(StringData, sep ="\t\t", engine="python")
-    return data

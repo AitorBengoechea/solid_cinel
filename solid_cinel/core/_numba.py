@@ -1,3 +1,8 @@
+"""
+Python file for working with numba function coming from cinel.
+
+@author: AB272525
+"""
 import numpy as np
 import numba as nb
 from numba import prange
@@ -201,73 +206,3 @@ def interp1(x1, y1, x2, y2, x, mode):
         return y1 * math.exp(math.log(x / x1) * math.log(y2 / y1) / math.log(x2 / x1))
     else:
         raise ValueError('Undefined interpolation mode, please check.')
-
-
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
-              mu: np.ndarray) -> np.ndarray:
-    """
-    Get all the posible alpha values from the parameters of the function:
-    .. math::
-        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
-
-    Parameters
-    ----------
-    Eout : 'np.ndarray', (N,)
-        Output energy of the neutron.
-    Ein : 'np.ndarray', (M,)
-        Incidente energy of the neutron.
-    T : 'np.ndarray', (Z,)
-        Temperature in K.
-    M : "float"
-        Mass in amu of the scatterer.
-    mu : 'np.ndarray', (K,)
-        Cosine of the scattering angle.
-
-    Returns
-    -------
-    'np.ndarray', (N + M + Z + K,)
-        Array containing all posible alpha values for the input parameters.
-    """
-    alpha = []
-    for i in prange(len(T)):
-        for j in prange(len(Ein)):
-            for k in prange(len(Eout)):
-                for ll in prange(len(mu)):
-                    alpha_value = Eout[k] + Ein[j]
-                    alpha_value -= 2 * mu[ll] * np.sqrt(Eout[k] * Ein[j])
-                    alpha_value /= (M * kb * T[i] / m)
-                    alpha.append(alpha_value)
-    return np.array(alpha)
-
-
-@nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
-def get_beta(Eout: np.ndarray, Ein: np.ndarray,
-             T: np.ndarray) -> np.ndarray:
-    """
-    Get all the posible beta values from the parameters of the function:
-    .. math::
-        \beta=\dfrac{E_{out} - E_{in}}{k_BT}
-
-    Parameters
-    ----------
-    Eout : 'np.ndarray', (N,)
-        Output energy of the neutron.
-    Ein : 'np.ndarray', (M,)
-        Incidente energy of the neutron.
-    T : 'np.ndarray', (Z,)
-        Temperature in K.
-
-    Returns
-    -------
-    'np.ndarray', (N + M + Z,)
-        Array containing all posible beta values for the input parameters.
-    """
-    beta = []
-    for i in prange(len(T)):
-        for j in prange(len(Ein)):
-            for k in prange(len(Eout)):
-                beta_value = Eout[k] - Ein[j]
-                beta_value /= kb * T[i]
-                beta.append(beta_value)
-    return np.array(beta)

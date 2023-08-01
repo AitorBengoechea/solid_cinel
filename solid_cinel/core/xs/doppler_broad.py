@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFuncSD
+import os
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]

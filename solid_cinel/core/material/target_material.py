@@ -7,11 +7,14 @@ Python file for working with Target Material.
 
 from solid_cinel.core.material.structure.solid import Solid, hkl_max_value
 from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.scattering_function.beta import Beta
+from solid_cinel.core.material.scattering_function.alpha import Alpha
 from solid_cinel.core.material.scattering_function.sab import Sab
 from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np
+import os
 import pandas as pd
 import numba as nb
 import collections

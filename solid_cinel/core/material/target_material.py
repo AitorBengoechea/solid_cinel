@@ -10,7 +10,6 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.scattering_function.sab import Sab
 from solid_cinel.core.material.scattering_function.alpha import Alpha
 from solid_cinel.core.material.scattering_function.beta import Beta
-from solid_cinel.core._numba import hklloop
 from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
@@ -1363,3 +1362,109 @@ def numba_hkl_data(d_min: float,
                          for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul]
                          in hkl_data_dict.items()],
                         columns=columns)
+
+
+@nb.jit(nopython=True, nogil=True)
+def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
+            Bfac: dict, pos: dict, csl: dict, preferred_orientation: np.ndarray,
+            precision: np.ndarray) -> dict:
+    """
+    Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
+    fill the condition of d_hkl > d_min
+    .. math::
+        d_{hkl} = \frac{2\pi}{\tau_{hkl}}
+        F(\vec{\tau}_{hkl})=\sum_{j=1}^{N_{uc}}b_j\exp\left(-\dfrac{\hbar^2\tau_{hkl}^2}{4M_jk_BT}\Lambda_j(T)\right) e^{i\vec{\tau}_{hkl}\cdot\vec{p}_j}
+
+    Parameters
+    ----------
+    d_min : 'float'
+        The minimum dspacing for the LEAPR module of NJOY
+    hkl_max : 'np.ndarray', (3,)
+        Maximun h, k, l index for generating a d > d_min
+    rec_vecs : 'np.ndarray' (3, 3)
+        Reciprocal vectors
+    Bfac : 'nb.typed.Dict'
+        Dict with the B factor for Target_Material object elements.
+    pos : 'nb.typed.Dict'
+        Dict with atomic position of elements in Target_Material object.
+    csl : 'nb.typed.Dict'
+        Coherent elastic length for each element of Target_Material object.
+    preferred_orientation: "np.ndarray", (3)
+        Array with the preferred orientation of the solid.
+    precision: "float"
+        Precision of the rounding in the calculation to merge different plane
+        values
+
+    Returns
+    --------
+    "dict"
+        Dictionary containing the hkl planes, the d_hkl, Fsq, orientation_angle.
+    """
+    hklM = {}
+    hkldF = {}
+    h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
+
+    for h in h_range[::-1]:  # to get positive hkl order
+        for k in k_range[::-1]:
+            for l in l_range[::-1]:
+                if h ** 2 + k ** 2 + l ** 2 == 0:  # (0, 0, 0) is excluded
+                    continue
+
+                # d_hkl:
+                vec_tau_hkl = h * rec_vecs[0] + k * rec_vecs[1] + l * rec_vecs[2]
+                d_hkl = 2 * np.pi / np.linalg.norm(vec_tau_hkl)
+
+                if d_hkl < d_min:  # d < d_min is excluded
+                    continue
+
+                Fsq = Fsq_hkl(vec_tau_hkl, Bfac, csl, pos)  # Fsquared
+
+                # same dspacing and Fsquared with precision will be regrouped
+                d_rnd = round(d_hkl, precision[0])
+                Fsq_rnd = round(Fsq, precision[1])
+                if (d_rnd, Fsq_rnd) in hkldF:
+                    hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
+                else:
+                    hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
+                    OA_num = np.sum(vec_tau_hkl * preferred_orientation)
+                    OA_den = np.linalg.norm(vec_tau_hkl) * np.linalg.norm(preferred_orientation)
+                    orientation_angle_hkl = np.arccos(OA_num / OA_den) * 180 / np.pi
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq, orientation_angle_hkl, 1])
+    return hklM
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
+    """
+    Get F_hkl:
+    .. math::
+        F(\vec{\tau}_{hkl})=\sum_{j=1}^{N_{uc}}b_j\exp\left(-\dfrac{\hbar^2\tau_{hkl}^2}{4M_jk_BT}\Lambda_j(T)\right) e^{i\vec{\tau}_{hkl}\cdot\vec{p}_j}
+
+    Parameters
+    ----------
+    vec_tau_hkl : 'np.ndarray', (3, 3)
+        Reciprocal vectors
+    Bfac : 'nb.typed.Dict'
+        Dict with the B factor for Target_Material object elements.
+    pos : 'nb.typed.Dict'
+        Dict with atomic position of elements in Target_Material object.
+    csl : 'nb.typed.Dict'
+        Coherent elastic length for each element of Target_Material object.
+
+    Returns
+    -------
+    "float"
+        Fsq_hkl value for that (h, k, l) plane
+    """
+    real = 0.
+    imag = 0.
+    for element in Bfac:
+        expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
+                           * Bfac[element] / (8 * np.pi ** 2))
+        element_position = pos[element]
+        for iep in range(len(element_position)):
+            cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]))
+            cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]))
+            real += csl[element] * 0.1 * expon_hkl * cumulant_cos
+            imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
+    return real ** 2 + imag ** 2  # Fsquared

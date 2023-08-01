@@ -3,11 +3,11 @@ import os
 import numpy as np
 import pandas as pd
 from solid_cinel.core.xs.doppler_broad import get_DB
-from solid_cinel.core.generic import integrate
 
-M = 238.05077040419212
+
 @pytest.mark.parametrize("T", [300, 1000])
 def test_sigma1(T):
+    M = 238.05077040419212
     wd = os.getcwd()
     os.chdir(__file__.replace("test_sigma1.py", ""))
     # Get test data:
@@ -37,8 +37,8 @@ def test_sigma1(T):
             Eout_great = np.logspace(np.log10(Ein * 1.01),
                                      np.log10(2 * Ein),
                                      num=1500, endpoint=True)
-        E_out = np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
-        xs_broad = integrate(get_DB(xs_0K, Ein, E_out, M, T, algorithm="sigma1"))
+        Eout = np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+        xs_broad = get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True)
         assert abs(1 - xs_broad/xs_test.loc[Ein].values) < 0.8
 
 

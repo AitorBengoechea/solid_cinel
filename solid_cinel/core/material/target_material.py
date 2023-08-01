@@ -7,7 +7,7 @@ Created on Thu Oct 20 11:46:42 2022
 
 from solid_cinel.core.material.structure.solid import Solid, hkl_max_value
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.scattering_function.s import Sab
+from solid_cinel.core.material.scattering_function.sab import Sab
 from solid_cinel.core.material.scattering_function.alpha import Alpha
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core._numba import hklloop

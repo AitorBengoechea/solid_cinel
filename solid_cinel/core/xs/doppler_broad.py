@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import reshape_differential, integrate
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFuncSD
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -27,9 +28,9 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     xs_0K : pd.Series
         0K xs data for the given material
     Ein : float
-        Incident energy of the neutron
+        The incident energy of the neutron in eV
     Eout : np.array
-        Outgoing energy grid
+        The neutron outgoing energy grid in eV
     M : float
         Mass of the material in amu
     T : float
@@ -49,7 +50,7 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')] # Remove duplicated index
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Generate Broadening test results:
     >>> Ein = 36.68723
@@ -59,7 +60,7 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
 
     # SIGMA1:
     >>> algorithm = "sigma1"
-    >>> round(integrate(get_DB(xs_0K, Ein, Eout, M, T, algorithm=algorithm)), 2)
+    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm=algorithm, integral=True), 2)
     7905.42
 
     """
@@ -69,8 +70,8 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     return
 
 
-def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
-           T: float) -> pd.Series:
+def sigma1(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.array,
+           integral: bool = False) -> pd.Series:
     """
     Calculate the outgoin energy defferential Doppler broadened cross section at
     a given temperature and for an incident energy and mass using sigma1
@@ -83,9 +84,9 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     xs_0K : pd.Series
         0K xs data for the given material
     Ein : float
-        Incident energy of the neutron
+        The incident energy of the neutron in eV
     Eout : np.array
-        Outgoing energy grid
+        The neutron outgoing energy grid in eV
     M : float
         Mass of the material in amu
     T : float
@@ -105,14 +106,14 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')] # Remove duplicated index
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Generate Broadening test results:
     >>> Ein = 36.68723
     >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
     >>> M = 238.05077040419212
     >>> T = 300
-    >>> xs_broad = sigma1(xs_0K, Ein, Eout, M, T)
+    >>> xs_broad = sigma1(xs_0K, Ein, M, T, Eout)
 
     # Differential value test:
     >>> xs_broad.iloc[::100]
@@ -130,13 +131,7 @@ def sigma1(xs_0K: pd.Series, Ein: float, Eout: np.array, M: float,
     Name: 36.68723, dtype: float64
 
     # Integral value test:
-    >>> round(integrate(xs_broad), 2)
+    >>> round(sigma1(xs_0K, Ein, M, T, Eout, integral = True), 2)
     7905.42
     """
-    exp_negative = pd.Series(np.exp(- M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout))**2),
-                             index=pd.Index(Eout, name="Eout"), name=Ein)
-    exp_positive = pd.Series(np.exp(- M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout))**2),
-                             index=pd.Index(Eout, name="Eout"), name=Ein)
-    xs_0K_ = reshape_differential(xs_0K.index.values, xs_0K.values, Eout)[::, 0]
-    xs_broad = xs_0K_ * (exp_negative - exp_positive) * np.sqrt(Eout)
-    return 0.5 * xs_broad / Ein * np.sqrt(M / (np.pi * m * kb * T))
+    return ScatFuncSD.from_MD(Ein, M, T, Eout).convolve(xs_0K, integral=integral)

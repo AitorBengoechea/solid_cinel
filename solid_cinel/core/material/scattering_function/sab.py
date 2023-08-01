@@ -6,7 +6,8 @@ Created on Thu Oct 20 11:46:42 2022
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, get_S_sct_from_alpha_beta, get_S_pdos_from_alpha_beta
+from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, \
+    get_S_sct_from_alpha_beta, get_S_pdos_from_alpha_beta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
@@ -364,6 +365,60 @@ class Sab:
         Sab_positive = self.data.apply(lambda x: x * np.exp(-beta), axis=1)
         return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
 
+    def to_ScatFunc(self, Ein, T, M, mu=None) -> pd.Series:
+        """
+        Get the scattering function from the S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        Ein : 'float'
+            Incident energy in eV.
+        T : 'float'
+            Temperature in K.
+        mu : 'float', optional
+            The Cosine of the scattering angle used for the creation of the
+            S(alpha, -beta) table. The default is None.
+
+        Returns
+        -------
+        'pd.Series'
+            Scattering function of these S(alpha, -beta) table
+
+        Example
+        -------
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha_grid = Alpha.generate_grid(300, 26).data
+        >>> Sab.from_fgm(alpha_grid, beta_grid).to_ScatFunc(7.2, 300, 26).iloc[295:305].round(6) #doctest: +NORMALIZE_WHITESPACE
+        Eout
+        7.198667    100.181707
+        7.199000    127.528189
+        7.199333    153.327750
+        7.199667    172.925131
+        7.200000    181.604950
+        7.200333    170.717666
+        7.200667    149.438145
+        7.201000    122.706410
+        7.201333     95.163376
+        7.201667     70.151820
+        dtype: float64
+        """
+        sab_diag = np.diag(self.data)
+        beta = self.beta.data[:len(sab_diag)]
+        sab_diag_negative = pd.Series(sab_diag,
+                                      index=Ein - beta * kb * T)
+        # Avoid negative energy:
+        sab_diag_negative = sab_diag_negative.loc[sab_diag_negative.index >= 0]
+        sab_diag_positive = pd.Series(np.diag(self.data) * np.exp(-beta),
+                                      index=Ein + beta * kb * T)
+        scattfunc = pd.concat([sab_diag_negative, sab_diag_positive.iloc[1::]])
+        # Apply normalization constrains:
+        awr = ((M / m + 1) / (M / m)) ** 2
+        scattfunc *= awr * np.sqrt(scattfunc.index.values / Ein) / (2 * kb * T)
+        scattfunc.index.name = 'Eout'
+        if mu:
+            scattfunc.name = mu
+        return scattfunc.sort_index()
+
     @classmethod
     def from_fgm(cls, alpha_grid: Union[Alpha, Iterable],
                  beta_grid: Union[Beta, Iterable], T: float = None,
@@ -408,14 +463,18 @@ class Sab:
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
+            beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
+            alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_fgm_from_alpha_beta(alpha_grid_.data,
-                                                 - beta_grid_.data, # S(alpha, -beta)
+                                                 - beta_grid_.data,
+                                                 # S(alpha, -beta)
                                                  wt)
         else:
-            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
+            raise ValueError(
+                "The beta grid contains negative values and the input is the absolute beta grid")
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
     @classmethod
@@ -474,15 +533,19 @@ class Sab:
         # Start the calculation:
         ratio = pdos.Teff(T) / T
 
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
+            beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
+            alpha_grid)
         if beta_grid_.kind == "abs":
             S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
-                                                 - beta_grid_.data,  # S(alpha, -beta)
+                                                 - beta_grid_.data,
+                                                 # S(alpha, -beta)
                                                  ratio,
                                                  ws)
         else:
-            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
+            raise ValueError(
+                "The beta grid contains negative values and the input is the absolute beta grid")
 
         return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
 
@@ -503,14 +566,14 @@ class Sab:
 
         Parameters
         ----------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        T : 'float'
-            Temperature in K.
         alpha_grid : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
         threshold : 'float', optional
             Minimun value to take into account in the creation of tau_n
             functions. For T>200 is convenient to set into 1.0e-14 to speed up
@@ -544,8 +607,10 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(alpha_grid)
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
+            beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
+            alpha_grid)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
@@ -571,6 +636,130 @@ class Sab:
                                                   iter_sum,
                                                   S_values)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
+
+    @classmethod
+    def from_model(cls, *args, model: str = "pdos", **kwargs):
+        """
+        Create Sab object from different models. The models available are:
+            - "phonon expansion": Phonon expansion model.
+            - "fgm": Free Gas Model.
+            - "sct": Short Collision Time model.
+
+        Parameters
+        ----------
+        model : 'str'
+            The model to calculate matrix values. The default is "pdos". The
+            available models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model
+                - "sct" : Short Collision Time model
+
+        Parameters for FGM model:
+        -------------------------
+        alpha_grid : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            Absolute beta grid.
+        model : 'str', optional
+            The model to calculate matrix values. The default is "FGM".
+        wt: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for SCT model:
+        -------------------------
+        alpha_grid : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for Phonon Expansion model:
+        --------------------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float'
+            Temperature in K.
+        alpha_grid : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        Sab
+            S(alpha, -beta) matrix based on the chosen model.
+
+        Examples
+        --------
+        FGM:
+        >>> T = 300
+        >>> beta_grid = Beta.generate_grid(T).data
+        >>> alpha_grid = Alpha.generate_grid(T, 26).data
+        >>> Sab.from_model(alpha_grid, beta_grid, model="fgm").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        alpha
+        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
+        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
+        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
+        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
+        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
+        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
+        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
+        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
+        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
+        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+
+        SCT:
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="sct").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
+        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
+        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
+        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
+        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
+        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
+        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
+        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
+        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
+        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
+
+        Phonon Expansion:
+        >>> T = 800
+        >>> beta_grid = Beta(beta0_).scale(T).data
+        >>> alpha_grid = Alpha(alpha0_).scale(T).data
+        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="pdos", threshold=1.0e-14).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+        """
+        if model.lower() == "fgm":
+            return cls.from_fgm(*args, **kwargs)
+        elif model.lower() == "sct":
+            return cls.from_sct(*args, **kwargs)
+        elif model.lower() == "pdos":
+            return cls.from_pdos(*args, **kwargs)
 
     @staticmethod
     def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
@@ -649,7 +838,7 @@ class Sab:
         Check if the S(alpha, beta) matrix satifies the sum rule constrain.
         .. math::
             \int_{-\infty}^{\infty}\beta S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(1-\exp(-\beta))d\beta = \alpha
-        
+
         For SCT and for phonon expansion, the normalization is only satisfy to
         large alpha values, for the rest:
         .. math::
@@ -677,7 +866,8 @@ class Sab:
         if (abs(1 - abs(sum_rule)) > 0.6).any():
             raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
         if (abs(1 - abs(sum_rule)) > 1.0e-3).any():
-            warnings.warn("Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
+            warnings.warn(
+                "Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
     def normalization_check(self, S: pd.DataFrame) -> None:
@@ -710,9 +900,11 @@ class Sab:
         """
         normalization = S.apply(_normalization, axis="columns")
         if hasattr(self, "DebyeWallerCoeff"):
-            normalization /= (1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
+            normalization /= (
+                        1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
         if (abs(normalization - 1.0) > 1.0e-2).any():
-            warnings.warn("Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
+            warnings.warn(
+                "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
     def _get_single_momentum(self, n, T: float = None) -> pd.Series:
@@ -775,7 +967,9 @@ class Sab:
         if T:
             momentum_df *= (kb * T) ** n
         return momentum_df
-    def get_momentum(self, n: int, all: bool = False, T: float = None) -> pd.DataFrame:
+
+    def get_momentum(self, n: int, all: bool = False,
+                     T: float = None) -> pd.DataFrame:
         """
         Get the n momentum of the S(alpha, -beta) matrix:
         .. math::
@@ -939,7 +1133,8 @@ class Sab:
                                       axis=1)
         beta_df = pd.DataFrame.from_records(beta_values.values,
                                             index=beta_values.index,
-                                            columns=pd.Index(beta_new_, name="beta"))
+                                            columns=pd.Index(beta_new_,
+                                                             name="beta"))
         if add:
             return Sab(pd.concat([beta_df, self.data], axis=1))
         else:
@@ -1078,12 +1273,14 @@ class Sab:
 
         if hasattr(self, "DebyeWallerCoeff"):
             debye_weller = self.DebyeWallerCoeff
-            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (1 - np.exp(-debye_weller * x.name)))
+            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (
+                        1 - np.exp(-debye_weller * x.name)))
         else:
             prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
 
         q = proportionality_factor(alpha_new, alpha_0, alpha_2, mode="linlog")
-        alpha_new_escale = (1 - q) * prob_norm.loc[::, alpha_0] + q * prob_norm.loc[::, alpha_2]
+        alpha_new_escale = (1 - q) * prob_norm.loc[::,
+                                     alpha_0] + q * prob_norm.loc[::, alpha_2]
 
         alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
         if hasattr(self, "DebyeWallerCoeff"):
@@ -1132,9 +1329,9 @@ class Sab:
         """
         alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
         beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
-        interp_Alpha_Beta = self.get_alpha(alpha_)\
-                                .get_beta(abs(beta_))\
-                                .set_axis(pd.Index(beta_, name="beta"), axis=1)
+        interp_Alpha_Beta = self.get_alpha(alpha_) \
+            .get_beta(abs(beta_)) \
+            .set_axis(pd.Index(beta_, name="beta"), axis=1)
         if (beta_ > 0).any():
             interp_Alpha_Beta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
@@ -1229,12 +1426,15 @@ class Sab:
         param_beta_grid = Beta.from_parameters(Eout, Ein, T).data
 
         # Create the masks for interpolation:
-        alpha_mask = (self.alpha.data.max() >= param_alpha_grid) & (self.alpha.data.min() <= param_alpha_grid)
-        beta_mask = (self.beta.data.max() >= abs(param_beta_grid)) & (self.beta.data.min() <= abs(param_beta_grid))
+        alpha_mask = (self.alpha.data.max() >= param_alpha_grid) & (
+                    self.alpha.data.min() <= param_alpha_grid)
+        beta_mask = (self.beta.data.max() >= abs(param_beta_grid)) & (
+                    self.beta.data.min() <= abs(param_beta_grid))
 
         # Interpolation:
-        Sab_interp = self.get_value_from_Alpha_Beta(param_alpha_grid[alpha_mask],
-                                                    param_beta_grid[beta_mask])
+        Sab_interp = self.get_value_from_Alpha_Beta(
+            param_alpha_grid[alpha_mask],
+            param_beta_grid[beta_mask])
 
         # Check if extrapolation is need:
         if not all(alpha_mask) or not all(beta_mask):
@@ -1251,9 +1451,12 @@ class Sab:
             else:
                 raise SyntaxError("Model not available")
             Sab_new = pd.DataFrame(Sab_values,
-                                   index=pd.Index(param_alpha_grid, name="alpha"),
-                                   columns=pd.Index(param_beta_grid, name="beta"))
-            Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[beta_mask]] = Sab_interp.values
+                                   index=pd.Index(param_alpha_grid,
+                                                  name="alpha"),
+                                   columns=pd.Index(param_beta_grid,
+                                                    name="beta"))
+            Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[
+                beta_mask]] = Sab_interp.values
         else:
             Sab_new = Sab_interp
 
@@ -1262,7 +1465,8 @@ class Sab:
     def get_scattering_func(self, Ein: Union[Iterable, float],
                             theta: Union[Iterable, float],
                             T: Union[Iterable, float],
-                            M: float, extrapolation: str = "sct") -> pd.DataFrame:
+                            M: float,
+                            extrapolation: str = "sct") -> pd.DataFrame:
         """
         Return the scattering function from S(alpha, beta) matrix:
         .. math::
@@ -1305,7 +1509,7 @@ class Sab:
         >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
         >>> Sab_interp.iloc[::, 198:203]  #doctest: +NORMALIZE_WHITESPACE
         Eout	6.599348	6.600000	6.600652	6.601305	6.601957
-        theta					
+        theta
         1.0	    0.026893	0.026602	0.026264	0.023732	0.022887
         45.5	6.440034	6.472782	6.279656	6.017741	5.809228
         90.0	2.255336	2.227227	2.199121	2.171028	2.142957
@@ -1338,13 +1542,17 @@ class Sab:
         """
         Eout = self.beta.get_Eout(T, Ein, side="full").values
         energy_vect = np.sqrt(Eout / Ein)
-        energy_vect *= (1 + m / M)**2
+        energy_vect *= (1 + m / M) ** 2
         energy_vect /= 2 * kb * T
         scattering_funct = {}
         theta_ = theta if hasattr(theta, '__len__') else [theta]
         for single_theta in theta_:
-            Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein, T, M, single_theta,  extrapolation=extrapolation)
-            scattering_funct[single_theta] = np.diag(Sab_interp_single_theta) * energy_vect
+            Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein,
+                                                                      T, M,
+                                                                      single_theta,
+                                                                      extrapolation=extrapolation)
+            scattering_funct[single_theta] = np.diag(
+                Sab_interp_single_theta) * energy_vect
         scattering_funct = pd.DataFrame(scattering_funct,
                                         index=pd.Index(Eout, name="Eout"),
                                         columns=pd.Index(theta_, name="theta"))
@@ -1400,7 +1608,7 @@ class Sab:
         return inelastic_xs
 
 
-def _sum_rule(x: pd.Series, n: int=1) -> float:
+def _sum_rule(x: pd.Series, n: int = 1) -> float:
     """
     Calculate the "n" sum rule value for a fix alpha value.
     .. math::
@@ -1459,7 +1667,8 @@ def _normalization(x: pd.Series) -> float:
 
 
 def proportionality_factor(alpha: float, alpha_i: float,
-                           alpha_i_plus_one: float, mode: str = "linlog") -> float:
+                           alpha_i_plus_one: float,
+                           mode: str = "linlog") -> float:
     """
     Get the proportionality factor for unit-base interpolation
 

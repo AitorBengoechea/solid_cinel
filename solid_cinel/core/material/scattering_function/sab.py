@@ -6,14 +6,14 @@ Created on Thu Oct 20 11:46:42 2022
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import get_S_fgm_from_alpha_beta, \
-    get_S_sct_from_alpha_beta, get_S_pdos_from_alpha_beta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
+import numba as nb
+from numba import prange
 import warnings
 
 kb = const["Boltzmann constant in eV/K"][0]
@@ -468,9 +468,9 @@ class Sab:
         alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
             alpha_grid)
         if beta_grid_.kind == "abs":
-            S_values = get_S_fgm_from_alpha_beta(alpha_grid_.data,
+            S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
                                                  - beta_grid_.data,
-                                                 # S(alpha, -beta)
+                                                 1.0,
                                                  wt)
         else:
             raise ValueError(
@@ -907,161 +907,6 @@ class Sab:
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
-    def _get_single_momentum(self, n, T: float = None) -> pd.Series:
-        """
-        Get the n momentum of the S(alpha, -beta) matrix:
-        .. math::
-            \alpha_{moment}(n)=\int_{-\infty}^{\infty}\beta^n S(\alpha,\,\beta)d\beta
-
-        Parameters
-        ----------
-        n : 'int'
-            The momentum to calcualte.
-        T: 'float', optional
-            If a temperature is introduced, it means that the momentum is going to
-            be tranform into a energy in eV. The default is None.
-
-        Returns
-        -------
-        'pd.Series'
-            Pandas Series with the momentum value for each alpha of the
-            S(alpha, -beta) matrix.
-
-        Example
-        -------
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha_grid = Alpha.generate_grid(300, 26).data
-        >>> Sab_mat = Sab.from_fgm(alpha_grid, beta_grid)
-        >>> Sab_mat.get_momentum(2).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
-                            2
-        alpha
-        0.001050     0.000077
-        0.002941     0.000360
-        0.008233     0.001687
-        0.023048     0.007912
-        0.064523     0.037186
-        0.180632     0.175848
-        0.505683     0.845481
-        1.415669     4.235277
-        3.963193    23.178151
-        11.095036  145.220627
-
-        >>> Sab_mat.get_momentum(1).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
-                           1
-        alpha
-        0.001050   -0.001050
-        0.002941   -0.002941
-        0.008233   -0.008233
-        0.023048   -0.023048
-        0.064523   -0.064523
-        0.180632   -0.180632
-        0.505683   -0.505749
-        1.415669   -1.415937
-        3.963193   -3.963627
-        11.095036 -11.096278
-        """
-        momentum_df = self.data.apply(_sum_rule, axis="columns", n=n)
-        momentum_df.name = n
-        if not (n % 2) == 0:
-            momentum_df *= -1
-        if T:
-            momentum_df *= (kb * T) ** n
-        return momentum_df
-
-    def get_momentum(self, n: int, all: bool = False,
-                     T: float = None) -> pd.DataFrame:
-        """
-        Get the n momentum of the S(alpha, -beta) matrix:
-        .. math::
-            \alpha_{moment}(n)=\int_{-\infty}^{\infty}\beta^n S(\alpha,\,\beta)d\beta
-
-        Parameters
-        ----------
-        n : 'int'
-            The momentum to calcualte.
-        all : 'bool', optional
-            Optional argument to calculate all the moments until n. The default
-            is False.
-        T: 'float', optional
-            If a temperature is introduced, it means that the momentum is going to
-            be tranform into a energy in eV. The default is None.
-
-        Returns
-        -------
-        momentum_df: 'pd.DataFrame'
-            Dataframe with the moments values
-
-        Example
-        -------
-        1 momentum:
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha_grid = Alpha.generate_grid(300, 26).data
-        >>> Sab_mat = Sab.from_fgm(alpha_grid, beta_grid)
-        >>> Sab_mat.get_momentum(2).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
-                            2
-        alpha
-        0.001050     0.000077
-        0.002941     0.000360
-        0.008233     0.001687
-        0.023048     0.007912
-        0.064523     0.037186
-        0.180632     0.175848
-        0.505683     0.845481
-        1.415669     4.235277
-        3.963193    23.178151
-        11.095036  145.220627
-
-        >>> Sab_mat.get_momentum(2, T = 300).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
-                              2
-        alpha
-        0.001050   5.135575e-08
-        0.002941   2.405873e-07
-        0.008233   1.127426e-06
-        0.023048   5.287471e-06
-        0.064523   2.485224e-05
-        0.180632   1.175238e-04
-        0.505683   5.650571e-04
-        1.415669   2.830546e-03
-        3.963193   1.549056e-02
-        11.095036  9.705471e-02
-
-        2 momentum:
-        >>> Sab_mat.get_momentum(4, all=True).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
-                            1           2             3             4
-        alpha
-        0.001050    -0.001050    0.000077     -0.000007  6.458514e-07
-        0.002941    -0.002941    0.000360     -0.000052  8.473183e-06
-        0.008233    -0.008233    0.001687     -0.000407  1.112575e-04
-        0.023048    -0.023048    0.007912     -0.003199  1.464338e-03
-        0.064523    -0.064523    0.037186     -0.025248  1.940055e-02
-        0.180632    -0.180632    0.175848     -0.201662  2.617168e-01
-        0.505683    -0.505749    0.845481     -1.664099  3.704584e+00
-        1.415669    -1.415937    4.235277    -14.863639  5.882242e+01
-        3.963193    -3.963627   23.178151   -156.507316  1.176998e+03
-        11.095036  -11.096278  145.220627  -2104.633063  3.302225e+04
-
-        >>> Sab_mat.get_momentum(4, all=True, T=300).iloc[::30] #doctest: +NORMALIZE_WHITESPACE
-                           1             2              3             4
-        alpha
-        0.001050   -0.000027  5.135575e-08  -1.144102e-10  2.884757e-13
-        0.002941   -0.000076  2.405873e-07  -8.969503e-10  3.784628e-12
-        0.008233   -0.000213  1.127426e-06  -7.035873e-09  4.969421e-11
-        0.023048   -0.000596  5.287471e-06  -5.527828e-08  6.540605e-10
-        0.064523   -0.001668  2.485224e-05  -4.362162e-07  8.665441e-09
-        0.180632   -0.004670  1.175238e-04  -3.484226e-06  1.168983e-07
-        0.505683   -0.013075  5.650571e-04  -2.875156e-05  1.654688e-06
-        1.415669   -0.036605  2.830546e-03  -2.568074e-04  2.627359e-05
-        3.963193   -0.102468  1.549056e-02  -2.704065e-03  5.257172e-04
-        11.095036  -0.286861  9.705471e-02  -3.636293e-02  1.474970e-02
-        """
-        if all:
-            momentum_df = {}
-            for n_ in range(1, n + 1):
-                momentum_df[n_] = self._get_single_momentum(n_, T=T)
-        else:
-            momentum_df = self._get_single_momentum(n, T=T)
-        return pd.DataFrame(momentum_df)
-
     def get_beta(self, beta_new: Union[Iterable, float],
                  add: bool = False) -> pd.DataFrame:
         """
@@ -1288,8 +1133,8 @@ class Sab:
         return pd.DataFrame(alpha_new_vector,
                             columns=pd.Index([alpha_new], name="alpha"))
 
-    def get_value_from_Alpha_Beta(self, alpha: Union[Iterable, float],
-                                  beta: Union[Iterable, float]) -> pd.DataFrame:
+    def get_Alpha_Beta(self, alpha: Union[Iterable, float],
+                       beta: Union[Iterable, float]) -> pd.DataFrame:
         """
         Get intepolated values for the beta and alpha values from the
         S(alpha, beta) matrix. This method take into account the sing of the
@@ -1321,7 +1166,7 @@ class Sab:
         >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alpha_new = [1.25e-4, 1.35e-4]
         >>> beta_new = [0.01, 0.03, -0.01, -0.03]
-        >>> S_mat.get_value_from_Alpha_Beta(alpha_new, beta_new) #doctest: +NORMALIZE_WHITESPACE
+        >>> S_mat.get_Alpha_Beta(alpha_new, beta_new) #doctest: +NORMALIZE_WHITESPACE
         beta         -0.03     -0.01      0.01      0.03
         alpha
         0.000125  0.000479  0.000487  0.000483  0.000465
@@ -1335,277 +1180,6 @@ class Sab:
         if (beta_ > 0).any():
             interp_Alpha_Beta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
-
-    def get_matrix_from_parameters(self,
-                                   Eout: Union[Iterable, float],
-                                   Ein: Union[Iterable, float],
-                                   T: Union[Iterable, float],
-                                   M: float,
-                                   theta: Union[Iterable, float],
-                                   extrapolation: str = "sct") -> pd.DataFrame:
-        """
-        Based on the set of variables introduced, interpolate the existing
-        S(alpha, -beta) to make a new S(alpha, beta) matrix with the alpha and
-        beta values created from the set of variables. If the alpha or beta
-        values created from the set of varibales are outside of the range of
-        the S(alpha, -beta) matrix, the method extrapolate the values using
-        free gas model or short time colission aproximation.
-
-        Parameters
-        ----------
-        Eout : 1D iterable or 'float'
-            Neutron output energies in eV.
-        Ein : 1D iterable or 'float'
-            Neutron incident energy in eV.
-        T : 1D iterable or 'float'
-            Temperature in Kelvin.
-        M : 'float'
-            Atom mass, amu
-        theta : 1D iterable or 'float'
-            scattering angle in Degrees.
-        extrapolation : "bool", optional
-            Optional argument to chose the model of extrapolation. The default
-            model is "sct". The available models are:
-                - "sct": Short Collision Time.
-                - "fgm": Free Gas Model.
-
-        Returns
-        -------
-        "pd.DataFrame"
-            Interpolated S(alpha, beta) based on parameters
-
-        Example
-        -------
-        Create the S(alpha, -beta) matrix:
-        >>> T = 300
-        >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
-
-        Only interpolation (sum rule check):
-        >>> Ein = 6.6
-        >>> theta = 60
-        >>> M = 238.05077040419212
-        >>> Eout = Sab_matrix.beta.get_Eout(T, Ein, side="full").values
-        >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
-        >>> Sab_intep.apply(lambda x: integrate(x * x.index), axis=1).iloc[::40]
-        alpha
-        0.811392   -0.812439
-        1.033521   -1.035315
-        1.075407   -1.076916
-        1.077535   -1.079099
-        1.079667   -1.081283
-        1.081804   -1.083466
-        1.083945   -1.085649
-        1.086090   -1.087833
-        1.088532   -1.090313
-        1.137942   -1.139335
-        dtype: float64
-
-        Extrapolation (last alpha is extrapolated):
-        >>> Eout = np.concatenate([Eout, np.array([12.0, 13.0])])
-        >>> Sab_intep = Sab_matrix.get_matrix_from_parameters(Eout, Ein, T, M, theta)
-        >>> Sab_intep.apply(lambda x: integrate(x * x.index), axis=1).iloc[::40]
-        alpha
-        0.811392   -0.812439
-        1.033521   -1.035315
-        1.075407   -1.076916
-        1.077535   -1.079099
-        1.079667   -1.081283
-        1.081804   -1.083466
-        1.083945   -1.085649
-        1.086090   -1.087833
-        1.088532   -1.090313
-        1.137942   -1.139335
-        1.694279   -1.696591
-        dtype: float64
-        """
-        # Create alpha and beta grid:
-        param_alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, theta).data
-        param_beta_grid = Beta.from_parameters(Eout, Ein, T).data
-
-        # Create the masks for interpolation:
-        alpha_mask = (self.alpha.data.max() >= param_alpha_grid) & (
-                    self.alpha.data.min() <= param_alpha_grid)
-        beta_mask = (self.beta.data.max() >= abs(param_beta_grid)) & (
-                    self.beta.data.min() <= abs(param_beta_grid))
-
-        # Interpolation:
-        Sab_interp = self.get_value_from_Alpha_Beta(
-            param_alpha_grid[alpha_mask],
-            param_beta_grid[beta_mask])
-
-        # Check if extrapolation is need:
-        if not all(alpha_mask) or not all(beta_mask):
-            if extrapolation == "sct":
-                Tratio = self.pdos.Teff(T) / T
-                Sab_values = get_S_sct_from_alpha_beta(param_alpha_grid,
-                                                       param_beta_grid,
-                                                       Tratio,
-                                                       1.0)
-            elif extrapolation == "fgm":
-                Sab_values = get_S_fgm_from_alpha_beta(param_alpha_grid,
-                                                       param_beta_grid,
-                                                       1.0)
-            else:
-                raise SyntaxError("Model not available")
-            Sab_new = pd.DataFrame(Sab_values,
-                                   index=pd.Index(param_alpha_grid,
-                                                  name="alpha"),
-                                   columns=pd.Index(param_beta_grid,
-                                                    name="beta"))
-            Sab_new.loc[param_alpha_grid[alpha_mask], param_beta_grid[
-                beta_mask]] = Sab_interp.values
-        else:
-            Sab_new = Sab_interp
-
-        return Sab_new
-
-    def get_scattering_func(self, Ein: Union[Iterable, float],
-                            theta: Union[Iterable, float],
-                            T: Union[Iterable, float],
-                            M: float,
-                            extrapolation: str = "sct") -> pd.DataFrame:
-        """
-        Return the scattering function from S(alpha, beta) matrix:
-        .. math::
-            S(\theta, Eout)= \frac{1}{2k_B T}\sqrt{\dfrac{E^\prime}{E}}S(\alpha(\theta, Eout, Ein, T, M),\beta(Eout, Ein, T))
-
-        Parameters
-        ----------
-        Ein : 1D iterable or 'float'
-            Neutron incident energy in eV.
-        T : 1D iterable or 'float'
-            Temperature in Kelvin.
-        M : 'float'
-            Atom mass, amu
-        theta : 1D iterable or 'float'
-            scattering angle in Degrees.
-        extrapolation : "bool", optional
-            Optional argument to chose the model of extrapolation. The default
-            model is "sct". The available models are:
-                - "sct": Short Collision Time.
-                - "fgm": Free Gas Model
-
-        Returns
-        -------
-        "pd.DataFrame"
-            the scattering function from S(alpha, beta) matrix
-
-        Example
-        -------
-        Create the S(alpha, -beta) with clm:
-        >>> T = 300
-        >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Sab_matrix = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
-
-        Only interpolation:
-        >>> Ein = 6.6
-        >>> theta = np.linspace(1, 179, num=5)
-        >>> M = 238.05077040419212
-        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
-        >>> Sab_interp.iloc[::, 198:203]  #doctest: +NORMALIZE_WHITESPACE
-        Eout	6.599348	6.600000	6.600652	6.601305	6.601957
-        theta
-        1.0	    0.026893	0.026602	0.026264	0.023732	0.022887
-        45.5	6.440034	6.472782	6.279656	6.017741	5.809228
-        90.0	2.255336	2.227227	2.199121	2.171028	2.142957
-        134.5	1.170795	1.156554	1.141573	1.126691	1.111910
-        179.0	0.922784	0.911547	0.899738	0.888019	0.876389
-
-        Create S(alpha, -beta) with fgm:
-        >>> Sab_matrix = Sab.from_fgm(alpha_grid, beta_grid)
-        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
-        >>> Sab_interp.iloc[::, 198:203] #doctest: +NORMALIZE_WHITESPACE
-        Eout     6.599348    6.600000    6.600652   6.601305  6.601957
-        theta
-        1.0    188.865923  291.958542  184.160018  47.547845  5.046000
-        45.5     5.891717    5.819368    5.745076   5.668940  5.591058
-        90.0     2.206110    2.178604    2.151124   2.123677  2.096272
-        134.5    1.170795    1.156554    1.141573   1.126691  1.111910
-        179.0    0.922784    0.911547    0.899738   0.888019  0.876389
-
-        Create the S(alpha, -beta) with sct:
-        >>> Sab_matrix = Sab.from_sct(alpha_grid, beta_grid,  T, pdos)
-        >>> Sab_interp = Sab_matrix.get_scattering_func(Ein, theta, T, M)
-        >>> Sab_interp.iloc[::, 198:203] #doctest: +NORMALIZE_WHITESPACE
-        Eout     6.599348    6.600000    6.600652   6.601305  6.601957
-        theta
-        1.0    188.485078  287.789507  183.785006  49.270922  5.567497
-        45.5     5.832225    5.762629    5.687067   5.609810  5.530955
-        90.0     2.207412    2.180667    2.152396   2.124188  2.096049
-        134.5    1.170795    1.156554    1.141573   1.126691  1.111910
-        179.0    0.922784    0.911547    0.899738   0.888019  0.876389
-        """
-        Eout = self.beta.get_Eout(T, Ein, side="full").values
-        energy_vect = np.sqrt(Eout / Ein)
-        energy_vect *= (1 + m / M) ** 2
-        energy_vect /= 2 * kb * T
-        scattering_funct = {}
-        theta_ = theta if hasattr(theta, '__len__') else [theta]
-        for single_theta in theta_:
-            Sab_interp_single_theta = self.get_matrix_from_parameters(Eout, Ein,
-                                                                      T, M,
-                                                                      single_theta,
-                                                                      extrapolation=extrapolation)
-            scattering_funct[single_theta] = np.diag(
-                Sab_interp_single_theta) * energy_vect
-        scattering_funct = pd.DataFrame(scattering_funct,
-                                        index=pd.Index(Eout, name="Eout"),
-                                        columns=pd.Index(theta_, name="theta"))
-        return scattering_funct.T
-
-    def get_inelastic_Xs(self, T: float, M: float, boundXs: float,
-                         Ein: float) -> pd.DataFrame:
-        """
-        Get inelastic scattering for a atom with a certain bound Xs and mass
-        and for a certain incident energy.
-        .. math::
-            \sigma(E \rightarrow E^\prime, \mu)=\dfrac{\sigma_b}{2k_B T}\sqrt{\dfrac{E^\prime}{E}} S(\alpha, \beta)
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        m : 'float'
-            Atom mass, amu.
-        boundXs : 'float'
-            Bound total scattering cross section in barn.
-        Ein : 'float'
-            Incident neutron energy in eV.
-
-        Example
-        -------
-        >>> T = 800
-        >>> M = 26.98153433356103
-        >>> boundXs = 1.5030808051112423
-        >>> Ein = 0.33118
-        >>> beta_grid = Beta(beta0_).scale(T)
-        >>> alpha_grid = Alpha(alpha0_).scale(T)
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Sab = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
-        >>> Sab.get_inelastic_Xs(T, M, boundXs, Ein).iloc[:5, :5].round(6)  #doctest: +NORMALIZE_WHITESPACE
-        E_out     0.331180  0.331812  0.332445  0.333077  0.333710
-        theta
-        0.101125  0.414306  0.416519  0.418685  0.420825  0.422894
-        0.143002  0.814356  0.818542  0.822529  0.826404  0.830112
-        0.175125  1.200295  1.206236  1.211737  1.216984  1.221948
-        0.202199  1.572293  1.579791  1.586531  1.592831  1.598713
-        0.226045  1.930542  1.939419  1.947155  1.954222  1.960724
-        """
-        # Get the output energies: and the scatterig angle
-        E_prima = self.beta.get_Eout(T, Ein).values
-        theta = self.alpha.get_theta(T, Ein, M, self.beta).values
-
-        vector = boundXs / (2 * kb * T) * np.sqrt(E_prima / Ein)
-
-        inelastic_xs = vector * self.data.iloc[:len(theta), ::]
-        inelastic_xs.index = pd.Index(theta, name="theta")
-        inelastic_xs.columns = pd.Index(E_prima, name="E_out")
-        return inelastic_xs
 
 
 def _sum_rule(x: pd.Series, n: int = 1) -> float:
@@ -1696,3 +1270,182 @@ def proportionality_factor(alpha: float, alpha_i: float,
     elif mode == "const":
         q = 1
     return q
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
+def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
+                               nphonon: int, tau1: np.ndarray, delta_beta: float,
+                               threshold: float, DebyeWallerCoeff: float,
+                               iter_sum: np.ndarray, S_values: np.ndarray):
+    """
+    Generate S(alpha, -beta) matrix using phonon expansion.
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Numerical appoximation to get convergence in large exponentiation and
+    factorial numbers. Each element of the array is related with one alpha
+    and represent the following term of the previous equation:
+    ..math::
+        \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+    Parameters
+    ----------
+    alpha : 'np.ndarray', (N,)
+        alpha grid values.
+    beta : 'np.ndarray', (M,)
+        beta grid values.
+    nphonon : 'int', optional
+        Phonon expansion order.
+    tau1 : 1D iterable, (N,)
+        tau1 function values.
+    delta_beta : float
+        Space between beta grid points.
+    threshold : 'float', optional
+        Minimun value to take into account in the creation of tau_n
+        functions. For T>200 is convenient to set into 1.0e-14 to speed up
+        the calculations.
+    DebyeWallerCoeff : 'float'
+        Debye Waller Coefficient in LEAPR formalism.
+    iter_sum : 'np.ndarray', (N,)
+        iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
+    S_values : 'np.ndarray', (N, M)
+        Zero phonon expansion $S(\alpha,\,-\beta)=\exp(-\alpha\lambda)(\alpha\lambda)\mathcal{T}_1(-\beta)$
+
+    Returns
+    -------
+    'np.ndarray', (N, M)
+        S(alpha, beta) matrix values
+    """
+    tau_n_minus_1 = tau1.copy()
+    for n in range(1, nphonon):
+        # Tau_n(-beta)
+        tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
+        beta_tau_n = np.arange(len(tau_n)) * delta_beta
+        check_tau_n(tau_n, delta_beta)
+
+        # Interpolate tau_n(-beta):
+        tau_n_reshape = np.interp(beta, beta_tau_n, tau_n)
+        # Bounds in nopython mode:
+        if beta[-1] > len(tau_n) * delta_beta:
+            tau_n_reshape[beta > len(tau_n) * delta_beta] = 0.0
+
+        # Compute S(alpha, -beta) for tau_n reshape
+        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+        S_values += np.outer(alpha_mul, tau_n_reshape)
+
+        # Next tau_n
+        tau_n_minus_1 = tau_n
+    return S_values
+
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
+                              Tratio: float,
+                              ws: float) -> np.ndarray:
+    """
+    Generate S(alpha, beta) matrix using Short Collision Time:
+    .. math::
+        S(\alpha, \beta)=\dfrac{1}{\sqrt{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\mid\beta\mid - \omega_{s}\alpha)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T} - \frac{\mid\beta\mid - \beta}{2}\right)
+
+    Parameters
+    ----------
+    alpha : 'np.ndarray', (N,)
+        alpha grid values.
+    beta : 'np.ndarray', (M,)
+        beta grid values.
+    Tratio : "float"
+        Effective temperature divide by the temperature.
+    ws: 'float', optional
+        normalization for continuous (vibrational) part. For solid is 1.
+
+    Returns
+    -------
+    'np.ndarray', (N, M)
+        S(alpha, beta) matrix values.
+    """
+    Sab = np.zeros((len(alpha), len(beta)))
+    for i in prange(len(alpha)):
+        for j in prange(len(beta)):
+            Sab[i, j] = np.exp(-(abs(beta[j]) - alpha[i] * ws) ** 2 / (4 * alpha[i] * ws * Tratio))
+            Sab[i, j] *= np.exp(- (abs(beta[j]) + beta[j]) / 2)
+            Sab[i, j] /= np.sqrt(4 * np.pi * ws * alpha[i] * Tratio)
+    return Sab
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
+              threshold: float) -> np.ndarray:
+    """
+    Get the tau_{n}(-beta) function values.
+
+    Parameters
+    ----------
+    delta_beta : 'float'
+        Interval of beta for the PDOS.
+    tau1 : 'np.ndarray', (N,)
+        Tau(-beta) function for n = 1 expansion.
+    tau_n_minus_1 : 'np.ndarray', (N,)
+        Tau(-beta) function for n - 1 expansion.
+    threshold : 'float'
+        Minimun value to take into account.
+
+    Returns
+    -------
+    tau_n : 'np.ndarray', (N,)
+        Tau(-beta) function for n expansion.
+    """
+    tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
+    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
+    N = len(tau1)
+
+    for i in prange(len(tau_n)):  # loop for tau_n
+        for j in prange(N):  # loop for tau1
+            convol = 0.
+
+            k = i - j  # tau_n_minus_1(-(beta-beta^pirme))
+            if k >= 0 and k < Nnm1:
+                convol = tau_n_minus_1[k]
+            elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
+                convol = tau_n_minus_1[-k] * np.exp(k * delta_beta)
+
+            l = i + j  # Tau_n_minus_1(-(beta+beta^pirme))
+            if l < Nnm1:
+                convol += tau_n_minus_1[l] * np.exp(-j * delta_beta)
+
+            if j == 0 or j == N - 1:
+                convol *= 0.5                      # trapz integrate
+
+            tau_n[i] += tau1[j] * convol * delta_beta
+
+    return tau_n[tau_n >= threshold]
+
+
+@nb.jit(nopython=True)
+def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
+    """
+    Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
+    normalized to the unity.
+
+    Parameters
+    ----------
+    tau_n : 1D iterable, (N,)
+        tau_n function values.
+    delta_beta : float
+        Space between beta grid points.
+
+    Returns
+    -------
+    "None"
+        If the normalization is not satisfied with good accuracy a warning
+        is raise. If the accuracy is very low, a ValueError will be raise.
+
+    Raises
+    ------
+    ValueError
+        Tau function doesnt satisfy the normalization condition.
+    """
+    if np.trapz(tau_n, dx=delta_beta) < 1.e-5:
+        raise ValueError("Tau function doesnt satisfy the normalization condition")
+    return
+

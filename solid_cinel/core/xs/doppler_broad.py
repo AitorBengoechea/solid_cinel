@@ -1,13 +1,18 @@
+"""
+Python file for working xs doppler broadening functions.
+
+@author: AB272525
+"""
 import numpy as np
 import pandas as pd
-import os
 from scipy.constants import physical_constants as const
-from solid_cinel.core.generic import reshape_differential, integrate
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFuncSD
+import os
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
+
 
 def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     """
@@ -134,4 +139,5 @@ def sigma1(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.array,
     >>> round(sigma1(xs_0K, Ein, M, T, Eout, integral = True), 2)
     7905.42
     """
-    return ScatFuncSD.from_MD(Ein, M, T, Eout).convolve(xs_0K, integral=integral)
+    return ScatFuncSD.from_MD(Ein, M, T, Eout)\
+                     .convolve(xs_0K, integral=integral)

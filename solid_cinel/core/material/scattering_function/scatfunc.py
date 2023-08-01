@@ -1,3 +1,8 @@
+"""
+Python file for working with scattering functions.
+
+@author: AB272525
+"""
 import numpy as np
 import pandas as pd
 import numba as nb
@@ -11,7 +16,6 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable
 from numba import prange
 import warnings
-
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -52,13 +56,17 @@ rho_in_energy_U238_str = '''
 '''
 rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
+
+
 class ScatFuncSD:
     """
-    Single Differencial (angle or Outgoing energy) scattering function base class
+    Single Differencial (angle or Outgoing energy) scattering function base
+    class.
     """
+
     def __init__(self, *args, **kwargs):
         """
-        Initialize the ScatFuncSD class
+        Initialize the ScatFuncSD class.
 
         Parameters
         ----------
@@ -72,7 +80,7 @@ class ScatFuncSD:
     @property
     def data(self) -> pd.Series:
         """
-        The scattering function data
+        Scattering function data.
 
         Returns
         -------
@@ -84,7 +92,7 @@ class ScatFuncSD:
     @data.setter
     def data(self, pdf: Iterable):
         """
-        Set the scattering function data and check the normalization
+        Set the scattering function data and check the normalization.
 
         Parameters
         ----------
@@ -160,7 +168,7 @@ class ScatFuncSD:
 
     def convolve(self, xs: pd.Series, integral: bool = False) -> pd.Series:
         """
-        Convolve the scattering function with a cross section
+        Convolve the scattering function with a cross section.
 
         Parameters
         ----------
@@ -218,14 +226,15 @@ class ScatFuncSD:
             return xs_convol
 
 
-
 class ScatFuncDD:
     """
-    Double Differencial (angle, Outgoing energy) scattering function base class
+    Double Differencial (angle, Outgoing energy) scattering function base
+    class.
     """
+
     def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
         """
-        Initialize the ScatFuncSD class
+        Initialize the ScatFuncSD class.
 
         Parameters
         ----------
@@ -250,7 +259,7 @@ class ScatFuncDD:
     @property
     def data(self) -> pd.DataFrame:
         """
-        The scattering function data
+        Scattering function data.
 
         Returns
         -------
@@ -262,7 +271,7 @@ class ScatFuncDD:
     @data.setter
     def data(self, dd_pdf: Iterable):
         """
-        Set the scattering function data and check the normalization
+        Set the scattering function data and check the normalization.
 
         Parameters
         ----------
@@ -284,7 +293,7 @@ class ScatFuncDD:
     def from_Sab(cls, Ein: float, M: float, T: float, Eout: np.array,
                  theta: np.array, *args, model: str = "fgm", **kwargs):
         """
-        Generate the scattering function from a S(alpha, beta) table
+        Generate the scattering function from a S(alpha, beta) table.
 
         Parameters
         ----------
@@ -409,7 +418,7 @@ class ScatFuncDD:
                       nphonon: int = 1000) -> pd.DataFrame:
         """
         Generate the scattering function from a S(alpha, -beta) table based on
-        the phonon expansion model
+        the phonon expansion model.
 
         Parameters
         ----------
@@ -467,11 +476,12 @@ class ScatFuncDD:
                                         .loc[Eout])
         return pd.DataFrame(dd_pdf)
 
-    def convolve(self, xs: pd.Series, integral: bool = False) -> [pd.DataFrame, float]:
+    def convolve(self, xs: pd.Series,
+                 integral: bool = False) -> [pd.DataFrame, float]:
         """
         Convolve the scattering function with a cross section for getting the
         integral value of the doppler broadening or the differential value of
-        the cross section
+        the cross section.
 
         Parameters
         ----------
@@ -537,10 +547,12 @@ class ScatFuncDD:
         else:
             return ddxs
 
+
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """
-    Scattering function base class
+    Scattering function base class.
     """
+
     def __init__(self, *args, **kwargs):
         pass
 
@@ -549,7 +561,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
 def get_Sab_sct(Eout: np.array, mu: np.array, Ein: float, T: float,
                 M: float, Teff: float, ws: float) -> np.array:
     """
-    Calculate the scattering function from the Short Collision Time model
+    Calculate the scattering function from the Short Collision Time model.
 
     Parameters
     ----------
@@ -611,4 +623,3 @@ def get_Sab_sct(Eout: np.array, mu: np.array, Ein: float, T: float,
             scattfunc[j, i] /= np.sqrt(4 * np.pi * ws * alpha * Tratio)
             scattfunc[j, i] *= awr * np.sqrt(Eout[i] / Ein) / (2 * kb * T)
     return scattfunc
-

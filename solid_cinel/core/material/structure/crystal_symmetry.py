@@ -1,10 +1,16 @@
+"""
+Python file for working with crystal structures.
+
+@author: AB272525
+"""
 import numpy as np
 import pandas as pd
 from typing import Iterable
 
+
 class Crystal_structure():
     """
-    Class for the crystal structure
+    Class for the crystal structure.
 
     Attributes
     ----------
@@ -24,9 +30,10 @@ class Crystal_structure():
     unit_cell_vol -> float
         Unit cell volume
     """
+
     def __init__(self, length: Iterable, angles: Iterable):
         """
-        Initialize the crystal structure class with the direct vector lengths
+        Initialize the crystal structure class with the direct vector lengths.
         and angles
 
         Parameters

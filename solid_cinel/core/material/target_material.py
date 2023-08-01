@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Oct 20 11:46:42 2022
+Python file for working with Target Material.
 
-@author: Aitor Bengoechea
+@author: AB272525
 """
 
 from solid_cinel.core.material.structure.solid import Solid, hkl_max_value
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.scattering_function.sab import Sab
-from solid_cinel.core.material.scattering_function.alpha import Alpha
 from solid_cinel.core.material.scattering_function.beta import Beta
-from solid_cinel.core._numba import hklloop
+from solid_cinel.core.material.scattering_function.alpha import Alpha
+from solid_cinel.core.material.scattering_function.sab import Sab
 from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np
+import os
 import pandas as pd
 import numba as nb
 import collections
@@ -71,7 +71,7 @@ alpha0_str = '''
   30.0 32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5
   55.0 57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0
 '''
-alpha0_ = np.fromstring(alpha0_str, dtype = np.float64, sep = ' ')
+alpha0_ = np.fromstring(alpha0_str, dtype=np.float64, sep=' ')
 beta0_str = '''
   .000 .025 .050 .075 .100 .125 .150 .175 .200 .225
   .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
@@ -89,7 +89,7 @@ beta0_str = '''
   57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0 77.5 80.0
   82.5 85.0 87.5 90.0
 '''
-beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
+beta0_ = np.fromstring(beta0_str, dtype=np.float64, sep=' ')
 
 # 2 atom:
 rho_in_energy_O16_str = '''
@@ -196,7 +196,7 @@ b_incoh = [0.0, 0.19947114020071632]
 
 class Target_mat(Solid, Pdos):
     """
-    Class to store all the Target material methods and attributes
+    Class to store all the Target material methods and attributes.
 
     Attributes
     ----------
@@ -282,14 +282,14 @@ class Target_mat(Solid, Pdos):
         elements_name = self.atoms.index
         if isinstance(args[10], float):
             atom_pdos = Pdos(args[9],
-                      index=pd.Index(np.arange(len(args[9])) * args[10],
-                                     name="E"))
+                             index=pd.Index(np.arange(len(args[9])) * args[10],
+                             name="E"))
             pdos[elements_name[0]] = atom_pdos
         else:
             for i in range(len(args[10])):
                 atom_pdos = Pdos(args[9][i],
-                      index=pd.Index(np.arange(len(args[9][i])) * args[10][i],
-                                     name="E"))
+                                 index=pd.Index(np.arange(len(args[9][i])) * args[10][i],
+                                 name="E"))
                 pdos[elements_name[i]] = atom_pdos
         self.pdos = pd.Series(pdos)
 
@@ -422,7 +422,8 @@ class Target_mat(Solid, Pdos):
                                   self.preferred_orientation.values,
                                   np.array(precision)
                                   )
-        return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
+        return hkl_data.sort_values(by=["h", "k", "l"])\
+                       .set_index(["h", "k", "l"])
 
     @staticmethod
     def _get_pddf(data: pd.DataFrame, kind: str = None,
@@ -561,7 +562,7 @@ class Target_mat(Solid, Pdos):
     @staticmethod
     def _get_difrac_angles(data: pd.DataFrame, energy_cut: float) -> pd.DataFrame:
         """
-        Add to the hkl data dataframe the difraction angles(ª) vs hkl data
+        Add to the hkl data dataframe the difraction angles(ª) vs hkl data.
         .. math::
             2\theta_{hkl}=\arccos\left(1-\dfrac{\pi^2\hbar^2}{md_{hkl}^2E}\right)
 
@@ -790,9 +791,9 @@ class Target_mat(Solid, Pdos):
                                      )
         # Get PDDF:
         self._get_pddf(data,
-                      kwargs.pop("kind", None),
-                      kwargs.pop("pddf_val", None)
-                      )
+                       kwargs.pop("kind", None),
+                       kwargs.pop("pddf_val", None)
+                       )
 
         # Get Bragg Edges:
         constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
@@ -804,16 +805,16 @@ class Target_mat(Solid, Pdos):
         # Xs:
         if xs:
             self._get_BraggEdges_Xs(data,
-                                   self.unit_cell_vol,
-                                   self.atom_number,
-                                   threshold=kwargs.get("threshold", 1.e-30)
-                                   )
+                                    self.unit_cell_vol,
+                                    self.atom_number,
+                                    threshold=kwargs.get("threshold", 1.e-30)
+                                    )
 
         # difraction angles vs hkl data
         if theta:
             self._get_difrac_angles(data,
-                                   args[1]
-                                   )
+                                    args[1]
+                                    )
 
         # Get the final result
         if file_BraggEdges:
@@ -948,7 +949,7 @@ class Target_mat(Solid, Pdos):
             default is None.
         w_t: 'dict', optional
             normalization for continuous (vibrational) part. For solid is 1.
-        
+
         Parameters for Short Collision Time
         -----------------------------------
         alpha_grid :'dict' of 1D iterable
@@ -959,7 +960,7 @@ class Target_mat(Solid, Pdos):
             Temperature in K.
         w_s: 'dict', optional
             normalization for continuous (vibrational) part. For solid is 1.
-        
+
         Parameters for Phonon Expansion
         -------------------------------
         T : 'float'
@@ -1000,17 +1001,16 @@ class Target_mat(Solid, Pdos):
             w_t = {key: kwargs.get("w_t", {}).get(key, 1) for key in index}
             Sab_matrix = groups.apply(lambda x: Sab.from_fgm(alpha_grid[x.name],
                                                              beta_grid[x.name],
-                                                             w_t = w_t[x.name]))
+                                                             w_t=w_t[x.name]))
         else:
             T = args[2]
-            scale = kwargs.pop("scale", False)
             if model.lower() == "sct":
                 w_s = {key: kwargs.get("w_s", {}).get(key, 1) for key in index}
                 Sab_matrix = groups.apply(lambda x: Sab.from_sct(alpha_grid[x.name],
                                                                  beta_grid[x.name],
                                                                  T,
                                                                  x[x.name],
-                                                                 w_s = w_s[x.name]))
+                                                                 w_s=w_s[x.name]))
             elif model.lower() == "phonon expansion":
                 threshold = {key: kwargs.get("threshold", {}).get(key, 0.0) for key in index}
                 nphonon = {key: kwargs.get("nphonon", {}).get(key, 1000) for key in index}
@@ -1018,8 +1018,8 @@ class Target_mat(Solid, Pdos):
                                                                   beta_grid[x.name],
                                                                   T,
                                                                   x[x.name],
-                                                                  threshold = threshold[x.name],
-                                                                  nphonon = nphonon[x.name]))
+                                                                  threshold=threshold[x.name],
+                                                                  nphonon=nphonon[x.name]))
             else:
                 raise ValueError("The selected model is not available")
         return Sab_matrix
@@ -1045,7 +1045,7 @@ class Target_mat(Solid, Pdos):
             default is None.
         w_t: 'dict', optional
             normalization for continuous (vibrational) part. For solid is 1.
-        
+
         Parameters for Short Collision Time
         -----------------------------------
         alpha_grid :1D iterable
@@ -1056,7 +1056,7 @@ class Target_mat(Solid, Pdos):
             Temperature in K.
         w_s: 'dict', optional
             normalization for continuous (vibrational) part. For solid is 1.
-        
+
         Parameters for Phonon Expansion
         -------------------------------
         pdos : 'solid_cinel.core.material.Pdos'
@@ -1236,138 +1236,6 @@ class Target_mat(Solid, Pdos):
             Sab = self._get_Sab_single(*args, model=model, **kwargs)
         return Sab
 
-    def get_inelastic_Xs(self, incident_neutron_energy: float,
-                         *args, **kwargs) -> pd.DataFrame:
-        """
-        Get inelastic Xs for the Target material based on the S(alpha, -beta)
-        matrix selected by the user. The available options are:
-            model = "fgm": Free Gas Model
-            model = "sct": Short Collision Time
-            model = "phonon expansion": Phonon Expansion
-
-        Parameters
-        ----------
-        incident_neutron_energy : 'float'
-            Incident neutron energy in eV.
-
-        Parameters for Free Gas model
-        -----------------------------
-        alpha_grid : 1D iterable
-            Alpha grid.
-        beta_grid : 1D iterable
-            beta grid.
-        model : 'str', optional
-            The model to calculate matrix values. The default is "FGM".
-        T : 'float', optional
-            Option to scale beta and alpha grid with the method scale_grid. The
-            default is None.
-        w_t: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Parameters for Short Collision Time
-        -----------------------------------
-        alpha_grid : 1D iterable
-            Alpha grid.
-        beta_grid : 1D iterable
-            beta grid.
-        T : 'float'
-            Temperature in K.
-        w_s: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Parameters for Phonon Expansion
-        -------------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        T : 'float'
-            Temperature in K.
-        alpha_grid : 1D iterable
-            Alpha grid.
-        beta_grid : 1D iterable
-            beta grid.
-        scale : 'bool', optional
-            Option to scale beta and alpha grid with the method scale_grid. The
-            default is False.
-        threshold : 'float', optional
-            Minimun value to take into account. The default is 1.0e-14.
-        nphonon : 'int', optional
-            Phonon expansion order. The default is 1000.
-
-        Returns
-        -------
-        Sab : 'pd.Series' of 'pd.DataFrame'
-            inelastic Xs(theta, E_out) matrix divide by a atom key.
-        Example
-        -------
-        Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
-        
-        Test the results:
-        >>> incident_neutron_energy = 0.33118
-
-        FGM:
-        >>> T = 300
-        >>> beta_grid = Beta.generate_grid(T).scale(T).data
-        >>> alpha_grid = Alpha.generate_grid(T, 26).scale(T).data
-        >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha_grid, beta_grid, model="fgm", T=T).iloc[:10, :5].round(6)
-        E_out            0.331180    0.331506    0.331832    0.332159    0.332485
-             theta
-        Al27 0.046336  255.705295  247.671957  222.013924  184.183131  141.411833
-             0.047124  251.353208  243.774809  219.378486  183.189282  141.940686
-             0.047920  247.075116  239.928337  216.736061  182.128499  142.371067
-             0.048725  242.869760  236.132426  214.088932  181.004430  142.705461
-             0.049540  238.735901  232.386933  211.439266  179.820646  142.946469
-             0.050365  234.672323  228.691679  208.789120  178.580640  143.096792
-             0.051201  230.677829  225.046460  206.140442  177.287824  143.159214
-             0.052047  226.751243  221.451041  203.495075  175.945519  143.136583
-             0.052905  222.891410  217.905165  200.854764  174.556959  143.031805
-             0.053774  219.097192  214.408551  198.221154  173.125287  142.847822
-        
-        SCT:
-        >>> T = 300
-        >>> beta_grid = Beta.generate_grid(T).data
-        >>> alpha_grid = Alpha.generate_grid(T, 26).data
-        >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha_grid, beta_grid, T, model="sct").iloc[:10, :5].round(6)
-        E_out            0.331180    0.331513    0.331847    0.332180    0.332513
-             theta
-        Al27 0.046839  242.514824  235.362225  212.397004  178.226864  139.062842
-             0.047635  238.387369  231.640484  209.809113  177.138473  139.405563
-             0.048439  234.330091  227.968093  207.218392  175.991120  139.656592
-             0.049253  230.341797  224.344886  204.626867  174.788236  139.818552
-             0.050076  226.421312  220.770664  202.036464  173.533166  139.894151
-             0.050909  222.567483  217.245205  199.449002  172.229175  139.886164
-             0.051753  218.779174  213.768260  196.866203  170.879439  139.797419
-             0.052607  215.055271  210.339557  194.289691  169.487043  139.630788
-             0.053473  211.394677  206.958803  191.721000  168.054983  139.389170
-             0.054351  207.796315  203.625684  189.161573  166.586161  139.075482
-        
-        Phonon Expansion:
-        >>> T = 800
-        >>> beta_grid = Beta(beta0_).scale(T).data
-        >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> Al.get_inelastic_Xs(incident_neutron_energy, alpha_grid, beta_grid, T, model="phonon expansion", threshold=1.0e-14).iloc[:10, :5].round(6)
-        E_out          0.331180  0.331812  0.332445  0.333077  0.333710
-             theta
-        Al27 0.101125  0.414306  0.416519  0.418685  0.420825  0.422894
-             0.143002  0.814356  0.818542  0.822529  0.826404  0.830112
-             0.175125  1.200295  1.206236  1.211737  1.216984  1.221948
-             0.202199  1.572293  1.579791  1.586531  1.592831  1.598713
-             0.226045  1.930542  1.939419  1.947155  1.954222  1.960724
-             0.247598  2.275254  2.285349  2.293864  2.301450  2.308310
-             0.267412  2.606658  2.617827  2.626930  2.634816  2.641805
-             0.285850  2.924998  2.937111  2.946634  2.954630  2.961551
-             0.303163  3.230530  3.243470  3.253268  3.261209  3.267892
-             0.319533  3.523522  3.537184  3.547129  3.554875  3.561176
-        """
-        T = kwargs.get("T") if kwargs.get("T") else args[2]
-        model = kwargs.pop("model", "phonon expansion")
-        Sab = self.get_Sab(*args, model=model, **kwargs)
-        return Sab.groupby(by=Sab.index)\
-                  .apply(lambda x: x[x.name].get_inelastic_Xs(T,
-                                                              self.atoms[x.name].atom_mass,
-                                                              self.atoms[x.name].boundXs,
-                                                              incident_neutron_energy))
-
 
 def numba_hkl_data(d_min: float,
                    hkl_max: np.ndarray,
@@ -1393,7 +1261,7 @@ def numba_hkl_data(d_min: float,
     Bfac : 'pd.Series'
         Pandas series with the B factor for Target_Material object elements.
     pos : 'pd.Series'
-        Pandas series with atomic position of elements in Target_Material 
+        Pandas series with atomic position of elements in Target_Material
         object.
     csl : 'pd.Series'
         Coherent elastic length for each element of Target_Material object.
@@ -1495,3 +1363,109 @@ def numba_hkl_data(d_min: float,
                          for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul]
                          in hkl_data_dict.items()],
                         columns=columns)
+
+
+@nb.jit(nopython=True, nogil=True)
+def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
+            Bfac: dict, pos: dict, csl: dict, preferred_orientation: np.ndarray,
+            precision: np.ndarray) -> dict:
+    """
+    Get the F_hkl and d_hkl for all the posible h, k, l plane combination that
+    fill the condition of d_hkl > d_min.
+    .. math::
+        d_{hkl} = \frac{2\pi}{\tau_{hkl}}
+        F(\vec{\tau}_{hkl})=\sum_{j=1}^{N_{uc}}b_j\exp\left(-\dfrac{\hbar^2\tau_{hkl}^2}{4M_jk_BT}\Lambda_j(T)\right) e^{i\vec{\tau}_{hkl}\cdot\vec{p}_j}
+
+    Parameters
+    ----------
+    d_min : 'float'
+        The minimum dspacing for the LEAPR module of NJOY
+    hkl_max : 'np.ndarray', (3,)
+        Maximun h, k, l index for generating a d > d_min
+    rec_vecs : 'np.ndarray' (3, 3)
+        Reciprocal vectors
+    Bfac : 'nb.typed.Dict'
+        Dict with the B factor for Target_Material object elements.
+    pos : 'nb.typed.Dict'
+        Dict with atomic position of elements in Target_Material object.
+    csl : 'nb.typed.Dict'
+        Coherent elastic length for each element of Target_Material object.
+    preferred_orientation: "np.ndarray", (3)
+        Array with the preferred orientation of the solid.
+    precision: "float"
+        Precision of the rounding in the calculation to merge different plane
+        values
+
+    Returns
+    -------
+    "dict"
+        Dictionary containing the hkl planes, the d_hkl, Fsq, orientation_angle.
+    """
+    hklM = {}
+    hkldF = {}
+    h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
+
+    for h in h_range[::-1]:  # to get positive hkl order
+        for k in k_range[::-1]:
+            for l in l_range[::-1]:
+                if h ** 2 + k ** 2 + l ** 2 == 0:  # (0, 0, 0) is excluded
+                    continue
+
+                # d_hkl:
+                vec_tau_hkl = h * rec_vecs[0] + k * rec_vecs[1] + l * rec_vecs[2]
+                d_hkl = 2 * np.pi / np.linalg.norm(vec_tau_hkl)
+
+                if d_hkl < d_min:  # d < d_min is excluded
+                    continue
+
+                Fsq = Fsq_hkl(vec_tau_hkl, Bfac, csl, pos)  # Fsquared
+
+                # same dspacing and Fsquared with precision will be regrouped
+                d_rnd = round(d_hkl, precision[0])
+                Fsq_rnd = round(Fsq, precision[1])
+                if (d_rnd, Fsq_rnd) in hkldF:
+                    hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
+                else:
+                    hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
+                    OA_num = np.sum(vec_tau_hkl * preferred_orientation)
+                    OA_den = np.linalg.norm(vec_tau_hkl) * np.linalg.norm(preferred_orientation)
+                    orientation_angle_hkl = np.arccos(OA_num / OA_den) * 180 / np.pi
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq, orientation_angle_hkl, 1])
+    return hklM
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
+    """
+    Get F_hkl:
+    .. math::
+        F(\vec{\tau}_{hkl})=\sum_{j=1}^{N_{uc}}b_j\exp\left(-\dfrac{\hbar^2\tau_{hkl}^2}{4M_jk_BT}\Lambda_j(T)\right) e^{i\vec{\tau}_{hkl}\cdot\vec{p}_j}
+
+    Parameters
+    ----------
+    vec_tau_hkl : 'np.ndarray', (3, 3)
+        Reciprocal vectors
+    Bfac : 'nb.typed.Dict'
+        Dict with the B factor for Target_Material object elements.
+    pos : 'nb.typed.Dict'
+        Dict with atomic position of elements in Target_Material object.
+    csl : 'nb.typed.Dict'
+        Coherent elastic length for each element of Target_Material object.
+
+    Returns
+    -------
+    "float"
+        Fsq_hkl value for that (h, k, l) plane
+    """
+    real = 0.
+    imag = 0.
+    for element in Bfac:
+        expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
+                           * Bfac[element] / (8 * np.pi ** 2))
+        element_position = pos[element]
+        for iep in range(len(element_position)):
+            cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]))
+            cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]))
+            real += csl[element] * 0.1 * expon_hkl * cumulant_cos
+            imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
+    return real ** 2 + imag ** 2  # Fsquared

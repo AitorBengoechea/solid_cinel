@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
 """
-Created on Thu Nov  3 14:24:18 2022
+Python file for working with the solid structure.
 
 @author: AB272525
 """
@@ -63,7 +62,7 @@ b_incoh = [0.0, 0.19947114020071632]
 
 class Solid(Crystal_structure, Molecule):
     """
-    Class to store the properties and methods for solid materials
+    Class to store the properties and methods for solid materials.
 
     Attributes
     ----------
@@ -166,7 +165,7 @@ class Solid(Crystal_structure, Molecule):
     @property
     def unit_pos(self) -> pd.Series:
         """
-        Pandas series containnig atom position in a unit cell for each atom
+        Pandas series containnig atom position in a unit cell for each atom.
 
         Returns
         -------
@@ -226,7 +225,7 @@ class Solid(Crystal_structure, Molecule):
     @property
     def atom_pos(self) -> pd.Series:
         """
-        Position of atoms in the direct lattice
+        Position of atoms in the direct lattice.
 
         Returns
         -------
@@ -276,7 +275,7 @@ class Solid(Crystal_structure, Molecule):
     @property
     def atom_number(self) -> int:
         """
-        The number of atoms in the unit cell.
+        Number of atoms in the unit cell.
 
         Returns
         -------
@@ -311,6 +310,7 @@ def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
         Precision of the minimization problem. The default is 1.0e-7.
 
     Returns
+    -------
     "np.ndarray", (3,)
         Array with the integers of the maximum hkl planes.
 
@@ -325,17 +325,18 @@ def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
     """
     def hkl_range_minimization(x, i):
         return x[i]
+
     def constrain(x, d_min):
         vec_tau_hkl = x[0] * rec_vecs[0] + x[1] * rec_vecs[1] + x[2] * rec_vecs[2]
-        vec_tau_hkl_norm = np.linalg.norm(vec_tau_hkl)                
+        vec_tau_hkl_norm = np.linalg.norm(vec_tau_hkl)
         d_hkl = 2 * np.pi / vec_tau_hkl_norm
         return d_hkl - d_min
     result = []
     for i in range(3):
         result.append(minimize(lambda x: hkl_range_minimization(x, i),
-                                    [-100, -100, -100],
-                                    method='COBYLA',
-                                    constraints=({'type': 'ineq', 'fun': constrain, 'args': [d_min]})).x)
+                               [-100, -100, -100],
+                               method='COBYLA',
+                               constraints=({'type': 'ineq', 'fun': constrain, 'args': [d_min]})).x)
     confidance = np.array(list(map(lambda x: constrain(x, d_min), result)))
     hkl_max = abs(np.array(result).diagonal().astype(int))
-    return np.where(abs(confidance) <= precision,  hkl_max, 100)  # [h_max, k_max, l_max]
+    return np.where(abs(confidance) <= precision,  hkl_max, 100)

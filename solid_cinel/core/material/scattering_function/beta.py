@@ -1,7 +1,13 @@
-from solid_cinel.core._numba import get_beta
+"""
+Python file for working with beta function.
+
+@author: AB272525
+"""
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
+import numba as nb
+from numba import prange
 from scipy.constants import physical_constants as const
 
 
@@ -182,6 +188,8 @@ rho_in_energy_U238_str = '''
 '''
 rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
+
+
 class Beta:
     """
     Class with all the method for the creation and manipulation of beta grids
@@ -262,6 +270,7 @@ class Beta:
         else:
             kind = "mix"
         return kind
+
     @property
     def unique(self) -> np.array:
         """
@@ -515,7 +524,7 @@ class Beta:
         else:
             raise SyntaxError("Side option not available")
 
-    def scale(self, T: float, therm: float=0.0253):
+    def scale(self, T: float, therm: float = 0.0253):
         """
         Scale alpha or beta spectrum.
         .. math::
@@ -529,6 +538,7 @@ class Beta:
             factor for regrid alpha and beta. The default is 0.0253.
 
         Returns
+        -------
         "Beta"
             Beta grid scaled.
 
@@ -542,3 +552,35 @@ class Beta:
         """
         scale_grid = self.data * therm / (kb * T)
         return Beta(scale_grid)
+
+
+@nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
+def get_beta(Eout: np.ndarray, Ein: np.ndarray,
+             T: np.ndarray) -> np.ndarray:
+    """
+    Get all the posible beta values from the parameters of the function:
+    .. math::
+        \beta=\dfrac{E_{out} - E_{in}}{k_BT}
+
+    Parameters
+    ----------
+    Eout : 'np.ndarray', (N,)
+        Output energy of the neutron.
+    Ein : 'np.ndarray', (M,)
+        Incidente energy of the neutron.
+    T : 'np.ndarray', (Z,)
+        Temperature in K.
+
+    Returns
+    -------
+    'np.ndarray', (N + M + Z,)
+        Array containing all posible beta values for the input parameters.
+    """
+    beta = []
+    for i in prange(len(T)):
+        for j in prange(len(Ein)):
+            for k in prange(len(Eout)):
+                beta_value = Eout[k] - Ein[j]
+                beta_value /= kb * T[i]
+                beta.append(beta_value)
+    return np.array(beta)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Nov 15 09:11:55 2022
+Python file for generic function.
 
 @author: AB272525
 """
@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from typing import Iterable
 from scipy.stats import qmc
+
 
 def integrate(series: pd.Series, kind="trapezoidal") -> float:
     """
@@ -49,7 +50,7 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
 
 
 def reshape_differential(x: Iterable, y: Iterable, xnew: Iterable,
-                         kind: str="slinear", bounds_error: bool=False):
+                         kind: str = "slinear", bounds_error: bool = False):
     """
     Linearly interpolate array over new energy grid structure.
     Extrapolated values are replaced by zeros.
@@ -96,7 +97,7 @@ def reshape_differential(x: Iterable, y: Iterable, xnew: Iterable,
     return foo(xnew)
 
 
-def sampling(d:int, n:int) -> np.array:
+def sampling(d: int, n: int) -> np.array:
     """
     Generate a latin hypercube sampling between 0 and 1.
 

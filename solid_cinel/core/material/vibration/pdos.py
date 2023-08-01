@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 """
-Created on Thu Oct 20 11:46:42 2022
-@author: Aitor Bengoechea
-"""
+Python file for working with Phonon Density Of States.
 
-from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core._numba import tau_n_CPU
+@author: AB272525
+"""
+from solid_cinel.core.generic import integrate
 from solid_cinel.core.material.scattering_function.beta import Beta
 import pandas as pd
 import numpy as np
@@ -25,6 +23,7 @@ rho_in_energy_str = '''
 '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
+
 
 class Pdos:
     """
@@ -56,7 +55,7 @@ class Pdos:
 
     def __init__(self, *args, **kwargs):
         """
-        Initialization of the pdos object
+        Initialize of the pdos object.
 
         Parameters
         ----------
@@ -387,138 +386,3 @@ class Pdos:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
         tau1.name = 1
         return tau1
-
-    @staticmethod
-    def _check_tau_norm(tau: pd.DataFrame) -> None:
-        """
-        Check if the tau functions are normalize
-
-        Parameters
-        ----------
-        tau : 'pd.DataFrame', (N, M)
-            tau functions.
-
-        Returns
-        -------
-        "None"
-            If tau function is normalize, return nothing. If the accuracy is
-            less than e-5, return a ValueError
-
-        Raises
-        ------
-        ValueError
-            The tau functions does not satisfy the normalization.
-        """
-        norm = tau.apply(lambda x: integrate(x * (1 + np.exp(-x.index.values))), axis=0)
-        if (norm < 1.e-5).any():
-            raise ValueError("Tau function doesnt satisfy the normalization condition")
-        return 
-
-    def get_tau(self, T: float, nphonon: int = 1000, beta: Iterable = None,
-                threshold: float = 1.0e-14,
-                norm_check: bool = True) -> pd.DataFrame:
-        """
-        Get tau function for the selected phonon expansion.
-        .. math::
-            For n=1:
-                \mathcal{T}_1(-\beta)=\dfrac{P(-\beta)\exp(\beta/2)}{\lambda}
-            For n>1:
-                \mathcal{T}_n(-\beta)=\int_{0}^{\infty}\mathcal{T}_1(-\beta^\prime)\left(\mathcal{T}_{n-1}(-\beta+\beta^\prime)+\exp(-\beta^\prime)\mathcal{T}_{n-1}(-\beta-\beta^\prime)\right)d\beta^\prime
-
-        Parameters
-        ----------
-        T : 'float'
-            Temperature in K.
-        nphonon : 'int', optional
-            Phonon expansion order. The default is 1.
-        beta : '1D iterable', optional
-            If this options is activate, the tau function will be linearly
-            interpolate to the 1D iterable introduce. The default is None.
-        threshold : 'float', optional
-            Minimun value to take into account. The default is 1.0e-14.
-        norm_check : 'bool', optional
-            If normalization is check. The default is True.
-
-        Returns
-        -------
-        "pd.DataFrame"
-            Tau function for certain phonon expansion.
-
-        Examples
-        --------
-        Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-
-        Test the results:
-        >>> p.get_tau(20, nphonon=1).iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
-        tau_n              1 
-        beta
-        0.000000    0.004250
-        0.464181    0.005313
-        0.928361    0.006524
-        1.392542    0.007875
-        1.856723    0.009344
-        2.320904    0.010932
-        2.785084    0.012606
-        3.249265    0.014359
-        3.713446    0.016167
-        4.177627    0.018020
-
-        >>> p.get_tau(20, nphonon=5).iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
-        tau_n            1         2         3             4             5
-        beta
-        0.000000  0.004250  0.000120  0.000004  1.530025e-07  5.908313e-09
-        0.464181  0.005313  0.000151  0.000005  1.927121e-07  7.444051e-09
-        0.928361  0.006524  0.000188  0.000007  2.420754e-07  9.359578e-09
-        1.392542  0.007875  0.000233  0.000008  3.032675e-07  1.174370e-08
-        1.856723  0.009344  0.000287  0.000010  3.789125e-07  1.470474e-08
-        2.320904  0.010932  0.000351  0.000013  4.721669e-07  1.837448e-08
-        2.785084  0.012606  0.000427  0.000015  5.868175e-07  2.291294e-08
-        3.249265  0.014359  0.000517  0.000019  7.273949e-07  2.851401e-08
-        3.713446  0.016167  0.000621  0.000023  8.993050e-07  3.541201e-08
-        4.177627  0.018020  0.000743  0.000029  1.108981e-06  4.388966e-08
-
-        >>> beta = [.000, .025, .050, .075, .100, .125, .150, .175, .200, .225]
-        >>> p.get_tau(20, nphonon=5, beta=beta)  #doctest: +NORMALIZE_WHITESPACE
-        tau_n         1         2         3             4             5
-        beta
-        0.000  0.004250  0.000120  0.000004  1.530025e-07  5.908313e-09
-        0.025  0.004308  0.000122  0.000004  1.551412e-07  5.991025e-09
-        0.050  0.004365  0.000123  0.000004  1.572799e-07  6.073737e-09
-        0.075  0.004422  0.000125  0.000004  1.594186e-07  6.156450e-09
-        0.100  0.004479  0.000127  0.000004  1.615573e-07  6.239162e-09
-        0.125  0.004537  0.000128  0.000004  1.636960e-07  6.321874e-09
-        0.150  0.004594  0.000130  0.000004  1.658347e-07  6.404587e-09
-        0.175  0.004651  0.000131  0.000005  1.679733e-07  6.487299e-09
-        0.200  0.004708  0.000133  0.000005  1.701120e-07  6.570011e-09
-        0.225  0.004765  0.000135  0.000005  1.722507e-07  6.652724e-09
-        """
-        tau1 = self._get_tau_1(T)
-        tau = [tau1.values]
-        delta_beta = tau1.index[1]
-        if nphonon > 1:
-            tau_n_minus_1 = tau1.values
-            for n in range(1, nphonon):
-                tau_n = tau_n_CPU(delta_beta, tau1.values,
-                                  tau_n_minus_1, threshold)
-                tau.append(tau_n)
-                tau_n_minus_1 = tau_n
-        tau = pd.DataFrame(tau).fillna(0).T
-        tau.index = Beta(np.arange(tau.shape[0]) * delta_beta).to_index
-        tau.columns = pd.Index(np.arange(1, nphonon + 1), name="tau_n")
-
-        # Check if the tau functions satisfy the normalization condition
-        if norm_check:
-            Pdos._check_tau_norm(tau)
-
-        # Change the beta grid for another one introduce by the user. If beta
-        # values are not in the original grid, apply linear interpolation.
-        if beta is not None:
-            beta_ = beta if isinstance(beta, Beta) else Beta(beta)
-            reshape_tau_values = reshape_differential(tau.index.values,
-                                                      tau.values,
-                                                      beta_.data)
-            tau = pd.DataFrame(reshape_tau_values,
-                               index=beta_.to_index,
-                               columns=tau.columns)
-        return tau

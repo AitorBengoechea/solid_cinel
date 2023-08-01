@@ -238,6 +238,24 @@ class Beta:
         """
         Analise the beta grid to know if the beta grid contains only absolute
         values or mix (positive and negative) values.
+
+        Returns
+        -------
+        kind : "str"
+            "abs" if the beta grid contains only absolute values or "mix" if
+            the beta grid contains mix (positive and negative) values
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> Beta.from_parameters(Eout, Ein, T).kind
+        'mix'
+
+        >>> Eout = np.array([7.2   , 7.3157, 7.448 ])
+        >>> Beta.from_parameters(Eout, Ein, T).kind
+        'abs'
         """
         if (self.data >= 0).all():
             kind = "abs"
@@ -245,12 +263,27 @@ class Beta:
             kind = "mix"
         return kind
     @property
-    def unique(self):
-        """Return the absolute unique values of the beta grid."""
+    def unique(self) -> np.array:
+        """
+        Return the absolute unique values of the beta grid
+
+        Returns
+        -------
+        "np.array"
+            Array with the absolute unique values of the beta grid
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> Beta.from_parameters(Eout, Ein, T).unique.round(2)
+        array([0.  , 1.34, 1.81, 2.88, 3.42, 5.16])
+        """
         if self.kind == "mix":
-            return self(abs(self.data))
+            return np.sort(abs(self.data))
         else:
-            return self
+            return self.data
 
     @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,

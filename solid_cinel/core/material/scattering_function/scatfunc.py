@@ -370,6 +370,23 @@ class ScatFuncDD:
          7.071068e-01  0.000000  0.000011  0.156818   3.436243  0.206127  0.000047
          8.660254e-01  0.000000  0.000000  0.002116   5.225189  0.024539  0.000000
          9.659258e-01  0.000000  0.000000  0.000000  10.545177  0.000000  0.000000
+
+        # Using the Phonon expansion model:
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([40, 80, 120, 160])
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncDD.from_Sab(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
+        Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
+        mu
+        -0.939693  0.109061  0.644157  1.346118  1.029210  0.373644  0.053219
+        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
+         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
+         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
         theta_ = theta if hasattr(theta, '__len__') else [theta]
         if model.lower() == "pdos":
@@ -389,7 +406,7 @@ class ScatFuncDD:
     @staticmethod
     def from_Sab_pdos(Ein: float, M: float, T: float, Eout: np.array,
                       theta: np.array, pdos: Pdos, threshold: float = 0.0,
-                      nphonon: int = 1000) -> dict:
+                      nphonon: int = 1000) -> pd.DataFrame:
         """
         Generate the scattering function from a S(alpha, -beta) table based on
         the phonon expansion model
@@ -423,21 +440,32 @@ class ScatFuncDD:
         Examples
         --------
         >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
         >>> T = 1000
         >>> M = 238.05077040419212
-        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> theta = np.array([40, 80, 120, 160])
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-
+        >>> dd_pdf = ScatFunc.from_Sab_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14)
+        >>> dd_pdf.loc[:, Eout_test].round(6)
+        Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
+         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
+         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
+        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
+        -0.939693  0.109061  0.644157  1.346118  1.029210  0.373644  0.053219
         """
         beta = Beta.from_parameters(Eout, Ein, T)
-        dd_pdf = {}
+        dd_pdf = []
         for angle in theta:
             alpha = Alpha.from_parameters(Eout, Ein, T, M, angle)
-            angular_dd_pdf = Sab.from_pdos(alpha, beta.unique, T, pdos, threshold=threshold,
-                                nphonon=nphonon).to_ScatFunc(Ein, T, M, mu=None)
-            dd_pdf[np.cos(angle * np.pi / 180)] = angular_dd_pdf.loc[beta.data]
-        return dd_pdf
+            angular_dd_pdf = Sab.from_pdos(alpha, beta.unique, T, pdos,
+                                           threshold=threshold,
+                                           nphonon=nphonon)
+            mu_angle = np.cos(angle * np.pi / 180)
+            dd_pdf.append(angular_dd_pdf.to_ScatFunc(Ein, T, M, mu=mu_angle)
+                                        .loc[Eout])
+        return pd.DataFrame(dd_pdf)
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """

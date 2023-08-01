@@ -17,7 +17,6 @@ from typing import Iterable
 from numba import prange
 import warnings
 
-
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]

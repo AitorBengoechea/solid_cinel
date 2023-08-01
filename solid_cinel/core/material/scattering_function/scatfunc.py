@@ -467,6 +467,76 @@ class ScatFuncDD:
                                         .loc[Eout])
         return pd.DataFrame(dd_pdf)
 
+    def convolve(self, xs: pd.Series, integral: bool = False) -> [pd.DataFrame, float]:
+        """
+        Convolve the scattering function with a cross section for getting the
+        integral value of the doppler broadening or the differential value of
+        the cross section
+
+        Parameters
+        ----------
+        xs : pd.Series
+            Cross section to convolve with the scattering function
+        integral : bool, optional
+            If True, the integral value of the doppler broadening is returned.
+
+        Returns
+        -------
+        ddxs : pd.DataFrame or float
+            The differential cross section or the integral value of the doppler
+            broadening cross section
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
+        >>> os.chdir("../../../data/xs/U238/")
+        >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
+        >>> os.chdir(wd)
+        >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
+
+        # Generate Scattering function:
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> T = 1000
+        >>> theta = np.arange(0, 180, 1)[1::]
+        >>> scattering_function = ScatFuncDD.from_Sab(Ein, M, T, Eout, theta, model="fgm")
+
+        # Convolve with 0K cross section:
+        >>> scattering_function.convolve(xs_0K).iloc[::18, ::100].round(6)
+        Eout            1.80000   1.84004    1.88008    1.92012    1.96016     2.00020    2.04024   2.08028   2.12032   2.16036
+        mu
+        -0.999848  1.845717  5.520093  12.094245  19.604192  23.732354   21.648132  15.005372  7.967618  3.265822  1.040889
+        -0.945519  1.696431  5.264665  11.865713  19.620378  24.032880   22.007028  15.196201  7.978725  3.210537  0.997526
+        -0.798636  1.312725  4.552553  11.171664  19.611419  24.885947   23.053886  15.737882  7.988442  3.040859  0.875142
+        -0.573576  0.799665  3.422558   9.866638  19.397984  26.318562   24.921709  16.647563  7.925768  2.715775  0.676017
+        -0.292372  0.330178  2.036849   7.768991  18.597894  28.345006   27.882576  17.934350  7.637824  2.179578  0.421558
+         0.017452  0.066314  0.779249   4.869372  16.496009  30.864798   32.468748  19.534647  6.833509  1.412050  0.174996
+         0.325568  0.002865  0.114695   1.834191  12.037504  33.286657   39.787981  21.073911  5.066641  0.566000  0.030051
+         0.601815  0.000002  0.001401   0.178412   5.048089  33.109271   52.489790  20.967417  2.199156  0.063077  0.000515
+         0.819152  0.000000  0.000000   0.000129   0.263195  21.693622   78.721403  13.741224  0.126658  0.000068  0.000000
+         0.956305  0.000000  0.000000   0.000000   0.000000   0.381820  161.216615   0.241879  0.000000  0.000000  0.000000
+
+        # Convolve with 0K cross section and get integral value:
+        >>> round(scattering_function.convolve(xs_0K, integral=True), 2)
+        9.07
+
+        # Compare with Sigma1 algorithm:
+        >>> round(ScatFuncSD.from_MD(Ein, M, T, Eout).convolve(xs_0K, integral=True), 2)
+        9.09
+        """
+        dd_pdf = self.data
+        xs_reshaped = reshape_differential(xs.index.values,
+                                           xs.values,
+                                           dd_pdf.columns.values)[::, 0]
+        ddxs = dd_pdf.multiply(xs_reshaped, axis=1)
+        if integral:
+            return integrate(ddxs.apply(integrate))
+        else:
+            return ddxs
+
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """
     Scattering function base class

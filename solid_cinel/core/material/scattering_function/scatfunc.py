@@ -696,7 +696,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
         9.07
         """
-        if len(xs.shape) == 2:
+        if len(xs.shape) == 1:
             if Exs is not None:
                 E = Exs.copy()
             elif self.data.index.name == "mu":
@@ -706,8 +706,10 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             xs_reshaped = reshape_differential(xs.index.values,
                                                xs.values,
                                                E)
-        else:
+        elif len(xs.shape) == 2:
             xs_reshaped = xs.values
+        else:
+            raise ValueError("xs must be 1D or 2D")
         scattfunc_conv = self.data * xs_reshaped
         if integral and self.data.index.name == "mu":
             return integrate(scattfunc_conv.apply(integrate))

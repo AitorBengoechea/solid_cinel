@@ -114,7 +114,7 @@ class ScatFuncSD:
         """
         pdf_ = pd.Series(pdf).sort_index()
         normalization = integrate(pdf_)
-        if abs(normalization - 1) >= 0.1 and pdf_.name >= 0.005:
+        if abs(normalization - 1) >= 0.1 and self.Ein >= 0.005:
             raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
         elif abs(normalization - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
@@ -173,7 +173,7 @@ class ScatFuncSD:
         exp_positive = np.exp(- M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout_)) ** 2)
         pdf = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout_) / Ein
         pdf *= np.sqrt(M / (np.pi * m * kb * T))
-        return cls(Ein, T, M, pdf, index=pd.Index(Eout_, name="Eout"), dtype='float64')
+        return cls(Ein, T, M, pdf, index=pd.Index(Eout_, name="Eout"))
 
     def convolve(self, xs: pd.Series, integral: bool = False) -> pd.Series:
         """

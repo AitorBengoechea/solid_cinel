@@ -653,7 +653,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> round(ScatFunc.from_MD(Ein, M, T, Eout).convolve(xs_0K, integral=True), 2)
         9.09
 
-        # Use a displaced xs for the convolution:
+        # Use a displaced xs for the convolution (1D desplacement):
         >>> Eout_move = Eout + kb * T
         >>> scattering_function.convolve(xs_0K, Exs=Eout_move).iloc[::18, ::200].round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
@@ -671,6 +671,24 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
 
         >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
         9.05
+
+        # Use a displaced xs for the convolution (2D desplacement):
+        >>> Eout_move = Eout + np.outer(np.cos(theta * np.pi / 180), np.sqrt(Eout)/M)
+        >>> scattering_function.convolve(xs_0K, Exs=Eout_move).iloc[::18, ::200].round(6)
+        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -0.999848  1.845492  12.092687  23.729226  15.003274  3.265355
+        -0.945519  1.696235  11.864267  24.029885  15.194192  3.210104
+        -0.798636  1.312597  11.170515  24.883327  15.736124  3.040513
+        -0.573576  0.799609   9.865909  26.316572  16.646228  2.715553
+        -0.292372  0.330167   7.768698  28.343913  17.933617  2.179487
+         0.017452  0.066314   4.869383  30.864869  19.534695  1.412054
+         0.325568  0.002865   1.834268  33.288086  21.074870  0.566026
+         0.601815  0.000002   0.178426  33.111897  20.969181  0.063083
+         0.819152  0.000000   0.000129  21.695964  13.742798  0.000068
+         0.956305  0.000000   0.000000   0.381868   0.241911  0.000000
+        >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
+        9.07
         """
         if Exs is not None:
             E = Exs.copy()

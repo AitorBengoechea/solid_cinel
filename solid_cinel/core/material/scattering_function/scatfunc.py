@@ -728,6 +728,8 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     scattfunc = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
     scattfunc *= np.sqrt(M / (np.pi * m * kb * T))
     return scattfunc
+
+
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
 def get_Sab_sct(Eout: np.array, mu: np.array, Ein: float, T: float,
                 M: float, Teff: float, ws: float) -> np.array:

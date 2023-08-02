@@ -6,7 +6,7 @@ Python file for working xs doppler broadening functions.
 import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFuncSD
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
 import os
 
 # constants
@@ -53,7 +53,7 @@ def get_DB(*args, **kwargs) -> [pd.Series, pd.DataFrame]:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
     >>> os.chdir(wd)
     >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
@@ -109,7 +109,7 @@ def sigma1(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.array,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1)
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
     >>> os.chdir(wd)
     >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
@@ -139,5 +139,5 @@ def sigma1(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.array,
     >>> round(sigma1(xs_0K, Ein, M, T, Eout, integral = True), 2)
     7905.42
     """
-    return ScatFuncSD.from_MD(Ein, M, T, Eout)\
-                     .convolve(xs_0K, integral=integral)
+    return ScatFunc.from_MD(Ein, M, T, Eout)\
+                   .convolve(xs_0K, integral=integral)

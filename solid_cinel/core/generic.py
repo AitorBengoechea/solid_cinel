@@ -83,6 +83,22 @@ def reshape_differential(x: Iterable, y: Iterable, xnew: Iterable,
     -------
     `numpy.ndarray` with length `len(xnew)`
         interpolated array
+
+    Examples
+    --------
+    Vector interpolation:
+    >>> x = np.array([1, 2, 3, 4, 5])
+    >>> y = np.array([1, 2, 3, 4, 5])
+    >>> xnew = np.array([1.5, 2.5, 3.5, 4.5])
+    >>> reshape_differential(x, y, xnew)
+    array([1.5, 2.5, 3.5, 4.5])
+
+    Matrix interpolation:
+    >>> xnew = np.array([[1.5, 2.5, 3.5, 4.5], [1.75, 2.75, 3.75, 4.75]])
+    >>> reshape_differential(x, y, xnew)[0]
+    array([1.5, 2.5, 3.5, 4.5])
+    >>> reshape_differential(x, y, xnew)[1]
+    array([1.75, 2.75, 3.75, 4.75])
     """
     foo = sp.interpolate.interp1d(
                                   x,

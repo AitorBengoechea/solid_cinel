@@ -12,11 +12,11 @@ def test_sigma1(T):
     os.chdir(__file__.replace("test_sigma1.py", ""))
     # Get test data:
     xs_test = pd.read_csv(f"u238.{T}.2", sep="    ", header=None, engine="python")\
-                .set_index(0).drop([2], axis=1)
+                .set_index(0).drop([2], axis=1).iloc[::, 0]
     # Get 0K data:
     os.chdir("../../../../data/xs/U238/")
     xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python")\
-              .set_index(0).drop([2], axis=1)
+              .set_index(0).drop([2], axis=1).iloc[::, 0]
     os.chdir(wd)
     # Remove duplicated index:
     xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
@@ -39,6 +39,6 @@ def test_sigma1(T):
                                      num=1500, endpoint=True)
         Eout = np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
         xs_broad = get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True)
-        assert abs(1 - xs_broad/xs_test.loc[Ein].values) < 0.8
+        assert abs(1 - xs_broad/xs_test.loc[Ein]) < 0.8
 
 

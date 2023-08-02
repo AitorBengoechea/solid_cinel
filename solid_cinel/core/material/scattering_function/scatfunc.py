@@ -169,11 +169,8 @@ class ScatFuncSD:
         dtype: float64
         """
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-        exp_negative = np.exp(- M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout_)) ** 2)
-        exp_positive = np.exp(- M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout_)) ** 2)
-        pdf = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout_) / Ein
-        pdf *= np.sqrt(M / (np.pi * m * kb * T))
-        return cls(Ein, T, M, pdf, index=pd.Index(Eout_, name="Eout"))
+        return cls(Ein, T, M, sigma1(Eout_, Ein, T, M),
+                   index=pd.Index(Eout_, name="Eout"))
 
     def convolve(self, xs: pd.Series, integral: bool = False) -> pd.Series:
         """
@@ -557,6 +554,61 @@ class ScatFuncDD:
         else:
             return ddxs
 
+    def to_sd(self, theta: float = None) -> ScatFuncSD:
+        """
+        Convert the double differential scattering function to a single
+        differential scattering function
+
+        Parameters
+        ----------
+        theta : float, optional
+            Angle to filter the scattering function. If None, the angular
+            distribution more similar to sigma1 algorith will be used.
+
+        Returns
+        -------
+        ScatFuncSD
+            Single differential scattering function
+
+        Examples
+        --------
+        # Generate double differencial Scattering function:
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> ddScatFunc = ScatFuncDD.from_Sab(Ein, M, T, Eout, theta)
+        >>> ddScatFunc.to_sd().data.round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.006232
+        7.0439    1.251925
+        7.2000    5.290892
+        7.3157    0.767286
+        7.4480    0.004026
+        Name: 0.5000000000000001, dtype: float64
+
+        >>> ddScatFunc.to_sd(theta=60).data.round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.006232
+        7.0439    1.251925
+        7.2000    5.290892
+        7.3157    0.767286
+        7.4480    0.004026
+        Name: 0.5000000000000001, dtype: float64
+        """
+        angular_norm = self.data.apply(integrate, axis=1)
+        if theta:
+            filt_angle = np.cos(theta * np.pi / 180)
+        else:
+            angular_max = self.data.max(axis=1) / angular_norm
+            MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
+            filt_angle = abs(angular_max - MD).idxmin()
+        scattfunc = self.data.loc[filt_angle] / angular_norm[filt_angle]
+        return ScatFuncSD(self.Ein, self.T, self.M, scattfunc)
+
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """
@@ -636,6 +688,15 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         return self.instance.__getattribute__(name)
 
 
+@nb.jit(nopython=True, nogil=False, cache=False)
+def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
+    exp_negative = np.exp(
+        - M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout)) ** 2)
+    exp_positive = np.exp(
+        - M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout)) ** 2)
+    scattfunc = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
+    scattfunc *= np.sqrt(M / (np.pi * m * kb * T))
+    return scattfunc
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
 def get_Sab_sct(Eout: np.array, mu: np.array, Ein: float, T: float,
                 M: float, Teff: float, ws: float) -> np.array:

@@ -64,17 +64,29 @@ class ScatFuncSD:
     class.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
         """
         Initialize the ScatFuncSD class.
 
         Parameters
         ----------
-        args : Iterable
-            The scattering function data
+        Ein : float
+            The neutron incident energy in eV
+        T : float
+            Temperature of the material in K
+        M : float
+            Mass of the material in amu
+        args : Iterable, (N,)
+            The scattering function data for the pd.Series
         kwargs : dict
             Optional arguments for the construction of the pd.Series
         """
+        # Atributes of the scattering function (Change in these parameters will
+        # change the scattering function):
+        self.Ein = Ein
+        self.T = T
+        self.M = M
+        # The scattering function data:
         self.data = pd.Series(*args, **kwargs)
 
     @property
@@ -154,17 +166,14 @@ class ScatFuncSD:
         36.981756    2.069367e-02
         37.128652    2.618312e-05
         37.275548    2.371152e-09
-        Name: 36.68723, dtype: float64
+        dtype: float64
         """
-        exp_negative = pd.Series(
-            np.exp(- M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout)) ** 2),
-            index=pd.Index(Eout, name="Eout"), name=Ein)
-        exp_positive = pd.Series(
-            np.exp(- M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout)) ** 2),
-            index=pd.Index(Eout, name="Eout"), name=Ein)
-        pdf = 1 / 2 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
+        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
+        exp_negative = np.exp(- M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout_)) ** 2)
+        exp_positive = np.exp(- M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout_)) ** 2)
+        pdf = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout_) / Ein
         pdf *= np.sqrt(M / (np.pi * m * kb * T))
-        return cls(pdf)
+        return cls(Ein, T, M, pdf, index=pd.Index(Eout_, name="Eout"))
 
     def convolve(self, xs: pd.Series, integral: bool = False) -> pd.Series:
         """
@@ -244,12 +253,13 @@ class ScatFuncDD:
             Temperature of the material in K
         M : float
             Mass of the material in amu
-        args : Iterable
-            The scattering function data
+        args : Iterable, (N, M)
+            The scattering function data for the pd.DataFrame
         kwargs : dict
-            Optional arguments for the construction of the pd.Series
+            Optional arguments for the construction of the pd.DataFrame
         """
-        # Atributes of the scattering function
+        # Atributes of the scattering function (Change in these parameters will
+        # change the scattering function):
         self.Ein = Ein
         self.T = T
         self.M = M

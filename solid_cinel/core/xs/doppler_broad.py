@@ -133,7 +133,7 @@ def sigma1(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.array,
     36.981756    6.837390e+00
     37.128652    4.644441e-03
     37.275548    2.789231e-07
-    Name: 36.68723, dtype: float64
+    dtype: float64
 
     # Integral value test:
     >>> round(sigma1(xs_0K, Ein, M, T, Eout, integral = True), 2)

@@ -64,17 +64,29 @@ class ScatFuncSD:
     class.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
         """
         Initialize the ScatFuncSD class.
 
         Parameters
         ----------
-        args : Iterable
-            The scattering function data
+        Ein : float
+            The neutron incident energy in eV
+        T : float
+            Temperature of the material in K
+        M : float
+            Mass of the material in amu
+        args : Iterable, (N,)
+            The scattering function data for the pd.Series
         kwargs : dict
             Optional arguments for the construction of the pd.Series
         """
+        # Atributes of the scattering function (Change in these parameters will
+        # change the scattering function):
+        self.Ein = Ein
+        self.T = T
+        self.M = M
+        # The scattering function data:
         self.data = pd.Series(*args, **kwargs)
 
     @property
@@ -102,7 +114,7 @@ class ScatFuncSD:
         """
         pdf_ = pd.Series(pdf).sort_index()
         normalization = integrate(pdf_)
-        if abs(normalization - 1) >= 0.1 and pdf_.name >= 0.005:
+        if abs(normalization - 1) >= 0.1 and self.Ein >= 0.005:
             raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
         elif abs(normalization - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
@@ -154,17 +166,11 @@ class ScatFuncSD:
         36.981756    2.069367e-02
         37.128652    2.618312e-05
         37.275548    2.371152e-09
-        Name: 36.68723, dtype: float64
+        dtype: float64
         """
-        exp_negative = pd.Series(
-            np.exp(- M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout)) ** 2),
-            index=pd.Index(Eout, name="Eout"), name=Ein)
-        exp_positive = pd.Series(
-            np.exp(- M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout)) ** 2),
-            index=pd.Index(Eout, name="Eout"), name=Ein)
-        pdf = 1 / 2 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
-        pdf *= np.sqrt(M / (np.pi * m * kb * T))
-        return cls(pdf)
+        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
+        return cls(Ein, T, M, sigma1(Eout_, Ein, T, M),
+                   index=pd.Index(Eout_, name="Eout"))
 
     def convolve(self, xs: pd.Series, integral: bool = False) -> pd.Series:
         """
@@ -210,7 +216,7 @@ class ScatFuncSD:
         36.981756    6.837390e+00
         37.128652    4.644441e-03
         37.275548    2.789231e-07
-        Name: 36.68723, dtype: float64
+        dtype: float64
 
         >>> round(scattering_function.convolve(xs_0K, integral=True), 2)
         7905.42
@@ -244,12 +250,13 @@ class ScatFuncDD:
             Temperature of the material in K
         M : float
             Mass of the material in amu
-        args : Iterable
-            The scattering function data
+        args : Iterable, (N, M)
+            The scattering function data for the pd.DataFrame
         kwargs : dict
-            Optional arguments for the construction of the pd.Series
+            Optional arguments for the construction of the pd.DataFrame
         """
-        # Atributes of the scattering function
+        # Atributes of the scattering function (Change in these parameters will
+        # change the scattering function):
         self.Ein = Ein
         self.T = T
         self.M = M
@@ -547,16 +554,149 @@ class ScatFuncDD:
         else:
             return ddxs
 
+    def to_sd(self, theta: float = None) -> ScatFuncSD:
+        """
+        Convert the double differential scattering function to a single
+        differential scattering function
+
+        Parameters
+        ----------
+        theta : float, optional
+            Angle to filter the scattering function. If None, the angular
+            distribution more similar to sigma1 algorith will be used.
+
+        Returns
+        -------
+        ScatFuncSD
+            Single differential scattering function
+
+        Examples
+        --------
+        # Generate double differencial Scattering function:
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> ddScatFunc = ScatFuncDD.from_Sab(Ein, M, T, Eout, theta)
+        >>> ddScatFunc.to_sd().data.round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.006232
+        7.0439    1.251925
+        7.2000    5.290892
+        7.3157    0.767286
+        7.4480    0.004026
+        Name: 0.5000000000000001, dtype: float64
+
+        >>> ddScatFunc.to_sd(theta=60).data.round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.006232
+        7.0439    1.251925
+        7.2000    5.290892
+        7.3157    0.767286
+        7.4480    0.004026
+        Name: 0.5000000000000001, dtype: float64
+        """
+        angular_norm = self.data.apply(integrate, axis=1)
+        if theta:
+            filt_angle = np.cos(theta * np.pi / 180)
+        else:
+            angular_max = self.data.max(axis=1) / angular_norm
+            MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
+            filt_angle = abs(angular_max - MD).idxmin()
+        scattfunc = self.data.loc[filt_angle] / angular_norm[filt_angle]
+        return ScatFuncSD(self.Ein, self.T, self.M, scattfunc)
+
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """
-    Scattering function base class.
+    Scattering function class
     """
-
     def __init__(self, *args, **kwargs):
-        pass
+        """
+        Initialize the scattering function class. Depending on the shape of the
+        scattering function, the class will be initialized as a ScatFuncSD or
+        ScatFuncDD class.
+
+        Parameters
+        ----------
+        Ein : float
+            The neutron incident energy in eV
+        T : float
+            Temperature of the material in K
+        M : float
+            Mass of the material in amu
+        args : Iterable, (N,) or (N, M)
+            The scattering function data for the pd.DataFrame or pd.Series
+        kwargs : dict
+            Optional arguments for the construction of the pd.DataFrame
+            pd.Series
+
+        Examples
+        --------
+        Initilization of a scattering function for a pd.DataFrame:
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> ScatFunc.from_Sab(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
+        mu
+        -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
+        -8.660254e-01  0.074800  0.591841  1.360299   1.032095  0.376520  0.052584
+        -7.071068e-01  0.049539  0.515196  1.379332   1.109853  0.392419  0.049014
+        -5.000000e-01  0.024994  0.404827  1.387900   1.228207  0.412767  0.043015
+        -2.588190e-01  0.008241  0.268643  1.360778   1.399190  0.433942  0.033969
+         6.123234e-17  0.001317  0.132279  1.255634   1.643445  0.447804  0.022111
+         2.588190e-01  0.000054  0.036774  1.013814   1.998435  0.436944  0.009862
+         5.000000e-01  0.000000  0.002991  0.600838   2.539266  0.368245  0.001932
+         7.071068e-01  0.000000  0.000010  0.155387   3.441598  0.204433  0.000045
+         8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
+         9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
+
+        >>> Ein = 36.68723
+        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> ScatFunc.from_MD(Ein, M, T, Eout).data.iloc[::100]
+        Eout
+        35.953485    8.937086e-15
+        36.100381    1.841784e-09
+        36.247277    2.425252e-05
+        36.394173    2.074937e-02
+        36.541069    1.172637e+00
+        36.687964    4.449812e+00
+        36.834860    1.152331e+00
+        36.981756    2.069367e-02
+        37.128652    2.618312e-05
+        37.275548    2.371152e-09
+        dtype: float64
+        """
+        if len(args[-1].shape) == 1:
+            self.instance = ScatFuncSD(*args, **kwargs)
+        elif len(args[-1].shape) == 2:
+            self.instance = ScatFuncDD(*args, **kwargs)
+        else:
+            raise ValueError("Invalid shape for scattering function")
+
+    # called when an attribute is not found:
+    def __getattr__(self, name):
+        # assume it is implemented by self.instance
+        return self.instance.__getattribute__(name)
 
 
+@nb.jit(nopython=True, nogil=False, cache=False)
+def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
+    exp_negative = np.exp(
+        - M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout)) ** 2)
+    exp_positive = np.exp(
+        - M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout)) ** 2)
+    scattfunc = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
+    scattfunc *= np.sqrt(M / (np.pi * m * kb * T))
+    return scattfunc
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
 def get_Sab_sct(Eout: np.array, mu: np.array, Ein: float, T: float,
                 M: float, Teff: float, ws: float) -> np.array:

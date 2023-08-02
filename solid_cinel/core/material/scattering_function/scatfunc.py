@@ -557,15 +557,21 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         # assume it is implemented by self.instance
         return self.instance.__getattribute__(name)
 
-    def convolve(self, xs: pd.Series, Exs: np.array = None,
+    def convolve(self, xs: [pd.Series, pd.DataFrame], Exs: np.array = None,
                  integral: bool = False) -> [pd.Series, float]:
         """
-        Convolve the scattering function with a cross section.
+        Convolve the scattering function with a cross section. If the cross
+        section is a matrix, the scattering function is convolved directly
+        with xs. On the other hand, if the cross section is a pd.Series, the
+        cross section is linearly interpolated to the energy grid of the
+        scattering function or the provided energy grid Exs.
 
         Parameters
         ----------
-        xs : pd.Series, (N,)
-            Cross section to convolve with the scattering function
+        xs : pd.Series or pd.DataFrame, (N,) or (M, N)
+            Cross section to convolve with the scattering function. If a
+            pd.DataFrame is provided, the scattering function is convolved with
+            the xs directly.
         Exs : np.array, optional, (N,) or (M, N)
             Displazed Energy grid of the cross section. If not provided, the
             energy grid of the scattering function is used.
@@ -690,15 +696,18 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
         9.07
         """
-        if Exs is not None:
-            E = Exs.copy()
-        elif self.data.index.name == "mu":
-            E = self.data.columns.values
+        if len(xs.shape) == 2:
+            if Exs is not None:
+                E = Exs.copy()
+            elif self.data.index.name == "mu":
+                E = self.data.columns.values
+            else:
+                E = self.data.index.values
+            xs_reshaped = reshape_differential(xs.index.values,
+                                               xs.values,
+                                               E)
         else:
-            E = self.data.index.values
-        xs_reshaped = reshape_differential(xs.index.values,
-                                           xs.values,
-                                           E)
+            xs_reshaped = xs.values
         scattfunc_conv = self.data * xs_reshaped
         if integral and self.data.index.name == "mu":
             return integrate(scattfunc_conv.apply(integrate))

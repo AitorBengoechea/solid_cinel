@@ -721,6 +721,40 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
 
 @nb.jit(nopython=True, nogil=False, cache=False)
 def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
+    """
+    Sigma1 function for Energy differential scattering function
+
+    Parameters
+    ----------
+    Eout : np.array
+        Outgoing energy grid in eV
+    Ein : float
+        Incoming energy in eV
+    T : float
+        Temperature in K
+    M :
+        Mass of the target in amu
+
+    Returns
+    -------
+    scattfunc : np.array
+        Scattering function based on sigma1 model
+
+    Examples
+    --------
+    >>> Ein = 7.2
+    >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> pd.Series(sigma1(Eout, Ein, T, M), index=Eout).round(6)
+    6.7554    0.000000
+    6.9050    0.001153
+    7.0439    0.522804
+    7.2000    5.501786
+    7.3157    1.568599
+    7.4480    0.017808
+    dtype: float64
+    """
     exp_negative = np.exp(
         - M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout)) ** 2)
     exp_positive = np.exp(

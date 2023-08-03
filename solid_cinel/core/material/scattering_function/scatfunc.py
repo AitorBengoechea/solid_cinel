@@ -242,6 +242,8 @@ class ScatFuncDD:
                  theta: np.array, *args, model: str = "fgm", **kwargs):
         """
         Generate the scattering function from a S(alpha, beta) table.
+        ..math::
+        S(\theta, E^\prime, E, M, T) = \frac{1}{2 * k_B * T}\sqrt{\frac{^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
         Parameters
         ----------
@@ -427,7 +429,8 @@ class ScatFuncDD:
     def to_sd(self, theta: float = None) -> ScatFuncSD:
         """
         Convert the double differential scattering function to a single
-        differential scattering function
+        differential scattering function finding the angular distribution
+        closest to sigma1 distribution or using the given angle.
 
         Parameters
         ----------
@@ -477,7 +480,7 @@ class ScatFuncDD:
             MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
             filt_angle = abs(angular_max - MD).idxmin()
         scattfunc = self.data.loc[filt_angle] / angular_norm[filt_angle]
-        return ScatFuncSD(self.Ein, self.T, self.M, scattfunc)
+        return ScatFunc(self.Ein, self.T, self.M, scattfunc)
 
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):

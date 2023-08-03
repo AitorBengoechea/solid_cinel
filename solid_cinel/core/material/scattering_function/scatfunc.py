@@ -115,7 +115,7 @@ class ScatFuncSD:
         pdf_ = pd.Series(pdf).sort_index()
         normalization = integrate(pdf_)
         if abs(normalization - 1) >= 0.1 and self.Ein >= 0.005:
-            raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
+            raise ValueError(f"The scattering function is not normalized ({normalization} < 0.9)")
         elif abs(normalization - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
         self._data = pdf_
@@ -232,7 +232,7 @@ class ScatFuncDD:
         dd_pdf_.columns.name = "Eout"
         normalization = integrate(dd_pdf_.apply(integrate))
         if abs(normalization - 1) >= 0.1 and self.Ein <= 0.005:
-            raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
+            raise ValueError(f"The scattering function is not normalized ({normalization} < 0.9)")
         elif abs(normalization - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
         self._data = dd_pdf_

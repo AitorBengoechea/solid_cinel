@@ -115,7 +115,7 @@ class ScatFuncSD:
         pdf_ = pd.Series(pdf).sort_index()
         normalization = integrate(pdf_)
         if abs(normalization - 1) >= 0.1 and self.Ein >= 0.005:
-            raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
+            raise ValueError(f"The scattering function is not normalized ({normalization} < 0.9)")
         elif abs(normalization - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
         self._data = pdf_
@@ -232,7 +232,7 @@ class ScatFuncDD:
         dd_pdf_.columns.name = "Eout"
         normalization = integrate(dd_pdf_.apply(integrate))
         if abs(normalization - 1) >= 0.1 and self.Ein <= 0.005:
-            raise ValueError("The scattering function is not normalized (normalization coeff < 0.9)")
+            raise ValueError(f"The scattering function is not normalized ({normalization} < 0.9)")
         elif abs(normalization - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
         self._data = dd_pdf_
@@ -242,6 +242,8 @@ class ScatFuncDD:
                  theta: np.array, *args, model: str = "fgm", **kwargs):
         """
         Generate the scattering function from a S(alpha, beta) table.
+        ..math::
+        S(\theta, E^\prime, E, M, T) = \frac{1}{2 * k_B * T}\sqrt{\frac{^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
         Parameters
         ----------
@@ -427,7 +429,8 @@ class ScatFuncDD:
     def to_sd(self, theta: float = None) -> ScatFuncSD:
         """
         Convert the double differential scattering function to a single
-        differential scattering function
+        differential scattering function finding the angular distribution
+        closest to sigma1 distribution or using the given angle.
 
         Parameters
         ----------
@@ -477,7 +480,7 @@ class ScatFuncDD:
             MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
             filt_angle = abs(angular_max - MD).idxmin()
         scattfunc = self.data.loc[filt_angle] / angular_norm[filt_angle]
-        return ScatFuncSD(self.Ein, self.T, self.M, scattfunc)
+        return ScatFunc(self.Ein, self.T, self.M, scattfunc)
 
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):
@@ -721,6 +724,40 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
 
 @nb.jit(nopython=True, nogil=False, cache=False)
 def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
+    """
+    Sigma1 function for Energy differential scattering function
+
+    Parameters
+    ----------
+    Eout : np.array
+        Outgoing energy grid in eV
+    Ein : float
+        Incoming energy in eV
+    T : float
+        Temperature in K
+    M :
+        Mass of the target in amu
+
+    Returns
+    -------
+    scattfunc : np.array
+        Scattering function based on sigma1 model
+
+    Examples
+    --------
+    >>> Ein = 7.2
+    >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> pd.Series(sigma1(Eout, Ein, T, M), index=Eout).round(6)
+    6.7554    0.000000
+    6.9050    0.001153
+    7.0439    0.522804
+    7.2000    5.501786
+    7.3157    1.568599
+    7.4480    0.017808
+    dtype: float64
+    """
     exp_negative = np.exp(
         - M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout)) ** 2)
     exp_positive = np.exp(

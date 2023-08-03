@@ -772,6 +772,8 @@ def get_Sab_sct(Eout: np.array, mu: np.array, Ein: float, T: float,
                 M: float, Teff: float, ws: float) -> np.array:
     """
     Calculate the scattering function from the Short Collision Time model.
+    ..math::
+        S(\theta, E^\prime, E, M, T) = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} \frac{1}{\sqrt{4 \pi w_s \alpha T_{eff} / T}} exp\left(\frac{(w_s\alpha +\beta)^2}{4 \alpha w_s T_{eff}/T}\right)
 
     Parameters
     ----------

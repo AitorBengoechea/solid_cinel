@@ -11,8 +11,7 @@ def test_sigma1(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_sigma1.py", ""))
     # Get test data:
-    xs_test = pd.read_csv(f"u238.{T}.2", sep="    ", header=None, engine="python")\
-                .set_index(0).drop([2], axis=1).iloc[::, 0]
+    xs_test = pd.read_hdf(f"u238.{T}.2", "test")
     # Get 0K data:
     os.chdir("../../../../data/xs/U238/")
     xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python")\

@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import os
 import pandas as pd
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
 from solid_cinel.core.generic import integrate
@@ -8,8 +9,10 @@ from solid_cinel.core.generic import integrate
 @pytest.mark.parametrize("Ein, M, T", [(0.1000000E-01, 238.0, 1000)])
 def test_sab_fgm_scatfunc(Ein, M, T):
     # Get test data:
+    wd = os.getcwd()
+    os.chdir(__file__.replace("test_Sab.py", ""))
     ddxs_test = pd.read_hdf('Sab_scatt_constant', 'test')
-
+    os.chdir(wd)
     # Generate data:
     theta = np.arange(0, 181, 1)[1::]
     ddxs = ScatFunc.from_Sab(Ein, M, T, ddxs_test.columns.values, theta).data

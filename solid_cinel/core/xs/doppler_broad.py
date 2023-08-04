@@ -5,9 +5,11 @@ Python file for working xs doppler broadening functions.
 """
 import numpy as np
 import pandas as pd
+import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
 import os
+from typing import Iterable
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -115,8 +117,8 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Generate Broadening test results:
-    >>> Ein = 2.0
     >>> T = 1000
+    >>> Ein = 2.0
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
     >>> M = 238.05077040419212
 
@@ -235,3 +237,139 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
 
     # Convolve scattering function with xs:
     return scattfunc.convolve(xs, Exs=Exs, integral=integral)
+
+
+def arno_xs(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
+            theta: np.ndarray):
+    return
+
+def generate_Eout(Ein, Elim: Iterable= None, N: int=None,
+                 space: str= "linear"):
+    """
+    Generate Eout grid for the convolution.
+
+    Parameters
+    ----------
+    Ein : float
+        Incident energy in eV
+    Elim : Iterable, (2,)
+        Outgoing energy limits in eV. The first value is the lower limit and the
+        second value is the upper limit.
+    N : int, optional
+        Number of points in the outgoing energy grid. If None, the default
+        number of points is used.
+    space : str, optional
+        Type of grid. Available options are "linear" and "log". Default is
+        "linear".
+
+    Returns
+    -------
+    Eout : ndarray
+        Outgoing energy grid in eV
+
+    Raises
+    ------
+    ValueError
+        If the number of points is not introduced.
+    ValueError
+        If the space is not available.
+
+    Examples
+    --------
+    Test default, linear and logarithmic grids with NJOY values:
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> os.chdir(wd)
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
+
+    # Common data:
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = default_Eout(Ein)
+    >>> M = 238.05077040419212
+
+    # Test default grid:
+    >>> Eout = default_Eout(Ein)
+    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    9.09
+
+    # Test linear grid:
+    >>> Eout = generate_Eout(Ein, Elim=[Ein * 0.9, Ein * 1.1], N=5000)
+    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    9.09
+
+    # Test logarithmic grid:
+    >>> Eout = generate_Eout(Ein, Elim=[Ein * 0.9, Ein * 1.1], N=5000, space="log")
+    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    9.09
+    """
+    if Elim is None:
+        Eout = default_Eout(Ein)
+    else:
+        if N is None:
+            raise ValueError("The number of points is not defined")
+        if space == "linear":
+            Eout = np.linspace(Elim[0],
+                               Elim[1],
+                               num=N, endpoint=True)
+        elif space == "log":
+            Eout = np.logspace(np.log10(Elim[0]),
+                               np.log10(Elim[1]),
+                               num=N, endpoint=True)
+        else:
+            raise ValueError("The space {} is not available".format(space))
+    return Eout
+
+def default_Eout(Ein: float) -> np.ndarray:
+    """
+    Generate the default Eout grid for the convolution. The grid is tested with
+    NJOY values to ensure a relative difference smaller than 0.4%
+
+    Parameters
+    ----------
+    Ein : float
+        Incident energy in eV
+
+    Returns
+    -------
+    Eout : ndarray
+        Outgoing energy grid in eV
+
+    Examples
+    --------
+    Test the default Eout with NJOY values:
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> os.chdir(wd)
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
+
+    # Generate Broadening test results:
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = default_Eout(Ein)
+    >>> M = 238.05077040419212
+    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    9.09
+    """
+    Eout_small = np.linspace(0,
+                             0.99 * Ein,
+                             num=2000, endpoint=False)
+    Eout_middle = np.linspace(0.99 * Ein,
+                              Ein * 1.01,
+                              num=3000,
+                              endpoint=False)
+    if Ein * 2 < 5.0:
+        Eout_great = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(5.0),
+                                 num=2000, endpoint=True)
+    else:
+        Eout_great = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(2 * Ein),
+                                 num=2000, endpoint=True)
+    return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))

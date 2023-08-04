@@ -2,7 +2,7 @@ import pytest
 import os
 import numpy as np
 import pandas as pd
-from solid_cinel.core.xs.doppler_broad import get_DB
+from solid_cinel.core.xs.doppler_broad import get_DB, default_Eout
 
 
 @pytest.mark.parametrize("T", [300, 1000])
@@ -22,22 +22,7 @@ def test_sigma1(T):
     xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
     xs_test = xs_test[~xs_test.index.duplicated(keep='first')]
     for Ein in xs_test.index[xs_test.index <= 100]:
-        Eout_small = np.linspace(0,
-                                  0.99 * Ein,
-                                  num=1000, endpoint=False)
-        Eout_middle = np.linspace(0.99 * Ein,
-                                  Ein * 1.01,
-                                  num=1000,
-                                  endpoint=False)
-        if Ein * 2 < 5.0:
-            Eout_great = np.logspace(np.log10(Ein * 1.01),
-                                     np.log10(5.0),
-                                     num=1500, endpoint=True)
-        else:
-            Eout_great = np.logspace(np.log10(Ein * 1.01),
-                                     np.log10(2 * Ein),
-                                     num=1500, endpoint=True)
-        Eout = np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+        Eout = default_Eout(Ein)
         xs_broad = get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True)
         assert abs(1 - xs_broad/xs_test.loc[Ein]) < 0.8
 

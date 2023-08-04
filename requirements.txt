@@ -7,7 +7,6 @@ numba
 pyDOE
 pandas >= 1
 pytest >= 3.3
-pytables
 pyyaml
 scipy
 sphinx

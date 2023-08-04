@@ -6,8 +6,9 @@ Python file for working xs doppler broadening functions.
 import numpy as np
 import pandas as pd
 import numba as nb
+from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1
 import os
 from typing import Iterable
 
@@ -238,10 +239,83 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     # Convolve scattering function with xs:
     return scattfunc.convolve(xs, Exs=Exs, integral=integral)
 
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
+                   M: float, T: float, Eout: np.ndarray,
+                   theta: np.ndarray) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model.
+    .. math::
+        \sigma^{T(1+\mu)/2}\left( \frac{E + E^\prime}{2} - E\frac{\mu m}{M}\right)
 
-def arno_xs(xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
-            theta: np.ndarray):
-    return
+    Parameters
+    ----------
+    xs_0K : pd.Series
+        Cross section at 0K in barns
+    Ein : float
+        Incident energy in eV
+    M : float
+        Target mass in amu
+    T : float
+        Target temperature in K
+    Eout : ndarray, (N,)
+        Outgoing energy grid in eV
+    theta : ndarray, (M,)
+        Outgoing angle grid in degrees
+
+    Returns
+    -------
+    xs_mat : ndarray, (M, N)
+        Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> os.chdir(wd)
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 10)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(0, 180, 10)[1::]
+    >>> pd.DataFrame(arno_xs_matrix(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta), index=theta, columns=Eout).round(6)
+         1.800000  1.844444  1.888889  1.933333  1.977778  2.022222  2.066667  2.111111  2.155556  2.200000
+    10   9.108238  9.103730  9.099199  9.094649  9.090074  9.085464  9.080815  9.076135  9.071435  9.066722
+    20   9.108151  9.103643  9.099112  9.094562  9.089987  9.085377  9.080727  9.076047  9.071347  9.066633
+    30   9.108011  9.103501  9.098970  9.094421  9.089846  9.085235  9.080584  9.075903  9.071203  9.066490
+    40   9.107821  9.103311  9.098779  9.094231  9.089656  9.085044  9.080392  9.075709  9.071009  9.066296
+    50   9.107590  9.103079  9.098547  9.093999  9.089425  9.084812  9.080158  9.075473  9.070772  9.066060
+    60   9.107328  9.102814  9.098282  9.093735  9.089161  9.084548  9.079891  9.075204  9.070502  9.065791
+    70   9.107045  9.102529  9.097997  9.093451  9.088878  9.084263  9.079603  9.074914  9.070212  9.065502
+    80   9.106756  9.102238  9.097706  9.093161  9.088590  9.083973  9.079309  9.074617  9.069915  9.065206
+    90   9.106479  9.101958  9.097425  9.092883  9.088313  9.083693  9.079025  9.074331  9.069628  9.064921
+    100  9.106233  9.101710  9.097177  9.092637  9.088069  9.083446  9.078773  9.074075  9.069373  9.064668
+    110  9.106047  9.101520  9.096988  9.092450  9.087884  9.083257  9.078577  9.073877  9.069175  9.064471
+    120  9.105951  9.101421  9.096889  9.092352  9.087787  9.083154  9.078467  9.073765  9.069062  9.064358
+    130  9.105971  9.101437  9.096902  9.092365  9.087801  9.083159  9.078462  9.073757  9.069051  9.064345
+    140  9.106064  9.101522  9.096979  9.092436  9.087869  9.083211  9.078502  9.073789  9.069076  9.064363
+    150  9.105858  9.101301  9.096744  9.092187  9.087613  9.082932  9.078207  9.073481  9.068756  9.064031
+    160  9.104602  9.100052  9.095502  9.090953  9.086395  9.081711  9.076994  9.072278  9.067562  9.062847
+    170  9.104026  9.099497  9.094968  9.090439  9.085908  9.081232  9.076532  9.071833  9.067133  9.062434
+    """
+    mu = np.cos(theta * np.pi / 180)
+    xs_mat =  np.zeros((len(mu), len(Eout)))
+    T_arno = T * (1 + mu) / 2
+    for i in prange(len(mu)):
+        for j in prange(len(Eout)):
+            Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
+            Eout_db = default_Eout(Ein_arno)
+            pdf = sigma1(Eout_db, Ein_arno, T_arno[i], M)
+            xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf, x=Eout_db)
+    return xs_mat
 
 def generate_Eout(Ein, Elim: Iterable= None, N: int=None,
                  space: str= "linear"):
@@ -323,6 +397,7 @@ def generate_Eout(Ein, Elim: Iterable= None, N: int=None,
             raise ValueError("The space {} is not available".format(space))
     return Eout
 
+@nb.jit(nopython=True, nogil=False, cache=True)
 def default_Eout(Ein: float) -> np.ndarray:
     """
     Generate the default Eout grid for the convolution. The grid is tested with
@@ -359,17 +434,16 @@ def default_Eout(Ein: float) -> np.ndarray:
     """
     Eout_small = np.linspace(0,
                              0.99 * Ein,
-                             num=2000, endpoint=False)
+                             num=2000)
     Eout_middle = np.linspace(0.99 * Ein,
                               Ein * 1.01,
-                              num=3000,
-                              endpoint=False)
+                              num=3000)
     if Ein * 2 < 5.0:
         Eout_great = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(5.0),
-                                 num=2000, endpoint=True)
+                                 num=2000)
     else:
         Eout_great = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(2 * Ein),
-                                 num=2000, endpoint=True)
+                                 num=2000)
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))

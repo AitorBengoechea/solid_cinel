@@ -284,7 +284,7 @@ def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> Ein = 2.0
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 10)
     >>> M = 238.05077040419212
-    >>> theta = np.arange(0, 180, 10)[1::]
+    >>> theta = np.arange(0, 180, 10)[10::]
     >>> pd.DataFrame(arno_xs_matrix(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta), index=theta, columns=Eout).round(6)
          1.800000  1.844444  1.888889  1.933333  1.977778  2.022222  2.066667  2.111111  2.155556  2.200000
     10   9.108238  9.103730  9.099199  9.094649  9.090074  9.085464  9.080815  9.076135  9.071435  9.066722

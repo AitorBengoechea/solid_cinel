@@ -284,7 +284,7 @@ def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> Ein = 2.0
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 10)
     >>> M = 238.05077040419212
-    >>> theta = np.arange(0, 180, 10)[10::]
+    >>> theta = np.arange(10, 180, 10)
     >>> pd.DataFrame(arno_xs_matrix(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta), index=theta, columns=Eout).round(6)
          1.800000  1.844444  1.888889  1.933333  1.977778  2.022222  2.066667  2.111111  2.155556  2.200000
     10   9.108238  9.103730  9.099199  9.094649  9.090074  9.085464  9.080815  9.076135  9.071435  9.066722
@@ -434,16 +434,16 @@ def default_Eout(Ein: float) -> np.ndarray:
     """
     Eout_small = np.linspace(0,
                              0.99 * Ein,
-                             num=2000)
+                             2000)
     Eout_middle = np.linspace(0.99 * Ein,
                               Ein * 1.01,
-                              num=3000)
+                              3000)
     if Ein * 2 < 5.0:
         Eout_great = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(5.0),
-                                 num=2000)
+                                 2000)
     else:
         Eout_great = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(2 * Ein),
-                                 num=2000)
+                                 2000)
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))

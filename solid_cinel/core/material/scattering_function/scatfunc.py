@@ -699,6 +699,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
         9.07
         """
+        # Create the xs matrix for the double differential scattering function:
         if len(xs.shape) == 1:
             if Exs is not None:
                 E = Exs.copy()
@@ -713,7 +714,11 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             xs_reshaped = xs.values
         else:
             raise ValueError("xs must be 1D or 2D")
+
+        # Convolve the scattering function with the cross section values matrix:
         scattfunc_conv = self.data * xs_reshaped
+
+        # Return the data in the chosen format:
         if integral and self.data.index.name == "mu":
             return integrate(scattfunc_conv.apply(integrate))
         elif integral:

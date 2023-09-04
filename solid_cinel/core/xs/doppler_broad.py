@@ -232,12 +232,14 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
         if algorithm == "dopush":
             scattfunc = scattfunc.to_sd()
             Exs = scattfunc.data.index.values
+            # Add recoil energy to outgoing energy:
             Exs += scattfunc.Ein - scattfunc.data.idxmax()
     else:
         raise ValueError("The algorithm {} is not available".format(algorithm))
 
     # Convolve scattering function with xs:
     return scattfunc.convolve(xs, Exs=Exs, integral=integral)
+
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
 def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
@@ -309,7 +311,7 @@ def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
 
     """
     mu = np.cos(theta * np.pi / 180)
-    xs_mat =  np.zeros((len(mu), len(Eout)))
+    xs_mat = np.zeros((len(mu), len(Eout)))
     T_arno = T * (1 + mu) / 2
     for i in prange(len(mu)):
         for j in prange(len(Eout)):
@@ -320,8 +322,9 @@ def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
             xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf, x=Eout_db)
     return xs_mat
 
-def generate_Eout(Ein, Elim: Iterable= None, N: int=None,
-                 space: str= "linear"):
+
+def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
+                  space: str = "linear"):
     """
     Generate Eout grid for the convolution.
 
@@ -399,6 +402,7 @@ def generate_Eout(Ein, Elim: Iterable= None, N: int=None,
         else:
             raise ValueError("The space {} is not available".format(space))
     return Eout
+
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_Eout(Ein: float) -> np.ndarray:

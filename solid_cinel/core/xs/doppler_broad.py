@@ -28,13 +28,13 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
 
         - S(alpha, -beta): S(alpha, -beta) tables for ddxs
         ..math::
-            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{\sigma_b}{2 * k_B * T}\sqrt{\frac{^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{\sigma_b}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
         - Dopush: From the chosen S(alpha, -beta) model, the distribution more
                   similar to sigma1 is chosen. Then, the new grid for the xs is
                   calculated adding the recoil energy to the outgoing energy
         ..math::
-         \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+         \frac{d\sigma_T(E)}{dE^\prime} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
 
     Parameters for get_DB

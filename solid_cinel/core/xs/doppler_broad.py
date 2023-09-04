@@ -88,13 +88,13 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
 
     Parameters for convolution
     --------------------------
-    xs_0K : pd.Series or pd.DataFrame, (N,) or (M, N)
+    xs : pd.Series or pd.DataFrame, (N,) or (M, N)
         0K xs data for the given material in barns. If the cross
         section is a matrix, the scattering function is convolved directly
         with xs. If the cross section is a vector, the scattering function is
         convolved with the cross section for each outgoing energy or with the
         Exs introduced by the user.
-    Exs : np.array, optional, (N,) or (M, N)
+    Exs : np.ndarray, optional, (N,) or (M, N)
         Displazed Energy grid of the cross section. If not provided, the
         energy grid of the scattering function is used.
     integral : bool, optional
@@ -225,20 +225,87 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     Exs = kwargs.pop("Exs", None)
 
     # Create Scattering function object:
-    if algorithm == "sigma1":
-        scattfunc = ScatFunc.from_MD(*args[1::], **kwargs)
-    elif algorithm == "sab" or algorithm == "dopush":
-        scattfunc = ScatFunc.from_Sab(*args[1::], **kwargs)
-        if algorithm == "dopush":
-            scattfunc = scattfunc.to_sd()
-            Exs = scattfunc.data.index.values
-            # Add recoil energy to outgoing energy:
-            Exs += scattfunc.Ein - scattfunc.data.idxmax()
-    else:
-        raise ValueError("The algorithm {} is not available".format(algorithm))
+    scattfunc = algorithm_scattfunc(algorithm, *args[1::], **kwargs)
+
+    # Update convolve parameters according to the model:
+    if algorithm == "dopush":
+        Exs = scattfunc.data.index.values
+        # Add recoil energy to outgoing energy:
+        Exs += scattfunc.Ein - scattfunc.data.idxmax()
+
 
     # Convolve scattering function with xs:
     return scattfunc.convolve(xs, Exs=Exs, integral=integral)
+
+
+def algorithm_scattfunc(algorithm: str, *args, **kwargs) -> ScatFunc:
+    """
+    Create a scattering function object for the chosen algorithm
+
+    Parameters
+    ----------
+    algorithm : str
+        The algorithm to use for the calculation of the dopper broadened elastic
+        cross section. The available algorithms are:
+            - "sigma1": sigma1 algorithm from NJOY2016 manual
+            - "sab": S(alpha, -beta) tables for ddxs
+            - "dopush": From the chosen S(alpha, -beta) model, the distribution
+                        more similar to sigma1 is chosen.
+    Parameters for sigma1
+    ---------------------
+    Ein : float
+        The incident energy of the neutron in eV
+    Eout : np.array, (N,)
+        The neutron outgoing energy grid in eV
+    M : float
+        Mass of the material in amu
+    T : float
+        Temperature of the material in K
+
+    Parameters for sab
+    ------------------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        Mass of the material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.array, (N,)
+        The neutron outgoing energy grid in eV
+    theta : np.array, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+    model : str
+        The model used to calculate the S(alpha, beta) distribution. The
+        available models are:
+            - "fgm": Free Gas Model
+            - "sct": Short Collision Time
+            - "pdos": Phonon Density of States
+
+    Extra parameters for sab algoritm using pdos model
+    --------------------------------------------------
+    pdos : 'solid_cinel.core.material.Pdos'
+        Pdos object.
+    threshold : 'float', optional
+        Minimun value to take into account in the creation of tau_n
+        functions. For T>200 is convenient to set into 1.0e-14 to speed up
+        the calculations. The default is 0.0.
+    nphonon : 'int', optional
+        Phonon expansion order. The default is 1000.
+
+    Returns
+    -------
+    ScatFunc
+        Scattering function object.
+    """
+    if algorithm == "sigma1":
+        scattfunc = ScatFunc.from_MD(*args, **kwargs)
+    elif algorithm in ["sab", "dopush"]:
+        scattfunc = ScatFunc.from_Sab(*args, **kwargs)
+        if algorithm == "dopush":
+            scattfunc = scattfunc.to_sd()
+    else:
+        raise ValueError("The algorithm {} is not available".format(algorithm))
+    return scattfunc
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)

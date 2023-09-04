@@ -23,19 +23,23 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     cross sections for elastic scattering at a given temperature and incident
     energy using one of the following formalism:
         - sigma1: sigma1 algorithm from NJOY2016 manual
-        ..math::
-            \frac{d\sigma_T(E)}{dE^\prime} = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\sigma_0(E^\prime)\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
+                  ..math::
+                  \frac{d\sigma_T(E)}{dE^\prime} = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\sigma_0(E^\prime)\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
 
         - S(alpha, -beta): S(alpha, -beta) tables for ddxs
-        ..math::
-            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{\sigma_b}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+                           ..math::
+                           \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{\sigma_b}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
         - Dopush: From the chosen S(alpha, -beta) model, the distribution more
                   similar to sigma1 is chosen. Then, the new grid for the xs is
                   calculated adding the recoil energy to the outgoing energy
-        ..math::
-         \frac{d\sigma_T(E)}{dE^\prime} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+                  ..math::
+                  \frac{d\sigma_T(E)}{dE^\prime} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
+        - Courcelle: Fourier double-Laplace transform of a 4-point correlation
+                     function
+                     ..math::
+                     \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E)/2 - E \mu / A)
 
     Parameters for get_DB
     ---------------------
@@ -44,6 +48,21 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
         cross section. The available algorithms are:
             - "sigma1": sigma1 algorithm from NJOY2016 manual
             - "sab": S(alpha, -beta) tables for ddxs
+
+    Parameters for convolution
+    --------------------------
+    xs : pd.Series or pd.DataFrame, (N,) or (M, N)
+        0K xs data for the given material in barns. If the cross
+        section is a matrix, the scattering function is convolved directly
+        with xs. If the cross section is a vector, the scattering function is
+        convolved with the cross section for each outgoing energy or with the
+        Exs introduced by the user.
+    Exs : np.ndarray, optional, (N,) or (M, N)
+        Displazed Energy grid of the cross section. If not provided, the
+        energy grid of the scattering function is used.
+    integral : bool, optional
+        If True, the integral of the cross section is returned instead of the
+        differential cross section, by default False.
 
     Parameters for sigma1
     ---------------------
@@ -85,21 +104,6 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
         the calculations. The default is 0.0.
     nphonon : 'int', optional
         Phonon expansion order. The default is 1000.
-
-    Parameters for convolution
-    --------------------------
-    xs : pd.Series or pd.DataFrame, (N,) or (M, N)
-        0K xs data for the given material in barns. If the cross
-        section is a matrix, the scattering function is convolved directly
-        with xs. If the cross section is a vector, the scattering function is
-        convolved with the cross section for each outgoing energy or with the
-        Exs introduced by the user.
-    Exs : np.ndarray, optional, (N,) or (M, N)
-        Displazed Energy grid of the cross section. If not provided, the
-        energy grid of the scattering function is used.
-    integral : bool, optional
-        If True, the integral of the cross section is returned instead of the
-        differential cross section, by default False.
 
     Returns
     -------
@@ -202,7 +206,7 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     9.07
 
 
-    # Use dopush algorithm:
+    # Dopush algorithm:
     >>> algorithm = "dopush"
     >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::100]
     Eout
@@ -217,6 +221,22 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     2.128529     0.380893
     2.168569     0.007884
     Name: 0.5000000000000001, dtype: float64
+
+    # Courcelle algorithm:
+    >>> algorithm = "courcelle"
+    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::18, ::200].round(6)
+    Eout       1.808208   1.888288   1.968368   2.048448  2.128529
+    mu
+    -0.999848  2.366691  13.667442  23.824066  13.476444  2.641000
+    -0.945519  2.193366  13.472951  24.159927  13.624406  2.584196
+    -0.798636  1.740061  12.867109  25.124228  14.037419  2.413506
+    -0.573576  1.111180  11.675304  26.785878  14.704432  2.098952
+    -0.292372  0.498004   9.635481  29.256439  15.574374  1.608490
+     0.017452  0.115575   6.561346  32.657570  16.463891  0.960546
+     0.325568  0.006573   2.894419  36.926567  16.777201  0.329704
+     0.601815  0.000010   0.399131  40.784055  14.715889  0.026084
+     0.819152  0.000000   0.000803  36.327474   6.664267  0.000010
+     0.956305  0.000000   0.000000   3.726110   0.014073  0.000000
     """
     algorithm = kwargs.pop("algorithm").lower()
     # Parameters for convolution:
@@ -227,12 +247,14 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     # Create Scattering function object:
     scattfunc = algorithm_scattfunc(algorithm, *args[1::], **kwargs)
 
-    # Update convolve parameters according to the model:
+    # Update convolution parameters according to the model:
     if algorithm == "dopush":
         Exs = scattfunc.data.index.values
         # Add recoil energy to outgoing energy:
         Exs += scattfunc.Ein - scattfunc.data.idxmax()
-
+    elif algorithm == "courcelle":
+        # Create Courcelle cross section matrix:
+        xs = courcelle_xs_matrix(xs.values, xs.index.values, *args[1::])
 
     # Convolve scattering function with xs:
     return scattfunc.convolve(xs, Exs=Exs, integral=integral)
@@ -251,6 +273,8 @@ def algorithm_scattfunc(algorithm: str, *args, **kwargs) -> ScatFunc:
             - "sab": S(alpha, -beta) tables for ddxs
             - "dopush": From the chosen S(alpha, -beta) model, the distribution
                         more similar to sigma1 is chosen.
+            - "courcelle": Fourier double-Laplace transform of a 4-point
+                           correlation function
     Parameters for sigma1
     ---------------------
     Ein : float
@@ -299,7 +323,7 @@ def algorithm_scattfunc(algorithm: str, *args, **kwargs) -> ScatFunc:
     """
     if algorithm == "sigma1":
         scattfunc = ScatFunc.from_MD(*args, **kwargs)
-    elif algorithm in ["sab", "dopush"]:
+    elif algorithm in ["sab", "dopush", "courcelle"]:
         scattfunc = ScatFunc.from_Sab(*args, **kwargs)
         if algorithm == "dopush":
             scattfunc = scattfunc.to_sd()
@@ -309,9 +333,9 @@ def algorithm_scattfunc(algorithm: str, *args, **kwargs) -> ScatFunc:
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
-def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
-                   M: float, T: float, Eout: np.ndarray,
-                   theta: np.ndarray) -> np.ndarray:
+def courcelle_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
+                        M: float, T: float, Eout: np.ndarray,
+                        theta: np.ndarray) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -356,7 +380,8 @@ def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
     >>> M = 238.05077040419212
     >>> theta = np.arange(10, 180, 10)
-    >>> pd.DataFrame(arno_xs_matrix(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta), index=theta, columns=Eout).round(6)
+    >>> xs_values = courcelle_xs_matrix(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta)
+    >>> pd.DataFrame(xs_values, index=theta, columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     10   9.108238  9.101467  9.094649  9.087774  9.080815  9.073787  9.066722
     20   9.108151  9.101380  9.094562  9.087687  9.080727  9.073699  9.066633

@@ -560,8 +560,9 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         # assume it is implemented by self.instance
         return self.instance.__getattribute__(name)
 
-    def convolve(self, xs: [pd.Series, pd.DataFrame], Exs: np.array = None,
-                 integral: bool = False) -> [pd.Series, float]:
+    def convolve(self, xs: [pd.Series, pd.DataFrame, np.ndarray],
+                 Exs: np.array = None,
+                 integral: bool = False) -> [pd.DataFrame, pd.Series, float]:
         """
         Convolve the scattering function with a cross section. If the cross
         section is a matrix, the scattering function is convolved directly
@@ -571,7 +572,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
 
         Parameters
         ----------
-        xs : pd.Series or pd.DataFrame, (N,) or (M, N)
+        xs : pd.Series or pd.DataFrame or np.ndarray, (N,) or (M, N) or (M, N)
             Cross section to convolve with the scattering function. If a
             pd.DataFrame is provided, the scattering function is convolved with
             the xs directly.
@@ -711,7 +712,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
                                                xs.values,
                                                E)
         elif len(xs.shape) == 2:
-            xs_reshaped = xs.values
+            xs_reshaped = xs.values if isinstance(xs, pd.DataFrame) else xs
         else:
             raise ValueError("xs must be 1D or 2D")
 

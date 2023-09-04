@@ -13,4 +13,3 @@ sphinx
 seaborn >= 0.9
 statsmodels
 typing
-pytables

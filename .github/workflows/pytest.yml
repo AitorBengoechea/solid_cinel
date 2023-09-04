@@ -19,7 +19,7 @@ jobs:
           python-version: "3.x"
 
       - name: install general python dependencies
-        run: pip install sphinx sphinx_rtd_theme numpydoc coveralls pytest-cov nbval pytables
+        run: pip install sphinx sphinx_rtd_theme numpydoc coveralls pytest-cov nbval
       - name: install solid cinel requirements
         run: pip install -r requirements.txt
       - name: install solid_cinel

@@ -224,7 +224,7 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     integral = kwargs.pop("integral", False)
     Exs = kwargs.pop("Exs", None)
 
-    # Create Scattering function:
+    # Create Scattering function object:
     if algorithm == "sigma1":
         scattfunc = ScatFunc.from_MD(*args[1::], **kwargs)
     elif algorithm == "sab" or algorithm == "dopush":
@@ -252,8 +252,10 @@ def arno_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
 
     Parameters
     ----------
-    xs_0K : pd.Series
-        Cross section at 0K in barns
+    xs_values : ndarray, (N,)
+        Cross section values at 0K in barns
+    xs_E : ndarray, (N,)
+        Energy grid of the cross section in eV
     Ein : float
         Incident energy in eV
     M : float

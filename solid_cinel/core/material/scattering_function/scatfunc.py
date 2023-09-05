@@ -21,6 +21,7 @@ import warnings
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
+# Example variables:
 interv_in_energy_U238 = 6.956193E-04
 rho_in_energy_U238_str = '''
 0.000000E+00 1.041128E-01 3.759952E-01 8.354039E-01

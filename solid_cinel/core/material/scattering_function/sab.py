@@ -620,21 +620,13 @@ class Sab:
         cls.pdos = pdos
 
         tau1 = pdos._get_tau_1(T)
-        delta_beta = tau1.index[1]
-        S_values, iter_sum = cls._S_from_tau1(tau1,
-                                              cls.DebyeWallerCoeff,
-                                              alpha_grid_.data,
-                                              beta_grid_.data)
-        if nphonon > 1:
-            S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
-                                                  beta_grid_.data,
-                                                  nphonon,
-                                                  tau1.values,
-                                                  delta_beta,
-                                                  threshold,
-                                                  cls.DebyeWallerCoeff,
-                                                  iter_sum,
-                                                  S_values)
+        S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
+                                              beta_grid_.data,
+                                              nphonon,
+                                              tau1.values,
+                                              tau1.index[1],
+                                              threshold,
+                                              cls.DebyeWallerCoeff)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @classmethod
@@ -760,77 +752,6 @@ class Sab:
             return cls.from_sct(*args, **kwargs)
         elif model.lower() == "pdos":
             return cls.from_pdos(*args, **kwargs)
-
-    @staticmethod
-    def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
-                     alpha_grid: Iterable,
-                     beta_grid: Iterable) -> tuple:
-        """
-        Generate S(alpha, -beta) matrix using first phonon expansion.
-        .. math::
-            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)(\alpha\lambda)\mathcal{T}_1(-\beta)
-
-        Parameters
-        ----------
-        tau1 : 'pd.Series'
-            $\mathcal{T}_1(-\beta)$ function values and in the index beta
-            values.
-        debye_waller_coeff : 'float'
-            Debye Waller Coefficient.
-        alpha_grid : 1D iterable, (N,)
-            Alpha grid.
-        beta_grid : 1D iterable, (M,)
-            beta grid.
-
-        Returns
-        -------
-        S_values : 'np.ndarray', (N, M)
-            S(alpha, -beta) matrix values for the firts phonon expansion.
-        iter_sum : 'np.ndarray', (N,)
-            iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
-
-        Example
-        -------
-        >>> T = 800
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> tau1 = pdos._get_tau_1(T)
-        >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> beta_grid = Beta(beta0_).scale(T).data
-        >>> S_mat, iter_sum = Sab._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
-        >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
-              0         1         2         3         4
-        0  0.036967  0.037137  0.037308  0.037478  0.037644
-        1  0.070694  0.071019  0.071345  0.071671  0.071988
-        2  0.101393  0.101859  0.102326  0.102795  0.103249
-        3  0.129265  0.129859  0.130455  0.131052  0.131631
-        4  0.154499  0.155209  0.155921  0.156635  0.157327
-        5  0.177272  0.178087  0.178904  0.179724  0.180517
-        6  0.197752  0.198661  0.199573  0.200487  0.201372
-        7  0.216097  0.217090  0.218086  0.219085  0.220053
-        8  0.232453  0.233521  0.234593  0.235667  0.236708
-        9  0.246960  0.248095  0.249234  0.250375  0.251481
-
-        >>> pd.Series(np.exp(iter_sum.round(6))).iloc[:10]
-        0    0.044821
-        1    0.089642
-        2    0.134463
-        3    0.179284
-        4    0.224106
-        5    0.268927
-        6    0.313748
-        7    0.358569
-        8    0.403390
-        9    0.448211
-        dtype: float64
-        """
-        iter_sum = np.log(alpha_grid * debye_waller_coeff)
-        alpha_mul = np.exp(-alpha_grid * debye_waller_coeff + iter_sum)
-        tau1_reshape = reshape_differential(tau1.index.values,
-                                            tau1.values,
-                                            beta_grid)
-        S_values = np.outer(alpha_mul, tau1_reshape)
-        return S_values, iter_sum
 
     @staticmethod
     def sum_rule_check(S: pd.DataFrame) -> None:
@@ -1272,10 +1193,75 @@ def proportionality_factor(alpha: float, alpha_i: float,
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
+def get_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
+                     debye_waller_coeff: float,  iter_sum: float,
+                     alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
+    """
+    Generate S(alpha, -beta) matrix using phonon expansion tau_n function.
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Numerical appoximation to get convergence in large exponentiation and
+    factorial numbers. Each element of the array is related with one alpha
+    and represent the following term of the previous equation:
+    ..math::
+        \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+    Parameters
+    ----------
+    tau : 'np.ndarray', (T,)
+        tau function values.
+    beta_tau : 'np.ndarray', (T,)
+        beta grid for tau function.
+    debye_waller_coeff : 'float'
+        Debye Waller Coefficient.
+    alpha : 1D iterable, (N,)
+        Alpha grid.
+    beta: 1D iterable, (M,)
+        beta grid.
+
+    Returns
+    -------
+    'np.ndarray', (N, M)
+        S(alpha, beta) matrix values for the n phonon expansion using tau_n.
+
+    Example
+    -------
+    >>> T = 800
+    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> tau1 = pdos._get_tau_1(T)
+    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+    >>> alpha_grid = Alpha(alpha0_).scale(T).data
+    >>> beta_grid = Beta(beta0_).scale(T).data
+    >>> iter_sum = np.log(alpha_grid * debye_waller_coeff)
+    >>> S_mat = get_S_from_tau_n(tau1.values, np.arange(len(tau1)) * beta_grid[1], debye_waller_coeff, iter_sum, alpha_grid, beta_grid)
+    >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
+              0         1         2         3         4
+    0  0.036967  0.037182  0.037398  0.037614  0.037796
+    1  0.070694  0.071105  0.071517  0.071932  0.072279
+    2  0.101393  0.101982  0.102574  0.103168  0.103666
+    3  0.129265  0.130016  0.130771  0.131528  0.132163
+    4  0.154499  0.155397  0.156299  0.157204  0.157963
+    5  0.177272  0.178303  0.179337  0.180376  0.181247
+    6  0.197752  0.198902  0.200056  0.201215  0.202186
+    7  0.216097  0.217353  0.218614  0.219880  0.220942
+    8  0.232453  0.233804  0.235161  0.236523  0.237664
+    9  0.246960  0.248396  0.249837  0.251284  0.252497
+    """
+    alpha_mul = np.exp(- alpha * debye_waller_coeff + iter_sum)
+    # Interpolate tau_n(-beta):
+    tau_n_reshape = np.interp(beta, beta_tau, tau)
+    # Bounds in nopython mode:
+    if beta[-1] > beta_tau[-1]:
+        tau_n_reshape[beta > beta_tau[-1]] = 0.0
+    return np.outer(alpha_mul, tau_n_reshape)
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
 def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
                                nphonon: int, tau1: np.ndarray, delta_beta: float,
-                               threshold: float, DebyeWallerCoeff: float,
-                               iter_sum: np.ndarray, S_values: np.ndarray):
+                               threshold: float,
+                               DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using phonon expansion.
     .. math::
@@ -1295,7 +1281,7 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         beta grid values.
     nphonon : 'int', optional
         Phonon expansion order.
-    tau1 : 1D iterable, (N,)
+    tau1 : 'np.ndarray', (N,)
         tau1 function values.
     delta_beta : float
         Space between beta grid points.
@@ -1305,33 +1291,50 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         the calculations.
     DebyeWallerCoeff : 'float'
         Debye Waller Coefficient in LEAPR formalism.
-    iter_sum : 'np.ndarray', (N,)
-        iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
-    S_values : 'np.ndarray', (N, M)
-        Zero phonon expansion $S(\alpha,\,-\beta)=\exp(-\alpha\lambda)(\alpha\lambda)\mathcal{T}_1(-\beta)$
 
     Returns
     -------
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values
+
+    Example
+    -------
+    >>> T = 800
+    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> tau1 = pdos._get_tau_1(T)
+    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+    >>> alpha_grid = Alpha(alpha0_).scale(T).data
+    >>> beta_grid = Beta(beta0_).scale(T).data
+    >>> S_mat = get_S_pdos_from_alpha_beta(alpha_grid, beta_grid, 10, tau1.values, beta_grid[1], 1.0e-14, debye_waller_coeff)
+    >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
+              0         1         2         3         4
+    0  0.037829  0.038039  0.038243  0.038444  0.038611
+    1  0.074018  0.074411  0.074776  0.075133  0.075422
+    2  0.108603  0.109154  0.109645  0.110117  0.110490
+    3  0.141624  0.142311  0.142895  0.143444  0.143867
+    4  0.173120  0.173922  0.174570  0.175165  0.175607
+    5  0.203131  0.204030  0.204716  0.205328  0.205763
+    6  0.231696  0.232675  0.233377  0.233982  0.234387
+    7  0.258856  0.259901  0.260599  0.261175  0.261531
+    8  0.284651  0.285748  0.286425  0.286954  0.287244
+    9  0.309121  0.310260  0.310900  0.311366  0.311575
     """
     tau_n_minus_1 = tau1.copy()
-    for n in range(1, nphonon):
+    # Zero phonon expansion:
+    iter_sum = np.log(alpha * DebyeWallerCoeff)
+    S_values = get_S_from_tau_n(tau1, np.arange(len(tau1)) * delta_beta,
+                                DebyeWallerCoeff, iter_sum, alpha, beta)
+
+    # Higher phonon expansion (nphonon >= 1):
+    for n in range(1, nphonon + 1):
         # Tau_n(-beta)
         tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
-        beta_tau_n = np.arange(len(tau_n)) * delta_beta
         check_tau_n(tau_n, delta_beta)
-
-        # Interpolate tau_n(-beta):
-        tau_n_reshape = np.interp(beta, beta_tau_n, tau_n)
-        # Bounds in nopython mode:
-        if beta[-1] > len(tau_n) * delta_beta:
-            tau_n_reshape[beta > len(tau_n) * delta_beta] = 0.0
 
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        S_values += np.outer(alpha_mul, tau_n_reshape)
+        S_values += get_S_from_tau_n(tau_n, np.arange(len(tau_n)) * delta_beta,
+                                     DebyeWallerCoeff, iter_sum, alpha, beta)
 
         # Next tau_n
         tau_n_minus_1 = tau_n

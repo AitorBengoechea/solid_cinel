@@ -415,11 +415,11 @@ class ScatFuncDD:
         -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
         -0.939693  0.109061  0.644157  1.346118  1.029210  0.373644  0.053219
         """
-        beta = Beta.from_parameters(Eout, Ein, T)
+        beta = Beta.from_parameters(Eout, Ein, T).unique
         dd_pdf = []
         for angle in theta:
             alpha = Alpha.from_parameters(Eout, Ein, T, M, angle)
-            angular_dd_pdf = Sab.from_pdos(alpha, beta.unique, T, pdos,
+            angular_dd_pdf = Sab.from_pdos(alpha, beta, T, pdos,
                                            threshold=threshold,
                                            nphonon=nphonon)
             dd_pdf.append(angular_dd_pdf.to_ScatFunc(Ein, T, M).loc[Eout])

@@ -9,7 +9,6 @@ from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -366,7 +365,7 @@ class Sab:
         Sab_positive = self.data.apply(lambda x: x * np.exp(-beta), axis=1)
         return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
 
-    def to_ScatFunc(self, Ein, T, M, mu=None) -> ScatFunc:
+    def to_ScatFunc(self, Ein, T, M, mu=None) -> pd.Series:
         """
         Get the scattering function from the S(alpha, -beta) matrix.
 

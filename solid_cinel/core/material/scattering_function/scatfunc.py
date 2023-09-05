@@ -472,17 +472,38 @@ class ScatFuncDD:
         7.4480    0.004026
         Name: 0.5000000000000001, dtype: float64
         """
-        angular_norm = self.data.apply(integrate, axis=1)
-        if theta:
-            filt_angle = np.cos(theta * np.pi / 180)
-        else:
-            angular_max = self.data.max(axis=1) / angular_norm
-            MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
-            filt_angle = abs(angular_max - MD).idxmin()
-        scattfunc = self.data.loc[filt_angle] / angular_norm[filt_angle]
+        filt_angle = np.cos(theta * np.pi / 180) if theta else self.get_angle
+        scattfunc = self.data.loc[filt_angle]
+        scattfunc /= integrate(self.data.loc[filt_angle])
         return ScatFunc(self.Ein, self.T, self.M, scattfunc)
 
 
+    @property
+    def get_angle(self) -> float:
+        """
+        Get the angle of the double differential scattering function closest to
+        the sigma1 distribution.
+
+        Returns
+        -------
+        float
+            Angle of the double differential scattering function closest to the
+            sigma1 distribution.
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> ddScatFunc = ScatFuncDD.from_Sab(Ein, M, T, Eout, theta)
+        >>> round(ddScatFunc.get_angle, 2)
+        0.5
+        """
+        angular_max = self.data.max(axis=1) / self.data.apply(integrate, axis=1)
+        MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
+        return abs(angular_max - MD).idxmin()
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """
     Scattering function class

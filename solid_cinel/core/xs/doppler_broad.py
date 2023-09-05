@@ -246,8 +246,13 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> theta = np.array([40, 80, 120, 160])
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos", algorithm=algorithm).iloc[::18, ::200].round(6)
-
+    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos", algorithm=algorithm).iloc[::, ::200].round(6)
+    Eout        1.80000    1.88008    1.96016    2.04024   2.12032
+    mu
+    -0.939693  2.203391  11.934588  24.417997  15.575835  3.101303
+    -0.500000  0.994808   9.521449  27.156911  17.307645  2.468526
+     0.173648  0.066807   3.586114  32.202480  20.456875  0.922720
+     0.766044  0.000026   0.045654  23.748453  14.926872  0.011525
 
     # Dopush algorithm:
     >>> algorithm = "dopush"

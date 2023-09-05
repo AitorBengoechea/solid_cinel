@@ -411,6 +411,8 @@ class Sab:
         sab_diag_positive = pd.Series(np.diag(self.data) * np.exp(-beta),
                                       index=Ein + beta * kb * T)
         scattfunc = pd.concat([sab_diag_negative, sab_diag_positive.iloc[1::]])
+        # Ensure unique values:
+        scattfunc = scattfunc[~scattfunc.index.duplicated(keep='first')]
         # Apply normalization constrains:
         awr = ((M / m + 1) / (M / m)) ** 2
         scattfunc *= awr * np.sqrt(scattfunc.index.values / Ein) / (2 * kb * T)

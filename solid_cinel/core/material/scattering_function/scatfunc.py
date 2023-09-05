@@ -422,10 +422,8 @@ class ScatFuncDD:
             angular_dd_pdf = Sab.from_pdos(alpha, beta.unique, T, pdos,
                                            threshold=threshold,
                                            nphonon=nphonon)
-            mu_angle = np.cos(angle * np.pi / 180)
-            dd_pdf.append(angular_dd_pdf.to_ScatFunc(Ein, T, M, mu=mu_angle)
-                                        .loc[Eout])
-        return pd.DataFrame(dd_pdf)
+            dd_pdf.append(angular_dd_pdf.to_ScatFunc(Ein, T, M).loc[Eout])
+        return pd.DataFrame(dd_pdf, index=np.cos(theta * np.pi / 180))
 
     def to_sd(self, theta: float = None) -> ScatFuncSD:
         """

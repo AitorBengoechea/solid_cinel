@@ -416,6 +416,7 @@ class Sab:
         # Apply normalization constrains:
         awr = ((M / m + 1) / (M / m)) ** 2
         scattfunc *= awr * np.sqrt(scattfunc.index.values / Ein) / (2 * kb * T)
+        # Output style:
         scattfunc.index.name = 'Eout'
         if mu:
             scattfunc.name = mu

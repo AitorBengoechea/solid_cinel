@@ -85,6 +85,9 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
         cross section. The available algorithms are:
             - "sigma1": sigma1 algorithm from NJOY2016 manual
             - "sab": S(alpha, -beta) tables for ddxs
+            - "dopush": From the chosen S(alpha, -beta) model, the distribution
+                        more similar to sigma1 is chosen and a recoil energy
+            - "courcelle": Fourier double-Laplace transform of a 4-point
 
     Parameters for convolution
     --------------------------
@@ -303,7 +306,7 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
         Exs += scattfunc.Ein - scattfunc.data.idxmax()
     elif algorithm == "courcelle":
         # Create Courcelle cross section matrix:
-        xs = courcelle_xs_matrix(xs.values, xs.index.values, *args[1::])
+        xs = xs_matrix_sigma1(xs.values, xs.index.values, *args[1::])
 
     # Convolve scattering function with xs:
     return scattfunc.convolve(xs, Exs=Exs, integral=integral)
@@ -382,9 +385,9 @@ def algorithm_scattfunc(algorithm: str, *args, **kwargs) -> ScatFunc:
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
-def courcelle_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
-                        M: float, T: float, Eout: np.ndarray,
-                        theta: np.ndarray) -> np.ndarray:
+def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
+                     M: float, T: float, Eout: np.ndarray,
+                     theta: np.ndarray) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -429,7 +432,7 @@ def courcelle_xs_matrix(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
     >>> M = 238.05077040419212
     >>> theta = np.arange(10, 180, 10)
-    >>> xs_values = courcelle_xs_matrix(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta)
+    >>> xs_values = xs_matrix_sigma1(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta)
     >>> pd.DataFrame(xs_values, index=theta, columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     10   9.108238  9.101467  9.094649  9.087774  9.080815  9.073787  9.066722

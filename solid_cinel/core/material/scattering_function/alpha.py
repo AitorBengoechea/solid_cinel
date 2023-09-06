@@ -330,7 +330,8 @@ class Alpha:
         mu = np.cos(theta * np.pi / 180) if hasattr(theta,
                                                     '__len__') else np.cos(
             np.array([theta]) * np.pi / 180)
-        return cls(get_alpha(Eout_, Ein_, T_, M, mu))
+        return cls(get_alpha(Eout_.astype('float64'), Ein_.astype('float64'),
+                             T_.astype('float32'), M, mu.astype('float64')))
 
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:
@@ -440,7 +441,8 @@ class Alpha:
         return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+@nb.jit('float64[:](float64[:], float64[:], float32[:], float64, float64[:])',
+    nopython=True, nogil=False, cache=True, parallel=True)
 def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
               mu: np.ndarray) -> np.ndarray:
     """

@@ -376,7 +376,7 @@ def algorithm_scattfunc(algorithm: str, *args, **kwargs) -> ScatFunc:
     if algorithm == "sigma1":
         scattfunc = ScatFunc.from_MD(*args, **kwargs)
     elif algorithm in ["sab", "dopush", "courcelle"]:
-        scattfunc = ScatFunc.from_Sab(*args, **kwargs)
+        scattfunc = ScatFunc.from_SabDD(*args, **kwargs)
         if algorithm == "dopush":
             scattfunc = scattfunc.to_sd()
     else:

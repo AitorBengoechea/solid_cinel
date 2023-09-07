@@ -1340,8 +1340,7 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     return S_values
 
 
-@nb.jit('float64[:, :](float64[:], float64[:], float64, float32)',
-    nopython=True, nogil=False, cache=False, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
 def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
                               Tratio: float,
                               ws: float) -> np.ndarray:
@@ -1375,8 +1374,7 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     return Sab
 
 
-@nb.jit('float64[:](float64, float64[:], float64[:], float64)',
-    nopython=True, nogil=False, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
               threshold: float) -> np.ndarray:
     """
@@ -1454,8 +1452,7 @@ def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     return
 
 
-@nb.jit('float64[:, :](float64[:,:], float64[:], float64, float64, float64)',
-        nopython=True)
+@nb.jit(nopython=True)
 def get_ScatFunc(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
                  T: float, M: float) -> np.ndarray:
     """

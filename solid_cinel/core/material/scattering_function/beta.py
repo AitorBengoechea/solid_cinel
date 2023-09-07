@@ -411,8 +411,7 @@ class Beta:
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
         Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
         T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
-        return cls(get_beta(Eout_.astype('float64'), Ein_.astype('float64'),
-                            T_.astype('float32')))
+        return cls(get_beta(Eout_, Ein_, T_))
 
     def get_dE(self, T: float) -> pd.Series:
         """
@@ -555,8 +554,7 @@ class Beta:
         return Beta(scale_grid)
 
 
-@nb.jit('float64[:](float64[:], float64[:], float32[:])',
-    nopython=True, nogil=False, parallel=True, cache=True)
+@nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
 def get_beta(Eout: np.ndarray, Ein: np.ndarray,
              T: np.ndarray) -> np.ndarray:
     """

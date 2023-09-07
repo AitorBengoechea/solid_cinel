@@ -9,9 +9,9 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.beta import Beta
-from solid_cinel.core.material.scattering_function.alpha import Alpha
-from solid_cinel.core.material.scattering_function.sab import Sab
+from solid_cinel.core.material.scattering_function.beta import Beta, get_beta
+from solid_cinel.core.material.scattering_function.alpha import Alpha, get_alpha
+from solid_cinel.core.material.scattering_function.sab import Sab, get_S_pdos_from_alpha_beta, get_ScatFunc
 from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable
 from numba import prange
@@ -447,7 +447,7 @@ class ScatFuncDD:
         """
         mu = np.cos(theta * np.pi / 180)
         if model.lower() == "pdos":
-            scattfunc = scatfunc_from_pdos(Ein, M, T, Eout, theta,
+            scattfunc = scat_from_pdos(Ein, M, T, Eout, theta,
                                            *args, **kwargs)
         else:
             ws = kwargs.pop("ws", 1.0)
@@ -880,7 +880,7 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: float, Ein: float, T: float,
     return scattfunc
 
 
-def scatfunc_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
+def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
                        theta: np.array, pdos: Pdos, threshold: float = 0.0,
                        nphonon: int = 1000) -> list:
     """
@@ -923,7 +923,7 @@ def scatfunc_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
     >>> M = 238.05077040419212
     >>> theta = np.array([40, 80, 120, 160])
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> dd_pdf = scatfunc_from_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14)
+    >>> dd_pdf = scat_from_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14)
     >>> pd.DataFrame(dd_pdf, index=np.cos(theta * np.pi / 180)).loc[:, Eout_test].round(6)
     Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
        0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
@@ -940,3 +940,69 @@ def scatfunc_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
                                        nphonon=nphonon)
         dd_pdf.append(angular_dd_pdf.to_ScatFunc(Ein, T, M).loc[Eout])
     return dd_pdf
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
+def scat_from_pdos_angular(Ein: float, M: float, T: float, Eout: np.ndarray,
+                           theta: float, nphonon: int, tau1: np.ndarray,
+                           delta_beta: float, threshold: float,
+                           DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate the scattering function from a S(alpha, -beta) table based on
+    the phonon expansion model.
+
+    Parameters
+    ----------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray
+        The neutron outgoing energy grid in eV
+    theta : float
+        Cosine of the scattering angle
+    nphonon : int
+        Phonon expansion order
+    tau1 : np.ndarray
+        Array with the tau values of the 1 phonon order
+    delta_beta : float
+        tau functions step size
+    threshold : float
+        Minimun value to take into account in the creation of tau_n
+        functions. For T>200 is convenient to set into 1.0e-14 to speed up
+        the calculations.
+    DebyeWallerCoeff : float
+        Debye Waller coefficient
+
+    Examples
+    --------
+    >>> Ein = 7.2
+    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> theta = 60
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> tau1 = pdos._get_tau_1(T)
+    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+    >>> sd_pdf = scat_from_pdos_angular(Ein, M, T, Eout, theta, 1000, tau1.values, tau1.index[1], 1.0e-14, debye_waller_coeff)
+    >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
+    6.7554     0.037459
+    6.9050     1.707956
+    7.0439     2.546358
+    7.2000     2.607742
+    7.3157    30.851057
+    7.4480     1.497491
+    dtype: float64
+    """
+    beta = (Eout - Ein) / (kb * T)
+    alpha = Eout + Ein - 2 * np.cos(theta * np.pi / 180) * np.sqrt(Eout * Ein)
+    alpha /= (M * kb * T / m)
+    sab = get_S_pdos_from_alpha_beta(alpha, beta, nphonon, tau1, delta_beta,
+                                     threshold, DebyeWallerCoeff)
+    sd_pdf = get_ScatFunc(sab, beta, Ein, T, M)
+    Eout_pos = np.searchsorted(sd_pdf[:, 0], Eout)
+    return sd_pdf[Eout_pos, 1] / np.trapz(sd_pdf[Eout_pos, 1], x=Eout)
+

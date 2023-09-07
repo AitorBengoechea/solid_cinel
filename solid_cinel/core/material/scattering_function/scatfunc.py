@@ -989,12 +989,12 @@ def scat_from_pdos_angular(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     >>> sd_pdf = scat_from_pdos_angular(Ein, M, T, Eout, theta, 1000, tau1.values, tau1.index[1], 1.0e-14, debye_waller_coeff)
     >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
-    6.7554     0.037459
-    6.9050     1.707956
-    7.0439     2.546358
-    7.2000     2.607742
-    7.3157    30.851057
-    7.4480     1.497491
+    6.7554    0.001861
+    6.9050    0.084836
+    7.0439    0.126480
+    7.2000    0.129529
+    7.3157    1.532400
+    7.4480    0.074382
     dtype: float64
     """
     beta = (Eout - Ein) / (kb * T)

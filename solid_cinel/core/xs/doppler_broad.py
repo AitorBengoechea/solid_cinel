@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular
 import os
 from typing import Iterable
 
@@ -187,7 +187,7 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     9.09
 
 
-    # SAB algorithm:
+    # SAB algorithm (FGM):
     >>> algorithm = "sab"
     >>> theta = np.arange(0, 180, 1)[1::]
     >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::18, ::200].round(6)
@@ -208,8 +208,38 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     >>> round(get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm, integral=True), 2)
         9.07
 
+    # SAB algorithm (SCT):
+    >>> Teff = 1003.48
+    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, Teff, algorithm=algorithm, model="sct").iloc[::18, ::200].round(6)
+        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
+    mu
+    -0.999848  1.858811  12.101290  23.691448  15.003767  3.282874
+    -0.945519  1.709047  11.873977  23.991555  15.194635  3.227646
+    -0.798636  1.323844  11.183304  24.843531  15.736491  3.058056
+    -0.573576  0.808013   9.883464  26.274694  16.646706  2.732837
+    -0.292372  0.334764   7.791351  28.300141  17.934918  2.195694
+     0.017452  0.067642   4.893629  30.821489  19.538760  1.425311
+     0.325568  0.002956   1.850787  33.252930  21.086557  0.573503
+     0.601815  0.000002   0.181653  33.106570  20.999544  0.064460
+     0.819152  0.000000   0.000135  21.753425  13.801333  0.000071
+     0.956305  0.000000   0.000000   0.389231   0.246971  0.000000
+
+    # SAB algorithm (PDOS):
+    >>> algorithm = "sab"
+    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> theta = np.array([40, 80, 120, 160])
+    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos", algorithm=algorithm).iloc[::, ::200].round(6)
+    Eout        1.80000    1.88008    1.96016    2.04024   2.12032
+    mu
+    -0.939693  2.203391  11.934588  24.417997  15.575835  3.101303
+    -0.500000  0.994808   9.521449  27.156911  17.307645  2.468526
+     0.173648  0.066807   3.586114  32.202480  20.456875  0.922720
+     0.766044  0.000026   0.045654  23.748453  14.926872  0.011525
+
     # Use a displaced xs for the convolution (1D desplacement):
     >>> Eout_move = Eout + kb * T
+    >>> theta = np.arange(0, 180, 1)[1::]
     >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm, Exs=Eout_move).iloc[::18, ::200].round(6)
     Eout        1.80000    1.88008    1.96016    2.04024   2.12032
     mu
@@ -245,18 +275,6 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     >>> round(get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm, integral=True, Exs=Eout_move), 2)
     9.07
 
-    # SAB algorithm(pdos):
-    >>> from solid_cinel.core.material.vibration.pdos import Pdos
-    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> theta = np.array([40, 80, 120, 160])
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos", algorithm=algorithm).iloc[::, ::200].round(6)
-    Eout        1.80000    1.88008    1.96016    2.04024   2.12032
-    mu
-    -0.939693  2.203391  11.934588  24.417997  15.575835  3.101303
-    -0.500000  0.994808   9.521449  27.156911  17.307645  2.468526
-     0.173648  0.066807   3.586114  32.202480  20.456875  0.922720
-     0.766044  0.000026   0.045654  23.748453  14.926872  0.011525
-
     # Dopush algorithm:
     >>> algorithm = "dopush"
     >>> theta = np.arange(0, 180, 1)[1::]
@@ -275,20 +293,74 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     Name: 0.5000000000000001, dtype: float64
 
     # Courcelle algorithm:
+    >>> theta = np.arange(0, 180, 10)[1::]
+
+    # Courcelle/sigma1:
     >>> algorithm = "courcelle"
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::18, ::200].round(6)
-    Eout       1.808208   1.888288   1.968368   2.048448  2.128529
+    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::, ::200].round(6)
+    Eout           1.808208   1.888288   1.968368   2.048448  2.128529
     mu
-    -0.999848  2.366691  13.667442  23.824066  13.476444  2.641000
-    -0.945519  2.193366  13.472951  24.159927  13.624406  2.584196
-    -0.798636  1.740061  12.867109  25.124228  14.037419  2.413506
-    -0.573576  1.111180  11.675304  26.785878  14.704432  2.098952
-    -0.292372  0.498004   9.635481  29.256439  15.574374  1.608490
-     0.017452  0.115575   6.561346  32.657570  16.463891  0.960546
-     0.325568  0.006573   2.894419  36.926567  16.777201  0.329704
-     0.601815  0.000010   0.399131  40.784055  14.715889  0.026084
-     0.819152  0.000000   0.000803  36.327474   6.664267  0.000010
-     0.956305  0.000000   0.000000   3.726110   0.014073  0.000000
+    -9.848078e-01  2.318467  13.615096  23.915984  13.517142  2.625602
+    -9.396926e-01  2.174932  13.451193  24.196580  13.640428  2.577908
+    -8.660254e-01  1.944838  13.160275  24.671156  13.845599  2.495018
+    -7.660444e-01  1.643337  12.715478  25.350217  14.131568  2.372062
+    -6.427876e-01  1.293960  12.079334  26.248619  14.495329  2.202885
+    -5.000000e-01  0.929320  11.205689  27.385408  14.929858  1.981202
+    -3.420201e-01  0.589137  10.045644  28.782887  15.420253  1.702931
+    -1.736482e-01  0.313257   8.561769  30.463721  15.936622  1.370373
+     6.123234e-17  0.128719   6.757019  32.443222  16.420854  0.998705
+     1.736482e-01  0.035636   4.723863  34.709869  16.761985  0.623401
+     3.420201e-01  0.005215   2.703390  37.176617  16.751192  0.301840
+     5.000000e-01  0.000254   1.088818  39.557707  16.006491  0.093794
+     6.427876e-01  0.000002   0.224437  41.052782  13.886735  0.012555
+     7.660444e-01  0.000000   0.011000  39.563067   9.615669  0.000278
+     8.660254e-01  0.000000   0.000014  30.294437   3.602681  0.000000
+     9.396926e-01  0.000000   0.000000   9.398372   0.145221  0.000000
+     9.848078e-01  0.000000   0.000000   0.003897   0.000000  0.000000
+
+    # Courcelle/fgm:
+    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm, model="fgm").iloc[::, ::200].round(6)
+    Eout           1.808208   1.888288   1.968368   2.048448  2.128529
+    mu
+    -9.848078e-01  2.318622  13.616106  23.917938  13.518364  2.625860
+    -9.396926e-01  2.175080  13.452211  24.198592  13.641680  2.578165
+    -8.660254e-01  1.944976  13.161302  24.673264  13.846901  2.495272
+    -7.660444e-01  1.643459  12.716509  25.352457  14.132938  2.372310
+    -6.427876e-01  1.294061  12.080355  26.251025  14.496782  2.203122
+    -5.000000e-01  0.929395  11.206675  27.388008  14.931402  1.981422
+    -3.420201e-01  0.589187  10.046557  28.785698  15.421891  1.703123
+    -1.736482e-01  0.313284   8.562562  30.466742  15.938339  1.370530
+     6.123234e-17  0.128730   6.757641  32.446417  16.422614  0.998818
+     1.736482e-01  0.035639   4.724279  34.713141  16.763713  0.623469
+     3.420201e-01  0.005215   2.703603  37.179759  16.752761  0.301870
+     5.000000e-01  0.000254   1.088884  39.560353  16.007716  0.093802
+     6.427876e-01  0.000002   0.224445  41.054420  13.887436  0.012555
+     7.660444e-01  0.000000   0.011000  39.563477   9.615889  0.000278
+     8.660254e-01  0.000000   0.000014  30.295060   3.602811  0.000000
+     9.396926e-01  0.000000   0.000000   9.399706   0.145243  0.000000
+     9.848078e-01  0.000000   0.000000   0.003898   0.000000  0.000000
+
+    # Courcelle/sct:
+    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, Teff, algorithm=algorithm, model="sct").iloc[::, ::200].round(6)
+    Eout           1.808208   1.888288   1.968368   2.048448  2.128529
+    mu
+    -9.848078e-01  2.333248  13.618615  23.876446  13.522065  2.641626
+    -9.396926e-01  2.189372  13.455785  24.156586  13.645522  2.593912
+    -8.660254e-01  1.958645  13.166671  24.630408  13.851001  2.510963
+    -7.660444e-01  1.656132  12.724415  25.308425  14.137453  2.387872
+    -6.427876e-01  1.305283  12.091519  26.205518  14.501932  2.218419
+    -5.000000e-01  0.938678  11.221705  27.340775  14.937506  1.996225
+    -3.420201e-01  0.596126  10.065770  28.736587  15.429412  1.717077
+    -1.736482e-01  0.317743   8.585674  30.415785  15.947965  1.383119
+     6.123234e-17  0.131002   6.783318  32.394001  16.435353  1.009378
+     1.736482e-01  0.036441   4.749682  34.660332  16.781032  0.631299
+     3.420201e-01  0.005370   2.724478  37.128945  16.776699  0.306551
+     5.000000e-01  0.000265   1.101281  39.516508  16.040722  0.095689
+     6.427876e-01  0.000002   0.228379  41.027480  13.931026  0.012905
+     7.660444e-01  0.000000   0.011319  39.571543   9.665451  0.000289
+     8.660254e-01  0.000000   0.000014  30.358581   3.637240  0.000000
+     9.396926e-01  0.000000   0.000000   9.470806   0.148479  0.000000
+     9.848078e-01  0.000000   0.000000   0.004045   0.000000  0.000000
     """
     algorithm = kwargs.pop("algorithm").lower()
     # Parameters for convolution:
@@ -305,8 +377,12 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
         # Add recoil energy to outgoing energy:
         Exs += scattfunc.Ein - scattfunc.data.idxmax()
     elif algorithm == "courcelle":
-        # Create Courcelle cross section matrix:
-        xs = xs_matrix_sigma1(xs.values, xs.index.values, *args[1::])
+        if "model" in kwargs:
+            mu_fit = scattfunc.get_angle
+            xs = xs_matrix_sab(mu_fit, *args, **kwargs)
+        else:
+            # use sigma1 model:
+            xs = xs_matrix_sigma1(xs.values, xs.index.values, *args[1::])
 
     # Convolve scattering function with xs:
     return scattfunc.convolve(xs, Exs=Exs, integral=integral)
@@ -464,6 +540,43 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
             pdf = sigma1(Eout_db, Ein_arno, T_arno[i], M)
             xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
             xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf, x=Eout_db)
+    return xs_mat
+
+
+def xs_matrix_sab(mu_fit: float, *args, **kwargs) -> np.ndarray:
+    if kwargs["model"] == "pdos":
+        return
+    else:
+        if kwargs["model"] == "fgm":
+            xs_0K, Ein, M, T, Eout, theta = args
+            Teff = T
+        else:
+            xs_0K, Ein, M, T, Eout, theta, Teff = args
+        return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout,
+                             theta, mu_fit, Teff, 1.0)
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
+                  T: float, Eout: np.ndarray, theta: np.ndarray, mu_fit:float,
+                  Teff:float, ws:float) -> np.ndarray:
+    mu = np.cos(theta * np.pi / 180)
+    xs_mat = np.zeros((len(mu), len(Eout)))
+    T_arno = T * (1 + mu) / 2
+    for i in prange(len(mu)):
+        Teff_ = Teff if T != Teff else T_arno[i]
+        for j in prange(len(Eout)):
+            Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
+            Eout_db = default_Eout(Ein_arno)
+            # Distribution + Normalization:
+            pdf_val = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno, T_arno[i],
+                                           M, Teff_, ws)
+            pdf_val /= np.trapz(pdf_val, x=Eout_db)
+            # Recoil:
+            recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
+            # xs:
+            xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db + recoil)
     return xs_mat
 
 

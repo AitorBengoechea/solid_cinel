@@ -1406,13 +1406,13 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
         for j in prange(N):  # loop for tau1
             convol = 0.
 
-            k = i - j  # tau_n_minus_1(-(beta-beta^pirme))
+            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
             if k >= 0 and k < Nnm1:
                 convol = tau_n_minus_1[k]
             elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
                 convol = tau_n_minus_1[-k] * np.exp(k * delta_beta)
 
-            l = i + j  # Tau_n_minus_1(-(beta+beta^pirme))
+            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
             if l < Nnm1:
                 convol += tau_n_minus_1[l] * np.exp(-j * delta_beta)
 

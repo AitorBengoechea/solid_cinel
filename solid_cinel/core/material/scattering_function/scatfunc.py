@@ -482,7 +482,7 @@ class ScatFuncDD:
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> ddScatFunc = ScatFuncDD.from_Sab(Ein, M, T, Eout, theta)
+        >>> ddScatFunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta)
         >>> ddScatFunc.to_sd().data.round(6)
         Eout
         6.7554    0.000000
@@ -528,7 +528,7 @@ class ScatFuncDD:
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> ddScatFunc = ScatFuncDD.from_Sab(Ein, M, T, Eout, theta)
+        >>> ddScatFunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta)
         >>> round(ddScatFunc.get_angle, 2)
         0.5
         """
@@ -600,12 +600,23 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         37.275548    2.371152e-09
         dtype: float64
         """
-        if len(args[-1].shape) == 1:
+        if len(args) == 1 and isinstance(args[0], (ScatFuncSD, ScatFuncDD)):
+            self.instance = args[0]
+        elif len(args[-1].shape) == 1:
             self.instance = ScatFuncSD(*args, **kwargs)
         elif len(args[-1].shape) == 2:
             self.instance = ScatFuncDD(*args, **kwargs)
         else:
-            raise ValueError("Invalid shape for scattering function")
+            raise ValueError("Invalid input")
+
+    @classmethod
+    def from_Sab(cls, Ein: float, M: float, T: float, Eout: np.array,
+                 theta: [np.ndarray, float], *args, model: str = "fgm", **kwargs):
+        if hasattr(theta, '__len__'):
+            scatfunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, *args, model=model, **kwargs)
+        else:
+            scatfunc = ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, *args, model=model, **kwargs)
+        return cls(scatfunc)
 
     # called when an attribute is not found:
     def __getattr__(self, name):
@@ -912,7 +923,7 @@ def scatfunc_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
     >>> M = 238.05077040419212
     >>> theta = np.array([40, 80, 120, 160])
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> dd_pdf = ScatFunc.from_Sab_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14)
+    >>> dd_pdf = scatfunc_from_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14)
     >>> pd.DataFrame(dd_pdf, index=np.cos(theta * np.pi / 180)).loc[:, Eout_test].round(6)
     Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
        0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019

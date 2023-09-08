@@ -282,7 +282,7 @@ class ScatFuncSD:
             Teff = args[0] if model == "sct" else T
             scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
         norm = integrate(pd.Series(scattfunc, index=Eout))
-        return cls(Ein, T, M, np.array(scattfunc) / norm, index=Eout)
+        return cls(Ein, T, M, scattfunc / norm, index=Eout)
 
 
 

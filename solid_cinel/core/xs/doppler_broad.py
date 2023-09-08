@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, scat_from_pdos_angular
 import os
 from typing import Iterable
 
@@ -361,6 +361,8 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
      8.660254e-01  0.000000   0.000014  30.358581   3.637240  0.000000
      9.396926e-01  0.000000   0.000000   9.470806   0.148479  0.000000
      9.848078e-01  0.000000   0.000000   0.004045   0.000000  0.000000
+
+    # Courcelle/pdos:
     """
     algorithm = kwargs.pop("algorithm").lower()
     # Parameters for convolution:
@@ -452,7 +454,7 @@ def algorithm_scattfunc(algorithm: str, *args, **kwargs) -> ScatFunc:
     if algorithm == "sigma1":
         scattfunc = ScatFunc.from_MD(*args, **kwargs)
     elif algorithm in ["sab", "dopush", "courcelle"]:
-        scattfunc = ScatFunc.from_SabDD(*args, **kwargs)
+        scattfunc = ScatFunc.from_Sab(*args, **kwargs)
         if algorithm == "dopush":
             scattfunc = scattfunc.to_sd()
     else:
@@ -467,7 +469,7 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
-    model.
+    model with sigma1 algorithm.
     .. math::
         \sigma^{T(1+\mu)/2}\left( \frac{E + E^\prime}{2} - E\frac{\mu m}{M}\right)
 
@@ -544,8 +546,126 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
 
 
 def xs_matrix_sab(mu_fit: float, *args, **kwargs) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with the most similar S(alpha, -beta) distribution with sigma1
+    .. math::
+        \sigma^{T(1+\mu)/2}\left( \frac{E + E^\prime}{2} - E\frac{\mu m}{M}\right)
+
+    Parameters
+    ----------
+    mu_fit : float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+
+    Parameters for fgm, sct and pdos models
+    ---------------------------------------
+    xs_0K : pd.Series
+        Cross section at 0K in barns
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        Mass of the material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.array, (N,)
+        The neutron outgoing energy grid in eV
+    theta : np.array, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+
+    Extra parameters for sct
+    ------------------------
+    Teff : float
+        Effective temperature of the material in K
+
+    Extra parameters for pdos
+    -------------------------
+    pdos : 'solid_cinel.core.material.Pdos'
+        Pdos object.
+    threshold : 'float', optional
+        Minimun value to take into account in the creation of tau_n
+        functions. For T>200 is convenient to set into 1.0e-14 to speed up
+        the calculations. The default is 0.0.
+    nphonon : 'int', optional
+        Phonon expansion order. The default is 1000.
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> os.chdir(wd)
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 180, 10)
+    >>> mu_fit = np.cos(60 / 180 * np.pi)
+
+    # fgm model:
+    >>> xs_values = xs_matrix_sab(0.0, xs_0K, Ein, M, T, Eout, theta, model="fgm")
+    >>> pd.DataFrame(xs_values, index=theta, columns=Eout).round(6)
+         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+    10   9.110252  9.103588  9.096864  9.090082  9.083234  9.076321  9.069350
+    20   9.110184  9.103519  9.096795  9.090012  9.083164  9.076250  9.069279
+    30   9.110074  9.103407  9.096683  9.089899  9.083049  9.076134  9.069162
+    40   9.109923  9.103255  9.096529  9.089745  9.082894  9.075976  9.069003
+    50   9.109738  9.103068  9.096341  9.089555  9.082702  9.075782  9.068807
+    60   9.109524  9.102851  9.096122  9.089336  9.082480  9.075556  9.068579
+    70   9.109286  9.102610  9.095879  9.089093  9.082235  9.075306  9.068327
+    80   9.109034  9.102354  9.095621  9.088834  9.081974  9.075040  9.068058
+    90   9.108773  9.102089  9.095354  9.088568  9.081704  9.074764  9.067780
+    100  9.108513  9.101823  9.095087  9.088303  9.081435  9.074487  9.067501
+    110  9.108262  9.101564  9.094827  9.088047  9.081174  9.074218  9.067230
+    120  9.108026  9.101320  9.094583  9.087807  9.080929  9.073964  9.066975
+    130  9.107813  9.101098  9.094362  9.087592  9.080708  9.073733  9.066744
+    140  9.107630  9.100906  9.094170  9.087409  9.080516  9.073534  9.066544
+    150  9.107481  9.100750  9.094014  9.087262  9.080359  9.073371  9.066382
+    160  9.107369  9.100634  9.093899  9.087156  9.080241  9.073252  9.066262
+    170  9.107299  9.100564  9.093828  9.087092  9.080168  9.073178  9.066189
+
+    # sct model:
+    >>> Teff = 1003.48
+    >>> xs_values = xs_matrix_sab(mu_fit, xs_0K, Ein, M, T, Eout, theta, Teff, model="sct")
+    >>> pd.DataFrame(xs_values, index=theta, columns=Eout).round(6)
+         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+    10   9.108835  9.102122  9.095359  9.088545  9.081651  9.074681  9.067667
+    20   9.108758  9.102045  9.095282  9.088466  9.081571  9.074600  9.067586
+    30   9.108633  9.101919  9.095154  9.088338  9.081441  9.074469  9.067454
+    40   9.108463  9.101747  9.094982  9.088163  9.081265  9.074291  9.067275
+    50   9.108254  9.101536  9.094769  9.087949  9.081047  9.074072  9.067055
+    60   9.108011  9.101291  9.094523  9.087700  9.080795  9.073818  9.066800
+    70   9.107743  9.101020  9.094250  9.087424  9.080516  9.073537  9.066517
+    80   9.107456  9.100731  9.093959  9.087130  9.080219  9.073237  9.066216
+    90   9.107160  9.100433  9.093659  9.086827  9.079912  9.072928  9.065905
+    100  9.106865  9.100135  9.093359  9.086523  9.079605  9.072618  9.065595
+    110  9.106578  9.099846  9.093068  9.086229  9.079307  9.072318  9.065293
+    120  9.106309  9.099574  9.092794  9.085953  9.079027  9.072037  9.065010
+    130  9.106065  9.099329  9.092547  9.085703  9.078774  9.071782  9.064754
+    140  9.105855  9.099117  9.092334  9.085487  9.078556  9.071562  9.064534
+    150  9.105684  9.098945  9.092161  9.085312  9.078379  9.071384  9.064355
+    160  9.105559  9.098819  9.092033  9.085183  9.078248  9.071253  9.064223
+    170  9.105482  9.098741  9.091955  9.085104  9.078168  9.071172  9.064142
+    """
     if kwargs["model"] == "pdos":
-        return
+        xs_0K, Ein, M, T, Eout, theta, pdos = args
+        threshold = kwargs.pop("threshold", 0.0)
+        nphonon = kwargs.pop("nphonon", 1000)
+        tau1 = pdos.get_tau_1(T)
+        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        return xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout,
+                              theta, nphonon, tau1.values, tau1.index[1],
+                              threshold, debye_waller_coeff, mu_fit)
     else:
         if kwargs["model"] == "fgm":
             xs_0K, Ein, M, T, Eout, theta = args
@@ -553,13 +673,151 @@ def xs_matrix_sab(mu_fit: float, *args, **kwargs) -> np.ndarray:
         else:
             xs_0K, Ein, M, T, Eout, theta, Teff = args
         return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout,
-                             theta, mu_fit, Teff, 1.0)
+                             theta, Teff, 1.0, mu_fit)
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
+                   T: float, Eout: np.ndarray, theta: np.ndarray, nphonon: int,
+                   tau1: np.ndarray, delta_beta: float, threshold: float,
+                   DebyeWallerCoeff: float, mu_fit: float) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with the most similar pdos distribution with sigma1
+
+    Parameters
+    ----------
+    xs_values : np.ndarray
+        Cross section values at 0K in barns
+    xs_E : np.ndarray
+        Energy grid of the cross section in eV
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray, (N,)
+        The neutron outgoing energy grid in eV
+    theta : np.ndarray, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+    nphonon : int
+        Phonon expansion order
+    tau1 : np.ndarray
+        Array with the tau values of the 1 phonon order
+    delta_beta : float
+        tau functions step size
+    threshold : float
+        Minimun value to take into account in the creation of tau_n
+        functions. For T>200 is convenient to set into 1.0e-14 to speed up
+        the calculations.
+    DebyeWallerCoeff : float
+        Debye Waller coefficient
+    mu_fit : float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+    """
+    mu = np.cos(theta * np.pi / 180)
+    xs_mat = np.zeros((len(mu), len(Eout)))
+    T_arno = T * (1 + mu) / 2
+    for i in prange(len(mu)):
+        for j in prange(len(Eout)):
+            Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
+            Eout_db = default_Eout(Ein_arno)
+            # Distribution + Normalization:
+            pdf_val = scat_from_pdos_angular(Ein_arno, M, T_arno[i], Eout_db,
+                                             mu_fit, nphonon, tau1, delta_beta,
+                                             threshold, DebyeWallerCoeff)
+            pdf_val /= np.trapz(pdf_val, x=Eout_db)
+            # Recoil:
+            recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
+            # xs:
+            xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db + recoil)
+    return xs_mat
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
-                  T: float, Eout: np.ndarray, theta: np.ndarray, mu_fit:float,
-                  Teff:float, ws:float) -> np.ndarray:
+                  T: float, Eout: np.ndarray, theta: np.ndarray,
+                  Teff: float, ws: float, mu_fit: float) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with the most similar sct distribution with sigma1
+
+    Parameters
+    ----------
+    xs_values : np.ndarray
+        Cross section values at 0K in barns
+    xs_E : np.ndarray
+        Energy grid of the cross section in eV
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray, (N,)
+        The neutron outgoing energy grid in eV
+    theta : np.ndarray, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+    Teff : float
+        Effective temperature of the material in K
+    ws : float
+        Normalization for continuous (vibrational) part. For solid is 1.
+    mu_fit : float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> os.chdir(wd)
+    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 180, 10)
+    >>> mu_fit = np.cos(60 / 180 * np.pi)
+    >>> xs_values = xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout, theta, T, 1.0, 0.0)
+    >>> pd.DataFrame(xs_values, index=theta, columns=Eout).round(6)
+         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+    10   9.110252  9.103588  9.096864  9.090082  9.083234  9.076321  9.069350
+    20   9.110184  9.103519  9.096795  9.090012  9.083164  9.076250  9.069279
+    30   9.110074  9.103407  9.096683  9.089899  9.083049  9.076134  9.069162
+    40   9.109923  9.103255  9.096529  9.089745  9.082894  9.075976  9.069003
+    50   9.109738  9.103068  9.096341  9.089555  9.082702  9.075782  9.068807
+    60   9.109524  9.102851  9.096122  9.089336  9.082480  9.075556  9.068579
+    70   9.109286  9.102610  9.095879  9.089093  9.082235  9.075306  9.068327
+    80   9.109034  9.102354  9.095621  9.088834  9.081974  9.075040  9.068058
+    90   9.108773  9.102089  9.095354  9.088568  9.081704  9.074764  9.067780
+    100  9.108513  9.101823  9.095087  9.088303  9.081435  9.074487  9.067501
+    110  9.108262  9.101564  9.094827  9.088047  9.081174  9.074218  9.067230
+    120  9.108026  9.101320  9.094583  9.087807  9.080929  9.073964  9.066975
+    130  9.107813  9.101098  9.094362  9.087592  9.080708  9.073733  9.066744
+    140  9.107630  9.100906  9.094170  9.087409  9.080516  9.073534  9.066544
+    150  9.107481  9.100750  9.094014  9.087262  9.080359  9.073371  9.066382
+    160  9.107369  9.100634  9.093899  9.087156  9.080241  9.073252  9.066262
+    170  9.107299  9.100564  9.093828  9.087092  9.080168  9.073178  9.066189
+    """
     mu = np.cos(theta * np.pi / 180)
     xs_mat = np.zeros((len(mu), len(Eout)))
     T_arno = T * (1 + mu) / 2

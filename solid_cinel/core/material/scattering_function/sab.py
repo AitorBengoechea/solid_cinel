@@ -386,34 +386,33 @@ class Sab:
 
         Example
         -------
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha_grid = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha_grid, beta_grid).to_ScatFunc(7.2, 300, 26).iloc[295:305].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> T = 300
+        >>> M = 26
+        >>> Ein = 3
+        >>> Eout = np.linspace(Ein, Ein * 1.05, 1000)
+        >>> beta_grid = Beta.from_parameters(Eout, Ein, T).data
+        >>> alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, 60).data
+        >>> Sab.from_fgm(alpha_grid, beta_grid).to_ScatFunc(Ein, T, M).iloc[295:305].round(6) #doctest: +NORMALIZE_WHITESPACE
         Eout
-        7.198667    100.181707
-        7.199000    127.528189
-        7.199333    153.327750
-        7.199667    172.925131
-        7.200000    181.604950
-        7.200333    170.717666
-        7.200667    149.438145
-        7.201000    122.706410
-        7.201333     95.163376
-        7.201667     70.151820
+        2.894294    2.665969
+        2.894444    2.665249
+        2.894595    2.664520
+        2.894745    2.663782
+        2.894895    2.663034
+        2.895045    2.662277
+        2.895195    2.661511
+        2.895345    2.660736
+        2.895495    2.659952
+        2.895646    2.659158
         dtype: float64
         """
-        sab_diag = np.diag(self.data)
-        beta = self.beta.data[:len(sab_diag)]
-        sab_diag_negative = pd.Series(sab_diag,
-                                      index=Ein - beta * kb * T)
-        # Avoid negative energy:
-        sab_diag_negative = sab_diag_negative.loc[sab_diag_negative.index >= 0]
-        sab_diag_positive = pd.Series(np.diag(self.data) * np.exp(-beta),
-                                      index=Ein + beta * kb * T)
-        scattfunc = pd.concat([sab_diag_negative, sab_diag_positive.iloc[1::]])
-        # Apply normalization constrains:
-        awr = ((M / m + 1) / (M / m)) ** 2
-        scattfunc *= awr * np.sqrt(scattfunc.index.values / Ein) / (2 * kb * T)
+        # Get the scattering function values:
+        scattfunc = get_ScatFunc(self.data.values, self.beta.data, Ein, T, M)
+
+        # Change the data type:
+        scattfunc = pd.Series(scattfunc[:, 1], index=scattfunc[:, 0])
+        scattfunc = scattfunc[~scattfunc.index.duplicated(keep='first')]
+        # Output style:
         scattfunc.index.name = 'Eout'
         if mu:
             scattfunc.name = mu
@@ -619,22 +618,14 @@ class Sab:
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos
 
-        tau1 = pdos._get_tau_1(T)
-        delta_beta = tau1.index[1]
-        S_values, iter_sum = cls._S_from_tau1(tau1,
-                                              cls.DebyeWallerCoeff,
-                                              alpha_grid_.data,
-                                              beta_grid_.data)
-        if nphonon > 1:
-            S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
-                                                  beta_grid_.data,
-                                                  nphonon,
-                                                  tau1.values,
-                                                  delta_beta,
-                                                  threshold,
-                                                  cls.DebyeWallerCoeff,
-                                                  iter_sum,
-                                                  S_values)
+        tau1 = pdos.get_tau_1(T)
+        S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
+                                              beta_grid_.data,
+                                              nphonon,
+                                              tau1.values,
+                                              tau1.index[1],
+                                              threshold,
+                                              cls.DebyeWallerCoeff)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @classmethod
@@ -760,77 +751,6 @@ class Sab:
             return cls.from_sct(*args, **kwargs)
         elif model.lower() == "pdos":
             return cls.from_pdos(*args, **kwargs)
-
-    @staticmethod
-    def _S_from_tau1(tau1: pd.Series, debye_waller_coeff: float,
-                     alpha_grid: Iterable,
-                     beta_grid: Iterable) -> tuple:
-        """
-        Generate S(alpha, -beta) matrix using first phonon expansion.
-        .. math::
-            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)(\alpha\lambda)\mathcal{T}_1(-\beta)
-
-        Parameters
-        ----------
-        tau1 : 'pd.Series'
-            $\mathcal{T}_1(-\beta)$ function values and in the index beta
-            values.
-        debye_waller_coeff : 'float'
-            Debye Waller Coefficient.
-        alpha_grid : 1D iterable, (N,)
-            Alpha grid.
-        beta_grid : 1D iterable, (M,)
-            beta grid.
-
-        Returns
-        -------
-        S_values : 'np.ndarray', (N, M)
-            S(alpha, -beta) matrix values for the firts phonon expansion.
-        iter_sum : 'np.ndarray', (N,)
-            iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
-
-        Example
-        -------
-        >>> T = 800
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> tau1 = pdos._get_tau_1(T)
-        >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> beta_grid = Beta(beta0_).scale(T).data
-        >>> S_mat, iter_sum = Sab._S_from_tau1(tau1, debye_waller_coeff, alpha_grid, beta_grid)
-        >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
-              0         1         2         3         4
-        0  0.036967  0.037137  0.037308  0.037478  0.037644
-        1  0.070694  0.071019  0.071345  0.071671  0.071988
-        2  0.101393  0.101859  0.102326  0.102795  0.103249
-        3  0.129265  0.129859  0.130455  0.131052  0.131631
-        4  0.154499  0.155209  0.155921  0.156635  0.157327
-        5  0.177272  0.178087  0.178904  0.179724  0.180517
-        6  0.197752  0.198661  0.199573  0.200487  0.201372
-        7  0.216097  0.217090  0.218086  0.219085  0.220053
-        8  0.232453  0.233521  0.234593  0.235667  0.236708
-        9  0.246960  0.248095  0.249234  0.250375  0.251481
-
-        >>> pd.Series(np.exp(iter_sum.round(6))).iloc[:10]
-        0    0.044821
-        1    0.089642
-        2    0.134463
-        3    0.179284
-        4    0.224106
-        5    0.268927
-        6    0.313748
-        7    0.358569
-        8    0.403390
-        9    0.448211
-        dtype: float64
-        """
-        iter_sum = np.log(alpha_grid * debye_waller_coeff)
-        alpha_mul = np.exp(-alpha_grid * debye_waller_coeff + iter_sum)
-        tau1_reshape = reshape_differential(tau1.index.values,
-                                            tau1.values,
-                                            beta_grid)
-        S_values = np.outer(alpha_mul, tau1_reshape)
-        return S_values, iter_sum
 
     @staticmethod
     def sum_rule_check(S: pd.DataFrame) -> None:
@@ -1272,10 +1192,75 @@ def proportionality_factor(alpha: float, alpha_i: float,
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
+def get_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
+                     debye_waller_coeff: float,  iter_sum: float,
+                     alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
+    """
+    Generate S(alpha, -beta) matrix using phonon expansion tau_n function.
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Numerical appoximation to get convergence in large exponentiation and
+    factorial numbers. Each element of the array is related with one alpha
+    and represent the following term of the previous equation:
+    ..math::
+        \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+    Parameters
+    ----------
+    tau : 'np.ndarray', (T,)
+        tau function values.
+    beta_tau : 'np.ndarray', (T,)
+        beta grid for tau function.
+    debye_waller_coeff : 'float'
+        Debye Waller Coefficient.
+    alpha : 1D iterable, (N,)
+        Alpha grid.
+    beta: 1D iterable, (M,)
+        beta grid.
+
+    Returns
+    -------
+    'np.ndarray', (N, M)
+        S(alpha, beta) matrix values for the n phonon expansion using tau_n.
+
+    Example
+    -------
+    >>> T = 800
+    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> tau1 = pdos.get_tau_1(T)
+    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+    >>> alpha_grid = Alpha(alpha0_).scale(T).data
+    >>> beta_grid = Beta(beta0_).scale(T).data
+    >>> iter_sum = np.log(alpha_grid * debye_waller_coeff)
+    >>> S_mat = get_S_from_tau_n(tau1.values, np.arange(len(tau1)) * beta_grid[1], debye_waller_coeff, iter_sum, alpha_grid, beta_grid)
+    >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
+              0         1         2         3         4
+    0  0.036967  0.037182  0.037398  0.037614  0.037796
+    1  0.070694  0.071105  0.071517  0.071932  0.072279
+    2  0.101393  0.101982  0.102574  0.103168  0.103666
+    3  0.129265  0.130016  0.130771  0.131528  0.132163
+    4  0.154499  0.155397  0.156299  0.157204  0.157963
+    5  0.177272  0.178303  0.179337  0.180376  0.181247
+    6  0.197752  0.198902  0.200056  0.201215  0.202186
+    7  0.216097  0.217353  0.218614  0.219880  0.220942
+    8  0.232453  0.233804  0.235161  0.236523  0.237664
+    9  0.246960  0.248396  0.249837  0.251284  0.252497
+    """
+    alpha_mul = np.exp(- alpha * debye_waller_coeff + iter_sum)
+    # Interpolate tau_n(-beta):
+    tau_n_reshape = np.interp(beta, beta_tau, tau)
+    # Bounds in nopython mode:
+    if beta[-1] > beta_tau[-1]:
+        tau_n_reshape[beta > beta_tau[-1]] = 0.0
+    return np.outer(alpha_mul, tau_n_reshape)
+
+
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
 def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
                                nphonon: int, tau1: np.ndarray, delta_beta: float,
-                               threshold: float, DebyeWallerCoeff: float,
-                               iter_sum: np.ndarray, S_values: np.ndarray):
+                               threshold: float,
+                               DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using phonon expansion.
     .. math::
@@ -1295,7 +1280,7 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         beta grid values.
     nphonon : 'int', optional
         Phonon expansion order.
-    tau1 : 1D iterable, (N,)
+    tau1 : 'np.ndarray', (N,)
         tau1 function values.
     delta_beta : float
         Space between beta grid points.
@@ -1305,33 +1290,50 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         the calculations.
     DebyeWallerCoeff : 'float'
         Debye Waller Coefficient in LEAPR formalism.
-    iter_sum : 'np.ndarray', (N,)
-        iterative sum array for $\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n$.
-    S_values : 'np.ndarray', (N, M)
-        Zero phonon expansion $S(\alpha,\,-\beta)=\exp(-\alpha\lambda)(\alpha\lambda)\mathcal{T}_1(-\beta)$
 
     Returns
     -------
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values
+
+    Example
+    -------
+    >>> T = 800
+    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> tau1 = pdos.get_tau_1(T)
+    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+    >>> alpha_grid = Alpha(alpha0_).scale(T).data
+    >>> beta_grid = Beta(beta0_).scale(T).data
+    >>> S_mat = get_S_pdos_from_alpha_beta(alpha_grid, beta_grid, 10, tau1.values, beta_grid[1], 1.0e-14, debye_waller_coeff)
+    >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
+              0         1         2         3         4
+    0  0.037829  0.038039  0.038243  0.038444  0.038611
+    1  0.074018  0.074411  0.074776  0.075133  0.075422
+    2  0.108603  0.109154  0.109645  0.110117  0.110490
+    3  0.141624  0.142311  0.142895  0.143444  0.143867
+    4  0.173120  0.173922  0.174570  0.175165  0.175607
+    5  0.203131  0.204030  0.204716  0.205328  0.205763
+    6  0.231696  0.232675  0.233377  0.233982  0.234387
+    7  0.258856  0.259901  0.260599  0.261175  0.261531
+    8  0.284651  0.285748  0.286425  0.286954  0.287244
+    9  0.309121  0.310260  0.310900  0.311366  0.311575
     """
     tau_n_minus_1 = tau1.copy()
-    for n in range(1, nphonon):
+    # Zero phonon expansion:
+    iter_sum = np.log(alpha * DebyeWallerCoeff)
+    S_values = get_S_from_tau_n(tau1, np.arange(len(tau1)) * delta_beta,
+                                DebyeWallerCoeff, iter_sum, alpha, beta)
+
+    # Higher phonon expansion (nphonon >= 1):
+    for n in range(1, nphonon + 1):
         # Tau_n(-beta)
         tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
-        beta_tau_n = np.arange(len(tau_n)) * delta_beta
         check_tau_n(tau_n, delta_beta)
-
-        # Interpolate tau_n(-beta):
-        tau_n_reshape = np.interp(beta, beta_tau_n, tau_n)
-        # Bounds in nopython mode:
-        if beta[-1] > len(tau_n) * delta_beta:
-            tau_n_reshape[beta > len(tau_n) * delta_beta] = 0.0
 
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        S_values += np.outer(alpha_mul, tau_n_reshape)
+        S_values += get_S_from_tau_n(tau_n, np.arange(len(tau_n)) * delta_beta,
+                                     DebyeWallerCoeff, iter_sum, alpha, beta)
 
         # Next tau_n
         tau_n_minus_1 = tau_n
@@ -1402,13 +1404,13 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
         for j in prange(N):  # loop for tau1
             convol = 0.
 
-            k = i - j  # tau_n_minus_1(-(beta-beta^pirme))
+            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
             if k >= 0 and k < Nnm1:
                 convol = tau_n_minus_1[k]
             elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
                 convol = tau_n_minus_1[-k] * np.exp(k * delta_beta)
 
-            l = i + j  # Tau_n_minus_1(-(beta+beta^pirme))
+            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
             if l < Nnm1:
                 convol += tau_n_minus_1[l] * np.exp(-j * delta_beta)
 
@@ -1420,7 +1422,8 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
     return tau_n[tau_n >= threshold]
 
 
-@nb.jit(nopython=True)
+@nb.jit('(float64[:], float64)',
+    nopython=True)
 def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     """
     Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
@@ -1447,3 +1450,85 @@ def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     if np.trapz(tau_n, dx=delta_beta) < 1.e-5:
         raise ValueError("Tau function doesnt satisfy the normalization condition")
     return
+
+
+@nb.jit(nopython=True)
+def get_ScatFunc(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
+                 T: float, M: float) -> np.ndarray:
+    """
+    Get the scattering function from the S(alpha, -beta) matrix. The scattering
+    function is calculated using the following equation:
+    .. math::
+        \dfrac{A_{wr}}{2k_{B}T}\sqrt{\dfrac{E_{out}}{E_{in}}}S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+
+    Parameters
+    ----------
+    Sab_mat : 'np.ndarray', (N, M)
+        S(alpha, -beta) matrix values.
+    beta_grid : 'np.ndarray', (M,)
+        Minus beta grid values.
+    Ein : 'float'
+        Incident energy in eV.
+    T : 'float'
+        Temperature in K.
+    M : 'float'
+        Mass of the target nucleus in amu.
+
+    Returns
+    -------
+    'np.ndarray', (min(N, M) , 2)
+        Scattering function values.
+
+    Example
+    -------
+    >>> T = 300
+    >>> M = 26
+    >>> Ein = 3
+    >>> Eout = np.linspace(Ein, Ein * 1.05, 1000)
+    >>> beta_grid = Beta.from_parameters(Eout, Ein, T).data
+    >>> alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, 60).data
+    >>> Sab_values = Sab.from_fgm(alpha_grid, beta_grid).data.values
+    >>> scat = get_ScatFunc(Sab_values, beta_grid, Ein, T, M)
+    >>> pd.Series(scat[:, 1], index=scat[:, 0]).iloc[::75].round(6) #doctest: +NORMALIZE_WHITESPACE
+    2.850000    2.474903
+    2.861261    2.596197
+    2.872523    2.670419
+    2.883784    2.692988
+    2.895045    2.662277
+    2.906306    2.579802
+    2.917568    2.450102
+    2.928829    2.280323
+    2.940090    2.079568
+    2.951351    1.858077
+    2.962613    1.626365
+    2.973874    1.394392
+    2.985135    1.170883
+    2.996396    0.962837
+    3.007658    0.772066
+    3.018919    0.605043
+    3.030180    0.464353
+    3.041441    0.349051
+    3.052703    0.257017
+    3.063964    0.185403
+    3.075225    0.131040
+    3.086486    0.090756
+    3.097748    0.061599
+    3.109009    0.040979
+    3.120270    0.026723
+    3.131532    0.017084
+    3.142793    0.010708
+    dtype: float64
+    """
+    sab_diag = np.diag(Sab_mat)
+    beta = beta_grid[:len(sab_diag)]
+    ScatFunc_values = np.concatenate((sab_diag[::-1], sab_diag[1::]))
+    ScatFunc_values[len(sab_diag)::] *= np.exp(-beta[1::])
+    Eout = np.sort(Ein + np.concatenate((- beta[::-1], beta[1::])) * kb * T)
+    # Avoid negative values and nan numbers:
+    ScatFunc_values = ScatFunc_values[Eout > 0]
+    ScatFunc_values[np.isnan(ScatFunc_values)] = 0
+    Eout = Eout[Eout > 0]
+    # Apply normalization constants:
+    awr = ((M / m + 1) / (M / m)) ** 2
+    ScatFunc_values *= awr * np.sqrt(Eout / Ein) / (2 * kb * T)
+    return np.vstack((Eout, ScatFunc_values)).T

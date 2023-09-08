@@ -338,7 +338,7 @@ class Pdos:
         beta = self.beta.data
         return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
 
-    def _get_tau_1(self, T: float) -> pd.Series:
+    def get_tau_1(self, T: float) -> pd.Series:
         """
         Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
         .. math::
@@ -365,7 +365,7 @@ class Pdos:
         >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
-        >>> p._get_tau_1(20).iloc[:10]
+        >>> p.get_tau_1(20).iloc[:10]
         beta
         0.000000    0.004250
         0.464181    0.005313

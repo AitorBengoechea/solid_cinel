@@ -618,7 +618,7 @@ class Sab:
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos
 
-        tau1 = pdos._get_tau_1(T)
+        tau1 = pdos.get_tau_1(T)
         S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
                                               beta_grid_.data,
                                               nphonon,
@@ -1228,7 +1228,7 @@ def get_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
     -------
     >>> T = 800
     >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> tau1 = pdos._get_tau_1(T)
+    >>> tau1 = pdos.get_tau_1(T)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     >>> alpha_grid = Alpha(alpha0_).scale(T).data
     >>> beta_grid = Beta(beta0_).scale(T).data
@@ -1300,7 +1300,7 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     -------
     >>> T = 800
     >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> tau1 = pdos._get_tau_1(T)
+    >>> tau1 = pdos.get_tau_1(T)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     >>> alpha_grid = Alpha(alpha0_).scale(T).data
     >>> beta_grid = Beta(beta0_).scale(T).data

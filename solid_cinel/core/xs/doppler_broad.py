@@ -538,7 +538,7 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     T_arno = T * (1 + mu) / 2
     for i in prange(len(mu)):
         if theta[i] == 180:
-            Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+            Ein_arno = (Eout + Ein) / 2 + Ein * m / M
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
         else:
             for j in prange(len(Eout)):
@@ -733,7 +733,7 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     T_arno = T * (1 + mu) / 2
     for i in prange(len(mu)):
         if theta[i] == 180:
-            Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+            Ein_arno = (Eout + Ein) / 2 + Ein * m / M
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
         else:
             for j in prange(len(Eout)):
@@ -833,7 +833,7 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     for i in prange(len(mu)):
         Teff_ = Teff if T != Teff else T_arno[i]
         if theta[i] == 180:
-            Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+            Ein_arno = (Eout + Ein) / 2 + Ein * m / M
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
         else:
             for j in prange(len(Eout)):

@@ -40,7 +40,8 @@ rho_in_energy_U238_str = '''
 1.180078E+00 1.075748E+00 9.928057E-01 9.238564E-01
 8.577708E-01 8.073819E-01 7.634820E-01 7.172257E-01
 6.728183E-01 6.251482E-01 5.496737E-01 4.992486E-01
-3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-019.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
+3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-01
+9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
 7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
 1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
 3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
@@ -259,12 +260,12 @@ class ScatFuncSD:
         # Using the Phonon expansion model:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
-        6.7554    0.001822
-        6.9050    0.085122
-        7.0439    0.126479
-        7.2000    0.129525
-        7.3157    1.532377
-        7.4480    0.074467
+        6.7554    0.001861
+        6.9050    0.084836
+        7.0439    0.126480
+        7.2000    0.129529
+        7.3157    1.532400
+        7.4480    0.074382
         dtype: float64
         """
         mu = np.cos(theta * np.pi / 180)
@@ -1131,12 +1132,12 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     >>> sd_pdf = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, 1000, tau1.values, tau1.index[1], 1.0e-14, debye_waller_coeff)
     >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
-    6.7554     0.036627
-    6.9050     1.711374
-    7.0439     2.542859
-    7.2000     2.604099
-    7.3157    30.808486
-    7.4480     1.497171
+    6.7554     0.037459
+    6.9050     1.707956
+    7.0439     2.546358
+    7.2000     2.607742
+    7.3157    30.851057
+    7.4480     1.497491
     dtype: float64
     """
     beta = (Eout - Ein) / (kb * T)

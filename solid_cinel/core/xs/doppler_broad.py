@@ -831,11 +831,11 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     xs_mat = np.zeros((len(mu), len(Eout)))
     T_arno = T * (1 + mu) / 2
     for i in prange(len(mu)):
-        Teff_ = Teff if T != Teff else T_arno[i]
         if theta[i] == 180:
             Ein_arno = (Eout + Ein) / 2 + Ein * m / M
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
         else:
+            Teff_ = Teff if T != Teff else T_arno[i]
             for j in prange(len(Eout)):
                 Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
                 Eout_db = default_Eout(Ein_arno)

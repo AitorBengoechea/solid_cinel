@@ -537,12 +537,16 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     xs_mat = np.zeros((len(mu), len(Eout)))
     T_arno = T * (1 + mu) / 2
     for i in prange(len(mu)):
-        for j in prange(len(Eout)):
-            Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
-            Eout_db = default_Eout(Ein_arno)
-            pdf = sigma1(Eout_db, Ein_arno, T_arno[i], M)
-            xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
-            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf, x=Eout_db)
+        if theta[i] == 180:
+            Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+            xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
+        else:
+            for j in prange(len(Eout)):
+                Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
+                Eout_db = default_Eout(Ein_arno)
+                pdf = sigma1(Eout_db, Ein_arno, T_arno[i], M)
+                xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+                xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf, x=Eout_db)
     return xs_mat
 
 
@@ -728,19 +732,23 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     xs_mat = np.zeros((len(mu), len(Eout)))
     T_arno = T * (1 + mu) / 2
     for i in prange(len(mu)):
-        for j in prange(len(Eout)):
-            Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
-            Eout_db = default_Eout(Ein_arno)
-            # Distribution + Normalization:
-            pdf_val = get_ScatFunc_pdos_angle(Ein_arno, M, T_arno[i], Eout_db,
-                                             mu_fit, nphonon, tau1, delta_beta,
-                                             threshold, DebyeWallerCoeff)
-            pdf_val /= np.trapz(pdf_val, x=Eout_db)
-            # Recoil:
-            recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
-            # xs:
-            xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
-            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db + recoil)
+        if theta[i] == 180:
+            Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+            xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
+        else:
+            for j in prange(len(Eout)):
+                Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
+                Eout_db = default_Eout(Ein_arno)
+                # Distribution + Normalization:
+                pdf_val = get_ScatFunc_pdos_angle(Ein_arno, M, T_arno[i], Eout_db,
+                                                 mu_fit, nphonon, tau1, delta_beta,
+                                                 threshold, DebyeWallerCoeff)
+                pdf_val /= np.trapz(pdf_val, x=Eout_db)
+                # Recoil:
+                recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
+                # xs:
+                xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+                xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db + recoil)
     return xs_mat
 
 
@@ -824,18 +832,22 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     T_arno = T * (1 + mu) / 2
     for i in prange(len(mu)):
         Teff_ = Teff if T != Teff else T_arno[i]
-        for j in prange(len(Eout)):
-            Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
-            Eout_db = default_Eout(Ein_arno)
-            # Distribution + Normalization:
-            pdf_val = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno, T_arno[i],
-                                           M, Teff_, ws)
-            pdf_val /= np.trapz(pdf_val, x=Eout_db)
-            # Recoil:
-            recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
-            # xs:
-            xs_Eout_arno = np.interp(Eout_db + recoil, xs_E, xs_values)
-            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db)
+        if theta[i] == 180:
+            Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+            xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
+        else:
+            for j in prange(len(Eout)):
+                Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
+                Eout_db = default_Eout(Ein_arno)
+                # Distribution + Normalization:
+                pdf_val = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno, T_arno[i],
+                                               M, Teff_, ws)
+                pdf_val /= np.trapz(pdf_val, x=Eout_db)
+                # Recoil:
+                recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
+                # xs:
+                xs_Eout_arno = np.interp(Eout_db + recoil, xs_E, xs_values)
+                xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db)
     return xs_mat
 
 

@@ -1280,7 +1280,7 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         beta grid values.
     nphonon : 'int', optional
         Phonon expansion order.
-    tau1 : 'np.ndarray', (N,)
+    tau1 : 'np.ndarray', (Z,)
         tau1 function values.
     delta_beta : float
         Space between beta grid points.

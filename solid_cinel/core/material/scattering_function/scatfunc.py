@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.scattering_function.beta import Beta, get_beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha, get_alpha
-from solid_cinel.core.material.scattering_function.sab import Sab, get_S_pdos_from_alpha_beta, get_ScatFunc
+from solid_cinel.core.material.scattering_function.sab import Sab, get_S_pdos_from_alpha_beta, tau_n_CPU
 from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable
 from numba import prange
@@ -40,8 +40,7 @@ rho_in_energy_U238_str = '''
 1.180078E+00 1.075748E+00 9.928057E-01 9.238564E-01
 8.577708E-01 8.073819E-01 7.634820E-01 7.172257E-01
 6.728183E-01 6.251482E-01 5.496737E-01 4.992486E-01
-3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-01
-9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
+3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-019.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
 7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
 1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
 3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
@@ -260,12 +259,12 @@ class ScatFuncSD:
         # Using the Phonon expansion model:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
-        6.7554    0.001861
-        6.9050    0.084836
-        7.0439    0.126480
-        7.2000    0.129529
-        7.3157    1.532400
-        7.4480    0.074382
+        6.7554    0.001822
+        6.9050    0.085122
+        7.0439    0.126479
+        7.2000    0.129525
+        7.3157    1.532377
+        7.4480    0.074467
         dtype: float64
         """
         mu = np.cos(theta * np.pi / 180)
@@ -274,7 +273,7 @@ class ScatFuncSD:
             nphonon = kwargs.pop("nphonon", 1000)
             tau1 = args[-1].get_tau_1(T)
             debye_waller_coeff = args[-1].DebyeWallerCoeff(T)
-            scattfunc = scat_from_pdos_angular(Ein, M, T, Eout, mu, nphonon,
+            scattfunc = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, nphonon,
                                                tau1.values, tau1.index[1],
                                                threshold, debye_waller_coeff)
         else:
@@ -957,11 +956,138 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
         dd_pdf.append(angular_dd_pdf.to_ScatFunc(Ein, T, M).loc[Eout])
     return dd_pdf
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=False)
-def scat_from_pdos_angular(Ein: float, M: float, T: float, Eout: np.ndarray,
-                           mu: float, nphonon: int, tau1: np.ndarray,
-                           delta_beta: float, threshold: float,
-                           DebyeWallerCoeff: float) -> np.ndarray:
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=False)
+def get_diag_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
+                     debye_waller_coeff: float,  iter_sum: float,
+                     alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
+    """
+    Generate the scattering function from a S(alpha, -beta) table based on
+    the phonon expansion model using a single angle for tau_n function.
+
+    Parameters
+    ----------
+    tau : 'np.ndarray', (T,)
+        tau function values.
+    beta_tau : 'np.ndarray', (T,)
+        beta grid for tau function.
+    debye_waller_coeff : 'float'
+        Debye Waller Coefficient.
+    alpha : 1D iterable, (N,)
+        Alpha grid.
+    beta: 1D iterable, (N,)
+        beta grid.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Scattering function values for a single angle for tau_n function.
+    """
+    alpha_mul = np.exp(- alpha * debye_waller_coeff + iter_sum)
+    # Interpolate tau_n(-beta):
+    tau_n_reshape = np.interp(beta, beta_tau, tau)
+    # Bounds in nopython mode:
+    if beta[-1] > beta_tau[-1]:
+        tau_n_reshape[beta > beta_tau[-1]] = 0.0
+    return alpha_mul * tau_n_reshape
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=False)
+def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
+                    nphonon: int, tau1: np.ndarray, delta_beta: float,
+                    threshold: float, DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate the scattering function from a S(alpha, -beta) table based on
+    the phonon expansion model using a single angle.
+
+    Parameters
+    ----------
+    alpha : 'np.ndarray', (N,)
+        alpha grid values.
+    beta : 'np.ndarray', (N,)
+        beta grid values.
+    nphonon : 'int', optional
+        Phonon expansion order.
+    tau1 : 'np.ndarray', (M,)
+        tau1 function values.
+    delta_beta : float
+        Space between beta grid points.
+    threshold : 'float', optional
+        Minimun value to take into account in the creation of tau_n
+        functions. For T>200 is convenient to set into 1.0e-14 to speed up
+        the calculations.
+    DebyeWallerCoeff : 'float'
+        Debye Waller Coefficient in LEAPR formalism.
+
+    Returns
+    -------
+    S_diag : 'np.ndarray', (N,)
+        Scattering function values for a single angle.
+    """
+    if len(alpha) != len(beta):
+        raise ValueError("alpha and beta must have the same length")
+
+    tau_n_minus_1 = tau1.copy()
+    # Zero phonon expansion:
+    iter_sum = np.log(alpha * DebyeWallerCoeff)
+    S_diag = get_diag_S_from_tau_n(tau1, np.arange(len(tau1)) * delta_beta,
+                                DebyeWallerCoeff, iter_sum, alpha, beta)
+
+    # Higher phonon expansion (nphonon >= 1):
+    for n in range(1, nphonon + 1):
+        # Tau_n(-beta)
+        tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
+
+        # Compute S(alpha, -beta) for tau_n reshape
+        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        S_diag += get_diag_S_from_tau_n(tau_n, np.arange(len(tau_n)) * delta_beta,
+                                        DebyeWallerCoeff, iter_sum, alpha, beta)
+
+        # Next tau_n
+        tau_n_minus_1 = tau_n
+    return S_diag
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=False)
+def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
+                        T: float, M: float) -> np.ndarray:
+    """
+    Generate the scattering function values from a S(alpha, -beta) table based on
+    the phonon expansion model for a single angle
+
+    Parameters
+    ----------
+    Sab_mat : 'np.ndarray', (N,)
+        S(alpha, -beta) matrix values.
+    beta_grid : 'np.ndarray', (N,)
+        Minus beta grid values.
+    Ein : 'float'
+        Incident energy in eV.
+    T : 'float'
+        Temperature in K.
+    M : 'float'
+        Mass of the target nucleus in amu.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Scattering function values for a single angle for tau_n expansion.
+    """
+    # Get the scattering function values:
+    ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::]))
+    ScatFunc_values[len(Sab_mat)::] *= np.exp(-beta_grid[1::])
+    Eout = np.sort(Ein + np.concatenate((- beta_grid[::-1], beta_grid[1::])) * kb * T)
+    # Avoid negative values and nan numbers:
+    ScatFunc_values = ScatFunc_values[Eout > 0]
+    ScatFunc_values[np.isnan(ScatFunc_values)] = 0
+    Eout = Eout[Eout > 0]
+    # Apply normalization constants:
+    awr = ((M / m + 1) / (M / m)) ** 2
+    ScatFunc_values *= awr * np.sqrt(Eout / Ein) / (2 * kb * T)
+    return np.vstack((Eout, ScatFunc_values)).T
+
+@nb.jit(nopython=True, nogil=False, cache=False, parallel=False)
+def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
+                 mu: float, nphonon: int, tau1: np.ndarray,
+                 delta_beta: float, threshold: float,
+                 DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -999,26 +1125,25 @@ def scat_from_pdos_angular(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
     >>> T = 1000
     >>> M = 238.05077040419212
-    >>> theta = np.cos(60 / 180 * np.pi)
+    >>> mu = np.cos(60 / 180 * np.pi)
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau1 = pdos.get_tau_1(T)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> sd_pdf = scat_from_pdos_angular(Ein, M, T, Eout, theta, 1000, tau1.values, tau1.index[1], 1.0e-14, debye_waller_coeff)
+    >>> sd_pdf = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, 1000, tau1.values, tau1.index[1], 1.0e-14, debye_waller_coeff)
     >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
-    6.7554     0.037459
-    6.9050     1.707956
-    7.0439     2.546358
-    7.2000     2.607742
-    7.3157    30.851057
-    7.4480     1.497491
+    6.7554     0.036627
+    6.9050     1.711374
+    7.0439     2.542859
+    7.2000     2.604099
+    7.3157    30.808486
+    7.4480     1.497171
     dtype: float64
     """
     beta = (Eout - Ein) / (kb * T)
     alpha = Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)
     alpha /= (M * kb * T / m)
-    sab = get_S_pdos_from_alpha_beta(alpha, beta, nphonon, tau1, delta_beta,
-                                     threshold, DebyeWallerCoeff)
-    sd_pdf = get_ScatFunc(sab, beta, Ein, T, M)
+    Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
+    sd_pdf = get_ScatFunc_values(Sab_values, beta, Ein, T, M)
     Eout_pos = np.searchsorted(sd_pdf[:, 0], Eout)
     return sd_pdf[Eout_pos, 1]
 

@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, scat_from_pdos_angular
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 import os
 from typing import Iterable
 
@@ -731,7 +731,7 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
             Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
             Eout_db = default_Eout(Ein_arno)
             # Distribution + Normalization:
-            pdf_val = scat_from_pdos_angular(Ein_arno, M, T_arno[i], Eout_db,
+            pdf_val = get_ScatFunc_pdos_angle(Ein_arno, M, T_arno[i], Eout_db,
                                              mu_fit, nphonon, tau1, delta_beta,
                                              threshold, DebyeWallerCoeff)
             pdf_val /= np.trapz(pdf_val, x=Eout_db)

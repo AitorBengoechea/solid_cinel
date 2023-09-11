@@ -1419,7 +1419,7 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
 
             tau_n[i] += tau1[j] * convol * delta_beta
 
-    return tau_n[tau_n >= threshold]
+    return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]
 
 
 @nb.jit('(float64[:], float64)',

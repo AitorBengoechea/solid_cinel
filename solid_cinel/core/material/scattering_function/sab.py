@@ -1280,7 +1280,7 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
         beta grid values.
     nphonon : 'int', optional
         Phonon expansion order.
-    tau1 : 'np.ndarray', (N,)
+    tau1 : 'np.ndarray', (Z,)
         tau1 function values.
     delta_beta : float
         Space between beta grid points.
@@ -1419,7 +1419,7 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
 
             tau_n[i] += tau1[j] * convol * delta_beta
 
-    return tau_n[tau_n >= threshold]
+    return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]
 
 
 @nb.jit('(float64[:], float64)',

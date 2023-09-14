@@ -203,8 +203,8 @@ class ScatFuncSD:
 
         Parameters for SCT model
         ------------------------
-        Teff : float
-            Effective temperature of the material in K
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
         ws: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
         twt: 'float', optional
@@ -247,18 +247,17 @@ class ScatFuncSD:
         dtype: float64
 
         # Using the Short Collision Time model:
-        >>> Teff = 1003.48
-        >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, Teff, model="sct").data.loc[Eout_test].round(6)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, pdos, model="sct").data.loc[Eout_test].round(6)
         6.7554    0.000000
         6.9050    0.006089
-        7.0439    1.200920
-        7.2000    5.050126
-        7.3157    0.737301
-        7.4480    0.003940
+        7.0439    1.200917
+        7.2000    5.050131
+        7.3157    0.737298
+        7.4480    0.003939
         dtype: float64
 
         # Using the Phonon expansion model:
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
         6.7554    0.001861
         6.9050    0.084836
@@ -279,7 +278,7 @@ class ScatFuncSD:
                                                threshold, debye_waller_coeff)
         else:
             ws = kwargs.pop("ws", 1.0)
-            Teff = args[0] if model == "sct" else T
+            Teff = args[0].Teff(T) if model == "sct" else T
             scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
         norm = integrate(pd.Series(scattfunc, index=Eout))
         return cls(Ein, T, M, scattfunc / norm, index=Eout)
@@ -380,8 +379,8 @@ class ScatFuncDD:
 
         Parameters for SCT model
         ------------------------
-        Teff : float
-            Effective temperature of the material in K
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
         ws: 'float', optional
             normalization for continuous (vibrational) part. For solid is 1.
         twt: 'float', optional
@@ -428,21 +427,22 @@ class ScatFuncDD:
          9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
 
         # Using the Short Collision Time model:
-        >>> Teff = 1003.48
-        >>> ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, Teff, model="sct").data.round(6)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
-        -9.659258e-01  0.094001  0.636412  1.342343   0.987381  0.367670  0.054938
-        -8.660254e-01  0.075435  0.592611  1.358168   1.031485  0.377621  0.053100
-        -7.071068e-01  0.050039  0.516194  1.377317   1.109088  0.393571  0.049515
-        -5.000000e-01  0.025312  0.406042  1.386154   1.227205  0.413998  0.043484
-        -2.588190e-01  0.008381  0.269914  1.359572   1.397841  0.435293  0.034377
-         6.123234e-17  0.001348  0.133286  1.255372   1.641600  0.449329  0.022420
-         2.588190e-01  0.000056  0.037238  1.014881   1.995875  0.438697  0.010033
-         5.000000e-01  0.000000  0.003057  0.602975   2.535638  0.370194  0.001978
-         7.071068e-01  0.000000  0.000011  0.156818   3.436243  0.206127  0.000047
-         8.660254e-01  0.000000  0.000000  0.002116   5.225189  0.024539  0.000000
-         9.659258e-01  0.000000  0.000000  0.000000  10.545177  0.000000  0.000000
+        -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
+        -8.660254e-01  0.075434  0.592611  1.358169   1.031486  0.377620  0.053100
+        -7.071068e-01  0.050039  0.516194  1.377318   1.109089  0.393570  0.049515
+        -5.000000e-01  0.025312  0.406041  1.386155   1.227206  0.413997  0.043483
+        -2.588190e-01  0.008381  0.269913  1.359573   1.397842  0.435292  0.034377
+         6.123234e-17  0.001348  0.133285  1.255372   1.641602  0.449328  0.022419
+         2.588190e-01  0.000056  0.037238  1.014880   1.995877  0.438696  0.010033
+         5.000000e-01  0.000000  0.003057  0.602973   2.535640  0.370193  0.001978
+         7.071068e-01  0.000000  0.000011  0.156817   3.436247  0.206125  0.000047
+         8.660254e-01  0.000000  0.000000  0.002116   5.225195  0.024538  0.000000
+         9.659258e-01  0.000000  0.000000  0.000000  10.545191  0.000000  0.000000
+
 
         # Using the Phonon expansion model:
         >>> Ein = 7.2
@@ -452,7 +452,7 @@ class ScatFuncDD:
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([40, 80, 120, 160])
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
         >>> ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
@@ -467,7 +467,7 @@ class ScatFuncDD:
                                            *args, **kwargs)
         else:
             ws = kwargs.pop("ws", 1.0)
-            Teff = args[0] if model == "sct" else T
+            Teff = args[0].Teff(T) if model == "sct" else T
             scattfunc = [get_scat_sct_angular(Eout, mu[j], Ein, T, M, Teff, ws)
                          for j in range(len(mu))]
         return cls(Ein, T, M, np.array(scattfunc),
@@ -667,9 +667,8 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../../data/xs/U238/")
-        >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
-        >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
         # Generate 1D Scattering function:
         >>> Ein = 36.68723

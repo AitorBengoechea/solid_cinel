@@ -5,11 +5,13 @@ import pandas as pd
 from solid_cinel.core.xs.doppler_broad import get_DB
 from solid_cinel.core.generic import integrate
 
+
 # Global variables for the tests:
 M = 238.0
 Ein = 6.67
 theta = np.arange(0, 181, 1)[1::]
 T = 1474.2
+
 
 # Coercelle model + sigma1 for xs matrix:
 @pytest.mark.parametrize("model", ["sigma1", "fgm"])

@@ -12,12 +12,12 @@ theta = np.arange(0, 181, 1)[1::]
 T = 1474.2
 
 # Coercelle model + sigma1 for xs matrix:
-@pytest.mark.parametrize("test_data, model", [("ddxs_arno_sigma1", "sigma1"), ("ddxs_arno_fgm", "fgm")])
-def test_coercelle(T, test_data, model):
+@pytest.mark.parametrize("model", ["sigma1", "fgm"])
+def test_coercelle(model):
     wd = os.getcwd()
     # Get test data:
     os.chdir(__file__.replace("test_coercelle.py", ""))
-    ddxs_test = pd.read_hdf(test_data, 'test')
+    ddxs_test = pd.read_hdf("ddxs_arno_{}".format(model), 'test')
     os.chdir(wd)
 
     # Get 0K data:
@@ -32,7 +32,8 @@ def test_coercelle(T, test_data, model):
     if model == "sigma1":
         ddxs = get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm="courcelle")
     else:
-        ddxs = get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm="courcelle", model=model)
+        ddxs = get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm="courcelle",
+                      model=model)
 
     # Check integral value:
     test_integral = integrate(ddxs_test.apply(integrate, axis=1))

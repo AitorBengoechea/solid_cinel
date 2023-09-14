@@ -20,7 +20,6 @@ def test_coercelle(model):
     # Get test data:
     os.chdir(__file__.replace("test_coercelle.py", ""))
     ddxs_test = pd.read_hdf("ddxs_arno_{}".format(model), 'test')
-    os.chdir(wd)
 
     # Get 0K data:
     os.chdir("../../../../data/xs/U238/")

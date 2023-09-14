@@ -14,11 +14,9 @@ def test_sigma1(T):
     xs_test = pd.read_hdf(f"u238.{T}.2", "test")
     # Get 0K data:
     os.chdir("../../../../data/xs/U238/")
-    xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python")\
-              .set_index(0).drop([2], axis=1).iloc[::, 0]
+    xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     os.chdir(wd)
     # Remove duplicated index:
-    xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
     xs_test = xs_test[~xs_test.index.duplicated(keep='first')]
     for Ein in xs_test.index[xs_test.index <= 100]:
         Eout = default_Eout(Ein)

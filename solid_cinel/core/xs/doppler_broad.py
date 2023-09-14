@@ -157,9 +157,8 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Generate Broadening test results:
     >>> T = 1000
@@ -495,9 +494,8 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     >>> T = 1000
     >>> Ein = 2.0
@@ -599,9 +597,8 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     >>> T = 1000
     >>> Ein = 2.0
@@ -828,9 +825,8 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     >>> T = 1000
     >>> Ein = 2.0
@@ -921,9 +917,8 @@ def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Common data:
     >>> T = 1000
@@ -987,9 +982,8 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("doppler_broad.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
-    >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
     # Generate Broadening test results:
     >>> T = 1000

@@ -667,9 +667,8 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../../data/xs/U238/")
-        >>> xs_0K = pd.read_csv("u238.0.2", sep="    ", header=None, engine="python").set_index(0).drop([2], axis=1).iloc[::, 0]
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
-        >>> xs_0K = xs_0K[~xs_0K.index.duplicated(keep='first')]
 
         # Generate 1D Scattering function:
         >>> Ein = 36.68723

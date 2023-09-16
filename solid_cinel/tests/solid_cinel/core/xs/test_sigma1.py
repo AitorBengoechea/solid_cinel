@@ -2,7 +2,7 @@ import pytest
 import os
 import numpy as np
 import pandas as pd
-from solid_cinel.core.xs.doppler_broad import get_DB, default_Eout
+from solid_cinel.core.xs.ddxs import get_DB, default_Eout
 
 
 @pytest.mark.parametrize("T", [300, 1000])

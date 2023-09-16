@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.xs.doppler_broad import get_DB
+from solid_cinel.core.xs.ddxs import get_DB
 from solid_cinel.core.generic import integrate
 
 

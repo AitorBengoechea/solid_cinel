@@ -9,7 +9,9 @@ import numba as nb
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
+from solid_cinel.core.generic import integrate
 import os
+
 from typing import Iterable
 
 # constants
@@ -53,6 +55,193 @@ rho_in_energy_U238_str = '''
 rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 
+
+class DDxs:
+    """
+    Class for the Double differential cross section for elastic scattering
+    """
+
+    def __init__(self, Ein: float, T: float, M: float, algorithm: str, *args, **kwargs):
+        """
+        Class for the Double differential cross section for elastic scattering
+
+        Parameters
+        ----------
+        xs : pd.Series or pd.DataFrame, (N,) or (M, N)
+            0K xs data for the given material in barns. If the cross
+            section is a matrix, the scattering function is convolved directly
+            with xs. If the cross section is a vector, the scattering function
+            is convolved with the cross section for each outgoing energy or
+            with the Exs introduced by the user.
+        Exs : np.ndarray, optional, (N,) or (M, N)
+            Displazed Energy grid of the cross section. If not provided, the
+            energy grid of the scattering function is used.
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+        algorithm : 'str'
+            The algorithm to use for the double differencial doppler broadened
+            elastic cross section. The available algorithms are:
+                - "sigma1": sigma1 algorithm from NJOY2016 manual
+                - "sab": S(alpha, -beta) tables for ddxs
+                - "dopush": From the chosen S(alpha, -beta) model, the
+                            distribution more similar to sigma1 is chosen and a
+                            recoil energy
+                - "courcelle": Fourier double-Laplace transform of a 4-point
+        kwargs : dict
+            Extra parameters for the selected algorithm
+        """
+        # Atributes of the scattering function (Change in these parameters will
+        # change the scattering function):
+        self.Ein = Ein
+        self.T = T
+        self.M = M
+        self.algorithm = algorithm
+        # The ddxs data:
+        self.data = pd.DataFrame(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        DDXS data.
+
+        Returns
+        -------
+        pd.Series
+            DDXS data
+        """
+        return self._data
+
+    @data.setter
+    def data(self, dd_pdf: Iterable):
+        """
+        Set the scattering function data and check the normalization.
+
+        Parameters
+        ----------
+        dd_pdf : pd.Series
+            Double differential scattering function data
+
+        """
+        dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
+        dd_pdf_.index.name = "mu"
+        dd_pdf_.columns.name = "Eout"
+        self._data = dd_pdf_
+
+    @classmethod
+    def from_Sab(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
+                 **kwargs):
+        """
+        """
+        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
+        return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs_0K))
+
+    @classmethod
+    def from_coercelle(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
+                    **kwargs):
+        """
+        """
+        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
+        xs = xs_matrix(scatfunction.get_angle, *args, **kwargs) if kwargs.get("model") else xs_matrix(*args)
+        return cls(Ein, T, M, "coercelle", scatfunction.convolve(xs))
+
+    @property
+    def angular(self) -> pd.Series:
+        return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data.apply(integrate, axis=1))
+    @property
+    def integral(self) -> float:
+        """
+        """
+        return self.data.angular.integral
+class Dxs:
+    """
+    Class for the differential cross section for elastic scattering
+    """
+    def __init__(self, Ein: float, T: float, M: float, algorithm: str, *args, **kwargs):
+        """
+        Class for the Double differential cross section for elastic scattering
+
+        Parameters
+        ----------
+        xs : pd.Series or pd.DataFrame, (N,) or (M, N)
+            0K xs data for the given material in barns. If the cross
+            section is a matrix, the scattering function is convolved directly
+            with xs. If the cross section is a vector, the scattering function
+            is convolved with the cross section for each outgoing energy or
+            with the Exs introduced by the user.
+        Exs : np.ndarray, optional, (N,) or (M, N)
+            Displazed Energy grid of the cross section. If not provided, the
+            energy grid of the scattering function is used.
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+        algorithm : 'str'
+            The algorithm to use for the double differencial doppler broadened
+            elastic cross section. The available algorithms are:
+                - "sigma1": sigma1 algorithm from NJOY2016 manual
+                - "sab": S(alpha, -beta) tables for ddxs
+                - "dopush": From the chosen S(alpha, -beta) model, the
+                            distribution more similar to sigma1 is chosen and a
+                            recoil energy
+                - "courcelle": Fourier double-Laplace transform of a 4-point
+        kwargs : dict
+            Extra parameters for the selected algorithm
+        """
+        # Atributes of the scattering function (Change in these parameters will
+        # change the scattering function):
+        self.Ein = Ein
+        self.T = T
+        self.M = M
+        self.algorithm = algorithm
+        # The dxs data:
+        self.data = pd.Series(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.Series:
+        """
+        Diferential xs data.
+
+        Returns
+        -------
+        pd.Series
+            Diferential xs data
+        """
+        return self._data
+
+    @data.setter
+    def data(self, pdf: Iterable):
+        """
+        Set the scattering function data and check the normalization.
+
+        Parameters
+        ----------
+        pdf : pd.Series
+            The scattering function data
+
+        """
+        pdf_ = pd.Series(pdf).sort_index()
+        self._data = pdf_
+
+
+    @classmethod
+    def from_sigma1(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray):
+        """
+        """
+        scatfunction = ScatFunc.from_MD(Ein, M, T, Eout)
+        return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs_0K))
+
+    @classmethod
+    def from_dopush(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
+                    **kwargs):
+        """
+        """
+        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs).to_sd()
+        Exs = Eout + (Ein - scatfunction.data.idxmax())
+        return cls(Ein, T, M, "dopush", scatfunction.convolve(xs_0K, Exs=Exs))
+
+    @property
+    def integral(self) -> float:
+        """
+        """
+        return integrate(self.data)
 
 def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     """
@@ -155,7 +344,7 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     --------
     # 0K xs data for U238:
     >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
@@ -492,7 +681,7 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     --------
     # 0K xs data for U238:
     >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
@@ -595,7 +784,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     --------
     # 0K xs data for U238:
     >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
@@ -823,7 +1012,7 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     --------
     # 0K xs data for U238:
     >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
@@ -915,7 +1104,7 @@ def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
     Test default, linear and logarithmic grids with NJOY values:
     # 0K xs data for U238:
     >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
@@ -980,7 +1169,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     Test the default Eout with NJOY values:
     # 0K xs data for U238:
     >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("doppler_broad.py", ""))
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
     >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)

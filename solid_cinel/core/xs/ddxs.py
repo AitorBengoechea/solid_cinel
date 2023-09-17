@@ -301,6 +301,81 @@ class Dxs:
         """
         return integrate(self.data)
 
+    def shift(self, dx: [float, np.ndarray, pd.DataFrame]):
+        """
+        Shift the Double Differential XS in the given axis and interpolate to get the values of the original axis
+
+        Parameters
+        ----------
+        dx : float or np.ndarray or pd.Series or pd.DataFrame
+            The shift value in the given axis. If a pd.DataFrame is given, the shift value is calculated according to
+            the index or the columns of the pd.DataFrame (next argument to select).
+        axis : str, optional
+            The axis to shift the Double Differential XS. The default is "Eout".
+
+        Returns
+        -------
+        DDxs
+            The shifted Double Differential XS values in the original axis
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> dxs = Dxs.from_sigma1(xs_0K, Ein, M, T, Eout)
+        >>> dxs.data.iloc[::200].round(6)
+        Eout
+        1.80000     0.000049
+        1.88008     0.575486
+        1.96016    54.281606
+        2.04024    55.278649
+        2.12032     0.791546
+        dtype: float64
+
+        # Shift the DDXS with float:
+        >>> recoil = kb * T / M
+        >>> dxs.shift(recoil).data.iloc[::200].round(6)
+        Eout
+        1.80000     0.000000
+        1.88008     0.557797
+        1.96016    53.733203
+        2.04024    55.817580
+        2.12032     0.814398
+        dtype: float64
+
+        # Shift the DDXS in the Eout axis:
+        >>> recoil = Eout * kb * T / M
+        >>> dxs.shift(recoil).data.iloc[::200].round(6)
+        Eout
+        1.80000     0.000000
+        1.88008     0.525884
+        1.96016    52.660553
+        2.04024    56.917662
+        2.12032     0.864760
+        dtype: float64
+        """
+        # Check the dx:
+        if isinstance(dx, float) or isinstance(dx, int):
+            self.data = pd.Series(np.interp(self.data.index, self.data.index + dx, self.data.values, left=0, right=0),
+                                        index=self.data.index)
+        else:
+            dx_ = dx if isinstance(dx, pd.Series) else pd.Series(dx, index=self.data.index)
+            x = self.data.loc[dx_.index].index
+            y = self.data.loc[dx_.index].values
+            self.data.loc[dx_.index] = pd.Series(np.interp(x, x + dx_.values, y, left=0, right=0),
+                                                     index=dx_.index)
+        return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data)
+
 
 class DDxs:
     """

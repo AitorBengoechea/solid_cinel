@@ -786,9 +786,8 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
                 E = self.data.columns.values
             else:
                 E = self.data.index.values
-            xs_reshaped = reshape_differential(xs.index.values,
-                                               xs.values,
-                                               E)
+            xs_reshaped = reshape_differential(xs, E)
+
         elif len(xs.shape) == 2:
             xs_reshaped = xs.values if isinstance(xs, pd.DataFrame) else xs
         else:

@@ -47,5 +47,5 @@ jobs:
         run: pip install -r requirements.txt
       - name: install solid_cinel
         run: python setup.py install --user
-      - name: pytest
+      - name: pytest test folder
         run: pytest --cov=solid_cinel solid_cinel/tests/

@@ -49,7 +49,7 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
     return y_norm
 
 
-def reshape_differential(x: Iterable, y: Iterable, xnew: Iterable,
+def reshape_differential(data, xnew: Iterable,
                          kind: str = "slinear", bounds_error: bool = False):
     """
     Linearly interpolate array over new energy grid structure.
@@ -57,12 +57,10 @@ def reshape_differential(x: Iterable, y: Iterable, xnew: Iterable,
 
     Parameters
     ----------
-    x : 1d array-like object with at least two entries
-        energy grid
+    data: pd.Series
+        Original data
     xnew : 1d array-like object with at least two entries
         new energy grid
-    y : `numpy.ndarray` with at least two entries and same length as `x`
-        array to interpolate
     kind: "str"
         Specifies the kind of interpolation as a string or as an integer
         specifying the order of the spline interpolator to use. The string has
@@ -89,20 +87,21 @@ def reshape_differential(x: Iterable, y: Iterable, xnew: Iterable,
     Vector interpolation:
     >>> x = np.array([1, 2, 3, 4, 5])
     >>> y = np.array([1, 2, 3, 4, 5])
+    >>> data = pd.Series(y, index=x)
     >>> xnew = np.array([1.5, 2.5, 3.5, 4.5])
-    >>> reshape_differential(x, y, xnew)
+    >>> reshape_differential(data, xnew)
     array([1.5, 2.5, 3.5, 4.5])
 
     Matrix interpolation:
     >>> xnew = np.array([[1.5, 2.5, 3.5, 4.5], [1.75, 2.75, 3.75, 4.75]])
-    >>> reshape_differential(x, y, xnew)[0]
+    >>> reshape_differential(data, xnew)[0]
     array([1.5, 2.5, 3.5, 4.5])
-    >>> reshape_differential(x, y, xnew)[1]
+    >>> reshape_differential(data, xnew)[1]
     array([1.75, 2.75, 3.75, 4.75])
     """
     foo = sp.interpolate.interp1d(
-                                  x,
-                                  y,
+                                  data.index.values,
+                                  data.values,
                                   axis=0,
                                   copy=False,
                                   kind=kind,

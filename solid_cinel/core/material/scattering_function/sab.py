@@ -890,8 +890,7 @@ class Sab:
         0.048932  0.050400  0.050641  0.050984  0.051114
         """
         beta_new_ = beta_new if hasattr(beta_new, '__len__') else [beta_new]
-        beta_values = self.data.apply(lambda x: reshape_differential(x.index,
-                                                                     x.values,
+        beta_values = self.data.apply(lambda x: reshape_differential(x,
                                                                      beta_new_,
                                                                      bounds_error=True,
                                                                      kind="quadratic"),

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.xs.doppler_broad import get_DB
+from solid_cinel.core.xs.ddxs import DDxs
 from solid_cinel.core.generic import integrate
 
 
@@ -66,23 +66,19 @@ def test_coercelle(model):
     # Get doppler broadening ddxs:
     Eout = ddxs_test.columns.values
     if model == "sigma1":
-        ddxs = get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm="courcelle")
+        ddxs = DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta)
     elif model == "fgm":
-        ddxs = get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm="courcelle",
-                      model=model)
+        ddxs = DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, model=model)
     elif model == "sct":
-        ddxs = get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, algorithm="courcelle",
-                      model=model)
+        ddxs = DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, pdos, model=model)
 
     # Check integral value:
     test_integral = integrate(ddxs_test.apply(integrate, axis=1))
-    ddxs_integral = integrate(ddxs.apply(integrate, axis=1))
-    assert abs(1 - ddxs_integral / test_integral) <= 0.03
+    assert abs(1 - ddxs.integral / test_integral) <= 0.03
 
     # Check differential value:
-    assert abs(1 - ddxs / ddxs_test).max().max() <= 0.03
+    assert abs(1 - ddxs.data.round(14) / ddxs_test.round(14)).fillna(0).max().max() <= 0.03
 
     # Check angular distribution:
-    test_angular_distr = ddxs_test.apply(integrate, axis=1)
-    ddxs_angular_distr = ddxs.apply(integrate, axis=1)
-    assert abs(1 - ddxs_angular_distr / test_angular_distr).max() <= 0.03
+    test_angular_distr = ddxs_test.apply(integrate).round(14)
+    assert abs(1 - ddxs.angular.data.round(14) / test_angular_distr).fillna(0).max() <= 0.03

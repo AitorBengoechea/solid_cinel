@@ -56,102 +56,6 @@ rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 
 
-class DDxs:
-    """
-    Class for the Double differential cross section for elastic scattering
-    """
-
-    def __init__(self, Ein: float, T: float, M: float, algorithm: str, *args, **kwargs):
-        """
-        Class for the Double differential cross section for elastic scattering
-
-        Parameters
-        ----------
-        xs : pd.Series or pd.DataFrame, (N,) or (M, N)
-            0K xs data for the given material in barns. If the cross
-            section is a matrix, the scattering function is convolved directly
-            with xs. If the cross section is a vector, the scattering function
-            is convolved with the cross section for each outgoing energy or
-            with the Exs introduced by the user.
-        Exs : np.ndarray, optional, (N,) or (M, N)
-            Displazed Energy grid of the cross section. If not provided, the
-            energy grid of the scattering function is used.
-        theta : np.ndarray, (M,)
-            The neutron outgoing angle grid in degrees (0, 180]
-        algorithm : 'str'
-            The algorithm to use for the double differencial doppler broadened
-            elastic cross section. The available algorithms are:
-                - "sigma1": sigma1 algorithm from NJOY2016 manual
-                - "sab": S(alpha, -beta) tables for ddxs
-                - "dopush": From the chosen S(alpha, -beta) model, the
-                            distribution more similar to sigma1 is chosen and a
-                            recoil energy
-                - "courcelle": Fourier double-Laplace transform of a 4-point
-        kwargs : dict
-            Extra parameters for the selected algorithm
-        """
-        # Atributes of the scattering function (Change in these parameters will
-        # change the scattering function):
-        self.Ein = Ein
-        self.T = T
-        self.M = M
-        self.algorithm = algorithm
-        # The ddxs data:
-        self.data = pd.DataFrame(*args, **kwargs)
-
-    @property
-    def data(self) -> pd.DataFrame:
-        """
-        DDXS data.
-
-        Returns
-        -------
-        pd.Series
-            DDXS data
-        """
-        return self._data
-
-    @data.setter
-    def data(self, dd_pdf: Iterable):
-        """
-        Set the scattering function data and check the normalization.
-
-        Parameters
-        ----------
-        dd_pdf : pd.Series
-            Double differential scattering function data
-
-        """
-        dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
-        dd_pdf_.index.name = "mu"
-        dd_pdf_.columns.name = "Eout"
-        self._data = dd_pdf_
-
-    @classmethod
-    def from_Sab(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
-                 **kwargs):
-        """
-        """
-        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
-        return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs_0K))
-
-    @classmethod
-    def from_coercelle(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
-                    **kwargs):
-        """
-        """
-        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
-        xs = xs_matrix(scatfunction.get_angle, *args, **kwargs) if kwargs.get("model") else xs_matrix(*args)
-        return cls(Ein, T, M, "coercelle", scatfunction.convolve(xs))
-
-    @property
-    def angular(self) -> pd.Series:
-        return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data.apply(integrate, axis=1))
-    @property
-    def integral(self) -> float:
-        """
-        """
-        return self.data.angular.integral
 class Dxs:
     """
     Class for the differential cross section for elastic scattering
@@ -224,6 +128,57 @@ class Dxs:
     @classmethod
     def from_sigma1(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray):
         """
+        Generate the Differential xs for elastic scattering from sigma1
+        ..math::
+            \frac{d\sigma_T(E)}{dE^\prime} = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\sigma_0(E^\prime)\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
+
+        Parameters
+        ----------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+
+        Returns
+        -------
+        Dxs
+            Differential cross section for elastic scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+
+        # SIGMA1 algorithm:
+        >>> Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).data.iloc[::100]
+        Eout
+        1.80000     0.000049
+        1.84004     0.009909
+        1.88008     0.575486
+        1.92012    10.018740
+        1.96016    54.281606
+        2.00020    94.844029
+        2.04024    55.278649
+        2.08028    11.098885
+        2.12032     0.791546
+        2.16036     0.020645
+        dtype: float64
         """
         scatfunction = ScatFunc.from_MD(Ein, M, T, Eout)
         return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs_0K))
@@ -232,6 +187,79 @@ class Dxs:
     def from_dopush(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
                     **kwargs):
         """
+        Generate the Differential xs for elastic scattering from the most similar distribution of the S(alpha, -beta)
+        tables and sigma1 algorithm
+        ..math::
+            \frac{d\sigma_T(E)}{dE^\prime} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+
+        Parameters for fgm, sct and pdos models
+        ----------------------------------------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+        model : str
+            The model used to calculate the S(alpha, beta) distribution. The available models are:
+                - "fgm": Free Gas Model (default)
+                - "sct": Short Collision Time
+                - "pdos": Phonon Density of States
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 1)[1::]
+
+        # DOPUSH algorithm:
+        >>> Dxs.from_dopush(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::100]
+        Eout
+        1.80000     0.000163
+        1.84004     0.025374
+        1.88008     1.152552
+        1.92012    15.775754
+        1.96016    67.355332
+        2.00020    92.796544
+        2.04024    42.650046
+        2.08028     6.756453
+        2.12032     0.380893
+        2.16036     0.007884
+        Name: 0.5000000000000001, dtype: float64
         """
         scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs).to_sd()
         Exs = Eout + (Ein - scatfunction.data.idxmax())
@@ -240,8 +268,413 @@ class Dxs:
     @property
     def integral(self) -> float:
         """
+        The integral value of the Diferential xs
+
+        Returns
+        -------
+        float
+            The integral value of the Diferential xs
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+
+        # SIGMA1 algorithm:
+        >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
+        9.09
+
+        # DOPUSH algorithm:
+        >>> theta = np.arange(0, 180, 1)[1::]
+        >>> round(Dxs.from_dopush(xs_0K, Ein, M, T, Eout, theta, model="fgm").integral, 2)
+        9.09
         """
         return integrate(self.data)
+
+
+class DDxs:
+    """
+    Class for the Double differential cross section for elastic scattering
+    """
+
+    def __init__(self, Ein: float, T: float, M: float, algorithm: str, *args, **kwargs):
+        """
+        Class for the Double differential cross section for elastic scattering
+
+        Parameters
+        ----------
+        Ein : float
+            The neutron incident energy in eV
+        T : float
+            Temperature of the material in K
+        M : float
+            Mass of the material in amu
+        args : Iterable, (N, M)
+            The scattering function data for the pd.DataFrame
+        kwargs : dict
+            Optional arguments for the construction of the pd.DataFrame
+        """
+        # Atributes of the scattering function:
+        self.Ein = Ein
+        self.T = T
+        self.M = M
+        self.algorithm = algorithm
+        # The ddxs data:
+        self.data = pd.DataFrame(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        DDXS data.
+
+        Returns
+        -------
+        pd.DataFrame
+            DDXS data
+        """
+        return self._data
+
+    @data.setter
+    def data(self, dd_pdf: Iterable):
+        """
+        Set the diferential data.
+
+        Parameters
+        ----------
+        dd_pdf : pd.DataFrame
+            Double differential scattering function data
+        """
+        dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
+        dd_pdf_.index.name = "mu"
+        dd_pdf_.columns.name = "Eout"
+        self._data = dd_pdf_
+
+    @classmethod
+    def from_Sab(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
+                 **kwargs):
+        """
+        Generate the Double Differential XS for elastic scattering from S(alpha, -beta) tables
+        ..math::
+            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{\sigma_b}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+
+        Common Parameters for fgm, sct and pdos models
+        ----------------------------------------------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        DDxs
+            Double differential cross section for elastic scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 1)[1::]
+        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
+        # S(alpha, -beta) algorithm for FGM:
+        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::18, ::200].round(6)
+        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -0.999848  1.845717  12.094245  23.732354  15.005372  3.265822
+        -0.945519  1.696431  11.865713  24.032880  15.196201  3.210537
+        -0.798636  1.312725  11.171664  24.885947  15.737882  3.040859
+        -0.573576  0.799665   9.866638  26.318562  16.647563  2.715775
+        -0.292372  0.330178   7.768991  28.345006  17.934350  2.179578
+         0.017452  0.066314   4.869372  30.864798  19.534647  1.412050
+         0.325568  0.002865   1.834191  33.286657  21.073911  0.566000
+         0.601815  0.000002   0.178412  33.109271  20.967417  0.063077
+         0.819152  0.000000   0.000129  21.693622  13.741224  0.000068
+         0.956305  0.000000   0.000000   0.381820   0.241879  0.000000
+
+        # S(alpha, -beta) algorithm for SCT:
+        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::18, ::200].round(6)
+        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -0.999848  1.858801  12.101285  23.691478  15.003768  3.282861
+        -0.945519  1.709037  11.873971  23.991586  15.194636  3.227633
+        -0.798636  1.323836  11.183295  24.843563  15.736492  3.058043
+        -0.573576  0.808007   9.883451  26.274727  16.646707  2.732824
+        -0.292372  0.334761   7.791334  28.300174  17.934917  2.195682
+         0.017452  0.067641   4.893611  30.821521  19.538757  1.425301
+         0.325568  0.002956   1.850774  33.252955  21.086547  0.573498
+         0.601815  0.000002   0.181650  33.106572  20.999520  0.064459
+         0.819152  0.000000   0.000135  21.753380  13.801288  0.000071
+         0.956305  0.000000   0.000000   0.389225   0.246967  0.000000
+
+        # S(alpha, -beta) algorithm for PDOS:
+        >>> theta = np.array([40, 80, 120, 160])
+        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.iloc[::, ::200].round(6)
+        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -0.939693  2.203391  11.934588  24.417997  15.575835  3.101303
+        -0.500000  0.994808   9.521449  27.156911  17.307645  2.468526
+         0.173648  0.066807   3.586114  32.202480  20.456875  0.922720
+         0.766044  0.000026   0.045654  23.748453  14.926872  0.011525
+        """
+        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
+        return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs_0K))
+
+    @classmethod
+    def from_coercelle(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
+                    **kwargs):
+        """
+        Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
+        correlation function
+        ..math::
+            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E)/2 - E \mu / A)
+
+        For the xs matrix calculation, they are the following models available:
+            - "sigma1": sigma1 algorithm from NJOY2016 manual (default)
+            - "fgm": Free Gas Model
+            - "sct": Short Collision Time
+            - "pdos": Phonon Density of States
+
+        Common parameters
+        -----------------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n functions. For T>200 is convenient to set into
+            1.0e-14 to speed up the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        DDxs
+            The Double Differential XS for elastic scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 10)[1::]
+        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
+        # Coercelle with sigma1 algorithm:
+        >>> DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta).data.iloc[::, ::200].round(6)
+        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -9.848078e-01  1.799780  12.014045  23.799698  15.061843  3.254832
+        -9.396926e-01  1.676763  11.822952  24.051670  15.221935  3.208413
+        -8.660254e-01  1.481580  11.489103  24.476148  15.491693  3.126870
+        -7.660444e-01  1.229592  10.987217  25.073257  15.871246  3.003188
+        -6.427876e-01  0.944073  10.287839  25.849947  16.364919  2.828878
+        -5.000000e-01  0.655123   9.357644  26.811206  16.975884  2.593950
+        -3.420201e-01  0.396433   8.168209  27.955887  17.703434  2.288872
+        -1.736482e-01  0.197855   6.713410  29.269238  18.538228  1.908875
+         6.123234e-17  0.074480   5.038601  30.706415  19.451845  1.461636
+         1.736482e-01  0.018209   3.279876  32.157794  20.374777  0.978669
+         3.420201e-01  0.002219   1.689684  33.375691  21.149970  0.525423
+         5.000000e-01  0.000081   0.578202  33.820341  21.435136  0.191609
+         6.427876e-01  0.000000   0.090890  32.356604  20.510394  0.033467
+         7.660444e-01  0.000000   0.002705  26.837555  17.014119  0.001208
+         8.660254e-01  0.000000   0.000001  14.857302   9.420052  0.000001
+         9.396926e-01  0.000000   0.000000   1.825474   1.157494  0.000000
+         9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
+
+        # Coercelle with fgm model:
+        >>> DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
+        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -9.848078e-01  1.799779  12.014039  23.799686  15.061836  3.254830
+        -9.396926e-01  1.676670  11.822344  24.050527  15.221266  3.208283
+        -8.660254e-01  1.481313  11.487095  24.472001  15.489150  3.126373
+        -7.660444e-01  1.229365  10.985218  25.068762  15.868442  3.002665
+        -6.427876e-01  0.943930  10.286290  25.846084  16.362492  2.828462
+        -5.000000e-01  0.655042   9.356495  26.807932  16.973823  2.593636
+        -3.420201e-01  0.396391   8.167353  27.952975  17.701601  2.288637
+        -1.736482e-01  0.197836   6.712774  29.266485  18.536498  1.908698
+         6.123234e-17  0.074473   5.038147  30.703670  19.450123  1.461508
+         1.736482e-01  0.018207   3.279584  32.154964  20.372999  0.978585
+         3.420201e-01  0.002219   1.689531  33.372717  21.148112  0.525378
+         5.000000e-01  0.000081   0.578148  33.817249  21.433206  0.191592
+         6.427876e-01  0.000000   0.090881  32.353553  20.508492  0.033464
+         7.660444e-01  0.000000   0.002704  26.834946  17.012495  0.001208
+         8.660254e-01  0.000000   0.000001  14.855816   9.419127  0.000001
+         9.396926e-01  0.000000   0.000000   1.825288   1.157378  0.000000
+         9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
+
+        # Coercelle with sct model:
+        >>> DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
+        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -9.848078e-01  1.812702  12.021390  23.758675  15.060225  3.271903
+        -9.396926e-01  1.689192  11.830712  24.009178  15.219694  3.225403
+        -8.660254e-01  1.493117  11.497147  24.430112  15.487659  3.143549
+        -7.660444e-01  1.240081  10.997583  25.026155  15.867098  3.019872
+        -6.427876e-01  0.953149  10.301507  25.802668  16.361423  2.845618
+        -5.000000e-01  0.662383   9.374892  26.763734  16.973233  2.610563
+        -3.420201e-01  0.401608   8.188847  27.908231  17.701827  2.305016
+        -1.736482e-01  0.200970   6.736581  29.221780  18.538082  1.924015
+         6.123234e-17  0.075931   5.062450  30.660187  19.453941  1.475009
+         1.736482e-01  0.018661   3.301400  32.114901  20.380469  0.989325
+         3.420201e-01  0.002292   1.705357  33.340007  21.161476  0.532500
+         5.000000e-01  0.000085   0.586015  33.798632  21.455962  0.194963
+         6.427876e-01  0.000000   0.092764  32.359550  20.545372  0.034279
+         7.660444e-01  0.000000   0.002796  26.877020  17.066638  0.001253
+         8.660254e-01  0.000000   0.000001  14.924038   9.477631  0.000001
+         9.396926e-01  0.000000   0.000000   1.849596   1.174681  0.000000
+         9.848078e-01  0.000000   0.000000   0.000006   0.000004  0.000000
+
+        # Coercelle with pdos model:
+        Is not done because the test take too long
+        """
+        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
+        xs = xs_matrix(scatfunction.get_angle, xs_0K, Ein, M, T, Eout, theta, *args, **kwargs) if kwargs.get("model") else xs_matrix(xs_0K, Ein, M, T, Eout, theta)
+        return cls(Ein, T, M, "coercelle", scatfunction.convolve(xs))
+
+    @property
+    def angular(self) -> Dxs:
+        """
+        The angular distribution of the Double Differential XS for elastic scattering
+
+        Returns
+        -------
+        Dxs
+            The angular distribution of the Double Differential XS for elastic scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 1)[1::]
+
+        # Angular distribution:
+        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, model="fgm").angular.data.iloc[::200].round(6)
+        Eout
+        1.80000     0.768794
+        1.88008    10.451361
+        1.96016    54.522950
+        2.04024    34.506930
+        2.12032     2.920481
+        dtype: float64
+        """
+        return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data.apply(integrate, axis=0))
+    @property
+    def integral(self) -> float:
+        """
+        The integral value of the Double Differential XS
+
+        Returns
+        -------
+        float
+            The integral value of the Double Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 1)[1::]
+        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
+        # S(alpha, -beta) algorithm for FGM:
+        >>> round(DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, model="fgm").integral, 2)
+        9.07
+        """
+        return self.angular.integral
 
 def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     """
@@ -355,74 +788,6 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
     >>> M = 238.05077040419212
 
-    # SIGMA1 algorithm:
-    >>> algorithm = "sigma1"
-    >>> get_DB(xs_0K, Ein, M, T, Eout, algorithm=algorithm).iloc[::100]
-    Eout
-    1.80000     0.000049
-    1.84004     0.009909
-    1.88008     0.575486
-    1.92012    10.018740
-    1.96016    54.281606
-    2.00020    94.844029
-    2.04024    55.278649
-    2.08028    11.098885
-    2.12032     0.791546
-    2.16036     0.020645
-    dtype: float64
-
-    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm=algorithm, integral=True), 2)
-    9.09
-
-
-    # SAB algorithm (FGM):
-    >>> algorithm = "sab"
-    >>> theta = np.arange(0, 180, 1)[1::]
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::18, ::200].round(6)
-    Eout        1.80000    1.88008    1.96016    2.04024   2.12032
-    mu
-    -0.999848  1.845717  12.094245  23.732354  15.005372  3.265822
-    -0.945519  1.696431  11.865713  24.032880  15.196201  3.210537
-    -0.798636  1.312725  11.171664  24.885947  15.737882  3.040859
-    -0.573576  0.799665   9.866638  26.318562  16.647563  2.715775
-    -0.292372  0.330178   7.768991  28.345006  17.934350  2.179578
-     0.017452  0.066314   4.869372  30.864798  19.534647  1.412050
-     0.325568  0.002865   1.834191  33.286657  21.073911  0.566000
-     0.601815  0.000002   0.178412  33.109271  20.967417  0.063077
-     0.819152  0.000000   0.000129  21.693622  13.741224  0.000068
-     0.956305  0.000000   0.000000   0.381820   0.241879  0.000000
-
-    # Convolve with 0K cross section and get integral value:
-    >>> round(get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm, integral=True), 2)
-        9.07
-
-    # SAB algorithm (SCT):
-    >>> from solid_cinel.core.material.vibration.pdos import Pdos
-    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, algorithm=algorithm, model="sct").iloc[::18, ::200].round(6)
-    Eout        1.80000    1.88008    1.96016    2.04024   2.12032
-    mu
-    -0.999848  1.858801  12.101285  23.691478  15.003768  3.282861
-    -0.945519  1.709037  11.873971  23.991586  15.194636  3.227633
-    -0.798636  1.323836  11.183295  24.843563  15.736492  3.058043
-    -0.573576  0.808007   9.883451  26.274727  16.646707  2.732824
-    -0.292372  0.334761   7.791334  28.300174  17.934917  2.195682
-     0.017452  0.067641   4.893611  30.821521  19.538757  1.425301
-     0.325568  0.002956   1.850774  33.252955  21.086547  0.573498
-     0.601815  0.000002   0.181650  33.106572  20.999520  0.064459
-     0.819152  0.000000   0.000135  21.753380  13.801288  0.000071
-     0.956305  0.000000   0.000000   0.389225   0.246967  0.000000
-
-    # SAB algorithm (PDOS):
-    >>> algorithm = "sab"
-    >>> theta = np.array([40, 80, 120, 160])
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos", algorithm=algorithm).iloc[::, ::200].round(6)
-    Eout        1.80000    1.88008    1.96016    2.04024   2.12032
-    mu
-    -0.939693  2.203391  11.934588  24.417997  15.575835  3.101303
-    -0.500000  0.994808   9.521449  27.156911  17.307645  2.468526
-     0.173648  0.066807   3.586114  32.202480  20.456875  0.922720
-     0.766044  0.000026   0.045654  23.748453  14.926872  0.011525
 
     # Use a displaced xs for the convolution (1D desplacement):
     >>> Eout_move = Eout + kb * T
@@ -461,93 +826,6 @@ def get_DB(*args, **kwargs) -> [float, pd.Series, pd.DataFrame]:
      0.956305  0.000000   0.000000   0.381868   0.241911  0.000000
     >>> round(get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm, integral=True, Exs=Eout_move), 2)
     9.07
-
-    # Dopush algorithm:
-    >>> algorithm = "dopush"
-    >>> theta = np.arange(0, 180, 1)[1::]
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::100]
-    Eout
-    1.808208     0.000163
-    1.848248     0.025374
-    1.888288     1.152552
-    1.928328    15.775754
-    1.968368    67.355332
-    2.008408    92.796544
-    2.048448    42.650046
-    2.088488     6.756453
-    2.128529     0.380893
-    2.168569     0.007884
-    Name: 0.5000000000000001, dtype: float64
-
-    # Courcelle algorithm:
-    >>> theta = np.arange(0, 180, 10)[1::]
-
-    # Courcelle/sigma1:
-    >>> algorithm = "courcelle"
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm).iloc[::, ::200].round(6)
-    Eout           1.808208   1.888288   1.968368   2.048448  2.128529
-    mu
-    -9.848078e-01  2.317394  13.608765  23.904997  13.510793  2.624357
-    -9.396926e-01  2.174082  13.445857  24.187016  13.634857  2.576835
-    -8.660254e-01  1.944376  13.157055  24.665105  13.842015  2.494349
-    -7.660444e-01  1.643019  12.712963  25.345237  14.128659  2.371558
-    -6.427876e-01  1.293729  12.077151  26.243932  14.492648  2.202467
-    -5.000000e-01  0.929179  11.203973  27.381268  14.927536  1.980888
-    -3.420201e-01  0.589072  10.044530  28.779737  15.418523  1.702736
-    -1.736482e-01  0.313239   8.561272  30.461975  15.935687  1.370291
-     6.123234e-17  0.128719   6.757019  32.443222  16.420854  0.998705
-     1.736482e-01  0.035638   4.724137  34.711859  16.762967  0.623438
-     3.420201e-01  0.005215   2.703690  37.180687  16.753071  0.301875
-     5.000000e-01  0.000254   1.088985  39.563688  16.008980  0.093809
-     6.427876e-01  0.000002   0.224478  41.060114  13.889304  0.012557
-     7.660444e-01  0.000000   0.011002  39.570839   9.617649  0.000278
-     8.660254e-01  0.000000   0.000014  30.301870   3.603613  0.000000
-     9.396926e-01  0.000000   0.000000   9.402088   0.145280  0.000000
-     9.848078e-01  0.000000   0.000000   0.003899   0.000000  0.000000
-
-    # Courcelle/fgm:
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, algorithm=algorithm, model="fgm").iloc[::, ::200].round(6)
-    Eout           1.808208   1.888288   1.968368   2.048448  2.128529
-    mu
-    -9.848078e-01  2.317392  13.608758  23.904985  13.510787  2.624355
-    -9.396926e-01  2.173962  13.445171  24.185875  13.634263  2.576731
-    -8.660254e-01  1.944027  13.154763  24.660940  13.839750  2.493953
-    -7.660444e-01  1.642716  12.710654  25.340701  14.126167  2.371146
-    -6.427876e-01  1.293533  12.075334  26.240014  14.490501  2.202144
-    -5.000000e-01  0.929064  11.202598  27.377927  14.925724  1.980648
-    -3.420201e-01  0.589010  10.043478  28.776741  15.416927  1.702561
-    -1.736482e-01  0.313209   8.560461  30.459112  15.934201  1.370164
-     6.123234e-17  0.128708   6.756411  32.440324  16.419402  0.998617
-     1.736482e-01  0.035635   4.723717  34.708808  16.761507  0.623384
-     3.420201e-01  0.005215   2.703446  37.177379  16.751602  0.301848
-     5.000000e-01  0.000254   1.088884  39.560077  16.007541  0.093801
-     6.427876e-01  0.000002   0.224456  41.056249  13.888018  0.012556
-     7.660444e-01  0.000000   0.011001  39.567001   9.616729  0.000278
-     8.660254e-01  0.000000   0.000014  30.298844   3.603260  0.000000
-     9.396926e-01  0.000000   0.000000   9.401132   0.145266  0.000000
-     9.848078e-01  0.000000   0.000000   0.003899   0.000000  0.000000
-
-    # Courcelle/sct:
-    >>> get_DB(xs_0K, Ein, M, T, Eout, theta, pdos, algorithm=algorithm, model="sct").iloc[::, ::200].round(6)
-    Eout           1.808208   1.888288   1.968368   2.048448  2.128529
-    mu
-    -9.848078e-01  2.331997  13.611252  23.863490  13.514472  2.640098
-    -9.396926e-01  2.188235  13.448739  24.143894  13.638100  2.592457
-    -8.660254e-01  1.957681  13.160138  24.618148  13.843862  2.509627
-    -7.660444e-01  1.655378  12.718574  25.296767  14.130709  2.386694
-    -6.427876e-01  1.304747  12.086522  26.194648  14.495701  2.217429
-    -5.000000e-01  0.938341  11.217661  27.330886  14.931904  1.995444
-    -3.420201e-01  0.595947  10.062731  28.727881  15.424557  1.716510
-    -1.736482e-01  0.317666   8.583616  30.408477  15.943968  1.382751
-     6.123234e-17  0.130978   6.782126  32.388313  16.432319  1.009176
-     1.736482e-01  0.036437   4.749149  34.656500  16.779046  0.631214
-     3.420201e-01  0.005370   2.724338  37.127171  16.775782  0.306530
-     5.000000e-01  0.000265   1.101286  39.516946  16.040803  0.095688
-     6.427876e-01  0.000002   0.228391  41.030114  13.931842  0.012906
-     7.660444e-01  0.000000   0.011320  39.575885   9.666456  0.000290
-     8.660254e-01  0.000000   0.000014  30.363000   3.637744  0.000000
-     9.396926e-01  0.000000   0.000000   9.472409   0.148502  0.000000
-     9.848078e-01  0.000000   0.000000   0.004045   0.000000  0.000000
 
     # Courcelle/pdos:
     """

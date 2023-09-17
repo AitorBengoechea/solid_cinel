@@ -1150,17 +1150,17 @@ def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
 
     # Test default grid:
     >>> Eout = default_Eout(Ein)
-    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
     9.09
 
     # Test linear grid:
     >>> Eout = generate_Eout(Ein, Elim=[Ein * 0.9, Ein * 1.1], N=5000)
-    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
     9.09
 
     # Test logarithmic grid:
     >>> Eout = generate_Eout(Ein, Elim=[Ein * 0.9, Ein * 1.1], N=5000, space="log")
-    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
     9.09
     """
     if Elim is None:
@@ -1212,7 +1212,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> Ein = 2.0
     >>> Eout = default_Eout(Ein)
     >>> M = 238.05077040419212
-    >>> round(get_DB(xs_0K, Ein, M, T, Eout, algorithm="sigma1", integral=True), 2)
+    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
     9.09
     """
     Eout_small = np.linspace(0,

@@ -31,5 +31,7 @@ jobs:
         run: python setup.py install --user
       - name: pytest solid_cinel code core
         run: pytest --cov=solid_cinel solid_cinel/core/
-      - name: pytest test folder
-        run: pytest --cov=solid_cinel solid_cinel/tests/
+      - name: Test materials
+        run: pytest --cov=solid_cinel solid_cinel/tests/materials/
+      - name: Big test for the whole solid_cinel code
+        run: pytest --cov=solid_cinel solid_cinel/tests/solid_cinel/

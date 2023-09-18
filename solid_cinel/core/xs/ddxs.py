@@ -1454,10 +1454,44 @@ def check_dx(data: [pd.DataFrame, pd.Series],
     axis : str, int
         Axis to shift the data. Available options are "Eout", "mu" or 0, 1
         respectively.
+
+    Returns
+    -------
+    float, pd.Series, pd.DataFrame
+        Value to shift the data in the correct format
+
+    Examples
+    --------
+    >>> data = pd.DataFrame([[1, 1, 1]] * 3, index=[-1, 0, 1], columns=[1, 2, 3])
+    >>> check_dx(data, 0.1, "Eout")
+    0.1
+
+    >>> check_dx(data, pd.Series([1, 1], index=[[0, -1]]), "mu")
+     0    1
+    -1    1
+    dtype: int64
+
+    >>> check_dx(data, [1, 1, 1], "mu")
+    -1    1
+     0    1
+     1    1
+    dtype: int64
+
+    >>> check_dx(data, [1, 1, 1], 1)
+    1    1
+    2    1
+    3    1
+    dtype: int64
+
+    >>> check_dx(data, [[1, 1, 1]] * 3, 0)
+        1	2	3
+    -1	1	1	1
+    0	1	1	1
+    1	1	1	1
     """
     if isinstance(dx, float) or isinstance(dx, int) or isinstance(dx, pd.Series) or isinstance(dx, pd.DataFrame):
         return dx
-    elif isinstance(dx, np.ndarray) and len(dx.shape) == 1:
+    elif len(np.array(dx).shape) == 1:
         axis_ = 1 if axis == "Eout" else 0 if axis == "mu" else axis
         return pd.Series(dx, index=data.index if axis_ == 0 else data.columns)
     else:

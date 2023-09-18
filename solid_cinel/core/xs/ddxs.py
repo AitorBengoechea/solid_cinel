@@ -11,6 +11,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.generic import integrate, reshift
 import os
+import copy
 
 from typing import Iterable
 
@@ -359,19 +360,21 @@ class Dxs:
         >>> dxs.shift(recoil).data.iloc[::200].round(6)
         Eout
         1.80000     0.000000
-        1.88008     0.525884
-        1.96016    52.660553
-        2.04024    56.917662
-        2.12032     0.864760
+        1.88008     0.542661
+        1.96016    53.207633
+        2.04024    56.378145
+        2.12032     0.840643
         dtype: float64
         """
+        # copy data to avoid changing the original data:
+        dxs = self.data
         # Check the dx:
         dx_ = check_dx(self.data, dx, 0)
         if isinstance(dx, float) or isinstance(dx, int):
-            self.data = reshift(self.data, dx_)
+            dxs = reshift(dxs, dx_)
         else:
-            self.data.loc[dx_.index] = reshift(self.data.loc[dx_.index], dx_)
-        return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data)
+            dxs.loc[dx_.index] = reshift(dxs.loc[dx_.index], dx_)
+        return Dxs(self.Ein, self.T, self.M, self.algorithm, dxs)
 
 
 class DDxs:
@@ -818,69 +821,71 @@ class DDxs:
         >>> ddxs.shift(recoil).data.iloc[::, ::200].round(6)
         Eout           1.80000    1.88008    1.96016    2.04024   2.12032
         mu
-        -9.659258e-01      0.0  11.752439  23.882671  15.334022  3.326921
-        -8.660254e-01      0.0  11.297289  24.439673  15.705924  3.218356
-        -7.071068e-01      0.0  10.462484  25.381107  16.337734  3.015037
-        -5.000000e-01      0.0   9.147290  26.718016  17.243286  2.685263
-        -2.588190e-01      0.0   7.262820  28.438565  18.428012  2.194713
-         6.123234e-17      0.0   4.851817  30.444705  19.854188  1.535498
-         2.588190e-01      0.0   2.316653  32.368444  21.334787  0.792574
-         5.000000e-01      0.0   0.532320  33.028519  22.201022  0.210386
-         7.071068e-01      0.0   0.018355  28.950225  20.300333  0.009908
-         8.660254e-01      0.0   0.000001  13.367055  10.574417  0.000001
-         9.659258e-01      0.0   0.000000   0.047965   0.072548  0.000000
+        -9.659258e-01      0.0  11.822076  23.895518  15.264930  3.296181
+        -8.660254e-01      0.0  11.369083  24.456245  15.633118  3.187391
+        -7.071068e-01      0.0  10.537212  25.404835  16.258116  2.983919
+        -5.000000e-01      0.0   9.224310  26.754111  17.152606  2.654508
+        -2.588190e-01      0.0   7.338641  28.495673  18.319880  2.165656
+         6.123234e-17      0.0   4.918270  30.538049  19.718229  1.510763
+         2.588190e-01      0.0   2.361239  32.525888  21.153202  0.775960
+         5.000000e-01      0.0   0.548102  33.300063  21.943376  0.204085
+         7.071068e-01      0.0   0.019319  29.400359  19.928865  0.009421
+         8.660254e-01      0.0   0.000001  13.858678  10.180689  0.000001
+         9.659258e-01      0.0   0.000000   0.055546   0.062846  0.000000
+
 
         # Shift the DDXS in the theta axis:
         >>> recoil =  theta * kb * T / M
         >>> ddxs.shift(recoil, axis="mu").data.iloc[::, ::200].round(6)
-        Eout           1.80000    1.88008    1.96016    2.04024   2.12032
+        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
-        -9.659258e-01      0.0   0.000000   0.000000   0.000000  0.000000
-        -8.660254e-01      0.0  11.344216  24.382244  15.667580  3.229550
-        -7.071068e-01      0.0  10.545228  25.287795  16.275111  3.035189
-        -5.000000e-01      0.0   9.281694  26.581393  17.150745  2.718964
-        -2.588190e-01      0.0   7.470283  28.249148  18.297584  2.248719
-         6.123234e-17      0.0   5.149073  30.197366  19.678353  1.616773
-         2.588190e-01      0.0   2.681311  32.091733  21.121817  0.899436
-         5.000000e-01      0.0   0.846623  32.912249  22.048438  0.312936
-         7.071068e-01      0.0   0.136533  29.887963  20.737366  0.056005
-         8.660254e-01      0.0   0.006065  18.515600  13.787775  0.003274
-         9.659258e-01      0.0   0.000000   7.600770   6.027802  0.000001
-
+        -9.659258e-01  0.000000   0.000000   0.000000   0.000000  0.000000
+        -8.660254e-01  1.512354  11.550701  24.428439  15.447373  3.133787
+        -7.071068e-01  1.130596  10.760152  25.354004  16.035088  2.938998
+        -5.000000e-01  0.701001   9.503678  26.682255  16.878503  2.623838
+        -2.588190e-01  0.329305   7.690280  28.408648  17.974768  2.158535
+         6.123234e-17  0.101044   5.345472  30.457178  19.275756  1.539072
+         2.588190e-01  0.016827   2.820610  32.526751  20.590726  0.845002
+         5.000000e-01  0.001321   0.907921  33.653627  21.309075  0.288268
+         7.071068e-01  0.000019   0.149474  31.103053  19.698006  0.050505
+         8.660254e-01  0.000000   0.007025  19.957749  12.641257  0.002797
+         9.659258e-01  0.000000   0.000001   8.458675   5.358187  0.000000
 
         # Shift the DDXS with a function that depends on theta and Eout:
         >>> recoil = np.outer(theta, Eout) * kb * T / M
         >>> ddxs.shift(recoil).data.iloc[::, ::200].round(6)
-        Eout           1.80000   1.88008    1.96016    2.04024     2.12032
+        Eout           1.80000    1.88008    1.96016    2.04024     2.12032
         mu
-        -9.659258e-01      0.0  0.000000   0.000000   0.000000    0.000000
-        -8.660254e-01      0.0  7.660641  22.480793  19.856386    5.659898
-        -7.071068e-01      0.0  5.309295  21.080102  22.725649    7.167386
-        -5.000000e-01      0.0  3.061451  18.618380  26.027269    9.065437
-        -2.588190e-01      0.0  1.299103  14.697815  29.623749   11.554546
-         6.123234e-17      0.0  0.328627   9.382356  32.912699   14.974422
-         2.588190e-01      0.0  0.036612   3.963107  34.150405   19.949152
-         5.000000e-01      0.0  0.001426   0.763712  29.473931   27.755249
-         7.071068e-01      0.0  0.000000   0.049612  15.238504   41.390633
-         8.660254e-01      0.0  0.000000   0.000237   2.564919   69.179036
-         9.659258e-01      0.0  0.000000   0.000000   0.045441  131.357046
+        -9.659258e-01      0.0  10.044976  23.349784  17.204335    4.296524
+        -8.660254e-01      0.0   7.778998  22.649984  19.722305    5.510014
+        -7.071068e-01      0.0   5.368781  21.298115  22.664033    6.984566
+        -5.000000e-01      0.0   3.058885  18.845614  26.081612    8.843408
+        -2.588190e-01      0.0   1.253561  14.854945  29.862541   11.284970
+         6.123234e-17      0.0   0.282746   9.355962  33.424442   14.649544
+         2.588190e-01      0.0   0.019782   3.711640  34.959481   19.575105
+         5.000000e-01      0.0   0.000105   0.511907  30.150619   27.416328
+         7.071068e-01      0.0   0.000000   0.004029  14.192045   41.605645
+         8.660254e-01      0.0   0.000000   0.000000   0.567834   73.587937
+         9.659258e-01      0.0   0.000000   0.000000   0.000000  181.402037
         """
+        # Copy original data to avoid changing the original data:
+        ddxs = self.data.copy()
         # Check the dx:
         dx_ = check_dx(self.data, dx, axis)
         axis_ = 1 if axis == "Eout" else 0 if axis == "mu" else axis
         if isinstance(dx_, float) or isinstance(dx_, int):
-            self.data = self.data.apply(lambda x: reshift(x, dx_), axis=axis_)
+            ddxs = ddxs.apply(lambda x: reshift(x, dx_), axis=axis_)
         elif isinstance(dx_, pd.Series):
-            data = self.data.loc[::, dx_.index] if axis_ == 1 else self.data.loc[dx_.index, ::]
+            data = ddxs.loc[::, dx_.index] if axis_ == 1 else ddxs.loc[dx_.index, ::]
             data_reshift = data.apply(lambda x: reshift(x, dx_.values), axis=axis_)
             if axis_ == 1:
-                self.data.loc[::, dx_.index] = data_reshift
+                ddxs.loc[::, dx_.index] = data_reshift
             else:
-                self.data.loc[dx_.index, ::] = data_reshift
+                ddxs.loc[dx_.index, ::] = data_reshift
         else:
-            data = self.data.loc[dx_.index, dx_.columns]
-            self.data.loc[dx_.index, dx_.columns] = data.apply(lambda x: reshift(x, dx_.loc[x.name].values), axis=1)
-        return DDxs(self.Ein, self.T, self.M, self.algorithm, self.data)
+            data = ddxs.loc[dx_.index, dx_.columns]
+            ddxs.loc[dx_.index, dx_.columns] = data.apply(lambda x: reshift(x, dx_.loc[x.name].values), axis=1)
+        return self.__class__(self.Ein, self.T, self.M, self.algorithm, ddxs)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

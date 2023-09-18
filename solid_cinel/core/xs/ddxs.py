@@ -9,7 +9,7 @@ import numba as nb
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
-from solid_cinel.core.generic import integrate
+from solid_cinel.core.generic import integrate, reshift
 import os
 
 from typing import Iterable
@@ -122,6 +122,7 @@ class Dxs:
 
         """
         pdf_ = pd.Series(pdf).sort_index()
+        pdf_.index.name = "Eout"
         self._data = pdf_
 
 
@@ -365,12 +366,11 @@ class Dxs:
         dtype: float64
         """
         # Check the dx:
-        dx_ = check_dx(self.data, dx, axis=0)
+        dx_ = check_dx(self.data, dx, 0)
         if isinstance(dx, float) or isinstance(dx, int):
-            self.data = reshift(self.data, dx_, self.data.index)
+            self.data = reshift(self.data, dx_)
         else:
-            self.data.loc[dx_.index] = reshift(self.data.loc[dx_.index], dx_,
-                                               dx_.index)
+            self.data.loc[dx_.index] = reshift(self.data.loc[dx_.index], dx_)
         return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data)
 
 
@@ -832,7 +832,7 @@ class DDxs:
 
         # Shift the DDXS in the theta axis:
         >>> recoil =  theta * kb * T / M
-        >>> ddxs.shift(recoil, axis="theta").data.iloc[::, ::200].round(6)
+        >>> ddxs.shift(recoil, axis="mu").data.iloc[::, ::200].round(6)
         Eout           1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.659258e-01      0.0   0.000000   0.000000   0.000000  0.000000
@@ -867,20 +867,19 @@ class DDxs:
         """
         # Check the dx:
         dx_ = check_dx(self.data, dx, axis)
-        axis_ = 1 if axis == "Eout" else 0 if axis == "theta" else axis
+        axis_ = 1 if axis == "Eout" else 0 if axis == "mu" else axis
         if isinstance(dx_, float) or isinstance(dx_, int):
-            x_values = self.data.columns.values if axis_ == 1 else self.data.index.values
-            self.data = self.data.apply(reshift, axis=axis_, args=(dx_, x_values))
+            self.data = self.data.apply(lambda x: reshift(x, dx_), axis=axis_)
         elif isinstance(dx_, pd.Series):
             data = self.data.loc[::, dx_.index] if axis_ == 1 else self.data.loc[dx_.index, ::]
-            data_reshift = data.apply(reshift, axis=axis_, args=(dx_.values, dx_.index))
+            data_reshift = data.apply(lambda x: reshift(x, dx_.values), axis=axis_)
             if axis_ == 1:
                 self.data.loc[::, dx_.index] = data_reshift
             else:
                 self.data.loc[dx_.index, ::] = data_reshift
         else:
             data = self.data.loc[dx_.index, dx_.columns]
-            self.data.loc[dx_.index, dx_.columns] = data.apply(lambda x: reshift(x, dx_.loc[x.name].values, dx_.columns), axis=1)
+            self.data.loc[dx_.index, dx_.columns] = data.apply(lambda x: reshift(x, dx_.loc[x.name].values), axis=1)
         return DDxs(self.Ein, self.T, self.M, self.algorithm, self.data)
 
 
@@ -1439,21 +1438,27 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
 
 
-def check_dx(data: pd.DataFrame, dx: [float, np.ndarray, pd.DataFrame], axis: [str, int]) -> [float, pd.Series, pd.DataFrame]:
+def check_dx(data: [pd.DataFrame, pd.Series],
+             dx: [float, np.ndarray, pd.DataFrame],
+             axis: [str, int]) -> [float, pd.Series, pd.DataFrame]:
     """
-    Check the dx value to shift the Double Differential XS and return the value in the correct format for the shift
+    Check the dx value to shift the Double Differential XS and return the value
+    in the correct format for the shift aplicattion.
+
+    Parameters
+    ----------
+    data : pd.DataFrame, pd.Series
+        Double or Single Differential XS data to shift
+    dx : float, np.ndarray, pd.DataFrame
+        Value to shift the data
+    axis : str, int
+        Axis to shift the data. Available options are "Eout", "mu" or 0, 1
+        respectively.
     """
     if isinstance(dx, float) or isinstance(dx, int) or isinstance(dx, pd.Series) or isinstance(dx, pd.DataFrame):
         return dx
     elif isinstance(dx, np.ndarray) and len(dx.shape) == 1:
-        axis_ = 1 if axis == "Eout" else 0 if axis == "theta" else axis
+        axis_ = 1 if axis == "Eout" else 0 if axis == "mu" else axis
         return pd.Series(dx, index=data.index if axis_ == 0 else data.columns)
     else:
         return pd.DataFrame(dx, index=data.index, columns=data.columns)
-
-def reshift(data: pd.Series, dx: np.ndarray, index: pd.Index) -> pd.Series:
-    """
-    """
-    x, y = data.index.values, data.values
-    rehifted_data = np.interp(x, x + dx, y, left=0, right=0)
-    return pd.Series(rehifted_data, index=index)

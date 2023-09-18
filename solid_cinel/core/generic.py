@@ -112,6 +112,62 @@ def reshape_differential(data, xnew: Iterable,
     return foo(xnew)
 
 
+def reshift(data: pd.Series, dx: [float, np.ndarray]) -> pd.Series:
+    """
+    Reshift the data to the original grid. For example, if the data is shifted
+    to the left, the data interpolated to the original grid.
+
+    Parameters
+    ----------
+    data : pd.Series
+        Data to reshift
+    dx : np.ndarray, float
+        Shifted grid
+
+    Returns
+    -------
+    pd.Series
+        Reshifted data
+
+    Examples
+    --------
+    Vector interpolation:
+    >>> x = np.array([1, 2, 3, 4, 5])
+    >>> y = np.array([1, 2, 3, 4, 5])
+    >>> data = pd.Series(y, index=x)
+    >>> dx = - 0.5
+    >>> reshift(data, dx)
+    1    1.5
+    2    2.5
+    3    3.5
+    4    4.5
+    5    0.0
+     dtype: float64
+
+    >>> dx = + 0.5
+    >>> reshift(data, dx)
+    1    0.0
+    2    1.5
+    3    2.5
+    4    3.5
+    5    4.5
+    dtype: float64
+
+    array interpolation:
+    >>> dx = np.array([-0.25, 0.0, 0.25, 0.5, 0.75])
+    >>> reshift(data, dx)
+    1    1.2
+    2    2.0
+    3    2.8
+    4    3.6
+    5    4.4
+    dtype: float64
+    """
+    x = data.index.values
+    reshifted_data = reshape_differential(data.set_axis(x + dx), x)
+    return pd.Series(reshifted_data, index=data.index.values)
+
+
 def sampling(d: int, n: int) -> np.array:
     """
     Generate a latin hypercube sampling between 0 and 1.

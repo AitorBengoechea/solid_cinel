@@ -1,5 +1,5 @@
 """
-Python file for working xs doppler broadening functions.
+Python for working with Double Diferential XS.
 
 @author: AB272525
 """
@@ -883,7 +883,7 @@ class DDxs:
         return DDxs(self.Ein, self.T, self.M, self.algorithm, self.data)
 
 
-@nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
                      M: float, T_arno: np.ndarray, Eout: np.ndarray,
                      mu: np.ndarray) -> np.ndarray:

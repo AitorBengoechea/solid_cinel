@@ -883,7 +883,7 @@ class DDxs:
         return DDxs(self.Ein, self.T, self.M, self.algorithm, self.data)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
                      M: float, T_arno: np.ndarray, Eout: np.ndarray,
                      mu: np.ndarray) -> np.ndarray:
@@ -1140,7 +1140,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
                               mu, nphonon, tau1.values, tau1.index[1],
                               threshold, debye_waller_coeff, mu_fit)
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
                    T_arno: np.ndarray, Eout: np.ndarray, mu: np.ndarray, nphonon: int,
                    tau1: np.ndarray, delta_beta: float, threshold: float,
@@ -1209,7 +1209,7 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     return xs_mat
 
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
                   T_arno: np.ndarray, Eout: np.ndarray, mu: np.ndarray,
                   Teff: np.ndarray, ws: float, mu_fit: float) -> np.ndarray:
@@ -1387,7 +1387,7 @@ def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
     return Eout
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def default_Eout(Ein: float) -> np.ndarray:
     """
     Generate the default Eout grid for the convolution. The grid is tested with

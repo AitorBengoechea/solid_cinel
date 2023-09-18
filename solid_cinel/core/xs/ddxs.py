@@ -365,15 +365,12 @@ class Dxs:
         dtype: float64
         """
         # Check the dx:
+        dx_ = check_dx(self.data, dx, axis=0)
         if isinstance(dx, float) or isinstance(dx, int):
-            self.data = pd.Series(np.interp(self.data.index, self.data.index + dx, self.data.values, left=0, right=0),
-                                        index=self.data.index)
+            self.data = reshift(self.data, dx_, self.data.index)
         else:
-            dx_ = dx if isinstance(dx, pd.Series) else pd.Series(dx, index=self.data.index)
-            x = self.data.loc[dx_.index].index
-            y = self.data.loc[dx_.index].values
-            self.data.loc[dx_.index] = pd.Series(np.interp(x, x + dx_.values, y, left=0, right=0),
-                                                     index=dx_.index)
+            self.data.loc[dx_.index] = reshift(self.data.loc[dx_.index], dx_,
+                                               dx_.index)
         return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data)
 
 
@@ -819,105 +816,72 @@ class DDxs:
         # Shift the DDXS in the Eout axis:
         >>> recoil = Eout * kb * T / M
         >>> ddxs.shift(recoil).data.iloc[::, ::200].round(6)
-        Eout           1.80000  1.88008   1.96016   2.04024   2.12032
+        Eout           1.80000    1.88008    1.96016    2.04024   2.12032
         mu
-        -9.659258e-01      0.0   1.8794  1.959451  2.039502  2.119553
-        -8.660254e-01      0.0   1.8794  1.959451  2.039502  2.119553
-        -7.071068e-01      0.0   1.8794  1.959451  2.039502  2.119553
-        -5.000000e-01      0.0   1.8794  1.959451  2.039502  2.119553
-        -2.588190e-01      0.0   1.8794  1.959451  2.039502  2.119553
-         6.123234e-17      0.0   1.8794  1.959451  2.039502  2.119553
-         2.588190e-01      0.0   1.8794  1.959451  2.039502  2.119553
-         5.000000e-01      0.0   1.8794  1.959451  2.039502  2.119553
-         7.071068e-01      0.0   1.8794  1.959451  2.039502  2.119553
-         8.660254e-01      0.0   1.8794  1.959451  2.039502  2.119553
-         9.659258e-01      0.0   1.8794  1.959451  2.039502  2.119553
+        -9.659258e-01      0.0  11.752439  23.882671  15.334022  3.326921
+        -8.660254e-01      0.0  11.297289  24.439673  15.705924  3.218356
+        -7.071068e-01      0.0  10.462484  25.381107  16.337734  3.015037
+        -5.000000e-01      0.0   9.147290  26.718016  17.243286  2.685263
+        -2.588190e-01      0.0   7.262820  28.438565  18.428012  2.194713
+         6.123234e-17      0.0   4.851817  30.444705  19.854188  1.535498
+         2.588190e-01      0.0   2.316653  32.368444  21.334787  0.792574
+         5.000000e-01      0.0   0.532320  33.028519  22.201022  0.210386
+         7.071068e-01      0.0   0.018355  28.950225  20.300333  0.009908
+         8.660254e-01      0.0   0.000001  13.367055  10.574417  0.000001
+         9.659258e-01      0.0   0.000000   0.047965   0.072548  0.000000
 
         # Shift the DDXS in the theta axis:
         >>> recoil =  theta * kb * T / M
         >>> ddxs.shift(recoil, axis="theta").data.iloc[::, ::200].round(6)
-        Eout            1.80000   1.88008   1.96016   2.04024   2.12032
+        Eout           1.80000    1.88008    1.96016    2.04024   2.12032
         mu
-        -9.659258e-01  0.000000  0.000000  0.000000  0.000000  0.000000
-        -8.660254e-01 -0.876325 -0.876325 -0.876325 -0.876325 -0.876325
-        -7.071068e-01 -0.722858 -0.722858 -0.722858 -0.722858 -0.722858
-        -5.000000e-01 -0.521165 -0.521165 -0.521165 -0.521165 -0.521165
-        -2.588190e-01 -0.285371 -0.285371 -0.285371 -0.285371 -0.285371
-         6.123234e-17 -0.031910 -0.031910 -0.031910 -0.031910 -0.031910
-         2.588190e-01  0.221591  0.221591  0.221591  0.221591  0.221591
-         5.000000e-01  0.457517  0.457517  0.457517  0.457517  0.457517
-         7.071068e-01  0.659486  0.659486  0.659486  0.659486  0.659486
-         8.660254e-01  0.813520  0.813520  0.813520  0.813520  0.813520
-         9.659258e-01  0.909276  0.909276  0.909276  0.909276  0.909276
+        -9.659258e-01      0.0   0.000000   0.000000   0.000000  0.000000
+        -8.660254e-01      0.0  11.344216  24.382244  15.667580  3.229550
+        -7.071068e-01      0.0  10.545228  25.287795  16.275111  3.035189
+        -5.000000e-01      0.0   9.281694  26.581393  17.150745  2.718964
+        -2.588190e-01      0.0   7.470283  28.249148  18.297584  2.248719
+         6.123234e-17      0.0   5.149073  30.197366  19.678353  1.616773
+         2.588190e-01      0.0   2.681311  32.091733  21.121817  0.899436
+         5.000000e-01      0.0   0.846623  32.912249  22.048438  0.312936
+         7.071068e-01      0.0   0.136533  29.887963  20.737366  0.056005
+         8.660254e-01      0.0   0.006065  18.515600  13.787775  0.003274
+         9.659258e-01      0.0   0.000000   7.600770   6.027802  0.000001
+
 
         # Shift the DDXS with a function that depends on theta and Eout:
         >>> recoil = np.outer(theta, Eout) * kb * T / M
         >>> ddxs.shift(recoil).data.iloc[::, ::200].round(6)
-        Eout           1.80000   1.88008   1.96016   2.04024   2.12032
+        Eout           1.80000   1.88008    1.96016    2.04024     2.12032
         mu
-        -9.659258e-01      0.0  0.000000  0.000000  0.000000  0.000000
-        -8.660254e-01      0.0 -0.876325 -0.876325 -0.876325 -0.876325
-        -7.071068e-01      0.0 -0.722858 -0.722858 -0.722858 -0.722858
-        -5.000000e-01      0.0 -0.521165 -0.521165 -0.521165 -0.521165
-        -2.588190e-01      0.0 -0.285371 -0.285371 -0.285371 -0.285371
-         6.123234e-17      0.0 -0.031910 -0.031910 -0.031910 -0.031910
-         2.588190e-01      0.0  0.221591  0.221591  0.221591  0.221591
-         5.000000e-01      0.0  0.457517  0.457517  0.457517  0.457517
-         7.071068e-01      0.0  0.000000  0.659486  0.659486  0.659486
-         8.660254e-01      0.0  0.000000  0.813520  0.813520  0.813520
-         9.659258e-01      0.0  0.000000  0.909276  0.909276  0.909276
+        -9.659258e-01      0.0  0.000000   0.000000   0.000000    0.000000
+        -8.660254e-01      0.0  7.660641  22.480793  19.856386    5.659898
+        -7.071068e-01      0.0  5.309295  21.080102  22.725649    7.167386
+        -5.000000e-01      0.0  3.061451  18.618380  26.027269    9.065437
+        -2.588190e-01      0.0  1.299103  14.697815  29.623749   11.554546
+         6.123234e-17      0.0  0.328627   9.382356  32.912699   14.974422
+         2.588190e-01      0.0  0.036612   3.963107  34.150405   19.949152
+         5.000000e-01      0.0  0.001426   0.763712  29.473931   27.755249
+         7.071068e-01      0.0  0.000000   0.049612  15.238504   41.390633
+         8.660254e-01      0.0  0.000000   0.000237   2.564919   69.179036
+         9.659258e-01      0.0  0.000000   0.000000   0.045441  131.357046
         """
         # Check the dx:
-        dx_ = self.check_dx(self.data, dx, axis)
+        dx_ = check_dx(self.data, dx, axis)
         axis_ = 1 if axis == "Eout" else 0 if axis == "theta" else axis
-        x_values = self.data.columns.values if axis_ == 1 else self.data.index.values
         if isinstance(dx_, float) or isinstance(dx_, int):
-            self.data = self.data.apply(lambda x: pd.Series(
-                np.interp(x_values, x_values + dx_, x.values, left=0, right=0),
-                                        index=x_values),
-                                   axis=axis_)
-        elif isinstance(dx_, pd.Series) and axis_ == 1:
-            self.data.loc[::, dx_.index] = self.data.loc[::, dx_.index].apply(lambda x:
-                                                                              pd.Series(
-                                                                                  np.interp(x_values,
-                                                                                            x_values + dx_.values,
-                                                                                            x_values, left=0, right=0),
-                                                                                    index=dx_.index
-                                                                              ),
-                                                                              axis=axis_)
-        elif isinstance(dx_, pd.Series) and axis_ == 0:
-            self.data.loc[dx_.index, ::] = self.data.loc[dx_.index, ::].apply(lambda x:
-                                                                              pd.Series(
-                                                                                  np.interp(x_values,
-                                                                                            x_values + dx_.values,
-                                                                                            x_values, left=0, right=0),
-                                                                                  index=dx_.index
-                                                                              ),
-                                                                              axis=axis_)
+            x_values = self.data.columns.values if axis_ == 1 else self.data.index.values
+            self.data = self.data.apply(reshift, axis=axis_, args=(dx_, x_values))
+        elif isinstance(dx_, pd.Series):
+            data = self.data.loc[::, dx_.index] if axis_ == 1 else self.data.loc[dx_.index, ::]
+            data_reshift = data.apply(reshift, axis=axis_, args=(dx_.values, dx_.index))
+            if axis_ == 1:
+                self.data.loc[::, dx_.index] = data_reshift
+            else:
+                self.data.loc[dx_.index, ::] = data_reshift
         else:
-            self.data.loc[dx_.index, dx_.columns] = self.data.loc[dx_.index, dx_.columns].apply(lambda x:
-                                                                                                    pd.Series(
-                                                                                                        np.interp(x_values,
-                                                                                                        x_values + dx_.loc[x.name].values,
-                                                                                                                  x.values, left=0, right=0),
-                                                                                                        index=dx_.columns,
-                                                                                                    ),
-                                                                                                axis=1)
-
+            data = self.data.loc[dx_.index, dx_.columns]
+            self.data.loc[dx_.index, dx_.columns] = data.apply(lambda x: reshift(x, dx_.loc[x.name].values, dx_.columns), axis=1)
         return DDxs(self.Ein, self.T, self.M, self.algorithm, self.data)
-
-    @staticmethod
-    def check_dx(data: pd.DataFrame, dx: [float, np.ndarray, pd.DataFrame], axis: [str, int]) -> [float, pd.Series, pd.DataFrame]:
-        """
-        Check the dx value to shift the Double Differential XS and return the value in the correct format for the shift
-        """
-        if isinstance(dx, float) or isinstance(dx, int) or isinstance(dx, pd.Series) or isinstance(dx, pd.DataFrame):
-            return dx
-        elif isinstance(dx, np.ndarray) and len(dx.shape) == 1:
-            axis_ = 1 if axis == "Eout" else 0 if axis == "theta" else axis
-            return pd.Series(dx, index=data.index if axis_ == 0 else data.columns)
-        else:
-            return pd.DataFrame(dx, index=data.index, columns=data.columns)
 
 
 @nb.jit(nopython=True, nogil=False, cache=False, parallel=True)
@@ -1473,3 +1437,23 @@ def default_Eout(Ein: float) -> np.ndarray:
                                  np.log10(2 * Ein),
                                  2000)
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+
+
+def check_dx(data: pd.DataFrame, dx: [float, np.ndarray, pd.DataFrame], axis: [str, int]) -> [float, pd.Series, pd.DataFrame]:
+    """
+    Check the dx value to shift the Double Differential XS and return the value in the correct format for the shift
+    """
+    if isinstance(dx, float) or isinstance(dx, int) or isinstance(dx, pd.Series) or isinstance(dx, pd.DataFrame):
+        return dx
+    elif isinstance(dx, np.ndarray) and len(dx.shape) == 1:
+        axis_ = 1 if axis == "Eout" else 0 if axis == "theta" else axis
+        return pd.Series(dx, index=data.index if axis_ == 0 else data.columns)
+    else:
+        return pd.DataFrame(dx, index=data.index, columns=data.columns)
+
+def reshift(data: pd.Series, dx: np.ndarray, index: pd.Index) -> pd.Series:
+    """
+    """
+    x, y = data.index.values, data.values
+    rehifted_data = np.interp(x, x + dx, y, left=0, right=0)
+    return pd.Series(rehifted_data, index=index)

@@ -618,15 +618,15 @@ class Sab:
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos
 
-        tau1 = pdos.get_tau_1(T)
-        delta_beta = pdos.grid
+        tau1 = pdos.get_tau_1(T).values
+        delta_beta = pdos.to_beta_grid(T).grid
         if hasattr(delta_beta, "__len__"):
             raise ValueError("Pdos object doesnt have a consistent grid")
         S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
                                               beta_grid_.data,
                                               nphonon,
-                                              tau1.values,
-                                              tau1.index[1],
+                                              tau1,
+                                              delta_beta,
                                               threshold,
                                               cls.DebyeWallerCoeff)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)

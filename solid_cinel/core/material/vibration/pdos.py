@@ -140,11 +140,8 @@ class Pdos:
         >>> round(p.grid, 4)
         0.0008
         """
-        diff =np.ediff1d(self.rho.index)
-        if len(np.unique(diff.round(14))) == 1:
-            return diff[0]
-        else:
-            return diff
+        diff = np.ediff1d(self.rho.index)
+        return diff[0] if abs(diff.max() - diff.min()) < 1.0e-14 else diff
 
     @classmethod
     def from_dE(cls, rho: Iterable, interval_energy: float):

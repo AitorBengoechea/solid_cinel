@@ -110,7 +110,10 @@ class Pdos:
         Test the results:
         >>> assert sp.integrate.trapezoid(p.data.values, p.data.index) == 1.0
         """
-        rho_ = pd.Series(rho_data, dtype=float, name="rho")
+        rho_ = pd.Series(rho_data, name="rho")
+
+        if rho_.index.name != "beta" and rho_.index.name != "E":
+            raise SyntaxError("Energy index must be E or beta")
 
         if not len(rho_.shape) == 1:
             raise TypeError("Rho must have one dimension")
@@ -119,6 +122,29 @@ class Pdos:
             raise SyntaxError("energy grid is not monotonically increasing")
 
         self.data = rho_ / integrate(rho_)
+
+    @property
+    def grid(self) -> [float, np.ndarray]:
+        """
+        Grid of the Phonon Density of States function
+
+        Returns
+        -------
+        "float" or "pd.Index"
+            Grid of the Phonon Density of States function
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> round(p.grid, 4)
+        0.0008
+        """
+        diff =np.ediff1d(self.rho.index)
+        if len(np.unique(diff.round(14))) == 1:
+            return diff[0]
+        else:
+            return diff
 
     @classmethod
     def from_dE(cls, rho: Iterable, interval_energy: float):
@@ -144,7 +170,7 @@ class Pdos:
 
         Test the results:
         >>> p.rho.iloc[0:10]
-        dE
+        E
         0.0000    0.000000
         0.0008    0.041157
         0.0016    0.164629
@@ -159,7 +185,7 @@ class Pdos:
         """
         rho_ = np.array(rho)
         index = pd.Index(np.arange(len(rho_)) * interval_energy)
-        index.name = "dE"
+        index.name = "E"
         return cls(rho_, index=index)
 
     def to_beta_grid(self, T: float):
@@ -183,7 +209,7 @@ class Pdos:
         Object initialization:
         >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> p.rho.iloc[0:5]
-        dE
+        E
         0.0000    0.000000
         0.0008    0.041157
         0.0016    0.164629
@@ -201,10 +227,22 @@ class Pdos:
         0.092836    0.009576
         0.123782    0.017008
         Name: rho, dtype: float64
+
+        >>> p.to_beta_grid(T).to_beta_grid(T).rho.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.030945    0.001064
+        0.061891    0.004256
+        0.092836    0.009576
+        0.123782    0.017008
+        Name: rho, dtype: float64
         """
-        grid = self.rho.index.values
-        self.beta = Beta.from_dE(grid, T)
-        return Pdos(self.rho.values, index=self.beta.to_index)
+        if self.rho.index.name == "beta":
+            return self
+        else:
+            grid = self.rho.index.values
+            return Pdos(self.rho.values,
+                        index=Beta.from_dE(grid, T).to_index)
 
     def plot(self) -> matplotlib:
         """Plot rho (y) vs grid (x)."""
@@ -250,8 +288,8 @@ class Pdos:
         0.154727    1.109309
         Name: P, dtype: float64
         """
-        rho_in_beta = self.to_beta_grid(T).rho.values
-        beta_values = self.beta.data
+        beta_rho = self.to_beta_grid(T).rho
+        rho_in_beta, beta_values = beta_rho.values, beta_rho.index.values
         if abs(beta_values[0]) > threshold:
             raise ValueError("Initial point of input DOS is not zero")
         P_values = np.zeros(len(rho_in_beta))
@@ -261,7 +299,7 @@ class Pdos:
 
         # Rest of P values calculation:
         P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
-        return pd.Series(P_values, index=self.beta.to_index, name="P")
+        return pd.Series(P_values, index=beta_rho.index, name="P")
 
     def Teff(self, T: float, twt: float = None) -> float:
         """
@@ -292,9 +330,9 @@ class Pdos:
         >>> p.Teff(T=80).round(4)
         159.1632
         """
-        P = self.P(T).values
-        beta = self.beta.data
-        Teff_weight = sp.integrate.trapezoid(beta ** 2 * P * np.cosh(0.5 * beta),
+        P = self.P(T)
+        P_values, beta = P.values, P.index.values
+        Teff_weight = sp.integrate.trapezoid(beta ** 2 * P_values * np.cosh(0.5 * beta),
                                              x=beta)
         if twt is not None:
             Teff_weight += twt
@@ -334,9 +372,10 @@ class Pdos:
         >>> p.DebyeWallerCoeff(T=80).round(6)
         0.379937
         """
-        P = self.P(T).values
-        beta = self.beta.data
-        return 2 * sp.integrate.trapezoid(P * np.cosh(0.5 * beta), x=beta)
+        P = self.P(T)
+        P_values, beta = P.values, P.index.values
+        return 2 * sp.integrate.trapezoid(P_values * np.cosh(0.5 * beta),
+                                          x=beta)
 
     def get_tau_1(self, T: float) -> pd.Series:
         """
@@ -380,7 +419,7 @@ class Pdos:
         Name: 1, dtype: float64
         """
         P = self.P(T)
-        beta = self.beta.data
+        beta = P.index.values
         tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff(T)
         if integrate(tau1 * (1 + np.exp(-beta))) < 1.e-5:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")

@@ -619,6 +619,9 @@ class Sab:
         cls.pdos = pdos
 
         tau1 = pdos.get_tau_1(T)
+        delta_beta = pdos.grid
+        if hasattr(delta_beta, "__len__"):
+            raise ValueError("Pdos object doesnt have a consistent grid")
         S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
                                               beta_grid_.data,
                                               nphonon,

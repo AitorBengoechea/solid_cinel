@@ -272,9 +272,12 @@ class ScatFuncSD:
             threshold = kwargs.pop("threshold", 0.0)
             nphonon = kwargs.pop("nphonon", 1000)
             tau1 = args[-1].get_tau_1(T)
+            delta_beta = args[-1].grid
+            if hasattr(delta_beta, "__len__"):
+                raise ValueError("Pdos object doesnt have a consistent grid")
             debye_waller_coeff = args[-1].DebyeWallerCoeff(T)
             scattfunc = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, nphonon,
-                                               tau1.values, tau1.index[1],
+                                               tau1.values, delta_beta,
                                                threshold, debye_waller_coeff)
         else:
             ws = kwargs.pop("ws", 1.0)

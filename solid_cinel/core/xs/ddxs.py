@@ -1139,17 +1139,18 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     else:
         threshold = kwargs.pop("threshold", 0.0)
         nphonon = kwargs.pop("nphonon", 1000)
-        tau1 = pdos.get_tau_1(T)
-        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        tau1 = [pdos.get_tau_1(T).values if T > 0.0 else 0 for T in T_arno]
+        DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0 for T in T_arno]
+        delta_beta = [pdos.to_beta_grid(T).grid if T > 0.0 else 0 for T in T_arno]
         return xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout,
-                              mu, nphonon, tau1.values, tau1.index[1],
-                              threshold, debye_waller_coeff, mu_fit)
+                              mu, nphonon, tau1, delta_beta,
+                              threshold, DebyeWallerCoeff, mu_fit)
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nogil=True, cache=True, parallel=False)
 def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
                    T_arno: np.ndarray, Eout: np.ndarray, mu: np.ndarray, nphonon: int,
-                   tau1: np.ndarray, delta_beta: float, threshold: float,
-                   DebyeWallerCoeff: float, mu_fit: float) -> np.ndarray:
+                   tau1: np.ndarray, delta_beta: np.ndarray, threshold: float,
+                   DebyeWallerCoeff: np.ndarray, mu_fit: float) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1175,14 +1176,14 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
         Phonon expansion order
     tau1 : np.ndarray
         Array with the tau values of the 1 phonon order
-    delta_beta : float
-        tau functions step size
+    delta_beta : np.ndarray
+        tau functions step size for each T_arno
     threshold : float
         Minimun value to take into account in the creation of tau_n
         functions. For T>200 is convenient to set into 1.0e-14 to speed up
         the calculations.
-    DebyeWallerCoeff : float
-        Debye Waller coefficient
+    DebyeWallerCoeff : np.ndarray
+        Debye Waller coefficient for each T_arno
     mu_fit : float
         The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
         with sigma1
@@ -1191,6 +1192,36 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     -------
     np.ndarray, (M, N)
         Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.array([1.800000,  1.866667,  1.933333,  2.000000,  2.066667,  2.133333,  2.200000])
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 190, 10)
+    >>> mu = np.sort(np.cos(theta * np.pi / 180))
+    >>> mu_fit = np.cos(60 / 180 * np.pi)
+
+    >>> T_arno = T * (1 + mu) / 2
+    >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0 for T in T_arno]
+    >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else 0 for T in T_arno]
+    >>> delta_beta  = [interv_in_energy_U238 / (kb * T_arno[i]) if hasattr(tau1[i], '__len__') else 0 for i in range(len(tau1))]
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values = xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff, mu_fit)
+    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
+
     """
     xs_mat = np.zeros((len(mu), len(Eout)))
     for i in prange(len(mu)):
@@ -1203,14 +1234,21 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
                 Eout_db = default_Eout(Ein_arno)
                 # Distribution + Normalization:
                 pdf_val = get_ScatFunc_pdos_angle(Ein_arno, M, T_arno[i], Eout_db,
-                                                 mu_fit, nphonon, tau1, delta_beta,
-                                                 threshold, DebyeWallerCoeff)
-                pdf_val /= np.trapz(pdf_val, x=Eout_db)
-                # Recoil:
-                recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
-                # xs:
-                xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
-                xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db + recoil)
+                                                 mu_fit, nphonon, tau1[i], delta_beta[i],
+                                                 threshold, DebyeWallerCoeff[i])
+                norm = np.trapz(pdf_val, x=Eout_db)
+                # Pdos for low T creates Dirac delta functions (force to dont
+                # use nopython=True)
+                if norm == np.inf:
+                    xs_mat[i, j] = np.interp(Eout_db[np.argmax(pdf_val)],
+                                             xs_E, xs_values)
+                else:
+                    # Recoil:
+                    recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
+                    # xs:
+                    xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+                    xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val,
+                                            x=Eout_db + recoil) / norm
     return xs_mat
 
 

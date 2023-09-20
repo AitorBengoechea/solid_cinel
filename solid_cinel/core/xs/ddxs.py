@@ -1111,6 +1111,32 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     30   9.107068  9.100310  9.093508  9.086644  9.079697  9.072680  9.065628
     20   9.107189  9.100431  9.093629  9.086768  9.079823  9.072806  9.065754
     10   9.107262  9.100507  9.093703  9.086843  9.079899  9.072885  9.065834
+
+    # pdos model:
+    >>> Eout = np.array([1.800000,  1.866667,  1.933333,  2.000000,  2.066667,  2.133333])
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values = xs_matrix(mu_fit, xs_0K, Ein, M, T, Eout, theta, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
+    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
+        1.800000    1.866667    1.933333    2.000000    2.066667    2.133333
+    180	9.103994	9.097201	9.090408	9.083550	9.076500	9.069451
+    170	9.104017	9.097223	9.090430	9.083573	9.076523	9.069474
+    160	9.104094	9.097301	9.090508	9.083654	9.076604	9.069555
+    150	9.104215	9.097422	9.090629	9.083779	9.076729	9.069680
+    140	9.104382	9.097589	9.090796	9.083952	9.076903	9.069853
+    130	9.104588	9.097794	9.091001	9.084165	9.077116	9.070067
+    120	9.104826	9.098032	9.091239	9.084412	9.077363	9.070314
+    110	9.105089	9.098295	9.091502	9.084685	9.077636	9.070586
+    100	9.105369	9.098576	9.091783	9.084976	9.077927	9.070877
+    90	9.105658	9.098864	9.092071	9.085276	9.078226	9.071177
+    80	9.105947	9.099153	9.092360	9.085567	9.078526	9.071477
+    70	9.106227	9.099434	9.092641	9.085847	9.078817	9.071768
+    60	9.106490	9.099697	9.092904	9.086113	9.079090	9.072041
+    50	9.106728	9.099935	9.093142	9.086348	9.079337	9.072288
+    40	9.106933	9.100140	9.093347	9.086554	9.079550	9.072501
+    30	9.107100	9.100307	9.093514	9.086720	9.079723	9.072674
+    20	9.107222	9.100429	9.093636	9.086843	9.079850	9.072801
+    10	9.107298	9.100504	9.093711	9.086918	9.079928	9.072879
     """
     # Common arguments:
     if len(args) == 6:
@@ -1119,6 +1145,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         mu_fit, xs_0K, Ein, M, T, Eout, theta = args
     else:
         mu_fit, xs_0K, Ein, M, T, Eout, theta, pdos = args
+
     mu = np.sort(np.cos(theta * np.pi / 180))
     T_arno = T * (1 + mu) / 2
     model = kwargs.pop("model", "sigma1")
@@ -1142,11 +1169,11 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         tau1 = [pdos.get_tau_1(T).values if T > 0.0 else 0 for T in T_arno]
         DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0 for T in T_arno]
         delta_beta = [pdos.to_beta_grid(T).grid if T > 0.0 else 0 for T in T_arno]
-        return xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T, Eout,
-                              mu, nphonon, tau1, delta_beta,
-                              threshold, DebyeWallerCoeff, mu_fit)
+        return xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
+                              Eout, mu, nphonon, tau1, delta_beta, threshold,
+                              DebyeWallerCoeff, mu_fit)
 
-@nb.jit(nogil=True, cache=True, parallel=False)
+@nb.jit(nogil=True, cache=True, parallel=True)
 def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
                    T_arno: np.ndarray, Eout: np.ndarray, mu: np.ndarray, nphonon: int,
                    tau1: np.ndarray, delta_beta: np.ndarray, threshold: float,
@@ -1207,7 +1234,7 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
 
     >>> T = 1000
     >>> Ein = 2.0
-    >>> Eout = np.array([1.800000,  1.866667,  1.933333,  2.000000,  2.066667,  2.133333,  2.200000])
+    >>> Eout = np.array([1.800000,  1.866667,  1.933333,  2.000000,  2.066667,  2.133333])
     >>> M = 238.05077040419212
     >>> theta = np.arange(10, 190, 10)
     >>> mu = np.sort(np.cos(theta * np.pi / 180))
@@ -1216,12 +1243,30 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     >>> T_arno = T * (1 + mu) / 2
     >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0 for T in T_arno]
     >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else 0 for T in T_arno]
-    >>> delta_beta  = [interv_in_energy_U238 / (kb * T_arno[i]) if hasattr(tau1[i], '__len__') else 0 for i in range(len(tau1))]
+    >>> delta_beta  = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0 for T in T_arno]
     >>> nphonon = 100
     >>> threshold = 1.0e-14
     >>> xs_values = xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff, mu_fit)
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
-
+        1.800000    1.866667    1.933333    2.000000    2.066667    2.133333
+    180	9.103994	9.097201	9.090408	9.083550	9.076500	9.069451
+    170	9.104017	9.097223	9.090430	9.083573	9.076523	9.069474
+    160	9.104094	9.097301	9.090508	9.083654	9.076604	9.069555
+    150	9.104215	9.097422	9.090629	9.083779	9.076729	9.069680
+    140	9.104382	9.097589	9.090796	9.083952	9.076903	9.069853
+    130	9.104588	9.097794	9.091001	9.084165	9.077116	9.070067
+    120	9.104826	9.098032	9.091239	9.084412	9.077363	9.070314
+    110	9.105089	9.098295	9.091502	9.084685	9.077636	9.070586
+    100	9.105369	9.098576	9.091783	9.084976	9.077927	9.070877
+    90	9.105658	9.098864	9.092071	9.085276	9.078226	9.071177
+    80	9.105947	9.099153	9.092360	9.085567	9.078526	9.071477
+    70	9.106227	9.099434	9.092641	9.085847	9.078817	9.071768
+    60	9.106490	9.099697	9.092904	9.086113	9.079090	9.072041
+    50	9.106728	9.099935	9.093142	9.086348	9.079337	9.072288
+    40	9.106933	9.100140	9.093347	9.086554	9.079550	9.072501
+    30	9.107100	9.100307	9.093514	9.086720	9.079723	9.072674
+    20	9.107222	9.100429	9.093636	9.086843	9.079850	9.072801
+    10	9.107298	9.100504	9.093711	9.086918	9.079928	9.072879
     """
     xs_mat = np.zeros((len(mu), len(Eout)))
     for i in prange(len(mu)):

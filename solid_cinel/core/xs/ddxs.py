@@ -303,6 +303,43 @@ class Dxs:
         """
         return integrate(self.data)
 
+    @property
+    def prob(self) -> dict:
+        """
+        Get the upscattering and downscattering probabilities for the selected Ein, T, M
+
+        Returns
+        -------
+        dict
+            Dictionary with the upscattering and downscattering probabilities
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> dxs = Dxs.from_sigma1(xs_0K, Ein, M, T, Eout)
+        >>> round(dxs.prob["upscattering"], 6)
+        0.505184
+        >>> round(dxs.prob["downscattering"], 6)
+        0.490636
+        """
+        integral = self.integral
+        Eout = self.data.index.values
+        return {
+            "upscattering": integrate(self.data.loc[Eout > self.Ein]) / integral,
+            "downscattering": integrate(self.data.loc[Eout < self.Ein]) / integral
+        }
+
     def shift(self, dx: [float, np.ndarray, pd.DataFrame]):
         """
         Shift the Double Differential XS in the given axis and interpolate to get the values of the original axis

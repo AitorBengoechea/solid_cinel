@@ -1210,6 +1210,26 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     30	9.107100	9.100307	9.093514	9.086720	9.079723	9.072674
     20	9.107222	9.100429	9.093636	9.086843	9.079850	9.072801
     10	9.107298	9.100504	9.093711	9.086918	9.079928	9.072879
+
+    Dirac delta test for Teff calculation and pdos model:
+    >>> Ein = 36.68
+    >>> M = 238.05077040419212
+    >>> T = 300
+    >>> theta = np.arange(1, 11, 1)
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> xs_values = xs_matrix(mu_fit, xs_0K, Ein, M, T, Eout, theta, pdos, model="sct")
+    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
+        33.012000  34.234667  35.457333    36.680000   37.902667  39.125333  40.348000
+    10   1.172155   0.050573   7.412180  2488.652909  189.358377  56.802524  35.638042
+    9    1.173263   0.050697   7.393529  2475.058188  189.717250  56.830802  35.646868
+    8    1.174255   0.050811   7.376864  2462.939890  190.039819  56.856154  35.654776
+    7    1.175131   0.050912   7.362177  2452.282809  190.325616  56.878566  35.661765
+    6    1.175891   0.051001   7.349462  2443.073267  190.574173  56.898019  35.667828
+    5    1.176534   0.051077   7.338713  2435.299906  190.785113  56.914502  35.672964
+    4    1.177061   0.051140   7.329925  2428.953907  190.958287  56.928003  35.677170
+    3    1.177471   0.051189   7.323094  2424.025876  191.093249  56.938513  35.680444
+    2    1.177764   0.051225   7.318218  2420.509985  191.189829  56.946026  35.682784
+    1    1.177939   0.051246   7.315292  2418.402935  191.247835  56.950535  35.684188
     """
     # Common arguments:
     if len(args) == 6:
@@ -1231,9 +1251,9 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                              Eout, mu, T_arno, 1.0, mu_fit)
     elif model == "sct":
-        Teff = pd.Series(
-            [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno],
-            index=T_arno).backfill().values
+        Teff = np.nan_to_num(
+            [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
+        )
         return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                              Eout, mu, Teff, 1.0, mu_fit)
     else:
@@ -1446,11 +1466,36 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     30   9.106929  9.100178  9.093367  9.086494  9.079551  9.072547  9.065490
     20   9.107044  9.100294  9.093484  9.086612  9.079670  9.072668  9.065611
     10   9.107115  9.100364  9.093556  9.086683  9.079744  9.072743  9.065684
+
+    # SCT model with Teff = np.nan for angles close to 180 degrees:
+    >>> Ein = 36.68
+    >>> M = 238.05077040419212
+    >>> T = 300
+    >>> theta = np.arange(1, 11, 1)
+    >>> mu = np.sort(np.cos(theta / 180 * np.pi))
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> T_arno = T * (1 + mu) / 2
+    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> Teff = np.nan_to_num([pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno])
+    >>> xs_values = xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, Teff, 1.0, mu_fit)
+    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
+        33.012000  34.234667  35.457333    36.680000   37.902667  39.125333  40.348000
+    10   1.172155   0.050573   7.412180  2488.652909  189.358377  56.802524  35.638042
+    9    1.173263   0.050697   7.393529  2475.058188  189.717250  56.830802  35.646868
+    8    1.174255   0.050811   7.376864  2462.939890  190.039819  56.856154  35.654776
+    7    1.175131   0.050912   7.362177  2452.282809  190.325616  56.878566  35.661765
+    6    1.175891   0.051001   7.349462  2443.073267  190.574173  56.898019  35.667828
+    5    1.176534   0.051077   7.338713  2435.299906  190.785113  56.914502  35.672964
+    4    1.177061   0.051140   7.329925  2428.953907  190.958287  56.928003  35.677170
+    3    1.177471   0.051189   7.323094  2424.025876  191.093249  56.938513  35.680444
+    2    1.177764   0.051225   7.318218  2420.509985  191.189829  56.946026  35.682784
+    1    1.177939   0.051246   7.315292  2418.402935  191.247835  56.950535  35.684188
     """
     xs_mat = np.zeros((len(mu), len(Eout)))
     for i in prange(len(mu)):
-        if mu[i] == np.cos(np.pi):
-            Ein_arno = (Eout + Ein) / 2 + Ein * m / M
+        if Teff[i] == 0.0:
+            Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
         else:
             for j in prange(len(Eout)):

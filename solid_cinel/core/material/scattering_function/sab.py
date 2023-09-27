@@ -407,7 +407,9 @@ class Sab:
         dtype: float64
         """
         # Get the scattering function values:
-        scattfunc = get_ScatFunc(self.data.values, self.beta.data, Ein, T, M)
+        sab_diag = np.diag(self.data)
+        beta = self.beta.data[:len(sab_diag)]
+        scattfunc = get_ScatFunc_values(sab_diag, beta, Ein, T, M)
 
         # Change the data type:
         scattfunc = pd.Series(scattfunc[:, 1], index=scattfunc[:, 0])
@@ -1403,7 +1405,7 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
     N = len(tau1)
 
     for i in prange(len(tau_n)):  # loop for tau_n
-        for j in prange(N):  # loop for tau1
+        for j in range(N):  # loop for tau1
             convol = 0.
 
             k = i - j  # tau_n_minus_1(-(beta-beta^prime))
@@ -1454,20 +1456,18 @@ def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     return
 
 
-@nb.jit(nopython=True, cache=True)
-def get_ScatFunc(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
-                 T: float, M: float) -> np.ndarray:
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
+                        T: float, M: float) -> np.ndarray:
     """
-    Get the scattering function from the S(alpha, -beta) matrix. The scattering
-    function is calculated using the following equation:
-    .. math::
-        \dfrac{A_{wr}}{2k_{B}T}\sqrt{\dfrac{E_{out}}{E_{in}}}S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+    Generate the scattering function values from a S(alpha, -beta) table based on
+    the phonon expansion model for a single angle
 
     Parameters
     ----------
-    Sab_mat : 'np.ndarray', (N, M)
+    Sab_mat : 'np.ndarray', (N,)
         S(alpha, -beta) matrix values.
-    beta_grid : 'np.ndarray', (M,)
+    beta_grid : 'np.ndarray', (N,)
         Minus beta grid values.
     Ein : 'float'
         Incident energy in eV.
@@ -1478,59 +1478,25 @@ def get_ScatFunc(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
 
     Returns
     -------
-    'np.ndarray', (min(N, M) , 2)
-        Scattering function values.
-
-    Example
-    -------
-    >>> T = 300
-    >>> M = 26
-    >>> Ein = 3
-    >>> Eout = np.linspace(Ein, Ein * 1.05, 1000)
-    >>> beta_grid = Beta.from_parameters(Eout, Ein, T).data
-    >>> alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, 60).data
-    >>> Sab_values = Sab.from_fgm(alpha_grid, beta_grid).data.values
-    >>> scat = get_ScatFunc(Sab_values, beta_grid, Ein, T, M)
-    >>> pd.Series(scat[:, 1], index=scat[:, 0]).iloc[::75].round(6) #doctest: +NORMALIZE_WHITESPACE
-    2.850000    2.474903
-    2.861261    2.596197
-    2.872523    2.670419
-    2.883784    2.692988
-    2.895045    2.662277
-    2.906306    2.579802
-    2.917568    2.450102
-    2.928829    2.280323
-    2.940090    2.079568
-    2.951351    1.858077
-    2.962613    1.626365
-    2.973874    1.394392
-    2.985135    1.170883
-    2.996396    0.962837
-    3.007658    0.772066
-    3.018919    0.605043
-    3.030180    0.464353
-    3.041441    0.349051
-    3.052703    0.257017
-    3.063964    0.185403
-    3.075225    0.131040
-    3.086486    0.090756
-    3.097748    0.061599
-    3.109009    0.040979
-    3.120270    0.026723
-    3.131532    0.017084
-    3.142793    0.010708
-    dtype: float64
+    'np.ndarray', (N,)
+        Scattering function values for a single angle for tau_n expansion.
     """
-    sab_diag = np.diag(Sab_mat)
-    beta = beta_grid[:len(sab_diag)]
-    ScatFunc_values = np.concatenate((sab_diag[::-1], sab_diag[1::]))
-    ScatFunc_values[len(sab_diag)::] *= np.exp(-beta[1::])
-    Eout = np.sort(Ein + np.concatenate((- beta[::-1], beta[1::])) * kb * T)
-    # Avoid negative values and nan numbers:
-    ScatFunc_values = ScatFunc_values[Eout > 0]
+    # Scattering function values calculation:
+    ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::]))
+    ScatFunc_values[len(Sab_mat)::] *= np.exp(-beta_grid[1::])
+
+    # Eout calculation
+    Eout = np.sort(
+        Ein + np.concatenate((-beta_grid[::-1], beta_grid[1::])) * kb * T)
+
+    # Ensure the Eout values are positive:
+    positive_mask = Eout > 0
+    ScatFunc_values = ScatFunc_values[positive_mask]
     ScatFunc_values[np.isnan(ScatFunc_values)] = 0
-    Eout = Eout[Eout > 0]
-    # Apply normalization constants:
-    awr = ((M / m + 1) / (M / m)) ** 2
-    ScatFunc_values *= awr * np.sqrt(Eout / Ein) / (2 * kb * T)
-    return np.vstack((Eout, ScatFunc_values)).T
+    Eout = Eout[positive_mask]
+
+    # Normalization constant
+    aws = ((M / m + 1) / (M / m)) ** 2
+    normalization_factor = aws * np.sqrt(Eout / Ein) / (2 * kb * T)
+
+    return np.vstack((Eout, ScatFunc_values * normalization_factor)).T

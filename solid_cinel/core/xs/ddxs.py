@@ -1339,9 +1339,9 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     >>> mu_fit = np.cos(60 / 180 * np.pi)
 
     >>> T_arno = T * (1 + mu) / 2
-    >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])
-    >>> tau1 = np.array([pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno])
-    >>> delta_beta  = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])
+    >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno]
+    >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]
+    >>> delta_beta  = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno]
     >>> nphonon = 100
     >>> threshold = 1.0e-14
     >>> xs_values = xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff, mu_fit)
@@ -1596,7 +1596,7 @@ def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
     return Eout
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def default_Eout(Ein: float) -> np.ndarray:
     """
     Generate the default Eout grid for the convolution. The grid is tested with

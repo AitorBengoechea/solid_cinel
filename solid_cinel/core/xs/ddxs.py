@@ -1033,17 +1033,16 @@ def xs_matrix_sigma1(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     10   9.108238  9.101467  9.094649  9.087774  9.080815  9.073787  9.066722
     """
     xs_mat = np.zeros((len(mu), len(Eout)))
-    for i in prange(len(mu)):
+    for i in range(len(mu)):
+        Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
         if mu[i] == np.cos(np.pi):
-            Ein_arno = (Eout + Ein) / 2 + Ein * m / M
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
-        else:
-            for j in prange(len(Eout)):
-                Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
-                Eout_db = default_Eout(Ein_arno)
-                pdf = sigma1(Eout_db, Ein_arno, T_arno[i], M)
-                xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
-                xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf, x=Eout_db)
+            continue
+        for j in prange(len(Ein_arno)):
+            Eout_db = default_Eout(Ein_arno[j])
+            pdf = sigma1(Eout_db, Ein_arno[j], T_arno[i], M)
+            xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf, x=Eout_db)
     return xs_mat
 
 
@@ -1192,24 +1191,44 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     >>> xs_values = xs_matrix(mu_fit, xs_0K, Ein, M, T, Eout, theta, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
         1.800000    1.866667    1.933333    2.000000    2.066667    2.133333
-    180	9.103994	9.097201	9.090408	9.083550	9.076500	9.069451
-    170	9.104017	9.097223	9.090430	9.083573	9.076523	9.069474
-    160	9.104094	9.097301	9.090508	9.083654	9.076604	9.069555
-    150	9.104215	9.097422	9.090629	9.083779	9.076729	9.069680
-    140	9.104382	9.097589	9.090796	9.083952	9.076903	9.069853
-    130	9.104588	9.097794	9.091001	9.084165	9.077116	9.070067
-    120	9.104826	9.098032	9.091239	9.084412	9.077363	9.070314
-    110	9.105089	9.098295	9.091502	9.084685	9.077636	9.070586
-    100	9.105369	9.098576	9.091783	9.084976	9.077927	9.070877
-    90	9.105658	9.098864	9.092071	9.085276	9.078226	9.071177
-    80	9.105947	9.099153	9.092360	9.085567	9.078526	9.071477
-    70	9.106227	9.099434	9.092641	9.085847	9.078817	9.071768
-    60	9.106490	9.099697	9.092904	9.086113	9.079090	9.072041
-    50	9.106728	9.099935	9.093142	9.086348	9.079337	9.072288
-    40	9.106933	9.100140	9.093347	9.086554	9.079550	9.072501
-    30	9.107100	9.100307	9.093514	9.086720	9.079723	9.072674
-    20	9.107222	9.100429	9.093636	9.086843	9.079850	9.072801
-    10	9.107298	9.100504	9.093711	9.086918	9.079928	9.072879
+    180 9.103994    9.097201    9.090408    9.083550    9.076500    9.069451
+    170 9.104017    9.097223    9.090430    9.083573    9.076523    9.069474
+    160 9.104094    9.097301    9.090508    9.083654    9.076604    9.069555
+    150 9.104215    9.097422    9.090629    9.083779    9.076729    9.069680
+    140 9.104382    9.097589    9.090796    9.083952    9.076903    9.069853
+    130 9.104588    9.097794    9.091001    9.084165    9.077116    9.070067
+    120 9.104826    9.098032    9.091239    9.084412    9.077363    9.070314
+    110 9.105089    9.098295    9.091502    9.084685    9.077636    9.070586
+    100 9.105369    9.098576    9.091783    9.084976    9.077927    9.070877
+    90  9.105658    9.098864    9.092071    9.085276    9.078226    9.071177
+    80  9.105947    9.099153    9.092360    9.085567    9.078526    9.071477
+    70  9.106227    9.099434    9.092641    9.085847    9.078817    9.071768
+    60  9.106490    9.099697    9.092904    9.086113    9.079090    9.072041
+    50  9.106728    9.099935    9.093142    9.086348    9.079337    9.072288
+    40  9.106933    9.100140    9.093347    9.086554    9.079550    9.072501
+    30  9.107100    9.100307    9.093514    9.086720    9.079723    9.072674
+    20  9.107222    9.100429    9.093636    9.086843    9.079850    9.072801
+    10  9.107298    9.100504    9.093711    9.086918    9.079928    9.072879
+
+    Dirac delta test for Teff calculation and pdos model:
+    >>> Ein = 36.68
+    >>> M = 238.05077040419212
+    >>> T = 300
+    >>> theta = np.arange(1, 11, 1)
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:6]
+    >>> xs_values = xs_matrix(mu_fit, xs_0K, Ein, M, T, Eout, theta, pdos, model="sct")
+    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
+        33.012000  34.234667  35.457333    36.680000   37.902667  39.125333
+    10   1.172155   0.050573   7.412180  2488.652909  189.358377  56.802524
+    9    1.173263   0.050697   7.393529  2475.058188  189.717250  56.830802
+    8    1.174255   0.050811   7.376864  2462.939890  190.039819  56.856154
+    7    1.175131   0.050912   7.362177  2452.282809  190.325616  56.878566
+    6    1.175891   0.051001   7.349462  2443.073267  190.574173  56.898019
+    5    1.176534   0.051077   7.338713  2435.299906  190.785113  56.914502
+    4    1.177061   0.051140   7.329925  2428.953907  190.958287  56.928003
+    3    1.177471   0.051189   7.323094  2424.025876  191.093249  56.938513
+    2    1.177764   0.051225   7.318218  2420.509985  191.189829  56.946026
+    1    1.177939   0.051246   7.315292  2418.402935  191.247835  56.950535
     """
     # Common arguments:
     if len(args) == 6:
@@ -1231,22 +1250,28 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                              Eout, mu, T_arno, 1.0, mu_fit)
     elif model == "sct":
-        Teff = pd.Series(
-            [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno],
-            index=T_arno).backfill().values
+        # nan to num for the dirac deltas created when the kb * T is very low:
+        Teff = np.nan_to_num(
+            [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
+        )
         return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                              Eout, mu, Teff, 1.0, mu_fit)
     else:
         threshold = kwargs.pop("threshold", 0.0)
         nphonon = kwargs.pop("nphonon", 1000)
-        tau1 = [pdos.get_tau_1(T).values if T > 0.0 else 0 for T in T_arno]
-        DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0 for T in T_arno]
-        delta_beta = [pdos.to_beta_grid(T).grid if T > 0.0 else 0 for T in T_arno]
+        tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
+        DebyeWallerCoeff = np.zeros(len(T_arno))
+        delta_beta = np.zeros(len(T_arno))
+        for i in range(len(T_arno)):
+            if T_arno[i] > 0.0:
+                tau1[i, :] = pdos.get_tau_1(T_arno[i]).values
+                DebyeWallerCoeff[i] = pdos.DebyeWallerCoeff(T_arno[i])
+                delta_beta[i] = pdos.to_beta_grid(T_arno[i]).grid
         return xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                               Eout, mu, nphonon, tau1, delta_beta, threshold,
                               DebyeWallerCoeff, mu_fit)
 
-@nb.jit(nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
                    T_arno: np.ndarray, Eout: np.ndarray, mu: np.ndarray, nphonon: int,
                    tau1: np.ndarray, delta_beta: np.ndarray, threshold: float,
@@ -1314,59 +1339,58 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     >>> mu_fit = np.cos(60 / 180 * np.pi)
 
     >>> T_arno = T * (1 + mu) / 2
-    >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0 for T in T_arno]
-    >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else 0 for T in T_arno]
-    >>> delta_beta  = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0 for T in T_arno]
+    >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno]
+    >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]
+    >>> delta_beta = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno]
     >>> nphonon = 100
     >>> threshold = 1.0e-14
     >>> xs_values = xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff, mu_fit)
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
         1.800000    1.866667    1.933333    2.000000    2.066667    2.133333
-    180	9.103994	9.097201	9.090408	9.083550	9.076500	9.069451
-    170	9.104017	9.097223	9.090430	9.083573	9.076523	9.069474
-    160	9.104094	9.097301	9.090508	9.083654	9.076604	9.069555
-    150	9.104215	9.097422	9.090629	9.083779	9.076729	9.069680
-    140	9.104382	9.097589	9.090796	9.083952	9.076903	9.069853
-    130	9.104588	9.097794	9.091001	9.084165	9.077116	9.070067
-    120	9.104826	9.098032	9.091239	9.084412	9.077363	9.070314
-    110	9.105089	9.098295	9.091502	9.084685	9.077636	9.070586
-    100	9.105369	9.098576	9.091783	9.084976	9.077927	9.070877
-    90	9.105658	9.098864	9.092071	9.085276	9.078226	9.071177
-    80	9.105947	9.099153	9.092360	9.085567	9.078526	9.071477
-    70	9.106227	9.099434	9.092641	9.085847	9.078817	9.071768
-    60	9.106490	9.099697	9.092904	9.086113	9.079090	9.072041
-    50	9.106728	9.099935	9.093142	9.086348	9.079337	9.072288
-    40	9.106933	9.100140	9.093347	9.086554	9.079550	9.072501
-    30	9.107100	9.100307	9.093514	9.086720	9.079723	9.072674
-    20	9.107222	9.100429	9.093636	9.086843	9.079850	9.072801
-    10	9.107298	9.100504	9.093711	9.086918	9.079928	9.072879
+    180 9.103994    9.097201    9.090408    9.083550    9.076500    9.069451
+    170 9.104017    9.097223    9.090430    9.083573    9.076523    9.069474
+    160 9.104094    9.097301    9.090508    9.083654    9.076604    9.069555
+    150 9.104215    9.097422    9.090629    9.083779    9.076729    9.069680
+    140 9.104382    9.097589    9.090796    9.083952    9.076903    9.069853
+    130 9.104588    9.097794    9.091001    9.084165    9.077116    9.070067
+    120 9.104826    9.098032    9.091239    9.084412    9.077363    9.070314
+    110 9.105089    9.098295    9.091502    9.084685    9.077636    9.070586
+    100 9.105369    9.098576    9.091783    9.084976    9.077927    9.070877
+    90  9.105658    9.098864    9.092071    9.085276    9.078226    9.071177
+    80  9.105947    9.099153    9.092360    9.085567    9.078526    9.071477
+    70  9.106227    9.099434    9.092641    9.085847    9.078817    9.071768
+    60  9.106490    9.099697    9.092904    9.086113    9.079090    9.072041
+    50  9.106728    9.099935    9.093142    9.086348    9.079337    9.072288
+    40  9.106933    9.100140    9.093347    9.086554    9.079550    9.072501
+    30  9.107100    9.100307    9.093514    9.086720    9.079723    9.072674
+    20  9.107222    9.100429    9.093636    9.086843    9.079850    9.072801
+    10  9.107298    9.100504    9.093711    9.086918    9.079928    9.072879
     """
     xs_mat = np.zeros((len(mu), len(Eout)))
-    for i in prange(len(mu)):
+    for i in range(len(mu)):
+        Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
         if mu[i] == np.cos(np.pi):
-            Ein_arno = (Eout + Ein) / 2 + Ein * m / M
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
-        else:
-            for j in prange(len(Eout)):
-                Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
-                Eout_db = default_Eout(Ein_arno)
-                # Distribution + Normalization:
-                pdf_val = get_ScatFunc_pdos_angle(Ein_arno, M, T_arno[i], Eout_db,
-                                                 mu_fit, nphonon, tau1[i], delta_beta[i],
-                                                 threshold, DebyeWallerCoeff[i])
-                norm = np.trapz(pdf_val, x=Eout_db)
-                # Pdos for low T creates Dirac delta functions (force to dont
-                # use nopython=True)
-                if norm == np.inf:
-                    xs_mat[i, j] = np.interp(Eout_db[np.argmax(pdf_val)],
-                                             xs_E, xs_values)
-                else:
-                    # Recoil:
-                    recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
-                    # xs:
-                    xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
-                    xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val,
-                                            x=Eout_db + recoil) / norm
+            continue
+        for j in prange(len(Eout)):
+            Eout_db = default_Eout(Ein_arno[j])
+            # Distribution + Normalization:
+            pdf_val = get_ScatFunc_pdos_angle(Ein_arno[j], M, T_arno[i], Eout_db,
+                                              mu_fit, nphonon, tau1[i], delta_beta[i],
+                                              threshold, DebyeWallerCoeff[i])
+            # Pdos for low T creates Dirac delta functions (force to dont
+            # use nopython=True)
+            if pdf_val.max() > 1.0e308:  # Overflow found in pdf_val
+                xs_mat[i, j] = np.interp(Eout_db[np.argmax(pdf_val)],
+                                         xs_E, xs_values)
+                continue
+            norm = np.trapz(pdf_val, x=Eout_db)
+            # Recoil:
+            recoil = Ein_arno[j] - Eout_db[np.argmax(pdf_val)]
+            # xs:
+            xs_Eout_arno = np.interp(Eout_db, xs_E, xs_values)
+            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val,
+                                    x=Eout_db + recoil) / norm
     return xs_mat
 
 
@@ -1446,25 +1470,49 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     30   9.106929  9.100178  9.093367  9.086494  9.079551  9.072547  9.065490
     20   9.107044  9.100294  9.093484  9.086612  9.079670  9.072668  9.065611
     10   9.107115  9.100364  9.093556  9.086683  9.079744  9.072743  9.065684
+
+    # SCT model with Teff = np.nan for angles close to 180 degrees:
+    >>> Ein = 36.68
+    >>> M = 238.05077040419212
+    >>> T = 300
+    >>> theta = np.arange(1, 11, 1)
+    >>> mu = np.sort(np.cos(theta / 180 * np.pi))
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:6]
+    >>> T_arno = T * (1 + mu) / 2
+    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> Teff = np.nan_to_num([pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno])
+    >>> xs_values = xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, Teff, 1.0, mu_fit)
+    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
+        33.012000  34.234667  35.457333    36.680000   37.902667  39.125333
+    10   1.172155   0.050573   7.412180  2488.652909  189.358377  56.802524
+    9    1.173263   0.050697   7.393529  2475.058188  189.717250  56.830802
+    8    1.174255   0.050811   7.376864  2462.939890  190.039819  56.856154
+    7    1.175131   0.050912   7.362177  2452.282809  190.325616  56.878566
+    6    1.175891   0.051001   7.349462  2443.073267  190.574173  56.898019
+    5    1.176534   0.051077   7.338713  2435.299906  190.785113  56.914502
+    4    1.177061   0.051140   7.329925  2428.953907  190.958287  56.928003
+    3    1.177471   0.051189   7.323094  2424.025876  191.093249  56.938513
+    2    1.177764   0.051225   7.318218  2420.509985  191.189829  56.946026
+    1    1.177939   0.051246   7.315292  2418.402935  191.247835  56.950535
     """
     xs_mat = np.zeros((len(mu), len(Eout)))
-    for i in prange(len(mu)):
-        if mu[i] == np.cos(np.pi):
-            Ein_arno = (Eout + Ein) / 2 + Ein * m / M
+    for i in range(len(mu)):
+        Ein_arno = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+        if Teff[i] == 0.0:
             xs_mat[i, :] = np.interp(Ein_arno, xs_E, xs_values)
-        else:
-            for j in prange(len(Eout)):
-                Ein_arno = (Eout[j] + Ein) / 2 - Ein * mu[i] * m / M
-                Eout_db = default_Eout(Ein_arno)
-                # Distribution + Normalization:
-                pdf_val = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno,
-                                               T_arno[i], M, Teff[i], ws)
-                pdf_val /= np.trapz(pdf_val, x=Eout_db)
-                # Recoil:
-                recoil = Ein_arno - Eout_db[np.argmax(pdf_val)]
-                # xs:
-                xs_Eout_arno = np.interp(Eout_db + recoil, xs_E, xs_values)
-                xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db)
+            continue
+        for j in prange(len(Eout)):
+            Eout_db = default_Eout(Ein_arno[j])
+            # Distribution + Normalization:
+            pdf_val = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno[j],
+                                           T_arno[i], M, Teff[i], ws)
+            pdf_val /= np.trapz(pdf_val, x=Eout_db)
+            # Recoil:
+            recoil = Ein_arno[j] - Eout_db[np.argmax(pdf_val)]
+            # xs:
+            xs_Eout_arno = np.interp(Eout_db + recoil, xs_E, xs_values)
+            xs_mat[i, j] = np.trapz(xs_Eout_arno * pdf_val, x=Eout_db)
     return xs_mat
 
 

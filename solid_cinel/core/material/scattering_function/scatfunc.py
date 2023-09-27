@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.scattering_function.beta import Beta, get_beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha, get_alpha
-from solid_cinel.core.material.scattering_function.sab import Sab, get_S_pdos_from_alpha_beta, tau_n_CPU
+from solid_cinel.core.material.scattering_function.sab import Sab, tau_n_CPU, get_ScatFunc_values
 from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable
 from numba import prange
@@ -1048,44 +1048,6 @@ def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
     return S_diag
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
-def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
-                        T: float, M: float) -> np.ndarray:
-    """
-    Generate the scattering function values from a S(alpha, -beta) table based on
-    the phonon expansion model for a single angle
-
-    Parameters
-    ----------
-    Sab_mat : 'np.ndarray', (N,)
-        S(alpha, -beta) matrix values.
-    beta_grid : 'np.ndarray', (N,)
-        Minus beta grid values.
-    Ein : 'float'
-        Incident energy in eV.
-    T : 'float'
-        Temperature in K.
-    M : 'float'
-        Mass of the target nucleus in amu.
-
-    Returns
-    -------
-    'np.ndarray', (N,)
-        Scattering function values for a single angle for tau_n expansion.
-    """
-    # Get the scattering function values:
-    ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::]))
-    ScatFunc_values[len(Sab_mat)::] *= np.exp(-beta_grid[1::])
-    Eout = np.sort(Ein + np.concatenate((- beta_grid[::-1], beta_grid[1::])) * kb * T)
-    # Avoid negative values and nan numbers:
-    ScatFunc_values = ScatFunc_values[Eout > 0]
-    ScatFunc_values[np.isnan(ScatFunc_values)] = 0
-    Eout = Eout[Eout > 0]
-    # Apply normalization constants:
-    awr = ((M / m + 1) / (M / m)) ** 2
-    ScatFunc_values *= awr * np.sqrt(Eout / Ein) / (2 * kb * T)
-    return np.vstack((Eout, ScatFunc_values)).T
-
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
 def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: float, nphonon: int, tau1: np.ndarray,
                  delta_beta: float, threshold: float,
@@ -1144,7 +1106,8 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     beta = (Eout - Ein) / (kb * T)
     alpha = Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)
     alpha /= (M * kb * T / m)
-    Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
+    Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta,
+                                 threshold, DebyeWallerCoeff)
     sd_pdf = get_ScatFunc_values(Sab_values, beta, Ein, T, M)
     Eout_pos = np.searchsorted(sd_pdf[:, 0], Eout)
     return sd_pdf[Eout_pos, 1]

@@ -440,7 +440,7 @@ class Alpha:
         return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
               mu: np.ndarray) -> np.ndarray:
     """

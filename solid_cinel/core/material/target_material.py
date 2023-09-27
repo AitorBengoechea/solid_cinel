@@ -17,6 +17,7 @@ import numpy as np
 import os
 import pandas as pd
 import numba as nb
+from numba import prange
 import collections
 
 collections.Callable = collections.abc.Callable
@@ -1365,7 +1366,7 @@ def numba_hkl_data(d_min: float,
                         columns=columns)
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
             Bfac: dict, pos: dict, csl: dict, preferred_orientation: np.ndarray,
             precision: np.ndarray) -> dict:
@@ -1434,7 +1435,7 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
     return hklM
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
     """
     Get F_hkl:
@@ -1463,7 +1464,7 @@ def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
         expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
                            * Bfac[element] / (8 * np.pi ** 2))
         element_position = pos[element]
-        for iep in range(len(element_position)):
+        for iep in prange(len(element_position)):
             cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]))
             cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]))
             real += csl[element] * 0.1 * expon_hkl * cumulant_cos

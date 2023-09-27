@@ -554,7 +554,7 @@ class Beta:
         return Beta(scale_grid)
 
 
-@nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
+@nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
 def get_beta(Eout: np.ndarray, Ein: np.ndarray,
              T: np.ndarray) -> np.ndarray:
     """

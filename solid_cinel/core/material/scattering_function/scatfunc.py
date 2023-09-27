@@ -1106,7 +1106,8 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     beta = (Eout - Ein) / (kb * T)
     alpha = Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)
     alpha /= (M * kb * T / m)
-    Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
+    Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta,
+                                 threshold, DebyeWallerCoeff)
     sd_pdf = get_ScatFunc_values(Sab_values, beta, Ein, T, M)
     Eout_pos = np.searchsorted(sd_pdf[:, 0], Eout)
     return sd_pdf[Eout_pos, 1]

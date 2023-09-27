@@ -1251,6 +1251,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                              Eout, mu, T_arno, 1.0, mu_fit)
     elif model == "sct":
+        # nan to num for the dirac deltas created when the kb * T is very low:
         Teff = np.nan_to_num(
             [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
         )
@@ -1259,9 +1260,19 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     else:
         threshold = kwargs.pop("threshold", 0.0)
         nphonon = kwargs.pop("nphonon", 1000)
-        tau1 = [pdos.get_tau_1(T).values if T > 0.0 else 0 for T in T_arno]
-        DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0 for T in T_arno]
-        delta_beta = [pdos.to_beta_grid(T).grid if T > 0.0 else 0 for T in T_arno]
+        tau1 = []
+        DebyeWallerCoeff = []
+        delta_beta = []
+        for T in T_arno:
+            if T > 0.0:
+                tau1_value = pdos.get_tau_1(T).values
+                DebyeWallerCoeff_value = pdos.DebyeWallerCoeff(T)
+                delta_beta_value = pdos.to_beta_grid(T).grid
+            else:
+                tau1_value = DebyeWallerCoeff_value = delta_beta_value = 0.0
+            tau1.append(tau1_value)
+            DebyeWallerCoeff.append(DebyeWallerCoeff_value)
+            delta_beta.append(delta_beta_value)
         return xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                               Eout, mu, nphonon, tau1, delta_beta, threshold,
                               DebyeWallerCoeff, mu_fit)

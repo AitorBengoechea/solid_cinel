@@ -1195,7 +1195,7 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
 def get_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
                      debye_waller_coeff: float,  iter_sum: float,
                      alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
@@ -1260,7 +1260,7 @@ def get_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
     return np.outer(alpha_mul, tau_n_reshape)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
 def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
                                nphonon: int, tau1: np.ndarray, delta_beta: float,
                                threshold: float,
@@ -1427,7 +1427,7 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
 
 
 @nb.jit('(float64[:], float64)',
-    nopython=True, nogil=True, cache=True, parallel=True)
+    nopython=True, nogil=True, cache=True, parallel=False)
 def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     """
     Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
@@ -1456,7 +1456,7 @@ def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     return
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
 def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
                         T: float, M: float) -> np.ndarray:
     """

@@ -1596,7 +1596,7 @@ def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
     return Eout
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
 def default_Eout(Ein: float) -> np.ndarray:
     """
     Generate the default Eout grid for the convolution. The grid is tested with

@@ -1216,7 +1216,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     >>> M = 238.05077040419212
     >>> T = 300
     >>> theta = np.arange(1, 11, 1)
-    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:5]
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:6]
     >>> xs_values = xs_matrix(mu_fit, xs_0K, Ein, M, T, Eout, theta, pdos, model="sct")
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
         33.012000  34.234667  35.457333    36.680000   37.902667  39.125333
@@ -1473,7 +1473,7 @@ def xs_matrix_sct(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float,
     >>> T = 300
     >>> theta = np.arange(1, 11, 1)
     >>> mu = np.sort(np.cos(theta / 180 * np.pi))
-    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:5]
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:6]
     >>> T_arno = T * (1 + mu) / 2
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)

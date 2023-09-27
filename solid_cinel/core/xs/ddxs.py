@@ -1259,20 +1259,14 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     else:
         threshold = kwargs.pop("threshold", 0.0)
         nphonon = kwargs.pop("nphonon", 1000)
-        tau1 = []
-        DebyeWallerCoeff = []
-        delta_beta = []
-        for T in T_arno:
-            if T > 0.0:
-                tau1_value = pdos.get_tau_1(T).values
-                DebyeWallerCoeff_value = pdos.DebyeWallerCoeff(T)
-                delta_beta_value = pdos.to_beta_grid(T).grid
-            else:
-                tau1_value = np.array([0.0] * len(mu))
-                DebyeWallerCoeff_value = delta_beta_value = 0.0
-            tau1.append(tau1_value)
-            DebyeWallerCoeff.append(DebyeWallerCoeff_value)
-            delta_beta.append(delta_beta_value)
+        tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
+        DebyeWallerCoeff = np.zeros(len(T_arno))
+        delta_beta = np.zeros(len(T_arno))
+        for i in range(len(T_arno)):
+            if T_arno[i] > 0.0:
+                tau1[i, :] = pdos.get_tau_1(T_arno[i]).values
+                DebyeWallerCoeff[i] = pdos.DebyeWallerCoeff(T_arno[i])
+                delta_beta[i] = pdos.to_beta_grid(T_arno[i]).grid
         return xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                               Eout, mu, nphonon, tau1, delta_beta, threshold,
                               DebyeWallerCoeff, mu_fit)
@@ -1345,9 +1339,9 @@ def xs_matrix_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, M: float
     >>> mu_fit = np.cos(60 / 180 * np.pi)
 
     >>> T_arno = T * (1 + mu) / 2
-    >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno]
-    >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]
-    >>> delta_beta  = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno]
+    >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])
+    >>> tau1 = np.array([pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno])
+    >>> delta_beta  = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])
     >>> nphonon = 100
     >>> threshold = 1.0e-14
     >>> xs_values = xs_matrix_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff, mu_fit)

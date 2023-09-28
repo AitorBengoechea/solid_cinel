@@ -1251,9 +1251,10 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
                              Eout, mu, T_arno, 1.0, mu_fit)
     elif model == "sct":
         # nan to num for the dirac deltas created when the kb * T is very low:
-        Teff = np.nan_to_num(
+        Teff = np.array(
             [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
         )
+        Teff[np.isnan(Teff)] = T_arno[np.isnan(Teff)]
         return xs_matrix_sct(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
                              Eout, mu, Teff, 1.0, mu_fit)
     else:

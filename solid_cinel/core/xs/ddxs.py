@@ -341,6 +341,49 @@ class Dxs:
         down = integrate(self.data.loc[Eout < self.Ein]) / integral
         return {"upscattering": up,  "downscattering": down, "Ein=Eout": 1.0 - up - down}
 
+    @property
+    def pdf(self) -> pd.Series:
+        """
+        Get the probability density function of the Differential XS
+
+        Returns
+        -------
+        pd.Series
+            The probability density function of the Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> dxs = Dxs.from_sigma1(xs_0K, Ein, M, T, Eout)
+
+        # SIGMA1 algorithm:
+        >>> dxs.pdf.iloc[::100]
+        Eout
+        1.80000     0.000005
+        1.84004     0.001091
+        1.88008     0.063339
+        1.92012     1.102673
+        1.96016     5.974293
+        2.00020    10.438638
+        2.04024     6.084029
+        2.08028     1.221555
+        2.12032     0.087118
+        2.16036     0.002272
+        dtype: float64
+        """
+        return self.data / self.integral
+
     def shift(self, dx: [float, np.ndarray, pd.DataFrame]):
         """
         Shift the Double Differential XS in the given axis and interpolate to get the values of the original axis
@@ -823,6 +866,49 @@ class DDxs:
         0.003736
         """
         return self.angular.prob
+
+    @property
+    def pdf(self) -> pd.DataFrame:
+        """
+        Get the probability density function of the Double Differential XS
+
+        Returns
+        -------
+        pd.DataFrame
+            The probability density function of the Double Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 15)[1::]
+        >>> ddxs = DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta)
+        >>> ddxs.pdf.iloc[::, ::200].round(6)
+        Eout            1.80000   1.88008   1.96016   2.04024   2.12032
+        mu
+        -9.659258e-01  0.199996  1.364426  2.730286  1.726349  0.368894
+        -8.660254e-01  0.169485  1.313193  2.795112  1.767512  0.356426
+        -7.071068e-01  0.124606  1.218890  2.904967  1.837268  0.333172
+        -5.000000e-01  0.074942  1.069553  3.061712  1.936798  0.295670
+        -2.588190e-01  0.032968  0.854101  3.265153  2.065984  0.240293
+         6.123234e-17  0.008520  0.575864  3.506323  2.219150  0.166594
+         2.588190e-01  0.000812  0.279307  3.747518  2.372410  0.084671
+         5.000000e-01  0.000009  0.066077  3.861538  2.445181  0.021837
+         7.071068e-01  0.000000  0.002427  3.457385  2.189727  0.000966
+         8.660254e-01  0.000000  0.000000  1.696249  1.074497  0.000000
+         9.659258e-01  0.000000  0.000000  0.008420  0.005334  0.000000
+        """
+        return self.data / self.integral
 
     def shift(self, dx: [float, np.ndarray, pd.DataFrame], axis: [str, int] = "Eout"):
         """

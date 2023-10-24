@@ -833,7 +833,7 @@ class DDxs:
         return self.angular.integral
 
     @property
-    def prob(self) -> dict:
+    def E_prob(self) -> dict:
         """
         Get the upscattering and downscattering probalities
 
@@ -858,14 +858,60 @@ class DDxs:
         >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
         >>> ddxs = DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta)
-        >>> round(ddxs.prob["upscattering"], 6)
+        >>> probabilities = ddxs.E_prob
+        >>> round(probabilities["upscattering"], 6)
         0.389484
-        >>> round(ddxs.prob["downscattering"], 6)
+        >>> round(probabilities["downscattering"], 6)
         0.60678
-        >>> round(ddxs.prob["Ein=Eout"], 6)
+        >>> round(probabilities["Ein=Eout"], 6)
         0.003736
         """
         return self.angular.prob
+
+    @property
+    def Angle_prob(self) -> pd.Series:
+        """
+        Get angular probability distribution of the Double Differential XS
+
+        Returns
+        -------
+        pd.Series
+            The angular probability distribution of the Double Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 15)[1::]
+        >>> ddxs = DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta)
+        >>> angular_prob = ddxs.Angle_prob
+        >>> angular_prob.round(6)
+        mu
+        -9.659258e-01    0.508586
+        -8.660254e-01    0.510186
+        -7.071068e-01    0.512448
+        -5.000000e-01    0.514870
+        -2.588190e-01    0.516993
+         6.123234e-17    0.518607
+         2.588190e-01    0.519829
+         5.000000e-01    0.520860
+         7.071068e-01    0.521737
+         8.660254e-01    0.522412
+         9.659258e-01    0.522836
+        dtype: float64
+        """
+        angular_prob = self.data.apply(integrate, axis=1)
+        return angular_prob / self.integral
 
     @property
     def pdf(self) -> pd.DataFrame:

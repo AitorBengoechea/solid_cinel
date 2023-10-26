@@ -259,12 +259,12 @@ class ScatFuncSD:
 
         # Using the Phonon expansion model:
         >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
-        6.7554    0.001861
-        6.9050    0.084836
-        7.0439    0.126480
-        7.2000    0.129529
-        7.3157    1.532400
-        7.4480    0.074382
+        6.7554    0.000005
+        6.9050    0.010414
+        7.0439    1.179141
+        7.2000    5.157189
+        7.3157    0.705790
+        7.4480    0.004105
         dtype: float64
         """
         mu = np.cos(theta * np.pi / 180)

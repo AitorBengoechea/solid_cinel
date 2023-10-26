@@ -1104,7 +1104,11 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     """
     beta = (Eout - Ein) / (kb * T)
     beta = np.unique(np.absolute(beta))
-    alpha = Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)
+    if len(beta) < len(Eout): # same beta values but one negative and one positive
+        Eout_ = beta * kb * T + Ein
+    else:
+        Eout_ = Eout.copy()
+    alpha = Eout_ + Ein - 2 * mu * np.sqrt(Eout_ * Ein)
     alpha /= (M * kb * T / m)
     Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta,
                                  threshold, DebyeWallerCoeff)

@@ -621,13 +621,13 @@ class DDxs:
         return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs_0K))
 
     @classmethod
-    def from_coercelle(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
+    def from_4PCF(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
                     **kwargs):
         """
         Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
-        correlation function
+        correlation function modified
         ..math::
-            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E)/2 - E \mu / A)
+            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E + \frac{\alpha k_{B} T}{1-\mu})/2 - E \mu / A)
 
         For the xs matrix calculation, they are the following models available:
             - "sigma1": sigma1 algorithm from NJOY2016 manual (default)
@@ -689,7 +689,7 @@ class DDxs:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # Coercelle with sigma1 algorithm:
-        >>> DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta).data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta).data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.799454  12.011826  23.795201  15.058832  3.254168
@@ -711,7 +711,7 @@ class DDxs:
          9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
 
         # Coercelle with fgm model:
-        >>> DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.799454  12.011827  23.795202  15.058833  3.254168
@@ -733,7 +733,7 @@ class DDxs:
          9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
 
         # Coercelle with sct model:
-        >>> DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.812376  12.019176  23.754160  15.057222  3.271238

@@ -66,11 +66,11 @@ def test_coercelle(model):
     # Get doppler broadening ddxs:
     Eout = ddxs_test.columns.values
     if model == "sigma1":
-        ddxs = DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta)
+        ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta)
     elif model == "fgm":
-        ddxs = DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, model=model)
+        ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, model=model)
     elif model == "sct":
-        ddxs = DDxs.from_coercelle(xs_0K, Ein, M, T, Eout, theta, pdos, model=model)
+        ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, model=model)
 
     # Check integral value:
     test_integral = integrate(ddxs_test.apply(integrate, axis=1))

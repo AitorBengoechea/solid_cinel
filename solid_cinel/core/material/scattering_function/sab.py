@@ -1378,7 +1378,8 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     return Sab
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit("float64[:](float64, float64[:], float64[:], float64)",
+    nopython=True, nogil=True, cache=True, parallel=True)
 def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
               threshold: float) -> np.ndarray:
     """

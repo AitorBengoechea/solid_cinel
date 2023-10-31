@@ -1259,7 +1259,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     if len(args) == 6:
         xs_0K, Ein, M, T, Eout, theta = args
     elif len(args) == 7:
-        xs_0K, Ein, M, T, Eout, theta, mu_fit  = args
+        xs_0K, Ein, M, T, Eout, theta, mu_fit = args
     else:
         xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
 
@@ -1297,6 +1297,124 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     else:
         return xs_matrix_values(*arguments)
 #    return xs_matrix_values(*arguments)
+
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                 M: float) -> np.ndarray:
+    """
+    Get the incident energy matrix for the arno model.
+
+    Parameters
+    ----------
+    Ein: float
+        The incident energy of the neutron in eV
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    mu: np.ndarray, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    Ein_arno: np.ndarray, (M, Z)
+        Incident energy matrix for the arno model
+    """
+    Ein_arno = np.zeros((len(mu), len(Eout)))
+    for i in range(len(mu)):
+        alpha = (Ein + Eout - 2 * mu[i] * np.sqrt(Ein * Eout)) * m / M
+        Ein_arno[i, :] = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+        Ein_arno[i, :] += 0.5 * alpha / (1 - mu[i])
+    return Ein_arno
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def default_Eout(Ein: float) -> np.ndarray:
+    """
+    Generate the default Eout grid for the convolution. The grid is tested with
+    NJOY values to ensure a relative difference smaller than 0.4%
+
+    Parameters
+    ----------
+    Ein : float
+        Incident energy in eV
+
+    Returns
+    -------
+    Eout : ndarray
+        Outgoing energy grid in eV
+
+    Examples
+    --------
+    Test the default Eout with NJOY values:
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    # Generate Broadening test results:
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = default_Eout(Ein)
+    >>> M = 238.05077040419212
+    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
+    9.09
+    """
+    Eout_small = np.linspace(0,
+                             0.99 * Ein,
+                             2000)
+    Eout_middle = np.linspace(0.99 * Ein,
+                              Ein * 1.01,
+                              3000)
+    if Ein * 2 < 5.0:
+        Eout_great = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(5.0),
+                                 2000)
+    else:
+        Eout_great = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(2 * Ein),
+                                 2000)
+    return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def Db(xs_values, xs_E, Ein, Eout, pdf):
+    """
+    Calculate the doppler broadening of a cross section for a pdf
+
+    Parameters
+    ----------
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    Ein: float
+        The incident energy of the neutron in eV
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    pdf: np.ndarray, (Z,)
+        Probability density function
+
+    Returns
+    -------
+    Db_xs: float
+        Doppler broadened cross section in barns
+    """
+    max_pos = np.argmax(pdf)
+    if pdf[max_pos] > 1.0e308:  # Overflow found in pdf_val
+        Db_xs = np.interp(Eout[max_pos], xs_E, xs_values)
+    else:
+        norm = np.trapz(pdf, x=Eout)
+        # Recoil:
+        recoil = Ein - Eout[max_pos]
+        # xs:
+        xs_Eout_arno = np.interp(Eout + recoil, xs_E, xs_values)
+        Db_xs = np.trapz(xs_Eout_arno * pdf, x=Eout) / norm
+    return Db_xs
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
@@ -1467,9 +1585,16 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
             xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
     return xs_mat
 
-def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
-                     M: float, T_arno: np.ndarray, Eout: np.ndarray,
-                     mu: np.ndarray, *args) -> np.ndarray:
+
+@nb.jit(nb.float64[:, :](nb.float64[:], nb.float64[:], nb.float64, nb.float64,
+                         nb.float64[:], nb.float64[:], nb.float64[:], nb.float64,
+                         nb.int32, nb.float64[:, :], nb.float64[:], nb.float64,
+                         nb.float64[:]),
+        nopython=True, nogil=True, cache=True, parallel=True)
+def xs_matrix_values_pdos(xs_values, xs_E, Ein, M,
+                          T_arno, Eout, mu, mu_fit,
+                          nphonon, tau1, delta_beta, threshold,
+                          DebyeWallerCoeff) -> np.ndarray:
     """
     DUPLICATE FUNCTION DUE TO NUMBA njit compilation error. Numba generates
     fluctuations in matrix values due to the complexity of the
@@ -1529,82 +1654,14 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
         if mu[i] == np.cos(np.pi):
             xs_mat[i, :] = np.interp(Ein_arno[i, :], xs_E, xs_values)
             continue
-
-        if len(args) == 6:
-            for j in range(len(Eout)):
-                Eout_db = default_Eout(Ein_arno[i, j])
-                pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
-                                              Eout_db, args[0], args[1],
-                                              args[2][i], args[3][i],
-                                              args[4], args[5][i])
-                xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+        for j in prange(len(Eout)):
+            Eout_db = default_Eout(Ein_arno[i, j])
+            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
+                                          Eout_db, mu_fit, nphonon,
+                                          tau1[i], delta_beta[i],
+                                          threshold, DebyeWallerCoeff[i])
+            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
     return xs_mat
-
-
-@nb.jit(nopython=True, nogil=True, cache=True)
-def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                 M: float) -> np.ndarray:
-    """
-    Get the incident energy matrix for the arno model.
-
-    Parameters
-    ----------
-    Ein: float
-        The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
-        The neutron outgoing energy grid in eV
-    mu: np.ndarray, (M,)
-        The neutron outgoing angle grid in degrees (0, 180]
-    M: float
-        Mass of the material in amu
-
-    Returns
-    -------
-    Ein_arno: np.ndarray, (M, Z)
-        Incident energy matrix for the arno model
-    """
-    Ein_arno = np.zeros((len(mu), len(Eout)))
-    for i in range(len(mu)):
-        alpha = (Ein + Eout - 2 * mu[i] * np.sqrt(Ein * Eout)) * m / M
-        Ein_arno[i, :] = (Eout + Ein) / 2 - Ein * mu[i] * m / M
-        Ein_arno[i, :] += 0.5 * alpha / (1 - mu[i])
-    return Ein_arno
-
-
-@nb.jit(nopython=True, nogil=True, cache=True)
-def Db(xs_values, xs_E, Ein, Eout, pdf):
-    """
-    Calculate the doppler broadening of a cross section for a pdf
-
-    Parameters
-    ----------
-    xs_values: np.ndarray, (N,)
-        Cross section values in barns
-    xs_E: np.ndarray, (N,)
-        Cross section energy grid in eV
-    Ein: float
-        The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
-        The neutron outgoing energy grid in eV
-    pdf: np.ndarray, (Z,)
-        Probability density function
-
-    Returns
-    -------
-    Db_xs: float
-        Doppler broadened cross section in barns
-    """
-    max_pos = np.argmax(pdf)
-    if pdf[max_pos] > 1.0e308:  # Overflow found in pdf_val
-        Db_xs = np.interp(Eout[max_pos], xs_E, xs_values)
-    else:
-        norm = np.trapz(pdf, x=Eout)
-        # Recoil:
-        recoil = Ein - Eout[max_pos]
-        # xs:
-        xs_Eout_arno = np.interp(Eout + recoil, xs_E, xs_values)
-        Db_xs = np.trapz(xs_Eout_arno * pdf, x=Eout) / norm
-    return Db_xs
 
 
 def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
@@ -1685,57 +1742,6 @@ def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
         else:
             raise ValueError("The space {} is not available".format(space))
     return Eout
-
-
-@nb.jit(nopython=True, nogil=True, cache=True)
-def default_Eout(Ein: float) -> np.ndarray:
-    """
-    Generate the default Eout grid for the convolution. The grid is tested with
-    NJOY values to ensure a relative difference smaller than 0.4%
-
-    Parameters
-    ----------
-    Ein : float
-        Incident energy in eV
-
-    Returns
-    -------
-    Eout : ndarray
-        Outgoing energy grid in eV
-
-    Examples
-    --------
-    Test the default Eout with NJOY values:
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("ddxs.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-    >>> os.chdir(wd)
-
-    # Generate Broadening test results:
-    >>> T = 1000
-    >>> Ein = 2.0
-    >>> Eout = default_Eout(Ein)
-    >>> M = 238.05077040419212
-    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
-    9.09
-    """
-    Eout_small = np.linspace(0,
-                             0.99 * Ein,
-                             2000)
-    Eout_middle = np.linspace(0.99 * Ein,
-                              Ein * 1.01,
-                              3000)
-    if Ein * 2 < 5.0:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
-                                 np.log10(5.0),
-                                 2000)
-    else:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
-                                 np.log10(2 * Ein),
-                                 2000)
-    return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
 
 
 def check_dx(data: [pd.DataFrame, pd.Series],

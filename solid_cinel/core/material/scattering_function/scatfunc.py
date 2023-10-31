@@ -808,7 +808,8 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             return scattfunc_conv
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit("float64[:](float64[:], float64, float64, float64)",
+    nopython=True, nogil=True, cache=True)
 def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     """
     Sigma1 function for Energy differential scattering function
@@ -855,7 +856,8 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     return scattfunc
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
+@nb.jit("float64[:](float64[:], float64, float64, float64, float64, float64, float64)",
+    nopython=True, nogil=True, cache=True, parallel=False)
 def get_scat_sct_angular(Eout: np.ndarray, mu: float, Ein: float, T: float,
                 M: float, Teff: float, ws: float) -> np.array:
     """
@@ -991,7 +993,8 @@ def get_diag_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
         tau_n_reshape[beta > beta_tau[-1]] = 0.0
     return alpha_mul * tau_n_reshape
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
+@nb.jit("float64[:](float64[:], float64[:], int32, float64[:], float64, float64, float64)",
+    nopython=True, nogil=True, cache=True, parallel=False)
 def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
                     nphonon: int, tau1: np.ndarray, delta_beta: float,
                     threshold: float, DebyeWallerCoeff: float) -> np.ndarray:
@@ -1046,7 +1049,8 @@ def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
         tau_n_minus_1 = tau_n
     return S_diag
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
+@nb.jit("float64[:](float64, float64, float64, float64[:], float64, int32, float64[:], float64, float64, float64)",
+        nopython=True, nogil=True, cache=True, parallel=False)
 def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: float, nphonon: int, tau1: np.ndarray,
                  delta_beta: float, threshold: float,

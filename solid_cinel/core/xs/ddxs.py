@@ -19,6 +19,9 @@ from typing import Iterable
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
+# Avoid numba fast math:
+nb.config.FASTMATH_DEFAULT = False
+
 # Example variables:
 interv_in_energy_U238 = 6.956193E-04
 rho_in_energy_U238_str = '''
@@ -754,8 +757,29 @@ class DDxs:
          9.396926e-01  0.000000   0.000000   1.849244   1.174449  0.000000
          9.848078e-01  0.000000   0.000000   0.000006   0.000004  0.000000
 
-        # Coercelle with pdos model:
-        Is not done because the test take too long
+        # Coercelle with pdos model: (Example not very accurate, only for
+        # demonstration purposes)
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=10, model="pdos").data.round(6)
+        Eout           1.800000  1.866667  1.933333    2.000000  2.066667  2.133333  2.200000
+        mu
+        -9.848078e-01  0.000000  0.000000  0.000001    0.000006  0.000000  0.000000  0.000000
+        -9.396926e-01  0.000000  0.000000  0.000002    0.000012  0.000001  0.000000  0.000000
+        -8.660254e-01  0.000000  0.000000  0.000007    0.000034  0.000002  0.000000  0.000000
+        -7.660444e-01  0.000000  0.000000  0.000029    0.000133  0.000009  0.000000  0.000000
+        -6.427876e-01  0.000000  0.000001  0.000158    0.000692  0.000051  0.000000  0.000000
+        -5.000000e-01  0.000000  0.000007  0.001039    0.004366  0.000353  0.000001  0.000000
+        -3.420201e-01  0.000000  0.000054  0.007500    0.030246  0.002690  0.000009  0.000000
+        -1.736482e-01  0.000001  0.000416  0.052983    0.205857  0.020120  0.000075  0.000000
+         6.123234e-17  0.000004  0.002702  0.322730    1.222287  0.129895  0.000518  0.000000
+         1.736482e-01  0.000020  0.012855  1.482854    5.617185  0.631574  0.002613  0.000002
+         3.420201e-01  0.000064  0.038037  4.492486   18.007688  2.015572  0.008171  0.000007
+         5.000000e-01  0.000104  0.058912  7.956262   38.425201  3.728910  0.013305  0.000011
+         6.427876e-01  0.000069  0.040440  7.620748   59.607383  3.684765  0.009512  0.000008
+         7.660444e-01  0.000015  0.011235  3.869906   83.015313  1.903885  0.002707  0.000002
+         8.660254e-01  0.000001  0.001381  0.986666  103.942011  0.488371  0.000335  0.000000
+         9.396926e-01  0.000000  0.000066  0.110370   82.228527  0.053964  0.000016  0.000000
+         9.848078e-01  0.000000  0.000001  0.008851   25.055335  0.004153  0.000000  0.000000
         """
         scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
         xs = xs_matrix(xs_0K, Ein, M, T, Eout, theta, scatfunction.get_angle, *args, **kwargs) if kwargs.get("model") else xs_matrix(xs_0K, Ein, M, T, Eout, theta)
@@ -1230,10 +1254,29 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     10   9.105490  9.098775  9.091979  9.085086  9.078076  9.070973  9.063803
 
     # pdos model:
-    pytest is not accurate enough
     >>> nphonon = 100
     >>> threshold = 1.0e-14
     >>> xs_values = xs_matrix(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
+    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
+         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+    180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
+    170  9.102381  9.095558  9.088736  9.081785  9.074706  9.067627  9.060548
+    160  9.102454  9.095632  9.088810  9.081861  9.074782  9.067703  9.060625
+    150  9.102577  9.095755  9.088932  9.081987  9.074910  9.067831  9.060753
+    140  9.102746  9.095924  9.089098  9.082158  9.075085  9.068007  9.060928
+    130  9.102952  9.096130  9.089299  9.082363  9.075297  9.068219  9.061139
+    120  9.103190  9.096369  9.089534  9.082602  9.075545  9.068466  9.061386
+    110  9.103451  9.096632  9.089797  9.082865  9.075817  9.068740  9.061657
+    100  9.103729  9.096912  9.090074  9.083149  9.076110  9.069031  9.061947
+    90   9.104017  9.097203  9.090360  9.083438  9.076408  9.069334  9.062245
+    80   9.104301  9.097490  9.090649  9.083730  9.076705  9.069633  9.062545
+    70   9.104579  9.097769  9.090927  9.084011  9.076995  9.069924  9.062834
+    60   9.104837  9.098033  9.091189  9.084274  9.077265  9.070196  9.063105
+    50   9.105070  9.098270  9.091426  9.084513  9.077508  9.070442  9.063350
+    40   9.105269  9.098471  9.091631  9.084720  9.077716  9.070655  9.063557
+    30   9.105425  9.098635  9.091795  9.084887  9.077888  9.070823  9.063725
+    20   9.105525  9.098748  9.091915  9.085010  9.078011  9.070941  9.063833
+    10   9.105489  9.098775  9.091979  9.085087  9.078074  9.070973  9.063803
 
     Dirac delta test for Teff calculation and pdos model:
     >>> Ein = 36.68
@@ -1271,14 +1314,12 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     # Specific arguments for S(alpha, -beta) DB:
     if model == "fgm":
         arguments += (mu_fit, T_arno, 1.0)
-        return xs_matrix_values(*arguments)
     elif model == "sct":
         Teff = np.array(
             [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
         )
         Teff[np.isnan(Teff)] = T_arno[np.isnan(Teff)]
         arguments += (mu_fit, Teff, 1.0)
-        return xs_matrix_values(*arguments)
     elif model == "pdos":
         threshold = kwargs.pop("threshold", 0.0)
         nphonon = kwargs.pop("nphonon", 1000)
@@ -1290,13 +1331,9 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
                 tau1[i, :] = pdos.get_tau_1(T_arno[i]).values
                 DebyeWallerCoeff[i] = pdos.DebyeWallerCoeff(T_arno[i])
                 delta_beta[i] = pdos.to_beta_grid(T_arno[i]).grid
-        return xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M,
-                                     T_arno, Eout, mu, mu_fit, nphonon,
-                                     tau1, delta_beta, threshold,
-                                     DebyeWallerCoeff)  # Parche momentaneo
-    else:
-        return xs_matrix_values(*arguments)
-#    return xs_matrix_values(*arguments)
+            arguments += (
+            mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
+    return xs_matrix_values(*arguments)
 
 
 
@@ -1568,62 +1605,12 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     10   9.105490  9.098775  9.091979  9.085086  9.078076  9.070973  9.063803
 
     # pdos model:
-    With numba fail. For the moment code is duplicated in xs_matrix_values_pdos
-    for getting the same results all the times.
-    """
-    xs_mat = np.zeros((len(mu), len(Eout)))
-    Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-    for i in range(len(mu)):
-        if mu[i] == np.cos(np.pi):
-            xs_mat[i, :] = np.interp(Ein_arno[i, :], xs_E, xs_values)
-            continue
-        for j in prange(len(Eout)):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            if len(args) == 3: #FGM or SCT
-                pdf = get_scat_sct_angular(Eout_db, args[0], Ein_arno[i, j], T_arno[i], M, args[1][i], args[2])
-            else:
-                pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
-            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
-    return xs_mat
-
-
-@nb.jit(nb.float64[:, :](nb.float64[:], nb.float64[:], nb.float64, nb.float64,
-                         nb.float64[:], nb.float64[:], nb.float64[:], nb.float64,
-                         nb.int32, nb.float64[:, :], nb.float64[:], nb.float64,
-                         nb.float64[:]),
-        nopython=True, nogil=False, cache=False, parallel=False)
-def xs_matrix_values_pdos(xs_values, xs_E, Ein, M,
-                          T_arno, Eout, mu, mu_fit,
-                          nphonon, tau1, delta_beta, threshold,
-                          DebyeWallerCoeff) -> np.ndarray:
-    """
-    DUPLICATE FUNCTION DUE TO NUMBA njit compilation error. Numba generates
-    fluctuations in matrix values due to the complexity of the
-    get_ScatFunc_pdos_angle
-
-    In the future will be updated. I only leave it here for reference and
-    example tests.
-
-    Examples
-    --------
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("ddxs.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-    >>> os.chdir(wd)
-    >>> T = 1000
-    >>> Ein = 2.0
-    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
-    >>> M = 238.05077040419212
-    >>> theta = np.arange(10, 190, 10)
-    >>> mu = np.sort(np.cos(theta * np.pi / 180))
-    >>> mu_fit = np.cos(60 / 180 * np.pi)
-    >>> from solid_cinel.core.material.vibration.pdos import Pdos
-    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno]
+    >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]
+    >>> delta_beta = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno]
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values = xs_matrix(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
+    >>> xs_values = xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -1644,7 +1631,6 @@ def xs_matrix_values_pdos(xs_values, xs_E, Ein, M,
     30   9.105006  9.098241  9.091431  9.084545  9.077570  9.070538  9.063469
     20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
-
     """
     xs_mat = np.zeros((len(mu), len(Eout)))
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
@@ -1652,12 +1638,17 @@ def xs_matrix_values_pdos(xs_values, xs_E, Ein, M,
         if mu[i] == np.cos(np.pi):
             xs_mat[i, :] = np.interp(Ein_arno[i, :], xs_E, xs_values)
             continue
-        for j in range(len(Eout)):
+        for j in prange(len(Eout)):
             Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
-                                          Eout_db, mu_fit, nphonon,
-                                          tau1[i], delta_beta[i],
-                                          threshold, DebyeWallerCoeff[i])
+            if len(args) == 3: #FGM or SCT
+                pdf = get_scat_sct_angular(Eout_db, args[0], Ein_arno[i, j], T_arno[i], M, args[1][i], args[2])
+            elif len(args) == 6: #PDOS
+                pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
+                                              Eout_db, args[0], args[1],
+                                              args[2][i], args[3][i],
+                                              args[4], args[5][i])
+            else:
+                pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
             xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
     return xs_mat
 

@@ -1120,6 +1120,6 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta,
                                  threshold, DebyeWallerCoeff)
     sd_pdf = get_ScatFunc_values(Sab_values, beta, Ein, T, M)
-    Eout_pos = np.searchsorted(sd_pdf[:, 0], Eout)
-    return sd_pdf[Eout_pos, 1]
+    # Interpolation for avoiding numerical fluctuations:
+    return np.interp(Eout, sd_pdf[:, 0], sd_pdf[:, 1])
 

@@ -1360,7 +1360,7 @@ def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     Ein_arno: np.ndarray, (M, Z)
         Incident energy matrix for the arno model
     """
-    Ein_arno = np.zeros((len(mu), len(Eout)))
+    Ein_arno = np.empty((len(mu), len(Eout)))
     for i in range(len(mu)):
         alpha = (Ein + Eout - 2 * mu[i] * np.sqrt(Ein * Eout)) * m / M
         Ein_arno[i, :] = (Eout + Ein) / 2 - Ein * mu[i] * m / M
@@ -1632,7 +1632,7 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
-    xs_mat = np.zeros((len(mu), len(Eout)))
+    xs_mat = np.empty((len(mu), len(Eout)))
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
     for i in range(len(mu)):
         if mu[i] == np.cos(np.pi):

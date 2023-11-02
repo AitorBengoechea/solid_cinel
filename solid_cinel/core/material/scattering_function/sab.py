@@ -1370,7 +1370,7 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values.
     """
-    Sab = np.zeros((len(alpha), len(beta)))
+    Sab = np.empty((len(alpha), len(beta)))
     for i in prange(len(alpha)):
         for j in prange(len(beta)):
             Sab[i, j] = np.exp(-(abs(beta[j]) - alpha[i] * ws) ** 2 / (4 * alpha[i] * ws * Tratio))

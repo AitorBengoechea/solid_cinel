@@ -959,9 +959,10 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
                                               threshold, debye_waller_coeff))
     return dd_pdf
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
+@nb.jit("float64[:](float64[:], float64[:], float64, float64[:], float64[:], float64[:])",
+    nopython=True, nogil=True, cache=True, parallel=False)
 def get_diag_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
-                     debye_waller_coeff: float,  iter_sum: float,
+                     debye_waller_coeff: float,  iter_sum: np.ndarray,
                      alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
@@ -1032,17 +1033,19 @@ def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
     tau_n_minus_1 = tau1.copy()
     # Zero phonon expansion:
     iter_sum = np.log(alpha * DebyeWallerCoeff)
-    S_diag = get_diag_S_from_tau_n(tau1, np.arange(len(tau1)) * delta_beta,
+    beta_tau_1 = np.arange(len(tau1)) * delta_beta
+    S_diag = get_diag_S_from_tau_n(tau1, beta_tau_1,
                                 DebyeWallerCoeff, iter_sum, alpha, beta)
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon + 1):
         # Tau_n(-beta)
         tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
+        beta_tau_n = np.arange(len(tau_n)) * delta_beta
 
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        S_diag += get_diag_S_from_tau_n(tau_n, np.arange(len(tau_n)) * delta_beta,
+        S_diag += get_diag_S_from_tau_n(tau_n, beta_tau_n,
                                         DebyeWallerCoeff, iter_sum, alpha, beta)
 
         # Next tau_n

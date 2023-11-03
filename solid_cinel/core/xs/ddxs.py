@@ -1261,23 +1261,23 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
-    170  9.102381  9.095558  9.088736  9.081785  9.074706  9.067627  9.060548
-    160  9.102454  9.095632  9.088810  9.081861  9.074782  9.067703  9.060625
-    150  9.102577  9.095755  9.088932  9.081987  9.074910  9.067831  9.060753
-    140  9.102746  9.095924  9.089098  9.082158  9.075085  9.068007  9.060928
-    130  9.102952  9.096130  9.089299  9.082363  9.075297  9.068219  9.061139
-    120  9.103190  9.096369  9.089534  9.082602  9.075545  9.068466  9.061386
-    110  9.103451  9.096632  9.089797  9.082865  9.075817  9.068740  9.061657
-    100  9.103729  9.096912  9.090074  9.083149  9.076110  9.069031  9.061947
-    90   9.104017  9.097203  9.090360  9.083438  9.076408  9.069334  9.062245
-    80   9.104301  9.097490  9.090649  9.083730  9.076705  9.069633  9.062545
-    70   9.104579  9.097769  9.090927  9.084011  9.076995  9.069924  9.062834
-    60   9.104837  9.098033  9.091189  9.084274  9.077265  9.070196  9.063105
-    50   9.105070  9.098270  9.091426  9.084513  9.077508  9.070442  9.063350
-    40   9.105269  9.098471  9.091631  9.084720  9.077716  9.070655  9.063557
-    30   9.105425  9.098635  9.091795  9.084887  9.077888  9.070823  9.063725
-    20   9.105525  9.098748  9.091915  9.085010  9.078011  9.070941  9.063833
-    10   9.105489  9.098775  9.091979  9.085087  9.078074  9.070973  9.063803
+    170  9.103715  9.096910  9.090104  9.083212  9.076165  9.069103  9.062042
+    160  9.103626  9.096821  9.090015  9.083121  9.076074  9.069013  9.061952
+    150  9.103167  9.096364  9.089558  9.082651  9.075602  9.068542  9.061485
+    140  9.102780  9.095979  9.089172  9.082254  9.075208  9.068149  9.061094
+    130  9.102666  9.095866  9.089056  9.082135  9.075097  9.068042  9.060984
+    120  9.102740  9.095944  9.089135  9.082217  9.075183  9.068131  9.061076
+    110  9.102926  9.096135  9.089323  9.082409  9.075386  9.068336  9.061282
+    100  9.103175  9.096384  9.089570  9.082664  9.075646  9.068599  9.061543
+    90   9.103449  9.096661  9.089848  9.082944  9.075937  9.068892  9.061832
+    80   9.103734  9.096949  9.090132  9.083232  9.076233  9.069190  9.062131
+    70   9.104011  9.097229  9.090414  9.083518  9.076522  9.069484  9.062421
+    60   9.104271  9.097492  9.090677  9.083783  9.076796  9.069758  9.062696
+    50   9.104647  9.097872  9.091058  9.084168  9.077187  9.070151  9.063088
+    40   9.104847  9.098078  9.091263  9.084378  9.077398  9.070365  9.063300
+    30   9.105006  9.098241  9.091431  9.084545  9.077570  9.070538  9.063469
+    20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
+    10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
 
     Dirac delta test for Teff calculation and pdos model:
     >>> Ein = 36.68
@@ -1310,17 +1310,18 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     mu = np.sort(np.cos(theta * np.pi / 180))
     T_arno = T * (1 + mu) / 2
     model = kwargs.pop("model", "sigma1")
-    arguments = [xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu]
 
     # Specific arguments for S(alpha, -beta) DB:
+    if model == "sigma1":
+        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu)
     if model == "fgm":
-        arguments += (mu_fit, T_arno, 1.0)
+        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, T_arno, 1.0)
     elif model == "sct":
         Teff = np.array(
             [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
         )
         Teff[np.isnan(Teff)] = T_arno[np.isnan(Teff)]
-        arguments += (mu_fit, Teff, 1.0)
+        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, Teff, 1.0)
     elif model == "pdos":
         threshold = kwargs.pop("threshold", 0.0)
         nphonon = kwargs.pop("nphonon", 1000)
@@ -1332,9 +1333,10 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
                 tau1[i, :] = pdos.get_tau_1(T_arno[i]).values
                 DebyeWallerCoeff[i] = pdos.DebyeWallerCoeff(T_arno[i])
                 delta_beta[i] = pdos.to_beta_grid(T_arno[i]).grid
-            arguments += (
-            mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
-    return xs_matrix_values(*arguments)
+        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1,
+                                delta_beta, threshold, DebyeWallerCoeff)
+    else:
+        raise ValueError("Model not found")
 
 
 
@@ -1641,15 +1643,15 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
             continue
         for j in prange(len(Eout)):
             Eout_db = default_Eout(Ein_arno[i, j])
-            if len(args) == 3: #FGM or SCT
+            if len(args) == 0:  # sigma1
+                pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
+            elif len(args) == 3:  # FGM or SCT
                 pdf = get_scat_sct_angular(Eout_db, args[0], Ein_arno[i, j], T_arno[i], M, args[1][i], args[2])
-            elif len(args) == 6: #PDOS
+            else:  # PDOS
                 pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
                                               Eout_db, args[0], args[1],
                                               args[2][i], args[3][i],
                                               args[4], args[5][i])
-            else:
-                pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
             xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
     return xs_mat
 

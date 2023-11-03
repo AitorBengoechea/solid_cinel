@@ -1497,7 +1497,7 @@ def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
     ScatFunc_values = ScatFunc_values[positive_mask]
     Eout = Eout[positive_mask]
 
-    # Handle nan values(PORQUE COJONES PUSE ESTO?):
+    # Handle nan values:
     ScatFunc_values[np.isnan(ScatFunc_values)] = 0
 
     # Normalization constant

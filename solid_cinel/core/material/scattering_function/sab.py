@@ -406,8 +406,9 @@ class Sab:
         2.895646    2.659158
         dtype: float64
         """
+        Ein, T, M = float(Ein), float(T), float(M)
         # Get the scattering function values:
-        sab_diag = np.diag(self.data)
+        sab_diag = np.array(np.diag(self.data), order='C')
         beta = self.beta.data[:len(sab_diag)]
         scattfunc = get_ScatFunc_values(sab_diag, beta, Ein, T, M)
 
@@ -1369,7 +1370,7 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values.
     """
-    Sab = np.zeros((len(alpha), len(beta)))
+    Sab = np.empty((len(alpha), len(beta)))
     for i in prange(len(alpha)):
         for j in prange(len(beta)):
             Sab[i, j] = np.exp(-(abs(beta[j]) - alpha[i] * ws) ** 2 / (4 * alpha[i] * ws * Tratio))
@@ -1378,7 +1379,8 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     return Sab
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit("float64[:](float64, float64[:], float64[:], float64)",
+    nopython=True, nogil=True, cache=True, parallel=True)
 def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
               threshold: float) -> np.ndarray:
     """
@@ -1456,7 +1458,8 @@ def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
     return
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit("float64[:, :](float64[:], float64[:], float64, float64, float64)",
+        nopython=True, nogil=True, cache=True)
 def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
                         T: float, M: float) -> np.ndarray:
     """
@@ -1478,7 +1481,7 @@ def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
 
     Returns
     -------
-    'np.ndarray', (N,)
+    'np.ndarray', (N, 2)
         Scattering function values for a single angle for tau_n expansion.
     """
     # Scattering function values calculation:
@@ -1492,8 +1495,10 @@ def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
     # Ensure the Eout values are positive:
     positive_mask = Eout > 0
     ScatFunc_values = ScatFunc_values[positive_mask]
-    ScatFunc_values[np.isnan(ScatFunc_values)] = 0
     Eout = Eout[positive_mask]
+
+    # Handle nan values:
+    ScatFunc_values[np.isnan(ScatFunc_values)] = 0
 
     # Normalization constant
     aws = ((M / m + 1) / (M / m)) ** 2

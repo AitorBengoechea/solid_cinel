@@ -1,6 +1,7 @@
 import os
 from setuptools import setup
 import multiprocessing
+from Cython.Build import cythonize
 requirements = "requirements.txt"
 
 if __name__ == "__main__":

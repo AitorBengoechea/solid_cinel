@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from setuptools import setup
 import multiprocessing
 from setuptools.extension import Extension
@@ -11,6 +12,7 @@ extensions = [
         ["solid_cinel/cython_modules/clm.pyx"],
         extra_compile_args=['-O3'],
         extra_link_args=[],
+        include_dirs=[np.get_include()],
     )
 ]
 

@@ -8,7 +8,7 @@ requirements = "requirements.txt"
 
 extensions = [
     Extension(
-        "solid_cinel.clm",
+        "solid_cinel.CLM",
         ["solid_cinel/cython_modules/clm.pyx"],
         extra_compile_args=['-fopenmp', '-O3'],
         extra_link_args=['-fopenmp'],

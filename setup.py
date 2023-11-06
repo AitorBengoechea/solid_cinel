@@ -1,8 +1,18 @@
 import os
 from setuptools import setup
 import multiprocessing
+from setuptools.extension import Extension
 from Cython.Build import cythonize
 requirements = "requirements.txt"
+
+extensions = [
+    Extension(
+        "clm",
+        ["solid_cinel/cython_modules/clm.pyx"],
+        extra_compile_args=['-O3'],
+        extra_link_args=[],
+    )
+]
 
 if __name__ == "__main__":
     # Freeze to support parallel compilation when using spawn instead of fork
@@ -27,7 +37,7 @@ if __name__ == "__main__":
             "pytest",
         ],
         include_package_data=True,
-        # ext_modules=extensions,
+        ext_modules=cythonize(extensions),
         # entry_points={
         #    'console_scripts': [
         #        'sandy=sandy.sampling:run',

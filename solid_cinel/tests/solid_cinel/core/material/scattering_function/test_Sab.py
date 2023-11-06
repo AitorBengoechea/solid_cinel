@@ -2,8 +2,7 @@ import pytest
 import numpy as np
 import os
 import pandas as pd
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
-from solid_cinel.core.generic import integrate
+from solid_cinel import ScatFunc, integrate
 
 
 @pytest.mark.parametrize("Ein, M, T", [(0.1000000E-01, 238.0, 1000)])

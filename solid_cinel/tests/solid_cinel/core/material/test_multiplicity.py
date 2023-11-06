@@ -4,8 +4,7 @@ Created on Thu Nov 24 10:15:33 2022
 @author: AB272525
 """
 
-from solid_cinel.core.material.target_material import Target_mat
-from solid_cinel.core.cinematic.frames import Neutron
+from solid_cinel import Target_mat, Neutron
 import numba as nb
 import numpy as np
 import pandas as pd

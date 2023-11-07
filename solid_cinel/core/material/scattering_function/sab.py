@@ -1403,48 +1403,28 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
         Tau(-beta) function for n expansion.
     """
     tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
-    Nnm1 = len(tau_n_minus_1)
+    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
     N = len(tau1)
-
     exp_delta_beta = np.exp(-delta_beta * np.arange(N))
 
-    for i in prange(len(tau_n)):
-        # Handle the first iteration of the inner loop separately
-        j = 0
-        k = i
-        l = i
-        if k < Nnm1:
-            convol = tau_n_minus_1[k]
-        if l < Nnm1:
-            convol += tau_n_minus_1[l]
-        convol *= 0.5
-        tau_n[i] += tau1[j] * convol * delta_beta
-
-        # Handle the middle iterations of the inner loop
-        for j in range(1, N - 1):
+    for i in prange(len(tau_n)):  # loop for tau_n
+        for j in range(N):  # loop for tau1
             convol = 0.
-            k = i - j
-            l = i + j
+
+            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
             if k >= 0 and k < Nnm1:
                 convol = tau_n_minus_1[k]
-            elif k < 0 and -k < Nnm1:
+            elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
                 convol = tau_n_minus_1[-k] * exp_delta_beta[-k]
+
+            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
             if l < Nnm1:
                 convol += tau_n_minus_1[l] * exp_delta_beta[j]
-            tau_n[i] += tau1[j] * convol * delta_beta
 
-        # Handle the last iteration of the inner loop separately
-        j = N - 1
-        k = i - j
-        l = i + j
-        if k >= 0 and k < Nnm1:
-            convol = tau_n_minus_1[k]
-        elif k < 0 and -k < Nnm1:
-            convol = tau_n_minus_1[-k] * exp_delta_beta[-k]
-        if l < Nnm1:
-            convol += tau_n_minus_1[l] * exp_delta_beta[j]
-        convol *= 0.5
-        tau_n[i] += tau1[j] * convol * delta_beta
+            if j == 0 or j == N - 1:
+                convol *= 0.5                      # trapz integrate
+
+            tau_n[i] += tau1[j] * convol * delta_beta
 
     return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]
 

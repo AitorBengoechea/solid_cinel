@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 import multiprocessing
 requirements = "requirements.txt"
 
@@ -8,7 +8,8 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
     setup(
         name='solid_cinel',
-        version='0.1',
+        use_scm_version=True,
+        setup_requires=['setuptools_scm'],
         description='solid_cinel',
         url='https://github.com/AitorBengoechea/solid_cinel/',
         author='Aitor Bengoechea',

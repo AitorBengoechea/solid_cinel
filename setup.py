@@ -1,5 +1,5 @@
 import os
-from setuptools import setup, find_packages
+from setuptools import setup
 import multiprocessing
 requirements = "requirements.txt"
 
@@ -27,10 +27,4 @@ if __name__ == "__main__":
             "pytest",
         ],
         include_package_data=True,
-        # ext_modules=extensions,
-        # entry_points={
-        #    'console_scripts': [
-        #        'sandy=sandy.sampling:run',
-        #       ],
-        #    },
     )

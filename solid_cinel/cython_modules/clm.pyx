@@ -44,9 +44,9 @@ cpdef ndarray[float64_t, ndim=1] sigma1(ndarray[float64_t, ndim=1] Eout, float64
     """
     cdef:
         int n = Eout.shape[0]
-        ndarray[float64_t, ndim=1] exp_negative = exp(- M / (m * kb * T) * (sqrt(Ein) - sqrt(Eout)) ** 2)
-        ndarray[float64_t, ndim=1] exp_positive = exp(- M / (m * kb * T) * (sqrt(Ein) + sqrt(Eout)) ** 2)
-        ndarray[float64_t, ndim=1] scattfunc = 0.5 * (exp_negative - exp_positive) * sqrt(Eout) / Ein
+        ndarray[float64_t, ndim=1] exp_negative = np.exp(- M / (m * kb * T) * (sqrt(Ein) - np.sqrt(Eout)) ** 2)
+        ndarray[float64_t, ndim=1] exp_positive = np.exp(- M / (m * kb * T) * (sqrt(Ein) + np.sqrt(Eout)) ** 2)
+        ndarray[float64_t, ndim=1] scattfunc = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
     scattfunc *= sqrt(M / (pi * m * kb * T))
     return scattfunc
 
@@ -85,11 +85,11 @@ cpdef ndarray[float64_t, ndim=1] get_scat_sct_angular(ndarray[float64_t, ndim=1]
     cdef:
         float64_t awr = ((M / m + 1) / (M / m)) ** 2
         ndarray[float64_t, ndim=1] beta = (Eout - Ein) / (kb * T)
-        ndarray[float64_t, ndim=1] alpha = Eout + Ein - 2 * mu * sqrt(Eout * Ein) / (M * kb * T / m)
-        ndarray[float64_t, ndim=1] scattfunc = exp(-(ws * alpha + beta) ** 2 / (4 * alpha * Teff / T * ws))
+        ndarray[float64_t, ndim=1] alpha = Eout + Ein - 2 * mu * np.sqrt(Eout * Ein) / (M * kb * T / m)
+        ndarray[float64_t, ndim=1] scattfunc = np.exp(-(ws * alpha + beta) ** 2 / (4 * alpha * Teff / T * ws))
 
-    scattfunc /= sqrt(4 * pi * ws * alpha * Teff / T)
-    scattfunc *= awr * sqrt(Eout / Ein) / (2 * kb * T)
+    scattfunc /= np.sqrt(4 * pi * ws * alpha * Teff / T)
+    scattfunc *= awr * np.sqrt(Eout / Ein) / (2 * kb * T)
     return scattfunc
 
 
@@ -306,7 +306,7 @@ cpdef ndarray[float64_t, ndim=1] get_diag_S_from_tau_n(ndarray[float64_t, ndim=1
         Scattering function values for a single angle for tau_n function.
     """
     cdef:
-        ndarray[float64_t, ndim=1] alpha_mul = exp(- alpha * debye_waller_coeff + iter_sum)
+        ndarray[float64_t, ndim=1] alpha_mul = np.exp(- alpha * debye_waller_coeff + iter_sum)
         ndarray[float64_t, ndim=1] tau_n_reshape = np.interp(beta, beta_tau, tau)
     # Bounds in nopython mode:
     if beta[-1] > beta_tau[-1]:
@@ -345,7 +345,7 @@ cpdef ndarray[float64_t, ndim=1] get_diag_S_pdos(ndarray[float64_t, ndim=1] alph
         Scattering function values for a single angle.
     """
     cdef:
-        ndarray[float64_t, ndim=1] iter_sum = log(alpha * DebyeWallerCoeff)
+        ndarray[float64_t, ndim=1] iter_sum = np.log(alpha * DebyeWallerCoeff)
         ndarray[float64_t, ndim=1] beta_tau_1 = np.arange(len(tau1)) * delta_beta
         ndarray[float64_t, ndim=1] S_diag = get_diag_S_from_tau_n(tau1, beta_tau_1, DebyeWallerCoeff, iter_sum, alpha, beta)
         int n
@@ -362,7 +362,7 @@ cpdef ndarray[float64_t, ndim=1] get_diag_S_pdos(ndarray[float64_t, ndim=1] alph
         beta_tau_n = np.arange(len(tau_n)) * delta_beta
 
         # Compute S(alpha, -beta) for tau_n reshape
-        iter_sum += log(alpha * DebyeWallerCoeff / (n + 1))
+        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
         S_diag += get_diag_S_from_tau_n(tau_n, beta_tau_n,
                                         DebyeWallerCoeff, iter_sum, alpha, beta)
 
@@ -450,14 +450,15 @@ cpdef ndarray[float64_t, ndim=1] get_ScatFunc_pdos_angle(float64_t Ein, float64_
         Debye Waller coefficient
     """
     cdef: 
-        ndarray[float64_t, ndim=1] Eout_, beta, alpha, Sab_values, sd_pdf
+        ndarray[float64_t, ndim=1] Eout_, beta, alpha, Sab_values
+        ndarray[float64_t, ndim=2] sd_pdf
     beta = (Eout - Ein) / (kb * T)
     beta = np.unique(np.absolute(beta))
     if len(beta) < len(Eout): # same beta values but one negative and one positive
         Eout_ = beta * kb * T + Ein
     else:
         Eout_ = Eout.copy()
-    alpha = Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)
+    alpha = Eout_ + Ein - 2 * mu * np.sqrt(Eout_ * Ein)
     alpha /= (M * kb * T / m)
     Sab_values = get_diag_S_pdos(alpha, beta, nphonon, tau1, delta_beta,
                                                             threshold, DebyeWallerCoeff)
@@ -481,7 +482,7 @@ cpdef ndarray[float64_t, ndim=2] xs_matrix_clm(ndarray[float64_t, ndim=1] xs_val
         if mu[i] == np.cos(np.pi):
             xs_mat[i, :] = np.interp(Ein_arno[i, :], xs_E, xs_values)
             continue
-        for j in range(7000):
+        for j in range(len(Eout)):
             Eout_db = default_Eout(Ein_arno[i, j])
             pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
                                               Eout_db, mu_fit, nphonon,

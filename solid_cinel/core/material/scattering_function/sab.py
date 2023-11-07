@@ -1409,7 +1409,7 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
     exp_delta_beta = np.exp(-delta_beta * np.arange(N))
 
     for i in prange(tau_n_len):  # loop for tau_n
-        for j in range(N):  # loop for tau1
+        for j in prange(N):  # loop for tau1
 
             # tau_n_minus_1(-(beta-beta^prime))
             k = i - j

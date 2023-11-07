@@ -1402,27 +1402,32 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
     tau_n : 'np.ndarray', (N,)
         Tau(-beta) function for n expansion.
     """
-    tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
+    tau_n_len = len(tau1) + len(tau_n_minus_1) - 1
+    tau_n = np.zeros(tau_n_len)
     Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
     N = len(tau1)
     exp_delta_beta = np.exp(-delta_beta * np.arange(N))
 
-    for i in prange(len(tau_n)):  # loop for tau_n
-        for j in range(N):  # loop for tau1
-            convol = 0.
+    for i in prange(tau_n_len):  # loop for tau_n
+        for j in prange(N):  # loop for tau1
 
-            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
+            # tau_n_minus_1(-(beta-beta^prime))
+            k = i - j
             if k >= 0 and k < Nnm1:
                 convol = tau_n_minus_1[k]
             elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
                 convol = tau_n_minus_1[-k] * exp_delta_beta[-k]
+            else:
+                convol = 0.
 
-            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
+            # Tau_n_minus_1(-(beta+beta^prime))
+            l = i + j
             if l < Nnm1:
                 convol += tau_n_minus_1[l] * exp_delta_beta[j]
 
+            # trapz integrate:
             if j == 0 or j == N - 1:
-                convol *= 0.5                      # trapz integrate
+                convol *= 0.5
 
             tau_n[i] += tau1[j] * convol * delta_beta
 

@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 import multiprocessing
 requirements = "requirements.txt"
 
@@ -18,8 +18,7 @@ if __name__ == "__main__":
             'Development Status :: Beta',
             'Programming Language :: Python :: 3',
         ],
-        data_files=[(x[0], list(map(lambda y: x[0] + '/' + y, x[2]))) for x in
-                    os.walk('solid_cinel')],
+        packages=find_packages(),
         install_requires=open(requirements).read().splitlines(),
         zip_safe=False,
         # setup_requires=["pytest-runner",],

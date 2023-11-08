@@ -1,4 +1,3 @@
-import numpy as np
 from setuptools import setup, find_packages
 import multiprocessing
 from setuptools.extension import Extension

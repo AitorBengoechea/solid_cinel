@@ -8,7 +8,8 @@ import pandas as pd
 import numba as nb
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.material.scattering_function.clm import sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.generic import integrate, reshift
 import os
 from math import pi

@@ -11,6 +11,7 @@ customize_compiler(compiler)
 if compiler.has_function('printf'):  # Check for a basic function
     # If compiler is available, compile Cython extensions
     from Cython.Build import cythonize
+    import numpy as np
     extensions = [
         Extension(
             "solid_cinel.CLM",

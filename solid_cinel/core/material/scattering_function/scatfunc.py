@@ -9,13 +9,10 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.beta import Beta, get_beta
-from solid_cinel.core.material.scattering_function.alpha import Alpha, get_alpha
-from solid_cinel.core.material.scattering_function.sab import Sab, tau_n_CPU, get_ScatFunc_values
+from solid_cinel.core.material.scattering_function.sab import tau_n_CPU, get_ScatFunc_values
 from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable
 from math import sqrt, pi
-from numba import prange
 import warnings
 
 # constants

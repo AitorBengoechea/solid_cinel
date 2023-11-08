@@ -11,6 +11,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.generic import integrate, reshift
 import os
+from math import pi
 import copy
 
 from typing import Iterable
@@ -1181,7 +1182,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
     >>> M = 238.05077040419212
     >>> theta = np.arange(10, 190, 10)
-    >>> mu_fit = np.cos(60 / 180 * np.pi)
+    >>> mu_fit = np.cos(np.deg2rad(60))
 
     # sigma1 model:
     >>> xs_values = xs_matrix(xs_0K, Ein, M, T, Eout, theta)
@@ -1307,7 +1308,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
     else:
         xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
 
-    mu = np.sort(np.cos(theta * np.pi / 180))
+    mu = np.sort(np.cos(np.deg2rad(theta)))
     T_arno = T * (1 + mu) / 2
     model = kwargs.pop("model", "sigma1")
 
@@ -1531,8 +1532,8 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
     >>> M = 238.05077040419212
     >>> theta = np.arange(10, 190, 10)
-    >>> mu = np.sort(np.cos(theta * np.pi / 180))
-    >>> mu_fit = np.cos(60 / 180 * np.pi)
+    >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+    >>> mu_fit = np.cos(np.deg2rad(60))
     >>> T_arno = T * (1 + mu) / 2
 
     # sigma1 model:
@@ -1638,7 +1639,7 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     xs_mat = np.empty((len(mu), len(Eout)))
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
     for i in range(len(mu)):
-        if mu[i] == np.cos(np.pi):
+        if mu[i] == np.cos(pi):
             xs_mat[i, :] = np.interp(Ein_arno[i, :], xs_E, xs_values)
             continue
         for j in prange(len(Eout)):

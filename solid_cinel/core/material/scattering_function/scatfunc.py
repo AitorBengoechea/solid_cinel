@@ -268,7 +268,7 @@ class ScatFuncSD:
         7.4480    0.004105
         dtype: float64
         """
-        mu = np.cos(theta * np.pi / 180)
+        mu = np.cos(np.deg2rad(theta))
         if model.lower() == "pdos":
             threshold = kwargs.pop("threshold", 0.0)
             nphonon = kwargs.pop("nphonon", 1000)
@@ -465,7 +465,7 @@ class ScatFuncDD:
          0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
-        mu = np.cos(theta * np.pi / 180)
+        mu = np.cos(np.deg2rad(theta))
         if model.lower() == "pdos":
             scattfunc = scat_from_pdos(Ein, M, T, Eout, theta,
                                            *args, **kwargs)
@@ -523,7 +523,7 @@ class ScatFuncDD:
         7.4480    0.004026
         Name: 0.5000000000000001, dtype: float64
         """
-        filt_angle = np.cos(theta * np.pi / 180) if theta else self.get_angle
+        filt_angle = np.cos(np.deg2rad(theta)) if theta else self.get_angle
         scattfunc = self.data.loc[filt_angle]
         scattfunc /= integrate(self.data.loc[filt_angle])
         return ScatFunc(self.Ein, self.T, self.M, scattfunc)
@@ -765,7 +765,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         9.05
 
         # Use a displaced xs for the convolution (2D desplacement):
-        >>> Eout_move = Eout + np.outer(np.cos(theta * np.pi / 180), np.sqrt(Eout)/M)
+        >>> Eout_move = Eout + np.outer(np.cos(np.deg2rad(theta)), np.sqrt(Eout)/M)
         >>> scattering_function.convolve(xs_0K, Exs=Eout_move).iloc[::18, ::200].round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu
@@ -895,7 +895,7 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: float, Ein: float, T: float,
     alpha = Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)
     alpha /= (M * kb * T / m)
     scattfunc = np.exp(-(ws * alpha + beta) ** 2 / (4 * alpha * Teff / T * ws))
-    scattfunc /= np.sqrt(4 * np.pi * ws * alpha * Teff / T)
+    scattfunc /= np.sqrt(4 * pi * ws * alpha * Teff / T)
     scattfunc *= awr * np.sqrt(Eout / Ein) / (2 * kb * T)
     return scattfunc
 
@@ -944,7 +944,7 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
     >>> theta = np.array([40, 80, 120, 160])
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> dd_pdf = scat_from_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14)
-    >>> pd.DataFrame(dd_pdf, index=np.cos(theta * np.pi / 180), columns=Eout).loc[:, Eout_test].round(6)
+    >>> pd.DataFrame(dd_pdf, index=np.cos(np.deg2rad(theta)), columns=Eout).loc[:, Eout_test].round(6)
                6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
      0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
      0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
@@ -954,7 +954,7 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.array,
     dd_pdf = []
     tau1 = pdos.get_tau_1(T)
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    for mu in np.cos(theta * np.pi / 180):
+    for mu in np.cos(np.deg2rad(theta)):
         dd_pdf.append(get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, nphonon,
                                               tau1.values, tau1.index[1],
                                               threshold, debye_waller_coeff))
@@ -1096,7 +1096,7 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
     >>> T = 1000
     >>> M = 238.05077040419212
-    >>> mu = np.cos(120 / 180 * np.pi)
+    >>> mu = np.cos(np.deg2rad(120))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau1 = pdos.get_tau_1(T)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)

@@ -14,6 +14,7 @@ from solid_cinel.core.material.scattering_function.alpha import Alpha, get_alpha
 from solid_cinel.core.material.scattering_function.sab import Sab, tau_n_CPU, get_ScatFunc_values
 from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable
+from math import sqrt, pi
 from numba import prange
 import warnings
 
@@ -848,11 +849,11 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     dtype: float64
     """
     exp_negative = np.exp(
-        - M / (m * kb * T) * (np.sqrt(Ein) - np.sqrt(Eout)) ** 2)
+        - M / (m * kb * T) * (sqrt(Ein) - np.sqrt(Eout)) ** 2)
     exp_positive = np.exp(
-        - M / (m * kb * T) * (np.sqrt(Ein) + np.sqrt(Eout)) ** 2)
+        - M / (m * kb * T) * (sqrt(Ein) + np.sqrt(Eout)) ** 2)
     scattfunc = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
-    scattfunc *= np.sqrt(M / (np.pi * m * kb * T))
+    scattfunc *= sqrt(M / (pi * m * kb * T))
     return scattfunc
 
 

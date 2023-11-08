@@ -1638,10 +1638,12 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     """
     xs_mat = np.empty((len(mu), len(Eout)))
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-    for i in range(len(mu)):
-        if mu[i] == np.cos(pi):
-            xs_mat[i, :] = np.interp(Ein_arno[i, :], xs_E, xs_values)
-            continue
+    if mu[0] == np.cos(pi):  # mu is sorted array
+        xs_mat[0, :] = np.interp(Ein_arno[0, :], xs_E, xs_values)
+        start = 1
+    else:
+        start = 0
+    for i in range(start, len(mu), 1):
         for j in prange(len(Eout)):
             Eout_db = default_Eout(Ein_arno[i, j])
             if len(args) == 0:  # sigma1

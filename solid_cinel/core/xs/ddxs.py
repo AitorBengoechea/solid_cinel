@@ -12,8 +12,6 @@ from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sig
 from solid_cinel.core.generic import integrate, reshift
 import os
 from math import pi
-import copy
-
 from typing import Iterable
 
 # constants

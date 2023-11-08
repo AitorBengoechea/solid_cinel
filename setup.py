@@ -1,4 +1,3 @@
-import os
 from setuptools import setup, find_packages
 import multiprocessing
 requirements = "requirements.txt"
@@ -18,12 +17,13 @@ if __name__ == "__main__":
             'Development Status :: Beta',
             'Programming Language :: Python :: 3',
         ],
-        packages=find_packages(),
+        packages=find_packages(exclude=["tests"]),
         install_requires=open(requirements).read().splitlines(),
         zip_safe=False,
         # setup_requires=["pytest-runner",],
         tests_require=[
             "pytest",
         ],
+        python_requires='>=3.9',
         include_package_data=True,
     )

@@ -13,6 +13,7 @@ from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
+from math import exp, sqrt, pi
 from numba import prange
 import warnings
 
@@ -1373,9 +1374,9 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     Sab = np.empty((len(alpha), len(beta)))
     for i in prange(len(alpha)):
         for j in prange(len(beta)):
-            Sab[i, j] = np.exp(-(abs(beta[j]) - alpha[i] * ws) ** 2 / (4 * alpha[i] * ws * Tratio))
-            Sab[i, j] *= np.exp(- (abs(beta[j]) + beta[j]) / 2)
-            Sab[i, j] /= np.sqrt(4 * np.pi * ws * alpha[i] * Tratio)
+            Sab[i, j] = exp(-(abs(beta[j]) - alpha[i] * ws) ** 2 / (4 * alpha[i] * ws * Tratio))
+            Sab[i, j] *= exp(- (abs(beta[j]) + beta[j]) / 2)
+            Sab[i, j] /= sqrt(4 * pi * ws * alpha[i] * Tratio)
     return Sab
 
 
@@ -1414,11 +1415,11 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
             if k >= 0 and k < Nnm1:
                 convol = tau_n_minus_1[k]
             elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
-                convol = tau_n_minus_1[-k] * np.exp(k * delta_beta)
+                convol = tau_n_minus_1[-k] * exp(k * delta_beta)
 
             l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
             if l < Nnm1:
-                convol += tau_n_minus_1[l] * np.exp(-j * delta_beta)
+                convol += tau_n_minus_1[l] * exp(-j * delta_beta)
 
             if j == 0 or j == N - 1:
                 convol *= 0.5                      # trapz integrate

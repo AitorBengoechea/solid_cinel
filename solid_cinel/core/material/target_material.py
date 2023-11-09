@@ -14,7 +14,7 @@ from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np
-import os
+from math import pi, cos, sin, acos, exp
 import pandas as pd
 import numba as nb
 import collections
@@ -1403,6 +1403,7 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
     """
     hklM = {}
     hkldF = {}
+    orientation_norm = np.linalg.norm(preferred_orientation)
     h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
 
     for h in h_range[::-1]:  # to get positive hkl order
@@ -1428,9 +1429,10 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
                 else:
                     hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
                     OA_num = np.sum(vec_tau_hkl * preferred_orientation)
-                    OA_den = np.linalg.norm(vec_tau_hkl) * np.linalg.norm(preferred_orientation)
-                    orientation_angle_hkl = np.arccos(OA_num / OA_den) * 180 / np.pi
-                    hklM[(h, k, l)] = np.array([d_hkl, Fsq, orientation_angle_hkl, 1])
+                    OA_den = np.linalg.norm(vec_tau_hkl) * orientation_norm
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq,
+                                                acos(OA_num / OA_den) * 180 / pi,
+                                                1])
     return hklM
 
 
@@ -1459,13 +1461,12 @@ def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
     """
     real = 0.
     imag = 0.
+    constant = - 0.5 * np.linalg.norm(vec_tau_hkl) ** 2 / (8 * pi ** 2)
     for element in Bfac:
-        expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
-                           * Bfac[element] / (8 * np.pi ** 2))
-        element_position = pos[element]
-        for iep in range(len(element_position)):
-            cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]))
-            cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]))
-            real += csl[element] * 0.1 * expon_hkl * cumulant_cos
-            imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
+        for iep in range(len(pos[element])):
+            real += cos(np.sum(vec_tau_hkl * pos[element][iep]))
+            imag += sin(np.sum(vec_tau_hkl * pos[element][iep]))
+        expon_hkl = exp(constant * Bfac[element])
+        real *= csl[element] * 0.1 * expon_hkl
+        imag *= csl[element] * 0.1 * expon_hkl
     return real ** 2 + imag ** 2  # Fsquared

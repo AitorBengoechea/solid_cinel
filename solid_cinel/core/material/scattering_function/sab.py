@@ -1413,13 +1413,14 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
 
         # loop for tau1
         for j in range(1, N):
-            convol = 0.
 
             k = i - j  # tau_n_minus_1(-(beta-beta^prime))
             if k >= 0 and k < Nnm1:
                 convol = tau_n_minus_1[k]
             elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
                 convol = tau_n_minus_1[-k] * exp(k * delta_beta)
+            else:
+                convol = 0.
 
             l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
             if l < Nnm1:

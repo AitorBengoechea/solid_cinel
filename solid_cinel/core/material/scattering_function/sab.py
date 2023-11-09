@@ -1380,24 +1380,6 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     return Sab
 
 
-@nb.jit("float64(float64[:], float64, int64, int64, int64)",
-    nopython=True, cache=True)
-def get_convol_value(tau_n_minus_1: np.ndarray, delta_beta: np.ndarray,
-                     i: int, j: int, Nnm1: int):
-    k = i - j  # tau_n_minus_1(-(beta-beta^prime))
-    if abs(k) < Nnm1:
-        if k >= 0:
-            convol = tau_n_minus_1[k]
-        else: # tau(beta) = exp(-beta)Tau(-beta)
-            convol = tau_n_minus_1[-k] * exp(k * delta_beta)
-    else:
-        convol = 0.
-    l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
-    if l < Nnm1:
-        convol += tau_n_minus_1[l] * exp(-j * delta_beta)
-    return convol
-
-
 @nb.jit("float64[:](float64, float64[:], float64[:], float64)",
     nopython=True, nogil=True, cache=True, parallel=True)
 def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
@@ -1430,14 +1412,26 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
         tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
 
         # loop for tau1
-        for j in range(1, N - 1):
-            convol = get_convol_value(tau_n_minus_1, delta_beta, i, j, Nnm1)
+        for j in range(1, N):
+            convol = 0.
+
+            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
+            if k >= 0 and k < Nnm1:
+                convol = tau_n_minus_1[k]
+            elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
+                convol = tau_n_minus_1[-k] * exp(k * delta_beta)
+
+            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
+            if l < Nnm1:
+                convol += tau_n_minus_1[l] * exp(-j * delta_beta)
+
+            if j == N - 1:
+                convol *= 0.5                      # trapz integrate
+
             tau_n[i] += tau1[j] * convol * delta_beta
 
-        # last iteration for trapezoidal integration: j = N - 1
-        convol = get_convol_value(tau_n_minus_1, delta_beta, i, N - 1, Nnm1) / 2
-        tau_n[i] += tau1[N - 1] * convol * delta_beta
     return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]
+
 
 
 @nb.jit('(float64[:], float64)',

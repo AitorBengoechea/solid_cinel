@@ -5,6 +5,7 @@ Python file for working with alpha function.
 @author: AB272525
 """
 from scipy.constants import physical_constants as const
+from solid_cinel.core.material.scattering_function.beta import Beta
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -331,6 +332,82 @@ class Alpha:
             np.array([theta]) * np.pi / 180)
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
+    def get_theta(self, T: float, Ein: float, M: float,
+                  beta_grid: Union[Beta, Iterable]) -> pd.Series:
+        """
+        Based on the S(alpha, -beta) matrix, get the posible scattering angles
+        for a scattering atom, temperature and incident neutron energy.
+        .. math::
+            \mu = \frac{E^\prime + E - \alpha Ak_BT}{2\sqrt{E^\prime E}}
+            \theta = \arccos(\mu)
+
+        Parameters
+        ----------
+        beta_grid: 'Beta' or 1D iterable
+            Beta grid.
+        T : 'float'
+            Temperature in K.
+        Ein : 'float'
+            Incident neutron energy in eV.
+        m : 'float'
+            Atom mass, amu.
+
+        Returns
+        -------
+        "pd.Series"
+            Series with the theta values for a range of alpha and a fix Ein, M
+            and Beta grid.
+
+        Example
+        -------
+        >>> T = 800
+        >>> M = 26.98153433356103
+        >>> Ein = 0.33118
+        >>> beta_grid = Beta(beta0_).scale(T)
+        >>> alpha_grid = Alpha(alpha0_).scale(T)
+        >>> alpha_grid.get_theta(T, Ein, M, beta_grid).iloc[0:5].round(6)
+        alpha
+        0.001835    0.101125
+        0.003670    0.143002
+        0.005505    0.175125
+        0.007340    0.202199
+        0.009175    0.226045
+        Name: mu, dtype: float64
+
+        >>> T = 800
+        >>> Ein = 0.33118
+        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
+        >>> beta_grid = Beta.from_parameters(Eout, Ein, T)
+        >>> M = 26.98153433356103
+        >>> theta = 45
+        >>> alpha = Alpha.from_parameters(Eout, Ein, T, M, theta)
+        >>> theta = alpha.get_theta(T, Ein, M, beta_grid)
+        >>> import numpy as np
+        >>> theta * 180 / np.pi
+        alpha
+        0.105201    45.0
+        0.105302    45.0
+        0.105403    45.0
+        0.105504    45.0
+        0.105605    45.0
+        Name: mu, dtype: float64
+        """
+        alpha = self.data
+        A = M / m
+
+        beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
+        E_prima = beta.get_Eout(T, Ein).values
+
+        if len(E_prima) > len(alpha):
+            E_prima = E_prima[:len(alpha)]
+        elif len(E_prima) < len(alpha):
+            alpha = alpha[:len(E_prima)]
+
+        mu = E_prima + Ein - alpha * A * kb * T
+        mu /= 2 * np.sqrt(E_prima * Ein)
+        mu = np.arccos(mu[abs(mu) <= 1])
+        return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
+
     def scale(self, T: float, therm: float = 0.0253):
         """
         Scale alpha or beta spectrum.
@@ -360,8 +437,7 @@ class Alpha:
                9.8269000e-02, 3.0727100e-01, 9.6078300e-01, 3.0041990e+00,
                9.3936040e+00, 2.9372154e+01])
         """
-        scale_grid = self.data * therm / (kb * T)
-        return Alpha(scale_grid)
+        return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)

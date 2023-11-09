@@ -1408,25 +1408,31 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
     N = len(tau1)
 
     for i in prange(len(tau_n)):  # loop for tau_n
-        for j in range(N):  # loop for tau1
+        # 1 iteration: j = 0
+        tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
+
+        # loop for tau1
+        for j in range(1, N):
             convol = 0.
 
             k = i - j  # tau_n_minus_1(-(beta-beta^prime))
-            if k >= 0 and k < Nnm1:
-                convol = tau_n_minus_1[k]
-            elif k < 0 and -k < Nnm1:  # tau(beta) = exp(-beta)Tau(-beta)
-                convol = tau_n_minus_1[-k] * exp(k * delta_beta)
+            if abs(k) < Nnm1:
+                if k >= 0:
+                    convol += tau_n_minus_1[k]
+                else:
+                    convol += tau_n_minus_1[-k] * exp(k * delta_beta)
 
             l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
             if l < Nnm1:
                 convol += tau_n_minus_1[l] * exp(-j * delta_beta)
 
-            if j == 0 or j == N - 1:
+            if j == N - 1:
                 convol *= 0.5                      # trapz integrate
 
             tau_n[i] += tau1[j] * convol * delta_beta
 
     return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]
+
 
 
 @nb.jit('(float64[:], float64)',

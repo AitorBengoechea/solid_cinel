@@ -1392,9 +1392,9 @@ def get_convol_value(tau_n_minus_1: np.ndarray, delta_beta: np.ndarray,
             convol = tau_n_minus_1[-k] * exp(k * delta_beta)
     else:
         convol = 0.
-    # Tau_n_minus_1(-(beta+beta^prime))
-    if i + j < Nnm1:
-        convol += tau_n_minus_1[i + j] * exp(-j * delta_beta)
+    l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
+    if l < Nnm1:
+        convol += tau_n_minus_1[l] * exp(-j * delta_beta)
     return convol
 
 
@@ -1434,7 +1434,7 @@ def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
             convol = get_convol_value(tau_n_minus_1, delta_beta, i, j, Nnm1)
             tau_n[i] += tau1[j] * convol * delta_beta
 
-    # last iteration for trapezoidal integration: j = N - 1
+        # last iteration for trapezoidal integration: j = N - 1
         convol = get_convol_value(tau_n_minus_1, delta_beta, i, N - 1, Nnm1) / 2
         tau_n[i] += tau1[N - 1] * convol * delta_beta
     return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]

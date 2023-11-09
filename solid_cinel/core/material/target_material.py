@@ -27,6 +27,8 @@ m_to_eV = const["atomic mass unit-electron volt relationship"][0]
 mn_to_MeV = const["neutron mass energy equivalent in MeV"][0]
 kb = const["Boltzmann constant in eV/K"][0]
 c = sp.constants.c
+Bfac_unit_change = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
+Bragg_unit_change = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
 # Examples variables:
 # 1 atom
@@ -338,17 +340,10 @@ class Target_mat(Solid, Pdos):
         U238    0.340297
         dtype: float64
         """
-        constant = (4 * c ** 2 * np.pi**2) * h ** 2
-        constant /= m_to_eV * kb
-        atom_masses = self.atoms.apply(lambda x: x.atom_mass)
 
-        def get_Bfac(single_pdos):
-            B = constant * single_pdos.DebyeWallerCoeff(T) / T
-            if anstrom:
-                B *= 1.0e20
-            return B
-
-        return self.pdos.apply(get_Bfac) / atom_masses
+        Bfact = Bfac_unit_change * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
+        Bfact /= T * self.atoms.apply(lambda x: x.atom_mass)
+        return Bfact * 1.0e20 if anstrom else Bfact
 
     def get_multiplicity(self, T: float, energy_cut: float,
                          precision: list = [6, 6]) -> pd.DataFrame:
@@ -615,12 +610,10 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0  13.929091
 
         """
-        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
-        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         d = data.loc[:, "d"]
-        angle_value = np.clip(1 - np.pi ** 2 * constant / (d ** 2 * energy_cut),
+        angle_value = np.clip(1 - pi ** 2 * Bragg_unit_change / (d ** 2 * energy_cut),
                               -1, 1)
-        data["theta"] = np.arccos(angle_value) * 180 / np.pi
+        data["theta"] = np.rad2deg(np.arccos(angle_value))
         return data
 
     @staticmethod
@@ -687,13 +680,10 @@ class Target_mat(Solid, Pdos):
               3    0.005850
         Name: Xs, dtype: float64
         """
-        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
-        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         if "PDDF" not in data.columns:
             Target_mat.get_pddf(data)
         data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
-        data["Xs"] *= constant * np.pi ** 2
-        data["Xs"] /= unit_cell_vol * atom_number
+        data["Xs"] *= Bragg_unit_change * pi ** 2 / (unit_cell_vol * atom_number)
         if threshold:
             data["Xs"][data["Xs"] < threshold] = 0.0
         return data
@@ -796,9 +786,7 @@ class Target_mat(Solid, Pdos):
                        )
 
         # Get Bragg Edges:
-        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
-        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
-        data["E"] = np.pi ** 2 * constant / (2 * data["d"] ** 2)
+        data["E"] = pi ** 2 * Bragg_unit_change / (2 * data["d"] ** 2)
         data = data.sort_values(by=["E"])
 
         # Optional argument:

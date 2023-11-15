@@ -1327,8 +1327,6 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M,
                                 T_arno, Eout, mu, mu_fit, Teff, 1.0)
     elif model == "pdos":
-        threshold = kwargs.pop("threshold", 0.0)
-        nphonon = kwargs.pop("nphonon", 1000)
         tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
         DebyeWallerCoeff = np.zeros(len(T_arno))
         delta_beta = np.zeros(len(T_arno))
@@ -1338,8 +1336,10 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
                 DebyeWallerCoeff[i] = pdos.DebyeWallerCoeff(T_arno[i])
                 delta_beta[i] = pdos.to_beta_grid(T_arno[i]).grid
         return xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M,
-                                     T_arno, Eout, mu, mu_fit, nphonon, tau1,
-                                     delta_beta, threshold, DebyeWallerCoeff)
+                                     T_arno, Eout, mu, mu_fit,
+                                     kwargs.pop("nphonon", 1000), tau1, delta_beta,
+                                     kwargs.pop("threshold", 0.0), DebyeWallerCoeff,
+                                     chunksize= kwargs.pop("chunksize", (100, 10)))
     else:
         raise ValueError("Model not found")
 

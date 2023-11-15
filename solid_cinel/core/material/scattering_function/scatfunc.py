@@ -9,9 +9,7 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.beta import Beta, get_beta
-from solid_cinel.core.material.scattering_function.alpha import Alpha, get_alpha
-from solid_cinel.core.material.scattering_function.sab import Sab, tau_n_CPU, get_ScatFunc_values
+from solid_cinel.core.material.scattering_function.sab import tau_n_CPU, get_ScatFunc_values
 from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable
 from math import sqrt, pi
@@ -902,7 +900,7 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: float, Ein: float, T: float,
 
 def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
                    theta: np.ndarray, pdos: Pdos, threshold: float = 0.0,
-                   nphonon: int = 1000) -> np.ndarray:
+                   nphonon: int = 1000, chunksize: int = 100) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -943,7 +941,7 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> M = 238.05077040419212
     >>> theta = np.array([40, 80, 120, 160])
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> dd_pdf = scat_from_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14)
+    >>> dd_pdf = scat_from_pdos(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, chunksize=2)
     >>> pd.DataFrame(dd_pdf, index=np.cos(np.deg2rad(theta)), columns=Eout).loc[:, Eout_test].round(6)
                6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
      0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
@@ -965,8 +963,8 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
                                                   debye_waller_coeff))
         return np.array(result)
 
-    mu = da.from_array(np.cos(np.deg2rad(theta)), chunks=100)
-    return mu.map_blocks(scat_chunk, dtype=np.ndarray).compute()
+    mu = da.from_array(np.cos(np.deg2rad(theta)), chunks=chunksize)
+    return mu.map_blocks(scat_chunk, dtype=float, new_axis=[1]).compute()
 
 @nb.jit("float64[:](float64[:], float64[:], float64, float64[:], float64[:], float64[:])",
     nopython=True, nogil=True, cache=True, parallel=False)

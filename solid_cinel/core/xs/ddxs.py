@@ -12,7 +12,7 @@ from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sig
 from solid_cinel.core.generic import integrate, reshift
 import os
 from math import pi
-import copy
+import dask.array as da
 
 from typing import Iterable
 
@@ -1314,18 +1314,19 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
 
     # Specific arguments for S(alpha, -beta) DB:
     if model == "sigma1":
-        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu)
+        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
+                                Eout, mu)
     if model == "fgm":
-        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, T_arno, 1.0)
+        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno,
+                                Eout, mu, mu_fit, T_arno, 1.0)
     elif model == "sct":
         Teff = np.array(
             [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
         )
         Teff[np.isnan(Teff)] = T_arno[np.isnan(Teff)]
-        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, Teff, 1.0)
+        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M,
+                                T_arno, Eout, mu, mu_fit, Teff, 1.0)
     elif model == "pdos":
-        threshold = kwargs.pop("threshold", 0.0)
-        nphonon = kwargs.pop("nphonon", 1000)
         tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
         DebyeWallerCoeff = np.zeros(len(T_arno))
         delta_beta = np.zeros(len(T_arno))
@@ -1334,8 +1335,11 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
                 tau1[i, :] = pdos.get_tau_1(T_arno[i]).values
                 DebyeWallerCoeff[i] = pdos.DebyeWallerCoeff(T_arno[i])
                 delta_beta[i] = pdos.to_beta_grid(T_arno[i]).grid
-        return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1,
-                                delta_beta, threshold, DebyeWallerCoeff)
+        return xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M,
+                                     T_arno, Eout, mu, mu_fit,
+                                     kwargs.pop("nphonon", 1000), tau1, delta_beta,
+                                     kwargs.pop("threshold", 0.0), DebyeWallerCoeff,
+                                     chunksize= kwargs.pop("chunksize", (100, 10)))
     else:
         raise ValueError("Model not found")
 
@@ -1607,14 +1611,95 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     30   9.105426  9.098636  9.091798  9.084886  9.077887  9.070824  9.063726
     20   9.105528  9.098748  9.091917  9.085011  9.078012  9.070941  9.063832
     10   9.105490  9.098775  9.091979  9.085086  9.078076  9.070973  9.063803
+    """
+    xs_mat = np.empty((len(mu), len(Eout)))
+    Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
+    if mu[0] == np.cos(pi):  # mu is sorted array
+        xs_mat[0, :] = np.interp(Ein_arno[0, :], xs_E, xs_values)
+        start = 1
+    else:
+        start = 0
+    for i in range(start, len(mu), 1):
+        for j in prange(len(Eout)):
+            Eout_db = default_Eout(Ein_arno[i, j])
+            if len(args) == 0:  # sigma1
+                pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
+            elif len(args) == 3:  # FGM or SCT
+                pdf = get_scat_sct_angular(Eout_db, args[0], Ein_arno[i, j], T_arno[i], M, args[1][i], args[2])
+            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+    return xs_mat
 
-    # pdos model:
+
+def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
+                     M: float, T_arno: np.ndarray, Eout: np.ndarray,
+                     mu: np.ndarray, *args,
+                     chunksize: tuple = (100, 10)) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with different pdf.
+
+    Parameters
+    ----------
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    Ein: float
+        The incident energy of the neutron in eV
+    M: float
+        Mass of the material in amu
+    T_arno: np.ndarray, (M,)
+        Target temperature grid in K
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    mu: np.ndarray, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+    mu_fit: float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+    nphonon: int
+        Phonon expansion order
+    tau1: np.ndarray, (M, T)
+        tau1 values for all the T_arno values
+    delta_beta: np.ndarray, (M,)
+        delta_beta values for all the T_arno values
+    threshold: float
+        Minimun value to take into account in the creation of tau_n
+    DebyeWallerCoeff: np.ndarray, (M,)
+        DebyeWallerCoeff values for all the T_arno values
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("ddxs.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    Common parameters for all the examples:
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 190, 10)
+    >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+    >>> mu_fit = np.cos(np.deg2rad(60))
+    >>> T_arno = T * (1 + mu) / 2
+    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno]
     >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]
     >>> delta_beta = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno]
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values = xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
+    >>> xs_values = xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -1636,26 +1721,44 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
-    xs_mat = np.empty((len(mu), len(Eout)))
+    @nb.njit
+    def compute_chunk(Ein_arno_chunk, row, *args):
+        result = np.empty(Ein_arno_chunk.shape)
+        for i in range(Ein_arno_chunk.shape[0]):
+            i_ = i + row
+            for j in range(Ein_arno_chunk.shape[1]):
+                Eout_db = default_Eout(Ein_arno_chunk[i, j])
+                pdf = get_ScatFunc_pdos_angle(Ein_arno_chunk[i, j], M, T_arno[i_],
+                                            Eout_db, args[0], args[1],
+                                            args[2][i_], args[3][i_],
+                                            args[4], args[5][i_])
+                result[i, j] = Db(xs_values, xs_E, Ein_arno_chunk[i, j], Eout_db, pdf)
+        return result
+
+    def chunk_wrapper(block, start, *args, block_info=None):
+        # The row of the block in the array
+        row = block_info[0]['array-location'][0][0]
+        if start > 0:
+            row += start
+        return compute_chunk(block, row, *args)
+
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-    if mu[0] == np.cos(pi):  # mu is sorted array
-        xs_mat[0, :] = np.interp(Ein_arno[0, :], xs_E, xs_values)
+    start = 0
+    if mu[0] == np.cos(pi):
+        xs_mat180 = np.array([np.interp(Ein_arno[0, :], xs_E, xs_values)])
         start = 1
-    else:
-        start = 0
-    for i in range(start, len(mu), 1):
-        for j in prange(len(Eout)):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            if len(args) == 0:  # sigma1
-                pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
-            elif len(args) == 3:  # FGM or SCT
-                pdf = get_scat_sct_angular(Eout_db, args[0], Ein_arno[i, j], T_arno[i], M, args[1][i], args[2])
-            else:  # PDOS
-                pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
-                                              Eout_db, args[0], args[1],
-                                              args[2][i], args[3][i],
-                                              args[4], args[5][i])
-            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+
+    Ein_arno_da = da.from_array(Ein_arno[start::, ::])
+    xs_mat = Ein_arno_da.map_blocks(chunk_wrapper, start, *args,
+                                    dtype=float, chunks=chunksize)
+
+    # Compute the Dask array
+    xs_mat = xs_mat.compute(scheduler="threads")
+
+    if mu[0] == np.cos(pi):
+        # Concatenate xs_mat180 and xs_mat
+        xs_mat = np.concatenate([xs_mat180, xs_mat], axis=0)
+
     return xs_mat
 
 

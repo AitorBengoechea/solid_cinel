@@ -14,7 +14,7 @@ from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import scipy as sp
 import numpy as np
-import os
+from math import pi, cos, sin, acos, exp
 import pandas as pd
 import numba as nb
 import collections
@@ -27,6 +27,8 @@ m_to_eV = const["atomic mass unit-electron volt relationship"][0]
 mn_to_MeV = const["neutron mass energy equivalent in MeV"][0]
 kb = const["Boltzmann constant in eV/K"][0]
 c = sp.constants.c
+Bfac_unit_change = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
+Bragg_unit_change = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
 # Examples variables:
 # 1 atom
@@ -338,17 +340,10 @@ class Target_mat(Solid, Pdos):
         U238    0.340297
         dtype: float64
         """
-        constant = (4 * c ** 2 * np.pi**2) * h ** 2
-        constant /= m_to_eV * kb
-        atom_masses = self.atoms.apply(lambda x: x.atom_mass)
 
-        def get_Bfac(single_pdos):
-            B = constant * single_pdos.DebyeWallerCoeff(T) / T
-            if anstrom:
-                B *= 1.0e20
-            return B
-
-        return self.pdos.apply(get_Bfac) / atom_masses
+        Bfact = Bfac_unit_change * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
+        Bfact /= T * self.atoms.apply(lambda x: x.atom_mass)
+        return Bfact * 1.0e20 if anstrom else Bfact
 
     def get_multiplicity(self, T: float, energy_cut: float,
                          precision: list = [6, 6]) -> pd.DataFrame:
@@ -615,12 +610,10 @@ class Target_mat(Solid, Pdos):
             3  0.777498  0.094765          70.528779          32.0  13.929091
 
         """
-        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
-        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         d = data.loc[:, "d"]
-        angle_value = np.clip(1 - np.pi ** 2 * constant / (d ** 2 * energy_cut),
+        angle_value = np.clip(1 - pi ** 2 * Bragg_unit_change / (d ** 2 * energy_cut),
                               -1, 1)
-        data["theta"] = np.arccos(angle_value) * 180 / np.pi
+        data["theta"] = np.rad2deg(np.arccos(angle_value))
         return data
 
     @staticmethod
@@ -687,13 +680,10 @@ class Target_mat(Solid, Pdos):
               3    0.005850
         Name: Xs, dtype: float64
         """
-        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
-        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
         if "PDDF" not in data.columns:
             Target_mat.get_pddf(data)
         data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
-        data["Xs"] *= constant * np.pi ** 2
-        data["Xs"] /= unit_cell_vol * atom_number
+        data["Xs"] *= Bragg_unit_change * pi ** 2 / (unit_cell_vol * atom_number)
         if threshold:
             data["Xs"][data["Xs"] < threshold] = 0.0
         return data
@@ -796,9 +786,7 @@ class Target_mat(Solid, Pdos):
                        )
 
         # Get Bragg Edges:
-        constant = h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
-        constant *= 1.0e20  # Coherence with Bfac that is in anstrom
-        data["E"] = np.pi ** 2 * constant / (2 * data["d"] ** 2)
+        data["E"] = pi ** 2 * Bragg_unit_change / (2 * data["d"] ** 2)
         data = data.sort_values(by=["E"])
 
         # Optional argument:
@@ -1403,6 +1391,7 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
     """
     hklM = {}
     hkldF = {}
+    orientation_norm = np.linalg.norm(preferred_orientation)
     h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
 
     for h in h_range[::-1]:  # to get positive hkl order
@@ -1428,9 +1417,10 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
                 else:
                     hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
                     OA_num = np.sum(vec_tau_hkl * preferred_orientation)
-                    OA_den = np.linalg.norm(vec_tau_hkl) * np.linalg.norm(preferred_orientation)
-                    orientation_angle_hkl = np.arccos(OA_num / OA_den) * 180 / np.pi
-                    hklM[(h, k, l)] = np.array([d_hkl, Fsq, orientation_angle_hkl, 1])
+                    OA_den = np.linalg.norm(vec_tau_hkl) * orientation_norm
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq,
+                                                acos(OA_num / OA_den) * 180 / pi,
+                                                1])
     return hklM
 
 
@@ -1459,13 +1449,12 @@ def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
     """
     real = 0.
     imag = 0.
+    constant = - 0.5 * np.linalg.norm(vec_tau_hkl) ** 2 / (8 * pi ** 2)
     for element in Bfac:
-        expon_hkl = np.exp(-0.5 * np.linalg.norm(vec_tau_hkl) ** 2
-                           * Bfac[element] / (8 * np.pi ** 2))
-        element_position = pos[element]
-        for iep in range(len(element_position)):
-            cumulant_cos = np.cos(np.sum(vec_tau_hkl * element_position[iep]))
-            cumulant_sin = np.sin(np.sum(vec_tau_hkl * element_position[iep]))
-            real += csl[element] * 0.1 * expon_hkl * cumulant_cos
-            imag += csl[element] * 0.1 * expon_hkl * cumulant_sin
+        for iep in range(len(pos[element])):
+            real += cos(np.sum(vec_tau_hkl * pos[element][iep]))
+            imag += sin(np.sum(vec_tau_hkl * pos[element][iep]))
+        expon_hkl = exp(constant * Bfac[element])
+        real *= csl[element] * 0.1 * expon_hkl
+        imag *= csl[element] * 0.1 * expon_hkl
     return real ** 2 + imag ** 2  # Fsquared

@@ -964,7 +964,8 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
         return np.array(result)
 
     mu = da.from_array(np.cos(np.deg2rad(theta)), chunks=chunksize)
-    return mu.map_blocks(scat_chunk, dtype=float, new_axis=[1]).compute()
+    scatfunc = mu.map_blocks(scat_chunk, dtype=float, new_axis=[1])
+    return scatfunc.compute(scheduler="threads")
 
 @nb.jit("float64[:](float64[:], float64[:], float64, float64[:], float64[:], float64[:])",
     nopython=True, nogil=True, cache=True, parallel=False)

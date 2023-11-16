@@ -1749,11 +1749,11 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
         start = 1
 
     Ein_arno_da = da.from_array(Ein_arno[start::, ::])
-    xs_mat = Ein_arno_da.map_blocks(chunk_wrapper, start, *args, dtype=np.ndarray,
-                                    chunks=chunksize)
+    xs_mat = Ein_arno_da.map_blocks(chunk_wrapper, start, *args,
+                                    dtype=float, chunks=chunksize)
 
     # Compute the Dask array
-    xs_mat = xs_mat.compute()
+    xs_mat = xs_mat.compute(scheduler="threads")
 
     if mu[0] == np.cos(pi):
         # Concatenate xs_mat180 and xs_mat

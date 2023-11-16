@@ -1699,7 +1699,7 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> delta_beta = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno]
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values = xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
+    >>> xs_values = xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff,  chunksize=(10, 5))
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521

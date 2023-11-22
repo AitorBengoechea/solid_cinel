@@ -10,7 +10,7 @@ from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.generic import integrate, reshift
-from solid_cinel.core.material.vibration.pdos import tau_n_functions
+from solid_cinel.core.material.vibration.tau import tau_n_functions
 import os
 from math import pi
 import dask.array as da

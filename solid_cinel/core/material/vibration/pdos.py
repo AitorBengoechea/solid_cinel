@@ -5,14 +5,13 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.material.scattering_function.beta import Beta
+from solid_cinel.core.material.vibration.tau import tau_n_functions
 import pandas as pd
 import numpy as np
 import scipy as sp
 from typing import Iterable, Union
 import matplotlib
-import numba as nb
-from math import exp
-from numba import prange
+
 
 # Examples variables:
 rho_in_energy_str = '''
@@ -493,111 +492,3 @@ class Pdos:
                 raise ValueError(
                     "Tau function doesnt satisfy the normalization condition")
         return tau_n
-
-@nb.jit("float64[:](float64, float64[:], float64[:], float64)",
-    nopython=True, nogil=True, cache=True, parallel=True)
-def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
-              threshold: float) -> np.ndarray:
-    """
-    Get the tau_{n}(-beta) function values.
-
-    Parameters
-    ----------
-    delta_beta : 'float'
-        Interval of beta for the PDOS.
-    tau1 : 'np.ndarray', (N,)
-        Tau(-beta) function for n = 1 expansion.
-    tau_n_minus_1 : 'np.ndarray', (N,)
-        Tau(-beta) function for n - 1 expansion.
-    threshold : 'float'
-        Minimun value to take into account.
-
-    Returns
-    -------
-    tau_n : 'np.ndarray', (N,)
-        Tau(-beta) function for n expansion.
-    """
-    tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
-    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
-    N = len(tau1)
-
-    for i in prange(len(tau_n)):  # loop for tau_n
-        # 1 iteration: j = 0
-        tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
-
-        # loop for tau1
-        for j in range(1, N):
-            convol = 0.
-
-            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
-            if abs(k) < Nnm1:
-                if k >= 0:
-                    convol += tau_n_minus_1[k]
-                else:
-                    convol += tau_n_minus_1[-k] * exp(k * delta_beta)
-
-            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
-            if l < Nnm1:
-                convol += tau_n_minus_1[l] * exp(-j * delta_beta)
-
-            if j == N - 1:
-                convol *= 0.5                      # trapz integrate
-
-            tau_n[i] += tau1[j] * convol * delta_beta
-
-    return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]
-
-
-@nb.jit("float64[:, :](float64[:], float64, int32, float64)",
-    nopython=True, nogil=True, cache=True, parallel=False)
-def tau_n_functions(tau1: np.ndarray, delta_beta: float,
-                    nphonon: int, threshold: float):
-    """
-    Get the tau_{n}(-beta) function values for all n.
-
-    Parameters
-    ----------
-    tau1: 'np.ndarray', (N,)
-        Tau(-beta) function values for n = 1 expansion.
-    delta_beta: 'float'
-        Interval of beta for the PDOS.
-    nphonon: 'int'
-        Number of phonon to calculate the tau functions.
-    threshold: 'float'
-        Minimun value to take into account.
-
-    Returns
-    -------
-    tau_n_func: 'np.ndarray', (N * nphonon, nphonon)
-        All Tau(-beta) function values for n expansion.
-
-    Examples
-    --------
-    Object initialization:
-    >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> T = 800
-    >>> nphonon = 5
-    >>> threshold = 0.0
-    >>> tau_n = tau_n_functions(p.get_tau_1(T).values, p.to_beta_grid(T).grid, nphonon, threshold)
-    >>> pd.DataFrame(tau_n).iloc[:100:10, :].round(6)
-               0         1         2         3         4
-    0   0.862582  1.068786  0.721827  0.649349  0.572522
-    10  0.912907  0.904301  0.754397  0.670815  0.598559
-    20  1.322890  0.835423  0.778009  0.669368  0.608795
-    30  1.664078  0.709480  0.742670  0.646839  0.600007
-    40  0.341423  0.650492  0.645243  0.608380  0.572271
-    50  0.000000  0.638436  0.539548  0.553518  0.529334
-    60  0.000000  0.397400  0.431710  0.476611  0.475181
-    70  0.000000  0.246076  0.347367  0.391567  0.414218
-    80  0.000000  0.067640  0.257169  0.305529  0.348585
-    90  0.000000  0.031901  0.164468  0.230576  0.281873
-    """
-    tau_n_func = np.zeros((len(tau1) * nphonon, nphonon))
-    tau_n_func[:len(tau1), 0] += tau1
-    tau_n_minus_1 = tau1.copy()
-    for n in range(1, nphonon):
-        tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
-        tau_n_func[:len(tau_n), n] += tau_n
-        # Next tau_n
-        tau_n_minus_1 = tau_n
-    return tau_n_func

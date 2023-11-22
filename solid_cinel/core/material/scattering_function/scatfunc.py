@@ -10,7 +10,8 @@ import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.scattering_function.sab import get_ScatFunc_values
-from solid_cinel.core.material.vibration.pdos import Pdos, tau_n_functions
+from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.vibration.tau import tau_n_functions
 from typing import Iterable
 from math import sqrt, pi
 import dask.array as da

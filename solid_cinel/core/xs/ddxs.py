@@ -10,9 +10,9 @@ from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.generic import integrate, reshift
+from solid_cinel.core.material.vibration.tau import tau_n_functions
 import os
 from math import pi
-import dask.array as da
 
 from typing import Iterable
 
@@ -625,8 +625,8 @@ class DDxs:
         return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs_0K))
 
     @classmethod
-    def from_4PCF(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
-                    **kwargs):
+    def from_4PCF(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
+                  Eout: np.ndarray, theta: np.ndarray, *args, **kwargs):
         """
         Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
         correlation function modified
@@ -760,31 +760,37 @@ class DDxs:
 
         # Coercelle with pdos model: (Example not very accurate, only for
         # demonstration purposes)
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 5)
-        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=10, model="pdos").data.round(6)
-        Eout                1.8       1.9         2.0       2.1       2.2
-        mu
-        -9.848078e-01  0.000000  0.000000    0.000006  0.000000  0.000000
-        -9.396926e-01  0.000000  0.000000    0.000012  0.000000  0.000000
-        -8.660254e-01  0.000000  0.000001    0.000034  0.000000  0.000000
-        -7.660444e-01  0.000000  0.000004    0.000133  0.000001  0.000000
-        -6.427876e-01  0.000000  0.000023    0.000691  0.000004  0.000000
-        -5.000000e-01  0.000000  0.000155    0.004365  0.000031  0.000000
-        -3.420201e-01  0.000000  0.001133    0.030240  0.000244  0.000000
-        -1.736482e-01  0.000001  0.008076    0.205815  0.001893  0.000000
-         6.123234e-17  0.000004  0.049158    1.222034  0.012581  0.000000
-         1.736482e-01  0.000021  0.221520    5.616005  0.061820  0.000002
-         3.420201e-01  0.000066  0.634651   18.003875  0.192170  0.000007
-         5.000000e-01  0.000104  0.988169   38.417022  0.321589  0.000011
-         6.427876e-01  0.000067  0.722460   59.594677  0.248796  0.000008
-         7.660444e-01  0.000015  0.229033   82.997584  0.081369  0.000002
-         8.660254e-01  0.000001  0.037892  103.919838  0.013351  0.000000
-         9.396926e-01  0.000000  0.005059   82.211000  0.001741  0.000000
-         9.848078e-01  0.000000  0.000221   25.049987  0.000073  0.000000
-
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+        >>> theta = np.arange(10, 190, 10)
+        >>> ddxs_test = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=100, model="pdos").data
+        >>> ddxs_test.set_axis(theta[::-1]).round(6)
+        Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
+        180   2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
+        170   2.322242  9.709096  21.591080   22.629430  10.248767  2.236507  0.261395
+        160   2.184305  9.495283  21.680440   22.942594  10.293308  2.188585  0.246138
+        150   1.963128  9.127680  21.817322   23.476630  10.361956  2.106059  0.221630
+        140   1.673261  8.592115  21.983471   24.253407  10.446299  1.985547  0.189424
+        130   1.336876  7.872568  22.147225   25.305572  10.531655  1.823139  0.151908
+        120   0.984164  6.957435  22.257099   26.680161  10.594023  1.615780  0.112375
+        110   0.651328  5.850551  22.232566   28.445456  10.595724  1.363767  0.074832
+        100   0.374294  4.587258  21.949746   30.701521  10.478464  1.074447  0.043334
+        90    0.178027  3.253160  21.222714   33.598268  10.154164  0.766695  0.020801
+        80    0.065776  1.993485  19.787501   37.371072   9.496498  0.473504  0.007766
+        70    0.017496  0.986708  17.317657   42.432964   8.346393  0.236599  0.002087
+        60    0.003118  0.359353  13.554393   49.718219   6.570866  0.087061  0.000375
+        50    0.000357  0.086814   8.694447   61.832770   4.247230  0.021201  0.000043
+        40    0.000026  0.013420   3.927192   83.133021   1.934737  0.003275  0.000003
+        30    0.000001  0.001397   0.987060  103.939037   0.488590  0.000339  0.000000
+        20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
+        10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
         """
         scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
-        xs = xs_matrix(xs_0K, Ein, M, T, Eout, theta, scatfunction.get_angle, *args, **kwargs) if kwargs.get("model") else xs_matrix(xs_0K, Ein, M, T, Eout, theta)
+        if kwargs.get("model"):
+            mu_fit = scatfunction.get_angle
+            xs = xs_matrix(xs_0K, Ein, M, T, Eout, theta,
+                           mu_fit, *args, **kwargs)
+        else:
+            xs = xs_matrix(xs_0K, Ein, M, T, Eout, theta)
         return cls(Ein, T, M, "coercelle", scatfunction.convolve(xs))
 
     @property
@@ -1338,8 +1344,7 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         return xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M,
                                      T_arno, Eout, mu, mu_fit,
                                      kwargs.pop("nphonon", 1000), tau1, delta_beta,
-                                     kwargs.pop("threshold", 0.0), DebyeWallerCoeff,
-                                     chunksize= kwargs.pop("chunksize", (100, 10)))
+                                     kwargs.pop("threshold", 0.0), DebyeWallerCoeff)
     else:
         raise ValueError("Model not found")
 
@@ -1625,15 +1630,16 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
             if len(args) == 0:  # sigma1
                 pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
             elif len(args) == 3:  # FGM or SCT
-                pdf = get_scat_sct_angular(Eout_db, args[0], Ein_arno[i, j], T_arno[i], M, args[1][i], args[2])
+                pdf = get_scat_sct_angular(Eout_db, args[0], Ein_arno[i, j],
+                                           T_arno[i], M, args[1][i], args[2])
             xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
     return xs_mat
 
-
 def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
-                     M: float, T_arno: np.ndarray, Eout: np.ndarray,
-                     mu: np.ndarray, *args,
-                     chunksize: tuple = (100, 10)) -> np.ndarray:
+                          M: float, T_arno: np.ndarray, Eout: np.ndarray,
+                          mu: np.ndarray, mu_fit: float, nphonon: int,
+                          tau1: np.ndarray, delta_beta: np.ndarray,
+                          threshold: float, DebyeWallerCoeff: np.ndarray) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1694,12 +1700,12 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> T_arno = T * (1 + mu) / 2
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> DebyeWallerCoeff = [pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno]
-    >>> tau1 = [pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]
-    >>> delta_beta = [interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno]
+    >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])
+    >>> tau1 = pd.DataFrame([pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]).values
+    >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values = xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff,  chunksize=(10, 5))
+    >>> xs_values = xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -1721,44 +1727,31 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
-    @nb.njit
-    def compute_chunk(Ein_arno_chunk, row, *args):
-        result = np.empty(Ein_arno_chunk.shape)
-        for i in range(Ein_arno_chunk.shape[0]):
-            i_ = i + row
-            for j in range(Ein_arno_chunk.shape[1]):
-                Eout_db = default_Eout(Ein_arno_chunk[i, j])
-                pdf = get_ScatFunc_pdos_angle(Ein_arno_chunk[i, j], M, T_arno[i_],
-                                            Eout_db, args[0], args[1],
-                                            args[2][i_], args[3][i_],
-                                            args[4], args[5][i_])
-                result[i, j] = Db(xs_values, xs_E, Ein_arno_chunk[i, j], Eout_db, pdf)
-        return result
 
-    def chunk_wrapper(block, start, *args, block_info=None):
-        # The row of the block in the array
-        row = block_info[0]['array-location'][0][0]
-        if start > 0:
-            row += start
-        return compute_chunk(block, row, *args)
+    @nb.jit(nopython=True, nogil=True, parallel=True)
+    def update_xs_mat(xs_mat, i, tau_n, tau_n_beta):
+        for j in prange(len(Eout)):
+            Eout_db = default_Eout(Ein_arno[i, j])
+            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
+                                          Eout_db, mu_fit, tau_n, tau_n_beta,
+                                          DebyeWallerCoeff[i])
+            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
 
+    # Create the variables:
+    xs_mat = np.empty((len(mu), len(Eout)))
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-    start = 0
-    if mu[0] == np.cos(pi):
-        xs_mat180 = np.array([np.interp(Ein_arno[0, :], xs_E, xs_values)])
+    if mu[0] == np.cos(pi):  # mu is sorted array
+        xs_mat[0, :] = np.interp(Ein_arno[0, :], xs_E, xs_values)
         start = 1
+    else:
+        start = 0
 
-    Ein_arno_da = da.from_array(Ein_arno[start::, ::])
-    xs_mat = Ein_arno_da.map_blocks(chunk_wrapper, start, *args,
-                                    dtype=float, chunks=chunksize)
-
-    # Compute the Dask array
-    xs_mat = xs_mat.compute(scheduler="threads")
-
-    if mu[0] == np.cos(pi):
-        # Concatenate xs_mat180 and xs_mat
-        xs_mat = np.concatenate([xs_mat180, xs_mat], axis=0)
-
+    # Calculate the cross-section matrix: Loop in theta
+    for i in range(start, len(mu), 1):
+        tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+        tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta[i]
+        # Paralelize the loop in Eout:
+        update_xs_mat(xs_mat, i, tau_n, tau_n_beta)
     return xs_mat
 
 

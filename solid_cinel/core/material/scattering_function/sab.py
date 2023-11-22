@@ -7,6 +7,7 @@ from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
 from typing import Iterable, Union
@@ -1021,7 +1022,7 @@ class Sab:
         Check the contrains:
         >>> debye_weller = pdos.DebyeWallerCoeff(T)
         >>> round(integrate(alpha_vector.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debye_weller * alpha_new)), 6)
-        1.00562
+        1.005976
 
         >>> round(integrate(alpha_vector.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
         0.000131
@@ -1197,72 +1198,8 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
-def get_S_from_tau_n(tau: np.ndarray, beta_tau: np.ndarray,
-                     debye_waller_coeff: float,  iter_sum: float,
-                     alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
-    """
-    Generate S(alpha, -beta) matrix using phonon expansion tau_n function.
-    .. math::
-        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
-
-    Numerical appoximation to get convergence in large exponentiation and
-    factorial numbers. Each element of the array is related with one alpha
-    and represent the following term of the previous equation:
-    ..math::
-        \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
-
-    Parameters
-    ----------
-    tau : 'np.ndarray', (T,)
-        tau function values.
-    beta_tau : 'np.ndarray', (T,)
-        beta grid for tau function.
-    debye_waller_coeff : 'float'
-        Debye Waller Coefficient.
-    alpha : 1D iterable, (N,)
-        Alpha grid.
-    beta: 1D iterable, (M,)
-        beta grid.
-
-    Returns
-    -------
-    'np.ndarray', (N, M)
-        S(alpha, beta) matrix values for the n phonon expansion using tau_n.
-
-    Example
-    -------
-    >>> T = 800
-    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> tau1 = pdos.get_tau_1(T)
-    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> alpha_grid = Alpha(alpha0_).scale(T).data
-    >>> beta_grid = Beta(beta0_).scale(T).data
-    >>> iter_sum = np.log(alpha_grid * debye_waller_coeff)
-    >>> S_mat = get_S_from_tau_n(tau1.values, np.arange(len(tau1)) * beta_grid[1], debye_waller_coeff, iter_sum, alpha_grid, beta_grid)
-    >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
-              0         1         2         3         4
-    0  0.036967  0.037182  0.037398  0.037614  0.037796
-    1  0.070694  0.071105  0.071517  0.071932  0.072279
-    2  0.101393  0.101982  0.102574  0.103168  0.103666
-    3  0.129265  0.130016  0.130771  0.131528  0.132163
-    4  0.154499  0.155397  0.156299  0.157204  0.157963
-    5  0.177272  0.178303  0.179337  0.180376  0.181247
-    6  0.197752  0.198902  0.200056  0.201215  0.202186
-    7  0.216097  0.217353  0.218614  0.219880  0.220942
-    8  0.232453  0.233804  0.235161  0.236523  0.237664
-    9  0.246960  0.248396  0.249837  0.251284  0.252497
-    """
-    alpha_mul = np.exp(- alpha * debye_waller_coeff + iter_sum)
-    # Interpolate tau_n(-beta):
-    tau_n_reshape = np.interp(beta, beta_tau, tau)
-    # Bounds in nopython mode:
-    if beta[-1] > beta_tau[-1]:
-        tau_n_reshape[beta > beta_tau[-1]] = 0.0
-    return np.outer(alpha_mul, tau_n_reshape)
-
-
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
+@nb.jit("float64[:, :](float64[:], float64[:], int32, float64[:], float64, float64, float64)",
+    nopython=True, nogil=True, cache=True, parallel=False)
 def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
                                nphonon: int, tau1: np.ndarray, delta_beta: float,
                                threshold: float,
@@ -1324,25 +1261,19 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     8  0.284651  0.285748  0.286425  0.286954  0.287244
     9  0.309121  0.310260  0.310900  0.311366  0.311575
     """
-    tau_n_minus_1 = tau1.copy()
+    tau_n = tau_n_functions(tau1, delta_beta, nphonon, threshold)
+    tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta
     # Zero phonon expansion:
     iter_sum = np.log(alpha * DebyeWallerCoeff)
-    S_values = get_S_from_tau_n(tau1, np.arange(len(tau1)) * delta_beta,
-                                DebyeWallerCoeff, iter_sum, alpha, beta)
+    S_values = np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
+                        np.interp(beta, tau_n_beta, tau_n[::, 0]))
 
     # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, nphonon + 1):
-        # Tau_n(-beta)
-        tau_n = tau_n_CPU(delta_beta, tau1, tau_n_minus_1, threshold)
-        check_tau_n(tau_n, delta_beta)
-
+    for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        S_values += get_S_from_tau_n(tau_n, np.arange(len(tau_n)) * delta_beta,
-                                     DebyeWallerCoeff, iter_sum, alpha, beta)
-
-        # Next tau_n
-        tau_n_minus_1 = tau_n
+        S_values += np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
+                             np.interp(beta, tau_n_beta, tau_n[::, n]))
     return S_values
 
 
@@ -1378,91 +1309,6 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
             Sab[i, j] *= exp(- (abs(beta[j]) + beta[j]) / 2)
             Sab[i, j] /= sqrt(4 * pi * ws * alpha[i] * Tratio)
     return Sab
-
-
-@nb.jit("float64[:](float64, float64[:], float64[:], float64)",
-    nopython=True, nogil=True, cache=True, parallel=True)
-def tau_n_CPU(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
-              threshold: float) -> np.ndarray:
-    """
-    Get the tau_{n}(-beta) function values.
-
-    Parameters
-    ----------
-    delta_beta : 'float'
-        Interval of beta for the PDOS.
-    tau1 : 'np.ndarray', (N,)
-        Tau(-beta) function for n = 1 expansion.
-    tau_n_minus_1 : 'np.ndarray', (N,)
-        Tau(-beta) function for n - 1 expansion.
-    threshold : 'float'
-        Minimun value to take into account.
-
-    Returns
-    -------
-    tau_n : 'np.ndarray', (N,)
-        Tau(-beta) function for n expansion.
-    """
-    tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
-    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
-    N = len(tau1)
-
-    for i in prange(len(tau_n)):  # loop for tau_n
-        # 1 iteration: j = 0
-        tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
-
-        # loop for tau1
-        for j in range(1, N):
-            convol = 0.
-
-            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
-            if abs(k) < Nnm1:
-                if k >= 0:
-                    convol += tau_n_minus_1[k]
-                else:
-                    convol += tau_n_minus_1[-k] * exp(k * delta_beta)
-
-            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
-            if l < Nnm1:
-                convol += tau_n_minus_1[l] * exp(-j * delta_beta)
-
-            if j == N - 1:
-                convol *= 0.5                      # trapz integrate
-
-            tau_n[i] += tau1[j] * convol * delta_beta
-
-    return tau_n if threshold == 0.0 else tau_n[tau_n >= threshold]
-
-
-
-@nb.jit('(float64[:], float64)',
-    nopython=True, cache=True)
-def check_tau_n(tau_n: np.ndarray, delta_beta: float) -> None:
-    """
-    Check if the tau function created in solid_cinel.core._numba.tau_n_CPU is
-    normalized to the unity.
-
-    Parameters
-    ----------
-    tau_n : 1D iterable, (N,)
-        tau_n function values.
-    delta_beta : float
-        Space between beta grid points.
-
-    Returns
-    -------
-    "None"
-        If the normalization is not satisfied with good accuracy a warning
-        is raise. If the accuracy is very low, a ValueError will be raise.
-
-    Raises
-    ------
-    ValueError
-        Tau function doesnt satisfy the normalization condition.
-    """
-    if np.trapz(tau_n, dx=delta_beta) < 1.e-5:
-        raise ValueError("Tau function doesnt satisfy the normalization condition")
-    return
 
 
 @nb.jit("float64[:, :](float64[:], float64[:], float64, float64, float64)",

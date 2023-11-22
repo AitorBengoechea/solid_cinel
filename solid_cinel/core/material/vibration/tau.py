@@ -1,0 +1,206 @@
+
+import numpy as np
+import numba as nb
+from math import exp
+from numba import prange, cuda
+
+
+@nb.jit("float64[:](float64, float64[:], float64[:], float64)",
+    nopython=True, nogil=True, cache=True, parallel=True)
+def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
+              threshold: float) -> np.ndarray:
+    """
+    Get the tau_{n}(-beta) function values.
+
+    Parameters
+    ----------
+    delta_beta : 'float'
+        Interval of beta for the PDOS.
+    tau1 : 'np.ndarray', (N,)
+        Tau(-beta) function for n = 1 expansion.
+    tau_n_minus_1 : 'np.ndarray', (N,)
+        Tau(-beta) function for n - 1 expansion.
+    threshold : 'float'
+        Minimun value to take into account.
+
+    Returns
+    -------
+    tau_n : 'np.ndarray', (N,)
+        Tau(-beta) function for n expansion.
+    """
+    tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
+    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
+    N = len(tau1)
+
+    for i in prange(len(tau_n)):  # loop for tau_n
+        # 1 iteration: j = 0
+        tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
+
+        # loop for tau1
+        for j in range(1, N):
+            convol = 0.
+
+            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
+            if abs(k) < Nnm1:
+                if k >= 0:
+                    convol += tau_n_minus_1[k]
+                else:
+                    convol += tau_n_minus_1[-k] * exp(k * delta_beta)
+
+            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
+            if l < Nnm1:
+                convol += tau_n_minus_1[l] * exp(-j * delta_beta)
+
+            if j == N - 1:
+                convol *= 0.5                      # trapz integrate
+
+            tau_n[i] += tau1[j] * convol * delta_beta
+
+    return tau_n[tau_n >= threshold] if threshold > 0.0 else tau_n
+
+
+@nb.jit("float64[:, :](float64[:], float64, int32, float64)",
+    nopython=True, nogil=True, cache=True, parallel=False)
+def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
+                        nphonon: int, threshold: float):
+    """
+    Get the tau_{n}(-beta) function values for all n.
+
+    Parameters
+    ----------
+    tau1: 'np.ndarray', (N,)
+        Tau(-beta) function values for n = 1 expansion.
+    delta_beta: 'float'
+        Interval of beta for the PDOS.
+    nphonon: 'int'
+        Number of phonon to calculate the tau functions.
+    threshold: 'float'
+        Minimun value to take into account.
+
+    Returns
+    -------
+    tau_n_func: 'np.ndarray', (N * nphonon, nphonon)
+        All Tau(-beta) function values for n expansion.
+    """
+    tau_n_func = np.zeros((len(tau1) * nphonon, nphonon))
+    tau_n_func[:len(tau1), 0] += tau1
+    tau_n_minus_1 = tau1.copy()
+    for n in range(1, nphonon):
+        tau_n = get_tau_n_cpu(delta_beta, tau1, tau_n_minus_1, threshold)
+        tau_n_func[:len(tau_n), n] += tau_n
+        # Next tau_n
+        tau_n_minus_1 = tau_n
+    return tau_n_func
+
+
+@cuda.jit()
+def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
+              tau_n: np.ndarray) -> np.ndarray:
+    """
+    Get the tau_{n}(-beta) function values.
+
+    Parameters
+    ----------
+    delta_beta : 'float'
+        Interval of beta for the PDOS.
+    tau1 : 'np.ndarray', (N,)
+        Tau(-beta) function for n = 1 expansion.
+    tau_n_minus_1 : 'np.ndarray', (N,)
+        Tau(-beta) function for n - 1 expansion.
+    threshold : 'float'
+        Minimun value to take into account.
+
+    Returns
+    -------
+    tau_n : 'np.ndarray', (N,)
+        Tau(-beta) function for n expansion.
+    """
+    start = cuda.grid(1)      # 1 = one dimensional thread grid, returns a single value
+    stride = cuda.gridsize(1)
+
+    Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
+    N = len(tau1)
+
+    for i in prange(start,  len(tau_n), stride):  # loop for tau_n
+        # 1 iteration: j = 0
+        tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
+
+        # loop for tau1
+        for j in range(1, N):
+            convol = 0.
+
+            k = i - j  # tau_n_minus_1(-(beta-beta^prime))
+            if abs(k) < Nnm1:
+                if k >= 0:
+                    convol += tau_n_minus_1[k]
+                else:
+                    convol += tau_n_minus_1[-k] * exp(k * delta_beta)
+
+            l = i + j  # Tau_n_minus_1(-(beta+beta^prime))
+            if l < Nnm1:
+                convol += tau_n_minus_1[l] * exp(-j * delta_beta)
+
+            if j == N - 1:
+                convol *= 0.5                      # trapz integrate
+
+            tau_n[i] += tau1[j] * convol * delta_beta
+
+
+
+def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
+                        nphonon: int, threshold: float,
+                        threadsperblock: int = 128):
+    """
+    Get the tau_{n}(-beta) function values for all n.
+
+    Parameters
+    ----------
+    tau1: 'np.ndarray', (N,)
+        Tau(-beta) function values for n = 1 expansion.
+    delta_beta: 'float'
+        Interval of beta for the PDOS.
+    nphonon: 'int'
+        Number of phonon to calculate the tau functions.
+    threshold: 'float'
+        Minimun value to take into account.
+    threadsperblock: 'int'
+         How many parallel threads are grouped into a single block. The default
+          is 128.
+
+    Returns
+    -------
+    tau_n_func: 'np.ndarray', (N * nphonon, nphonon)
+        All Tau(-beta) function values for n expansion.
+    """
+    tau_n_func = np.zeros((len(tau1) * nphonon, nphonon))
+    tau_n_func[:len(tau1), 0] += tau1
+    N = len(tau1)
+    Ntau = 2 * N - 1
+    # Copy the data to the device
+    tau1 = cuda.to_device(tau1)
+    tau_n_minus_1 = cuda.to_device(tau1)
+    for n in range(1, nphonon):
+        # Perform the calculation on the device:
+        tau_n_device = cuda.to_device(np.zeros(Ntau))
+        blockspergrid = Ntau + threadsperblock - 1
+        blockspergrid //= threadsperblock
+        get_tau_n_gpu[blockspergrid, threadsperblock](delta_beta,
+                                                      tau1,
+                                                      tau_n_minus_1,
+                                                      tau_n_device)
+        # Copy the data back to the host
+        tau_n = tau_n_device.copy_to_host()
+        if threshold > 0.0:
+            tau_n[tau_n <= threshold] = 0.0
+        tau_n_func[:Ntau, n] += tau_n
+
+        # Next tau_n
+        tau_n_minus_1 = tau_n_device
+        Ntau += N - 1
+    return tau_n_func
+
+
+if cuda.is_available():
+    tau_n_functions = tau_n_functions_gpu
+else:
+    tau_n_functions = tau_n_functions_cpu

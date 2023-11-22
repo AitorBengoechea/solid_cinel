@@ -5,11 +5,13 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.material.scattering_function.beta import Beta
+from solid_cinel.core.material.vibration.tau import tau_n_functions
 import pandas as pd
 import numpy as np
 import scipy as sp
 from typing import Iterable, Union
 import matplotlib
+
 
 # Examples variables:
 rho_in_energy_str = '''
@@ -421,3 +423,72 @@ class Pdos:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
         tau1.name = 1
         return tau1
+
+    def get_tau(self, T: float, nphonon: int = 1000,
+                threshold: float = 0.0, check: bool = True) -> pd.DataFrame:
+        """
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        nphonon: 'int'
+            Number of phonon to calculate the tau functions.
+        threshold: 'float'
+            Minimun value to take into account.
+
+        Returns
+        -------
+        "pd.DataFrame", (len(rho) * nphonon, nphonon)
+            Tau(-beta) function for n phonon.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> T = 800
+        >>> nphonon = 5
+        >>> tau_n = p.get_tau(T, nphonon=nphonon)
+        >>> tau_n.iloc[:100:10].round(6)
+                         1         2         3         4         5
+        0.000000  0.862582  1.068786  0.721827  0.649349  0.572522
+        0.116045  0.912907  0.904301  0.754397  0.670815  0.598559
+        0.232090  1.322890  0.835423  0.778009  0.669368  0.608795
+        0.348136  1.664078  0.709480  0.742670  0.646839  0.600007
+        0.464181  0.341423  0.650492  0.645243  0.608380  0.572271
+        0.580226  0.000000  0.638436  0.539548  0.553518  0.529334
+        0.696271  0.000000  0.397400  0.431710  0.476611  0.475181
+        0.812316  0.000000  0.246076  0.347367  0.391567  0.414218
+        0.928361  0.000000  0.067640  0.257169  0.305529  0.348585
+        1.044407  0.000000  0.031901  0.164468  0.230576  0.281873
+
+        >>> nphonon = 10
+        >>> tau_n = p.get_tau(T, nphonon=nphonon, check=False)
+        >>> tau_n.iloc[:100:10, ::2].round(6)
+                         1         3         5         7         9
+        0.000000  0.862582  0.721827  0.572522  0.479140  0.416041
+        0.116045  0.912907  0.754397  0.598559  0.502375  0.437155
+        0.232090  1.322890  0.778009  0.608795  0.515558  0.451569
+        0.348136  1.664078  0.742670  0.600007  0.517681  0.458534
+        0.464181  0.341423  0.645243  0.572271  0.508476  0.457651
+        0.580226  0.000000  0.539548  0.529334  0.488495  0.448911
+        0.696271  0.000000  0.431710  0.475181  0.458931  0.432693
+        0.812316  0.000000  0.347367  0.414218  0.421466  0.409732
+        0.928361  0.000000  0.257169  0.348585  0.378055  0.381067
+        1.044407  0.000000  0.164468  0.281873  0.330937  0.347970
+        """
+        delta_beta = self.to_beta_grid(T).grid
+        tau_n = pd.DataFrame(
+            tau_n_functions(self.get_tau_1(T).values, delta_beta,
+                            nphonon, threshold)
+        )
+        tau_n.index *= delta_beta
+        tau_n.columns += 1
+        if check:
+            # tau1 is not included in the check:
+            integrals_value = tau_n.apply(integrate).iloc[1::]
+            if (integrals_value < 1.e-5).any():
+                raise ValueError(
+                    "Tau function doesnt satisfy the normalization condition")
+        return tau_n

@@ -1636,8 +1636,6 @@ def xs_matrix_values(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
             xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
     return xs_mat
 
-@nb.jit("float64[:, :](float64[:], float64[:], float64, float64, float64[:], float64[:], float64[:], float64, int32, float64[:, :], float64[:], float64, float64[:])",
-    nopython=True, nogil=True, cache=True, parallel=True)
 def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
                           M: float, T_arno: np.ndarray, Eout: np.ndarray,
                           mu: np.ndarray, mu_fit: float, nphonon: int,
@@ -1730,6 +1728,17 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
+
+    @nb.jit(nopython=True, nogil=True, parallel=True)
+    def update_xs_mat(xs_mat, i, tau_n, tau_n_beta):
+        for j in prange(len(Eout)):
+            Eout_db = default_Eout(Ein_arno[i, j])
+            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
+                                          Eout_db, mu_fit, tau_n, tau_n_beta,
+                                          DebyeWallerCoeff[i])
+            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+
+    # Create the variables:
     xs_mat = np.empty((len(mu), len(Eout)))
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
     if mu[0] == np.cos(pi):  # mu is sorted array
@@ -1737,16 +1746,13 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
         start = 1
     else:
         start = 0
+
+    # Calculate the cross-section matrix: Loop in theta
     for i in range(start, len(mu), 1):
-        tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon,
-                                threshold)
+        tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
         tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta[i]
-        for j in prange(len(Eout)):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
-                                          Eout_db, mu_fit, tau_n, tau_n_beta,
-                                          DebyeWallerCoeff[i])
-            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+        # Paralelize the loop in Eout:
+        update_xs_mat(xs_mat, i, tau_n, tau_n_beta)
     return xs_mat
 
 

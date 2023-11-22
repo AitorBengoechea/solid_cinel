@@ -13,7 +13,6 @@ from solid_cinel.core.generic import integrate, reshift
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 import os
 from math import pi
-import dask.array as da
 
 from typing import Iterable
 

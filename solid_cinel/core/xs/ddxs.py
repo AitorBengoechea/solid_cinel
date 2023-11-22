@@ -1640,7 +1640,8 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
                           M: float, T_arno: np.ndarray, Eout: np.ndarray,
                           mu: np.ndarray, mu_fit: float, nphonon: int,
                           tau1: np.ndarray, delta_beta: np.ndarray,
-                          threshold: float, DebyeWallerCoeff: np.ndarray) -> np.ndarray:
+                          threshold: float, DebyeWallerCoeff: np.ndarray,
+                          chunksize: tuple = (10, 100)) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1706,7 +1707,7 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values = xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
+    >>> xs_values = xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff, chunksize=(10, 3))
     >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
          1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -1728,31 +1729,49 @@ def xs_matrix_values_pdos(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float,
     20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
-
     @nb.jit(nopython=True, nogil=True, parallel=True)
-    def update_xs_mat(xs_mat, i, tau_n, tau_n_beta):
-        for j in prange(len(Eout)):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
+    def update_result(result, Ein_arno_chunk, i, i_, tau_n, tau_n_beta):
+        for j in prange(Ein_arno_chunk.shape[1]):
+            Eout_db = default_Eout(Ein_arno_chunk[i, j])
+            pdf = get_ScatFunc_pdos_angle(Ein_arno_chunk[i, j], M, T_arno[i_],
                                           Eout_db, mu_fit, tau_n, tau_n_beta,
-                                          DebyeWallerCoeff[i])
-            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+                                          DebyeWallerCoeff[i_])
+            result[i, j] = Db(xs_values, xs_E, Ein_arno_chunk[i, j], Eout_db, pdf)
 
-    # Create the variables:
-    xs_mat = np.empty((len(mu), len(Eout)))
+    def compute_chunk(Ein_arno_chunk, row):
+        result = np.empty(Ein_arno_chunk.shape)
+        for i in range(Ein_arno_chunk.shape[0]):
+            i_ = i + row
+            tau_n = tau_n_functions(tau1[i_], delta_beta[i_], nphonon,
+                                    threshold)
+            tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta[i_]
+            update_result(result, Ein_arno_chunk, i, i_, tau_n, tau_n_beta)
+        return result
+
+    def chunk_wrapper(block, start, block_info=None):
+        # The row of the block in the array
+        row = block_info[0]['array-location'][0][0]
+        if start > 0:
+            row += start
+        return compute_chunk(block, row)
+
     Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-    if mu[0] == np.cos(pi):  # mu is sorted array
-        xs_mat[0, :] = np.interp(Ein_arno[0, :], xs_E, xs_values)
+    start = 0
+    if mu[0] == np.cos(pi):
+        xs_mat180 = np.array([np.interp(Ein_arno[0, :], xs_E, xs_values)])
         start = 1
-    else:
-        start = 0
 
-    # Calculate the cross-section matrix: Loop in theta
-    for i in range(start, len(mu), 1):
-        tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
-        tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta[i]
-        # Paralelize the loop in Eout:
-        update_xs_mat(xs_mat, i, tau_n, tau_n_beta)
+    Ein_arno_da = da.from_array(Ein_arno[start::, ::])
+    xs_mat = Ein_arno_da.map_blocks(chunk_wrapper, start, dtype=np.ndarray,
+                                    chunks=chunksize)
+
+    # Compute the Dask array
+    xs_mat = xs_mat.compute()
+
+    if mu[0] == np.cos(pi):
+        # Concatenate xs_mat180 and xs_mat
+        xs_mat = np.concatenate([xs_mat180, xs_mat], axis=0)
+
     return xs_mat
 
 

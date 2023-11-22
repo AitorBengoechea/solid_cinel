@@ -83,10 +83,8 @@ beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
 def test_Fe56_BraggEddges(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Fe56.py", ""))
-    file = os.path.abspath(f"Multiplicity_Fe_{T}K.dat")
-    test_data = pd.DataFrame(np.loadtxt(file),
-                             columns=["h", "k", "l", "d", "theta", "Orientation angle", "PDDF", "Fsq", "Multiplicity", "E", "Xs"])\
-        .set_index(["h", "k", "l"]).iloc[::, :5:-1]
+    test_data = pd.read_hdf(os.path.abspath(f"Multiplicity_Fe_{T}K.dat"),
+                            key="test")
     data = Fe.get_BraggEdges(T, energy_cut)\
              .iloc[::, :4:-1]\
              .drop(columns="theta")
@@ -101,10 +99,7 @@ def test_Fe56_BraggEddges(T):
 def test_Fe56_coherent_Xs(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Fe56.py", ""))
-    file = os.path.abspath(f"Fe56_Fe_{T}K_coh_XS")
-    test_data = pd.DataFrame(np.loadtxt(file),
-                             columns=["E", "Xs"])\
-        .set_index(["E"])
+    test_data = pd.read_hdf(os.path.abspath(f"Fe56_Fe_{T}K_coh_XS"), key="test")
     test_data.columns = pd.MultiIndex.from_product(
         [Fe.atoms.apply(lambda x: x.zam).values, [2]],
         names=["ZAM", "MT"])
@@ -122,11 +117,10 @@ def test_Fe56_Sab(T):
     beta_grid = Beta(beta0_).scale(T).data
     alpha_grid = Alpha(alpha0_).scale(T).data
     os.chdir(__file__.replace("test_Fe56.py", ""))
-    file = os.path.abspath(f"Fe56_Fe_{T}K_SSab")
-    test_data = pd.DataFrame(np.loadtxt(file).T * np.exp(beta_grid/2),
-                             columns=beta_grid,
-                             index=alpha_grid)
-    test_data.index.name, test_data.columns.name = "alpha", "beta"
+    test_data = pd.read_hdf(os.path.abspath(f"Fe56_Fe_{T}K_SSab"), key="test").T
+    test_data *= np.exp(beta_grid/2)
+    test_data.index = pd.Index(alpha_grid, name="alpha")
+    test_data.columns = pd.Index(beta_grid, name="beta")
     threshold = 0.0 if T < 200 else 1.0e-14
     data = Fe.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion",
                       threshold=threshold)["Fe56"].data

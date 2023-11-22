@@ -84,10 +84,8 @@ beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
 def test_Al27_BraggEddges(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Al27.py", ""))
-    file = os.path.abspath(f"Multiplicity_Al_{T}K.dat")
-    test_data = pd.DataFrame(np.loadtxt(file),
-                             columns=["h", "k", "l", "d", "theta", "Orientation angle", "PDDF", "Fsq", "Multiplicity", "E", "Xs"])\
-        .set_index(["h", "k", "l"]).iloc[::, :5:-1]
+    test_data = pd.read_hdf(os.path.abspath(f"Multiplicity_Al_{T}K.dat"),
+                            key="test")
     data = Al.get_BraggEdges(T, energy_cut)\
              .iloc[::, :4:-1]\
              .drop(columns="theta")
@@ -102,10 +100,7 @@ def test_Al27_BraggEddges(T):
 def test_Al27_coherent_Xs(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Al27.py", ""))
-    file = os.path.abspath(f"Al27_Al_{T}K_coh_XS")
-    test_data = pd.DataFrame(np.loadtxt(file),
-                             columns=["E", "Xs"])\
-        .set_index(["E"])
+    test_data = pd.read_hdf(os.path.abspath(f"Al27_Al_{T}K_coh_XS"), key="test")
     test_data.columns = pd.MultiIndex.from_product(
         [Al.atoms.apply(lambda x: x.zam).values, [2]],
         names=["ZAM", "MT"])
@@ -123,11 +118,10 @@ def test_Al27_Sab(T):
     beta_grid = Beta(beta0_).scale(T).data
     alpha_grid = Alpha(alpha0_).scale(T).data
     os.chdir(__file__.replace("test_Al27.py", ""))
-    file = os.path.abspath(f"Al27_Al_{T}K_SSab")
-    test_data = pd.DataFrame(np.loadtxt(file).T * np.exp(beta_grid/2),
-                             columns=beta_grid,
-                             index=alpha_grid)
-    test_data.index.name, test_data.columns.name = "alpha", "beta"
+    test_data = pd.read_hdf(os.path.abspath(f"Al27_Al_{T}K_SSab"), key="test").T
+    test_data *= np.exp(beta_grid/2)
+    test_data.index = pd.Index(alpha_grid, name="alpha")
+    test_data.columns = pd.Index(beta_grid, name="beta")
     threshold = 0.0 if T < 200 else 1.0e-14
     data = Al.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion",
                       threshold=threshold)["Al27"].data

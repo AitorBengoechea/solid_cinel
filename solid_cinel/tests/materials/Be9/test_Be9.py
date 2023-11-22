@@ -151,10 +151,8 @@ beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
 def test_Be9_BraggEddges(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Be9.py", ""))
-    file = os.path.abspath(f"Multiplicity_Be_{T}K.dat")
-    test_data = pd.DataFrame(np.loadtxt(file),
-                             columns=["h", "k", "l", "d", "theta", "Orientation angle", "PDDF", "Fsq", "Multiplicity", "E", "Xs"])\
-        .set_index(["h", "k", "l"]).loc[:, "Multiplicity"].sum()
+    test_data = pd.read_hdf(os.path.abspath(f"Multiplicity_Be_{T}K.dat"),
+                            key="test").loc[:, "Multiplicity"].sum()
     data = Be.get_BraggEdges(T, energy_cut).loc[:, "Multiplicity"].sum()
     assert int(test_data) == int(data)
     os.chdir(wd)
@@ -163,10 +161,7 @@ def test_Be9_BraggEddges(T):
 def test_Be9_coherent_Xs(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Be9.py", ""))
-    file = os.path.abspath(f"Be9_Be_{T}K_coh_XS")
-    test_data = pd.DataFrame(np.loadtxt(file),
-                             columns=["E", "Xs"])\
-        .set_index(["E"])
+    test_data = pd.read_hdf(os.path.abspath(f"Be9_Be_{T}K_coh_XS"), key="test")
     test_data.columns = pd.MultiIndex.from_product(
         [Be.atoms.apply(lambda x: x.zam).values, [2]],
         names=["ZAM", "MT"])
@@ -184,11 +179,10 @@ def test_Be9_Sab(T):
     beta_grid = Beta(beta0_).scale(T).data
     alpha_grid = Alpha(alpha0_).scale(T).data
     os.chdir(__file__.replace("test_Be9.py", ""))
-    file = os.path.abspath(f"Be9_Be_{T}K_SSab")
-    test_data = pd.DataFrame(np.loadtxt(file).T * np.exp(beta_grid/2),
-                             columns=beta_grid,
-                             index=alpha_grid)
-    test_data.index.name, test_data.columns.name = "alpha", "beta"
+    test_data = pd.read_hdf(os.path.abspath(f"Be9_Be_{T}K_SSab"), key="test").T
+    test_data *= np.exp(beta_grid/2)
+    test_data.index = pd.Index(alpha_grid, name="alpha")
+    test_data.columns = pd.Index(beta_grid, name="beta")
     threshold = 0.0 if T < 300 else 1.0e-14
     data = Be.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion",
                       threshold=threshold)["Be9"].data

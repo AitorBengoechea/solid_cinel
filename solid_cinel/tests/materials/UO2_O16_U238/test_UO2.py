@@ -312,10 +312,8 @@ beta0_O16 = np.fromstring(beta0_str_O16, dtype=np.float64, sep=' ')
 def test_UO2_BraggEddges(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_UO2.py", ""))
-    file = os.path.abspath(f"Multiplicity_UO2_{T}K.dat")
-    test_data = pd.DataFrame(np.loadtxt(file),
-                             columns=["h", "k", "l", "d", "theta", "Orientation angle", "PDDF", "Fsq", "Multiplicity", "E", "Xs"])\
-                  .set_index(["h", "k", "l"]).loc[:, "Multiplicity"].sum()
+    test_data = pd.read_hdf(os.path.abspath(f"Multiplicity_UO2_{T}K.dat"),
+                            key="test").loc[:, "Multiplicity"].sum()
     data = UO2.get_BraggEdges(T, energy_cut).loc[:, "Multiplicity"].sum()
     assert int(test_data) == int(data)
     os.chdir(wd)
@@ -325,10 +323,7 @@ def test_UO2_BraggEddges(T):
 def test_UO2_coherent_Xs(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_UO2.py", ""))
-    file = f"O16_UO2_{T}K_coh_XS"
-    test_dat = pd.DataFrame(np.loadtxt(file),
-                            columns=["E", "Xs"])\
-                 .set_index(["E"])
+    test_dat = pd.read_hdf(os.path.abspath(f"O16_UO2_{T}K_coh_XS"), key="test")
     test_data = pd.concat([test_dat] * len(UO2.atoms), axis=1)
     test_data.columns = pd.MultiIndex.from_product(
         [UO2.atoms.apply(lambda x: x.zam).values, [2]],
@@ -354,8 +349,10 @@ def test_UO2_Sab(T):
 
     # Test O16:
     test_data_O16 = Sab["O16"].data
-    data_O16 = pd.DataFrame(np.loadtxt(f"O16_UO2_{T}K_SSab").T * np.exp(beta_grid["O16"]/2),
-                            columns=beta_grid["O16"], index=alpha_grid["O16"])
+    data_O16 = pd.read_hdf(os.path.abspath(f"O16_UO2_{T}K_SSab"), key="test").T
+    data_O16 *= np.exp(beta_grid["O16"]/2)
+    data_O16.index = pd.Index(alpha_grid["O16"], name="alpha")
+    data_O16.columns = pd.Index(beta_grid["O16"], name="beta")
     Sab_normalize = []
     for ia in range(len(test_data_O16.index)):
         Sab_normalize_original = trapezoid(beta_grid["O16"] * data_O16.iloc[ia] * (1 + np.exp(-beta_grid["O16"])), beta_grid["O16"])
@@ -367,8 +364,10 @@ def test_UO2_Sab(T):
 
     # Test U238:
     test_data_U238 = Sab["U238"].data
-    data_U238 = pd.DataFrame(np.loadtxt(f"U238_UO2_{T}K_SSab").T * np.exp(beta_grid["U238"]/2),
-                             columns=beta_grid["U238"], index=alpha_grid["U238"])
+    data_U238 = pd.read_hdf(os.path.abspath(f"U238_UO2_{T}K_SSab"), key="test").T
+    data_U238 *= np.exp(beta_grid["U238"]/2)
+    data_U238.index = pd.Index(alpha_grid["U238"], name="alpha")
+    data_U238.columns = pd.Index(beta_grid["U238"], name="beta")
     Sab_normalize = []
     for ia in range(len(test_data_U238.index)):
         Sab_normalize_original = trapezoid(beta_grid["U238"] * data_U238.iloc[ia] * (1 + np.exp(-beta_grid["U238"])), beta_grid["U238"])

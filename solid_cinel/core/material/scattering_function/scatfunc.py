@@ -565,7 +565,8 @@ class ScatFuncDD:
         else:
             sigma1_pdf = ScatFuncSD.from_MD(self.Ein, self.M, self.T,
                                         scatfunc.columns.values).data
-            return mu_fit_calc(scatfunc, sigma1_pdf).mode()[0]
+            return mu_fit_calc(scatfunc, sigma1_pdf, self.Ein).mode()[0]
+
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """

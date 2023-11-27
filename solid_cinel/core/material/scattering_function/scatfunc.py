@@ -14,6 +14,9 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from typing import Iterable
 from math import sqrt, pi
+from scipy.stats import entropy, wasserstein_distance
+from scipy.spatial.distance import euclidean
+from scipy.spatial import distance
 import dask.array as da
 import warnings
 
@@ -542,7 +545,7 @@ class ScatFuncDD:
         Examples
         --------
         >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.linspace(Ein * 0.9, Ein * 1.1, 3000)
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
@@ -550,9 +553,20 @@ class ScatFuncDD:
         >>> round(ddScatFunc.get_angle, 2)
         0.5
         """
-        angular_max = self.data.max(axis=1) / self.data.apply(integrate, axis=1)
-        MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
-        return abs(angular_max - MD).idxmin()
+        scatfunc = self.data
+        if (scatfunc.iloc[::, [0, -1]] >= 1.0e-6).any().any():
+            warnings.warn("The distribution tails are not longer enough. Mu fit"
+                          " will only take into account the max value.")
+            angular_max = scatfunc.max(axis=1) / scatfunc.apply(integrate,
+                                                                axis=1)
+            MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
+            mu_fit_max = abs(angular_max - MD).idxmin()
+            return mu_fit_max
+        else:
+            sigma1_pdf = ScatFuncSD.from_MD(self.Ein, self.M, self.T,
+                                        scatfunc.columns.values).data
+            return mu_fit_calc(scatfunc, sigma1_pdf).mode()[0]
+
 class ScatFunc(ScatFuncSD, ScatFuncDD):
     """
     Scattering function class
@@ -1089,3 +1103,128 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     # Interpolation for avoiding numerical fluctuations:
     return np.interp(Eout, sd_pdf[:, 0], sd_pdf[:, 1])
 
+
+def total_variation_distance(p: np.ndarray, q: np.ndarray) -> float:
+    """
+    Total Variation Distance between two probability distributions.
+
+    Parameters
+    ----------
+    p : np.ndarray, (N,)
+        Probability distribution.
+    q : np.ndarray, (N,)
+        Probability distribution.
+
+    Returns
+    -------
+    float
+        Total Variation Distance.
+    """
+    return 0.5 * np.sum(np.abs(p - q))
+
+
+def hellinger_distance(p: np.ndarray, q: np.ndarray) -> float:
+    """
+    Hellinger Distance between two probability distributions.
+
+    Parameters
+    ----------
+    p : np.ndarray, (N,)
+        Probability distribution.
+    q : np.ndarray, (N,)
+        Probability distribution.
+
+    Returns
+    -------
+    float
+        Hellinger Distance.
+    """
+    return euclidean(np.sqrt(p), np.sqrt(q)) / np.sqrt(2)
+
+
+def bhattacharyya_distance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> float:
+    """
+    Bhattacharyya Distance between two probability distributions.
+
+    Parameters
+    ----------
+    p : np.ndarray, (N,)
+        Probability distribution.
+    q : np.ndarray, (N,)
+        Probability distribution.
+    Eout : np.ndarray, (N,)
+        Energy grid.
+
+    Returns
+    -------
+    float
+        Bhattacharyya Distance for continous distribution.
+    """
+    BC = np.trapz(np.sqrt(p * q), x=Eout)
+    return -np.log(BC)
+
+
+def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd.DataFrame:
+    """
+    Calculate the angle from the scattering function that best fits the
+    sigma1_pdf. The distributions from the scattering function are shifted
+    using the maximun position of the scattering function and the incident
+    energy distance. For the calculation, several distances are used:
+        - KL divergence
+        - Jensen-Shannon divergence
+        - Earth Mover's Distance
+        - Total Variation Distance
+        - Hellinger Distance
+        - Bhattacharyya Distance
+        - Maximun position distance
+
+    Parameters
+    ----------
+    scatfunc : pd.DataFrame, (N, M)
+        Scattering function distribution for each angle.
+    sigma1_pdf : pd.Series, (M, )
+        Sigma1 distribution.
+    Ein : float
+        Incident energy.
+
+    Returns
+    -------
+    mu_fit : pd.Series, (7, )
+        Best fit angle for each distance calculation.
+
+    Examples
+    --------
+    >>> Ein = 7.2
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> Eout = np.linspace(Ein * 0.9, Ein * 1.1, 3000)
+    >>> sigma1 = ScatFunc.from_MD(Ein, M, T, Eout).data
+    >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+    >>> ddScatFunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta).data
+    >>> mu_fit_calc(ddScatFunc, sigma1, Ein).round(2)
+    KL               0.5
+    JS               0.5
+    EMD              0.5
+    TVD              0.5
+    Hellinger        0.5
+    Bhattacharyya    0.5
+    max_pos          0.5
+    dtype: float64
+    """
+    Eout = scatfunc.columns.values
+    scatfunc_norm = scatfunc.apply(lambda x: x / integrate(x), axis=1)
+    def get_distances(angular_scatfunc):
+        angular_recoil = Ein - angular_scatfunc.idxmax()
+        scatfunc_shift = np.interp(Eout, Eout + angular_recoil,
+                                   angular_scatfunc.values)
+        return pd.Series({
+            "KL": entropy(scatfunc_shift, sigma1_pdf),
+            "JS": distance.jensenshannon(scatfunc_shift, sigma1_pdf),
+            "EMD": wasserstein_distance(scatfunc_shift, sigma1_pdf),
+            "TVD": total_variation_distance(scatfunc_shift, sigma1_pdf),
+            "Hellinger": hellinger_distance(scatfunc_shift, sigma1_pdf),
+            "Bhattacharyya": bhattacharyya_distance(scatfunc_shift,
+                                                    sigma1_pdf, Eout),
+            "max_pos": abs(scatfunc_shift.max() - sigma1_pdf.max()),
+        })
+    return scatfunc_norm.apply(get_distances, axis=1).idxmin()

@@ -288,6 +288,19 @@ class ScatFuncSD:
         norm = integrate(pd.Series(scattfunc, index=Eout))
         return cls(Ein, T, M, scattfunc / norm, index=Eout)
 
+    @property
+    def cdf(self) -> pd.Series:
+        """
+        Cumulative distribution function of the scattering function.
+
+        Returns
+        -------
+        pd.Series
+            Cumulative distribution function of the scattering function
+        """
+        cdf = self.data.cumsum()
+        return cdf / cdf.iloc[-1]
+
 
 
 class ScatFuncDD:
@@ -566,6 +579,19 @@ class ScatFuncDD:
             sigma1_pdf = ScatFuncSD.from_MD(self.Ein, self.M, self.T,
                                         scatfunc.columns.values).data
             return mu_fit_calc(scatfunc, sigma1_pdf, self.Ein).mode()[0]
+
+    @property
+    def cdf(self) -> pd.DataFrame:
+        """
+        Cumulative distribution function of the scattering function.
+
+        Returns
+        -------
+        pd.Series
+            Cumulative distribution function of the scattering function
+        """
+        cdf = self.data.cumsum(axis=0).cumsum(axis=1)
+        return cdf / cdf.iloc[-1, -1]
 
 
 class ScatFunc(ScatFuncSD, ScatFuncDD):

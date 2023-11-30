@@ -1329,6 +1329,9 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         Teff = np.array(
             [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in T_arno]
         )
+        nan_indices = np.where(np.isnan(Teff))
+        if nan_indices[0].size > 0:
+            Teff[nan_indices] = Teff[nan_indices[0].max() + 1]
         Teff[np.isnan(Teff)] = T_arno[np.isnan(Teff)]
         return xs_matrix_values(xs_0K.values, xs_0K.index.values, Ein, M,
                                 T_arno, Eout, mu, mu_fit, Teff, 1.0)
@@ -1338,9 +1341,16 @@ def xs_matrix(*args, **kwargs) -> np.ndarray:
         delta_beta = np.zeros(len(T_arno))
         for i in range(len(T_arno)):
             if T_arno[i] > 0.0:
-                tau1[i, :] = pdos.get_tau_1(T_arno[i]).values
-                DebyeWallerCoeff[i] = pdos.DebyeWallerCoeff(T_arno[i])
-                delta_beta[i] = pdos.to_beta_grid(T_arno[i]).grid
+                tau1[i, :] += pdos.get_tau_1(T_arno[i]).values
+                DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
+                delta_beta[i] += pdos.to_beta_grid(T_arno[i]).grid
+        # Some values are nan, so we replace them with the next values:
+        nan_indices = np.where(np.isnan(DebyeWallerCoeff))
+        if nan_indices[0].size > 0:
+            new_value_index = nan_indices[0].max() + 1
+            delta_beta[nan_indices] = delta_beta[new_value_index]
+            DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
+            tau1[nan_indices] = tau1[new_value_index]
         return xs_matrix_values_pdos(xs_0K.values, xs_0K.index.values, Ein, M,
                                      T_arno, Eout, mu, mu_fit,
                                      kwargs.pop("nphonon", 1000), tau1, delta_beta,

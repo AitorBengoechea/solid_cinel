@@ -388,7 +388,6 @@ def get_Teff(pdos, T_arno):
     nan_indices = np.where(np.isnan(Teff))
     if nan_indices[0].size > 0:
         Teff[nan_indices] = Teff[nan_indices[0].max() + 1]
-    Teff[np.isnan(Teff)] = T_arno[np.isnan(Teff)]
     return Teff
 
 

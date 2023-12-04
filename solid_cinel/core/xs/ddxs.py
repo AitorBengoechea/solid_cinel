@@ -389,7 +389,7 @@ class DDxs:
                            mu_fit, *args, **kwargs)
         else:
             xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
-        return cls(Ein, T, M, "coercelle", scatfunction.convolve(xs))
+        return cls(Ein, T, M, "coercelle", scatfunction.convolve(xs.data))
 
     @property
     def angular(self) -> Dxs:

@@ -268,17 +268,18 @@ class XsMat:
          >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:6]
          >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
          >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
-             33.0120	34.234667	35.457333	36.680000	37.902667	39.125333
-         10	0.781011	0.212474	18.943993	7832.112249	116.900933	48.371957
-         9	0.774634	0.214952	18.935478	7827.100451	116.942587	48.337172
-         8	0.765202	0.218967	18.947906	7822.491592	116.933518	48.278974
-         7	0.750937	0.225468	18.991055	7818.332543	116.851287	48.184526
-         6	0.728496	0.236354	19.083733	7814.650622	116.653779	48.029743
-         5	0.690994	0.255950	19.265986	7811.484114	116.253915	47.765243
-         4	0.622453	0.296031	19.636420	7808.858742	115.447043	47.276543
-         3	0.479921	0.399744	20.498496	7806.792841	113.658175	46.249378
-         2	0.151264	0.848392	23.250511	7805.305048	108.749223	43.580322
-         1	39.411876	15.646885	48.317676	7804.407359	88.153494	33.909257
+             33.012000  34.234667  35.457333    36.680000   37.902667  39.125333
+         10   0.781011   0.212474  18.943993  7832.112249  116.900933  48.371957
+         9    0.774634   0.214952  18.935478  7827.100451  116.942587  48.337172
+         8    0.765202   0.218967  18.947906  7822.491592  116.933518  48.278974
+         7    0.750937   0.225468  18.991055  7818.332543  116.851287  48.184526
+         6    0.728496   0.236354  19.083733  7814.650622  116.653779  48.029743
+         5    0.690994   0.255950  19.265986  7811.484114  116.253915  47.765243
+         4    0.622453   0.296031  19.636420  7808.858742  115.447043  47.276543
+         3    0.479921   0.399744  20.498496  7806.792841  113.658175  46.249378
+         2    0.151264   0.848392  23.250511  7805.305048  108.749223  43.580322
+         1   39.411876  15.646885  48.317676  7804.407359   88.153494  33.909257
+
          """
         # Common arguments:
         if len(args) == 6:
@@ -435,54 +436,6 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     -------
     np.ndarray, (M, N)
         Cross section matrix in barns
-
-    Examples
-    --------
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("xs_mat.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-    >>> os.chdir(wd)
-
-    Common parameters for all the examples:
-    >>> T = 1000
-    >>> Ein = 2.0
-    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
-    >>> M = 238.05077040419212
-    >>> theta = np.arange(10, 190, 10)
-    >>> mu = np.sort(np.cos(np.deg2rad(theta)))
-    >>> mu_fit = np.cos(np.deg2rad(60))
-    >>> T_arno = T * (1 + mu) / 2
-    >>> from solid_cinel.core.material.vibration.pdos import Pdos
-    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])
-    >>> tau1 = pd.DataFrame([pdos.get_tau_1(T).values if T > 0.0 else np.array([0.0] * len(mu)) for T in T_arno]).values
-    >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])
-    >>> nphonon = 100
-    >>> threshold = 1.0e-14
-    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-    >>> xs_values = update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_0K.values, xs_0K.index.values, Ein, M, T_arno, Eout, mu, mu_fit, nphonon, tau1, delta_beta, threshold, DebyeWallerCoeff)
-    >>> pd.DataFrame(xs_values, index=theta[::-1], columns=Eout).round(6)
-         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
-    180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
-    170  9.103715  9.096910  9.090104  9.083212  9.076165  9.069103  9.062042
-    160  9.103626  9.096821  9.090015  9.083121  9.076074  9.069013  9.061952
-    150  9.103167  9.096364  9.089558  9.082651  9.075602  9.068542  9.061485
-    140  9.102780  9.095979  9.089172  9.082254  9.075208  9.068149  9.061094
-    130  9.102666  9.095866  9.089056  9.082135  9.075097  9.068042  9.060984
-    120  9.102740  9.095944  9.089135  9.082217  9.075183  9.068131  9.061076
-    110  9.102926  9.096135  9.089323  9.082409  9.075386  9.068336  9.061282
-    100  9.103175  9.096384  9.089570  9.082664  9.075646  9.068599  9.061543
-    90   9.103449  9.096661  9.089848  9.082944  9.075937  9.068892  9.061832
-    80   9.103734  9.096949  9.090132  9.083232  9.076233  9.069190  9.062131
-    70   9.104011  9.097229  9.090414  9.083518  9.076522  9.069484  9.062421
-    60   9.104271  9.097492  9.090677  9.083783  9.076796  9.069758  9.062696
-    50   9.104647  9.097872  9.091058  9.084168  9.077187  9.070151  9.063088
-    40   9.104847  9.098078  9.091263  9.084378  9.077398  9.070365  9.063300
-    30   9.105006  9.098241  9.091431  9.084545  9.077570  9.070538  9.063469
-    20   9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
-    10   9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
     @nb.jit(nopython=True, nogil=True, parallel=True)
     def update_xs_mat(xs_mat, i, tau_n, tau_n_beta):
@@ -621,7 +574,30 @@ def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
 
 @nb.jit(nopython=True)
 def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
-                             Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
+                   Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
+    """
+    Get the input data for the convolution for the xs matrix calculation.
+
+    Parameters
+    ----------
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns at 0K
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    Ein_arno: np.ndarray, (M, N)
+        Incident energy matrix for the arno model
+    mu_min: float
+        The minimum cosine. If mu_min == -1.0, the first row of the matrix is
+        filled with the cross section values at 0K.
+
+    Returns
+    -------
+    xs_mat: np.empty, (M, N)
+        Cross section matrix in barns
+    start: int
+        Start index for the loop in theta. If mu_min == -1.0, start = 1, else
+        start = 0
+    """
     xs_mat = np.empty(Ein_arno.shape)
     if mu_min == np.cos(pi):
         xs_mat[0, :] = np.interp(Ein_arno[0, :], xs_E, xs_values)
@@ -715,83 +691,3 @@ def Db(xs_values, xs_E, Ein, Eout, pdf):
         xs_Eout_arno = np.interp(Eout + recoil, xs_E, xs_values)
         Db_xs = np.trapz(xs_Eout_arno * pdf, x=Eout) / norm
     return Db_xs
-
-
-def generate_Eout(Ein, Elim: Iterable = None, N: int = None,
-                  space: str = "linear"):
-    """
-    Generate Eout grid for the convolution.
-
-    Parameters
-    ----------
-    Ein : float
-        Incident energy in eV
-    Elim : Iterable, (2,)
-        Outgoing energy limits in eV. The first value is the lower limit and the
-        second value is the upper limit.
-    N : int, optional
-        Number of points in the outgoing energy grid. If None, the default
-        number of points is used.
-    space : str, optional
-        Type of grid. Available options are "linear" and "log". Default is
-        "linear".
-
-    Returns
-    -------
-    Eout : ndarray
-        Outgoing energy grid in eV
-
-    Raises
-    ------
-    ValueError
-        If the number of points is not introduced.
-    ValueError
-        If the space is not available.
-
-    Examples
-    --------
-    Test default, linear and logarithmic grids with NJOY values:
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("xs_mat.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-    >>> os.chdir(wd)
-
-    # Common data:
-    >>> T = 1000
-    >>> Ein = 2.0
-    >>> Eout = default_Eout(Ein)
-    >>> M = 238.05077040419212
-
-    # Test default grid:
-    >>> Eout = default_Eout(Ein)
-    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
-    9.09
-
-    # Test linear grid:
-    >>> Eout = generate_Eout(Ein, Elim=[Ein * 0.9, Ein * 1.1], N=5000)
-    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
-    9.09
-
-    # Test logarithmic grid:
-    >>> Eout = generate_Eout(Ein, Elim=[Ein * 0.9, Ein * 1.1], N=5000, space="log")
-    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
-    9.09
-    """
-    if Elim is None:
-        Eout = default_Eout(Ein)
-    else:
-        if N is None:
-            raise ValueError("The number of points is not defined")
-        if space == "linear":
-            Eout = np.linspace(Elim[0],
-                               Elim[1],
-                               num=N, endpoint=True)
-        elif space == "log":
-            Eout = np.logspace(np.log10(Elim[0]),
-                               np.log10(Elim[1]),
-                               num=N, endpoint=True)
-        else:
-            raise ValueError("The space {} is not available".format(space))
-    return Eout

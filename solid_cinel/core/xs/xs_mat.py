@@ -320,6 +320,27 @@ class XsMat:
 
 
 def get_pdos_variables(pdos, T_arno):
+    """
+    Get the tau1, DebyeWallerCoeff and delta_beta variables for the pdos model.
+    If Teff can't be calculated, the values are nan, so we replace them with the
+    next values.
+
+    Parameters
+    ----------
+    pdos: 'solid_cinel.core.material.Pdos'
+        Pdos object.
+    T_arno: np.ndarray, (M,)
+        Target arno temperature grid in K
+
+    Returns
+    -------
+    tau1: np.ndarray, (M, T)
+        tau1 values for all the T_arno values
+    DebyeWallerCoeff: np.ndarray, (M,)
+        DebyeWallerCoeff values for all the T_arno values
+    delta_beta: np.ndarray, (M,)
+        delta_beta values for all the T_arno values
+    """
     # Create variables:
     tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
     DebyeWallerCoeff = np.zeros(len(T_arno))
@@ -342,6 +363,22 @@ def get_pdos_variables(pdos, T_arno):
     return tau1, DebyeWallerCoeff, delta_beta
 
 def get_Teff(pdos, T_arno):
+    """
+    Get the effective temperature for the sct model. If Teff can't be calculated,
+    the values are nan, so we replace them with the next values.
+
+    Parameters
+    ----------
+    pdos: 'solid_cinel.core.material.Pdos'
+        Pdos object.
+    T_arno: np.ndarray, (M,)
+        Target arno temperature grid in K
+
+    Returns
+    -------
+    Teff: np.ndarray, (M,)
+        Effective temperature values for all the T_arno values
+    """
     Teff = np.array(
         [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in
          T_arno]
@@ -468,8 +505,36 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
 def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                          xs_values: np.ndarray, xs_E: np.ndarray,
                          M: float, T_arno: np.ndarray) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with the pdf calculated with SIGMA1 algorithm.
+
+    Parameters
+    ----------
+    xs_mat: np.ndarray, (M, N)
+        Cross section matrix in barns
+    Ein_arno: np.ndarray, (M, N)
+        Incident energy matrix for the arno model
+    start: int
+        Start index for the loop in theta. If mu_min == -1.0, start = 1, else
+        start = 0
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns at 0K
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    M: float
+        Mass of the material in amu
+    T_arno: np.ndarray, (M,)
+        Target temperature grid in K
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+    """
     for i in range(start, Ein_arno.shape[0], 1):
-        for j in prange(Ein_arno.shape[0]):
+        for j in prange(Ein_arno.shape[1]):
             Eout_db = default_Eout(Ein_arno[i, j])
             pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
             xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db,
@@ -481,8 +546,41 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                       xs_values: np.ndarray, xs_E: np.ndarray,
                       M: float, Tarno: np.ndarray, mu_fit: float,
                       Tarno_eff: np.ndarray) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with the pdf calculated with S(alpha, -beta) algorithm of sct.
+
+    Parameters
+    ----------
+    xs_mat: np.ndarray, (M, N)
+        Cross section matrix in barns
+    Ein_arno: np.ndarray, (M, N)
+        Incident energy matrix for the arno model
+    start: int
+        Start index for the loop in theta. If mu_min == -1.0, start = 1, else
+        start = 0
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns at 0K
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    M: float
+        Mass of the material in amu
+    T_arno: np.ndarray, (M,)
+        Target temperature grid in K
+    mu_fit: float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with SIGMA1 algoritm
+    Tarno_eff: np.ndarray, (M,)
+        Effective temperature grid in K
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+    """
     for i in range(start, Ein_arno.shape[0], 1):
-        for j in prange(Ein_arno.shape[0]):
+        for j in prange(Ein_arno.shape[1]):
             Eout_db = default_Eout(Ein_arno[i, j])
             pdf = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno[i, j],
                                        Tarno[i], M, Tarno_eff[i], 1.0)

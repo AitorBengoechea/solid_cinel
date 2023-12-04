@@ -391,6 +391,160 @@ def get_Teff(pdos, T_arno):
     Teff[np.isnan(Teff)] = T_arno[np.isnan(Teff)]
     return Teff
 
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def default_Eout(Ein: float) -> np.ndarray:
+    """
+    Generate the default Eout grid for the convolution. The grid is tested with
+    NJOY values to ensure a relative difference smaller than 0.4%
+
+    Parameters
+    ----------
+    Ein : float
+        Incident energy in eV
+
+    Returns
+    -------
+    Eout : ndarray
+        Outgoing energy grid in eV
+
+    Examples
+    --------
+    Test the default Eout with NJOY values:
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs_mat.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    # Generate Broadening test results:
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = default_Eout(Ein)
+    >>> M = 238.05077040419212
+    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
+    9.09
+    """
+    Eout_small = np.linspace(0,
+                             0.99 * Ein,
+                             2000)
+    Eout_middle = np.linspace(0.99 * Ein,
+                              Ein * 1.01,
+                              3000)
+    if Ein * 2 < 5.0:
+        Eout_great = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(5.0),
+                                 2000)
+    else:
+        Eout_great = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(2 * Ein),
+                                 2000)
+    return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+
+
+@nb.jit("float64[:, :](float64, float64[:], float64[:], float64)",
+    nopython=True, nogil=True, cache=True)
+def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                 M: float) -> np.ndarray:
+    """
+    Get the incident energy matrix for the arno model.
+
+    Parameters
+    ----------
+    Ein: float
+        The incident energy of the neutron in eV
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    mu: np.ndarray, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    Ein_arno: np.ndarray, (M, Z)
+        Incident energy matrix for the arno model
+    """
+    Ein_arno = np.empty((len(mu), len(Eout)))
+    for i in range(len(mu)):
+        alpha = (Ein + Eout - 2 * mu[i] * np.sqrt(Ein * Eout)) * m / M
+        Ein_arno[i, :] = (Eout + Ein) / 2 - Ein * mu[i] * m / M
+        Ein_arno[i, :] += 0.5 * alpha / (1 - mu[i])
+    return Ein_arno
+
+
+@nb.jit("Tuple((float64[:, :], int8))(float64[:], float64[:], float64[:, :], float64)", nopython=True)
+def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
+                   Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
+    """
+    Get the input data for the convolution for the xs matrix calculation.
+
+    Parameters
+    ----------
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns at 0K
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    Ein_arno: np.ndarray, (M, N)
+        Incident energy matrix for the arno model
+    mu_min: float
+        The minimum cosine. If mu_min == -1.0, the first row of the matrix is
+        filled with the cross section values at 0K.
+
+    Returns
+    -------
+    xs_mat: np.empty, (M, N)
+        Cross section matrix in barns
+    start: int
+        Start index for the loop in theta. If mu_min == -1.0, start = 1, else
+        start = 0
+    """
+    xs_mat = np.zeros(Ein_arno.shape)
+    if mu_min == np.cos(pi):
+        xs_mat[0, :] += np.interp(Ein_arno[0, :], xs_E, xs_values)
+        start = 1
+    else:
+        start = 0
+    return xs_mat, start
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def Db(xs_values, xs_E, Ein, Eout, pdf):
+    """
+    Calculate the doppler broadening of a cross section for a pdf
+
+    Parameters
+    ----------
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    Ein: float
+        The incident energy of the neutron in eV
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    pdf: np.ndarray, (Z,)
+        Probability density function
+
+    Returns
+    -------
+    Db_xs: float
+        Doppler broadened cross section in barns
+    """
+    max_pos = np.argmax(pdf)
+    if pdf[max_pos] > 1.0e308:  # Overflow found in pdf_val
+        Db_xs = np.interp(Eout[max_pos], xs_E, xs_values)
+    else:
+        norm = np.trapz(pdf, x=Eout)
+        # Recoil:
+        recoil = Ein - Eout[max_pos]
+        # xs:
+        xs_Eout_arno = np.interp(Eout + recoil, xs_E, xs_values)
+        Db_xs = np.trapz(xs_Eout_arno * pdf, x=Eout) / norm
+    return Db_xs
+
+
 def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                        xs_values: np.ndarray, xs_E: np.ndarray,
                        M: float, T_arno: np.ndarray,
@@ -444,7 +598,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
                                           Eout_db, mu_fit, tau_n, tau_n_beta,
                                           DebyeWallerCoeff[i])
-            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+            xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
 
     # Calculate the cross-section matrix: Loop in theta
     for i in range(start, Ein_arno.shape[0], 1):
@@ -452,9 +606,10 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
         tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta[i]
         # Paralelize the loop in Eout:
         update_xs_mat(xs_mat, i, tau_n, tau_n_beta)
-    return
 
-@nb.jit(nopython=True, nogil=True, cache=False, parallel=True)
+
+@nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:])",
+    nopython=True, nogil=True, cache=True, parallel=True)
 def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                          xs_values: np.ndarray, xs_E: np.ndarray,
                          M: float, T_arno: np.ndarray) -> np.ndarray:
@@ -490,11 +645,11 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
         for j in prange(Ein_arno.shape[1]):
             Eout_db = default_Eout(Ein_arno[i, j])
             pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
-            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db,
+            xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db,
                                 pdf)
-    return xs_mat
 
-@nb.jit(nopython=True, nogil=True, cache=False, parallel=True)
+@nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:], float64, float64[:])",
+    nopython=True, nogil=True, cache=True, parallel=True)
 def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                       xs_values: np.ndarray, xs_E: np.ndarray,
                       M: float, Tarno: np.ndarray, mu_fit: float,
@@ -537,157 +692,4 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             Eout_db = default_Eout(Ein_arno[i, j])
             pdf = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno[i, j],
                                        Tarno[i], M, Tarno_eff[i], 1.0)
-            xs_mat[i, j] = Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
-    return xs_mat
-
-
-@nb.jit("float64[:, :](float64, float64[:], float64[:], float64)",
-    nopython=True, nogil=True, cache=False)
-def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                 M: float) -> np.ndarray:
-    """
-    Get the incident energy matrix for the arno model.
-
-    Parameters
-    ----------
-    Ein: float
-        The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
-        The neutron outgoing energy grid in eV
-    mu: np.ndarray, (M,)
-        The neutron outgoing angle grid in degrees (0, 180]
-    M: float
-        Mass of the material in amu
-
-    Returns
-    -------
-    Ein_arno: np.ndarray, (M, Z)
-        Incident energy matrix for the arno model
-    """
-    Ein_arno = np.empty((len(mu), len(Eout)))
-    for i in range(len(mu)):
-        alpha = (Ein + Eout - 2 * mu[i] * np.sqrt(Ein * Eout)) * m / M
-        Ein_arno[i, :] = (Eout + Ein) / 2 - Ein * mu[i] * m / M
-        Ein_arno[i, :] += 0.5 * alpha / (1 - mu[i])
-    return Ein_arno
-
-
-@nb.jit(nopython=True)
-def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
-                   Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
-    """
-    Get the input data for the convolution for the xs matrix calculation.
-
-    Parameters
-    ----------
-    xs_values: np.ndarray, (N,)
-        Cross section values in barns at 0K
-    xs_E: np.ndarray, (N,)
-        Cross section energy grid in eV
-    Ein_arno: np.ndarray, (M, N)
-        Incident energy matrix for the arno model
-    mu_min: float
-        The minimum cosine. If mu_min == -1.0, the first row of the matrix is
-        filled with the cross section values at 0K.
-
-    Returns
-    -------
-    xs_mat: np.empty, (M, N)
-        Cross section matrix in barns
-    start: int
-        Start index for the loop in theta. If mu_min == -1.0, start = 1, else
-        start = 0
-    """
-    xs_mat = np.empty(Ein_arno.shape)
-    if mu_min == np.cos(pi):
-        xs_mat[0, :] = np.interp(Ein_arno[0, :], xs_E, xs_values)
-        start = 1
-    else:
-        start = 0
-    return xs_mat, start
-
-@nb.jit(nopython=True, nogil=True, cache=False)
-def default_Eout(Ein: float) -> np.ndarray:
-    """
-    Generate the default Eout grid for the convolution. The grid is tested with
-    NJOY values to ensure a relative difference smaller than 0.4%
-
-    Parameters
-    ----------
-    Ein : float
-        Incident energy in eV
-
-    Returns
-    -------
-    Eout : ndarray
-        Outgoing energy grid in eV
-
-    Examples
-    --------
-    Test the default Eout with NJOY values:
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("xs_mat.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-    >>> os.chdir(wd)
-
-    # Generate Broadening test results:
-    >>> T = 1000
-    >>> Ein = 2.0
-    >>> Eout = default_Eout(Ein)
-    >>> M = 238.05077040419212
-    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
-    9.09
-    """
-    Eout_small = np.linspace(0,
-                             0.99 * Ein,
-                             2000)
-    Eout_middle = np.linspace(0.99 * Ein,
-                              Ein * 1.01,
-                              3000)
-    if Ein * 2 < 5.0:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
-                                 np.log10(5.0),
-                                 2000)
-    else:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
-                                 np.log10(2 * Ein),
-                                 2000)
-    return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
-
-
-@nb.jit(nopython=True, nogil=True, cache=False)
-def Db(xs_values, xs_E, Ein, Eout, pdf):
-    """
-    Calculate the doppler broadening of a cross section for a pdf
-
-    Parameters
-    ----------
-    xs_values: np.ndarray, (N,)
-        Cross section values in barns
-    xs_E: np.ndarray, (N,)
-        Cross section energy grid in eV
-    Ein: float
-        The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
-        The neutron outgoing energy grid in eV
-    pdf: np.ndarray, (Z,)
-        Probability density function
-
-    Returns
-    -------
-    Db_xs: float
-        Doppler broadened cross section in barns
-    """
-    max_pos = np.argmax(pdf)
-    if pdf[max_pos] > 1.0e308:  # Overflow found in pdf_val
-        Db_xs = np.interp(Eout[max_pos], xs_E, xs_values)
-    else:
-        norm = np.trapz(pdf, x=Eout)
-        # Recoil:
-        recoil = Ein - Eout[max_pos]
-        # xs:
-        xs_Eout_arno = np.interp(Eout + recoil, xs_E, xs_values)
-        Db_xs = np.trapz(xs_Eout_arno * pdf, x=Eout) / norm
-    return Db_xs
+            xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)

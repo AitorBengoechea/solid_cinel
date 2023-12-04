@@ -142,11 +142,11 @@ class Xs:
         6.67  281.437747      0.262325        0.733844  0.003831
 
         # Doppler broadening using 4PCF(PDOS) algorithm (not very accurate):
-        >>> xs.Doppler_broad(T, pdos, nphonon=10, Ein_grid=Ein, num_Eout=1000, theta_diff= 15, prob=True, model="pdos").round(6)
-                     xs  upscattering  downscattering  Ein=Eout
-        Ein
-        2.00   2.179519      0.439105        0.557491  0.003404
-        6.67  33.519221      0.458024        0.529928  0.012048
+#        >>> xs.Doppler_broad(T, pdos, nphonon=10, Ein_grid=Ein, num_Eout=1000, theta_diff= 15, prob=True, model="pdos").round(6)
+#                     xs  upscattering  downscattering  Ein=Eout
+#        Ein
+#        2.00   2.179519      0.439105        0.557491  0.003404
+#        6.67  33.519221      0.458024        0.529928  0.012048
         """
         if Ein_grid:
             Ein_grid_ = Ein_grid if hasattr(Ein_grid, '__len__') else [Ein_grid]

@@ -290,14 +290,12 @@ class XsMat:
             xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
 
         # Common variables:
-        mu = np.sort(np.cos(np.deg2rad(theta)))
-        T_arno = T * (1 + mu) / 2
-        model = kwargs.pop("model", "sigma1")
-        Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-        xs_values, xs_E = xs_0K.values, xs_0K.index.values
-        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-
+        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
+                                                                     M, T, Eout,
+                                                                     theta)
         # Calculate the cross-section matrix:
+        model = kwargs.pop("model", "sigma1")
+        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
         if model == "sigma1":
             update_xs_mat_sigma1(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                                  T_arno)
@@ -305,11 +303,11 @@ class XsMat:
             update_xs_mat_sct(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                               T_arno, mu_fit, T_arno)
         elif model == "sct":
-            Teff = get_Teff(pdos, T_arno)
+            Teff = cls.get_Teff(pdos, T_arno)
             update_xs_mat_sct(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                               T_arno, mu_fit, Teff)
         elif model == "pdos":
-            tau1, DebyeWallerCoeff, delta_beta = get_pdos_variables(pdos, T_arno)
+            tau1, DebyeWallerCoeff, delta_beta = cls.get_pdos_variables(pdos, T_arno)
             threshold = kwargs.pop("threshold", 0.0)
             nphonon = kwargs.pop("nphonon", 1000)
             update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
@@ -319,76 +317,91 @@ class XsMat:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
+    @classmethod
+    def from_tau(cls, xs_0K, Ein, M, T, Eout, theta):
+        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
+                                                                     M, T, Eout,
+                                                                     theta)
+        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+        return
+    @staticmethod
+    def common_variables(xs_0K, Ein, M, T, Eout, theta):
+        mu = np.sort(np.cos(np.deg2rad(theta)))
+        T_arno = T * (1 + mu) / 2
+        Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
+        xs_values, xs_E = xs_0K.values, xs_0K.index.values
+        return xs_values, xs_E, Ein_arno, mu, T_arno
+    @staticmethod
+    def get_pdos_variables(pdos, T_arno):
+        """
+        Get the tau1, DebyeWallerCoeff and delta_beta variables for the pdos model.
+        If Teff can't be calculated, the values are nan, so we replace them with the
+        next values.
 
-def get_pdos_variables(pdos, T_arno):
-    """
-    Get the tau1, DebyeWallerCoeff and delta_beta variables for the pdos model.
-    If Teff can't be calculated, the values are nan, so we replace them with the
-    next values.
+        Parameters
+        ----------
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T_arno: np.ndarray, (M,)
+            Target arno temperature grid in K
 
-    Parameters
-    ----------
-    pdos: 'solid_cinel.core.material.Pdos'
-        Pdos object.
-    T_arno: np.ndarray, (M,)
-        Target arno temperature grid in K
+        Returns
+        -------
+        tau1: np.ndarray, (M, T)
+            tau1 values for all the T_arno values
+        DebyeWallerCoeff: np.ndarray, (M,)
+            DebyeWallerCoeff values for all the T_arno values
+        delta_beta: np.ndarray, (M,)
+            delta_beta values for all the T_arno values
+        """
+        # Create variables:
+        tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
+        DebyeWallerCoeff = np.zeros(len(T_arno))
+        delta_beta = np.zeros(len(T_arno))
 
-    Returns
-    -------
-    tau1: np.ndarray, (M, T)
-        tau1 values for all the T_arno values
-    DebyeWallerCoeff: np.ndarray, (M,)
-        DebyeWallerCoeff values for all the T_arno values
-    delta_beta: np.ndarray, (M,)
-        delta_beta values for all the T_arno values
-    """
-    # Create variables:
-    tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
-    DebyeWallerCoeff = np.zeros(len(T_arno))
-    delta_beta = np.zeros(len(T_arno))
+        # Fill variables:
+        for i in range(len(T_arno)):
+            if T_arno[i] > 0.0:
+                tau1[i, :] += pdos.get_tau_1(T_arno[i]).values
+                DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
+                delta_beta[i] += pdos.to_beta_grid(T_arno[i]).grid
 
-    # Fill variables:
-    for i in range(len(T_arno)):
-        if T_arno[i] > 0.0:
-            tau1[i, :] += pdos.get_tau_1(T_arno[i]).values
-            DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
-            delta_beta[i] += pdos.to_beta_grid(T_arno[i]).grid
+        # Some values are nan, so we replace them with the next values:
+        nan_indices = np.where(np.isnan(DebyeWallerCoeff))
+        if nan_indices[0].size > 0:
+            new_value_index = nan_indices[0].max() + 1
+            delta_beta[nan_indices] = delta_beta[new_value_index]
+            DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
+            tau1[nan_indices] = tau1[new_value_index]
+        return tau1, DebyeWallerCoeff, delta_beta
 
-    # Some values are nan, so we replace them with the next values:
-    nan_indices = np.where(np.isnan(DebyeWallerCoeff))
-    if nan_indices[0].size > 0:
-        new_value_index = nan_indices[0].max() + 1
-        delta_beta[nan_indices] = delta_beta[new_value_index]
-        DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
-        tau1[nan_indices] = tau1[new_value_index]
-    return tau1, DebyeWallerCoeff, delta_beta
+    @staticmethod
+    def get_Teff(pdos, T_arno):
+        """
+        Get the effective temperature for the sct model. If Teff can't be calculated,
+        the values are nan, so we replace them with the next values.
 
-def get_Teff(pdos, T_arno):
-    """
-    Get the effective temperature for the sct model. If Teff can't be calculated,
-    the values are nan, so we replace them with the next values.
+        Parameters
+        ----------
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T_arno: np.ndarray, (M,)
+            Target arno temperature grid in K
 
-    Parameters
-    ----------
-    pdos: 'solid_cinel.core.material.Pdos'
-        Pdos object.
-    T_arno: np.ndarray, (M,)
-        Target arno temperature grid in K
-
-    Returns
-    -------
-    Teff: np.ndarray, (M,)
-        Effective temperature values for all the T_arno values
-    """
-    Teff = np.array(
-        [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in
-         T_arno]
-    )
-    # Aproximation: if Teff is nan, take the next value of Teff
-    nan_indices = np.where(np.isnan(Teff))
-    if nan_indices[0].size > 0:
-        Teff[nan_indices] = Teff[nan_indices[0].max() + 1]
-    return Teff
+        Returns
+        -------
+        Teff: np.ndarray, (M,)
+            Effective temperature values for all the T_arno values
+        """
+        Teff = np.array(
+            [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in
+             T_arno]
+        )
+        # Aproximation: if Teff is nan, take the next value of Teff
+        nan_indices = np.where(np.isnan(Teff))
+        if nan_indices[0].size > 0:
+            Teff[nan_indices] = Teff[nan_indices[0].max() + 1]
+        return Teff
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)

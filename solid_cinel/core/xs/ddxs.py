@@ -382,6 +382,54 @@ class DDxs:
         20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
         10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
         """
+        ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta, *args, **kwargs)
+        return cls(Ein, T, M, "coercelle", ddxs_values)
+
+
+    @staticmethod
+    def gen_4PCF(xs_0K, Ein, M, T, Eout, theta, *args, **kwargs):
+        """
+        Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
+        correlation function modified
+        ..math::
+            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E + \frac{\alpha k_{B} T}{1-\mu})/2 - E \mu / A)
+
+        For the xs matrix calculation, they are the following models available:
+            - "sigma1": sigma1 algorithm from NJOY2016 manual (default)
+            - "fgm": Free Gas Model
+            - "sct": Short Collision Time
+            - "pdos": Phonon Density of States
+
+        Common parameters
+        -----------------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n functions. For T>200 is convenient to set into
+            1.0e-14 to speed up the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+        """
         scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs)
         if kwargs.get("model"):
             mu_fit = scatfunction.get_angle
@@ -389,8 +437,7 @@ class DDxs:
                            mu_fit, *args, **kwargs)
         else:
             xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
-        return cls(Ein, T, M, "coercelle", scatfunction.convolve(xs.data))
-
+        return scatfunction.convolve(xs.data)
     @property
     def angular(self) -> Dxs:
         """

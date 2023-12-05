@@ -18,14 +18,14 @@ def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
         Interval of beta for the PDOS.
     tau1 : 'np.ndarray', (N,)
         Tau(-beta) function for n = 1 expansion.
-    tau_n_minus_1 : 'np.ndarray', (N,)
+    tau_n_minus_1 : 'np.ndarray', (M,)
         Tau(-beta) function for n - 1 expansion.
     threshold : 'float'
         Minimun value to take into account.
 
     Returns
     -------
-    tau_n : 'np.ndarray', (N,)
+    tau_n : 'np.ndarray', (N + M -1,)
         Tau(-beta) function for n expansion.
     """
     tau_n = np.zeros(len(tau1) + len(tau_n_minus_1) - 1)
@@ -82,12 +82,12 @@ def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
     tau_n_func: 'np.ndarray', (N * nphonon, nphonon)
         All Tau(-beta) function values for n expansion.
     """
-    tau_n_func = np.zeros((len(tau1) * nphonon, nphonon))
-    tau_n_func[:len(tau1), 0] += tau1
+    tau_n_func = np.zeros((nphonon, len(tau1) * nphonon))
+    tau_n_func[0, :len(tau1)] += tau1
     tau_n_minus_1 = tau1.copy()
     for n in range(1, nphonon):
         tau_n = get_tau_n_cpu(delta_beta, tau1, tau_n_minus_1, threshold)
-        tau_n_func[:len(tau_n), n] += tau_n
+        tau_n_func[n, :len(tau_n)] += tau_n
         # Next tau_n
         tau_n_minus_1 = tau_n
     return tau_n_func
@@ -105,14 +105,14 @@ def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
         Interval of beta for the PDOS.
     tau1 : 'np.ndarray', (N,)
         Tau(-beta) function for n = 1 expansion.
-    tau_n_minus_1 : 'np.ndarray', (N,)
+    tau_n_minus_1 : 'np.ndarray', (M,)
         Tau(-beta) function for n - 1 expansion.
     threshold : 'float'
         Minimun value to take into account.
 
     Returns
     -------
-    tau_n : 'np.ndarray', (N,)
+    tau_n : 'np.ndarray', (N + M - 1,)
         Tau(-beta) function for n expansion.
     """
     start = cuda.grid(1)      # 1 = one dimensional thread grid, returns a single value
@@ -173,7 +173,7 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
         All Tau(-beta) function values for n expansion.
     """
     tau_n_func = np.zeros((len(tau1) * nphonon, nphonon))
-    tau_n_func[:len(tau1), 0] += tau1
+    tau_n_func[0, :len(tau1)] += tau1
     N = len(tau1)
     Ntau = 2 * N - 1
     # Copy the data to the device
@@ -192,7 +192,7 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
         tau_n = tau_n_device.copy_to_host()
         if threshold > 0.0:
             tau_n[tau_n <= threshold] = 0.0
-        tau_n_func[:Ntau, n] += tau_n
+        tau_n_func[n, :Ntau] += tau_n
 
         # Next tau_n
         tau_n_minus_1 = tau_n_device

@@ -1262,18 +1262,18 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     9  0.309121  0.310260  0.310900  0.311366  0.311575
     """
     tau_n = tau_n_functions(tau1, delta_beta, nphonon, threshold)
-    tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     # Zero phonon expansion:
     iter_sum = np.log(alpha * DebyeWallerCoeff)
     S_values = np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
-                        np.interp(beta, tau_n_beta, tau_n[::, 0]))
+                        np.interp(beta, tau_n_beta, tau_n[0]))
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
         S_values += np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
-                             np.interp(beta, tau_n_beta, tau_n[::, n]))
+                             np.interp(beta, tau_n_beta, tau_n[n]))
     return S_values
 
 

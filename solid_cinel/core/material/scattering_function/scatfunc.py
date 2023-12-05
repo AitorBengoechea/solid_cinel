@@ -277,7 +277,7 @@ class ScatFuncSD:
                                     delta_beta,
                                     kwargs.pop("nphonon", 1000),
                                     kwargs.pop("threshold", 0.0))
-            tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta
+            tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
             debye_waller_coeff = args[-1].DebyeWallerCoeff(T)
             scattfunc = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, tau_n,
                                                 tau_n_beta, debye_waller_coeff)
@@ -994,7 +994,7 @@ def scat_from_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     tau_n = tau_n_functions(pdos.get_tau_1(T).values,
                             delta_beta, nphonon, threshold)
-    tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
 
     @nb.jit("float64[:, :](float64[:], float64, float64, float64, float64[:], float64[:, :], float64[:], float64)",
             nopython=True, cache=True)
@@ -1048,14 +1048,14 @@ def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
     # Zero phonon expansion:
     iter_sum = np.log(alpha * DebyeWallerCoeff)
     alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    S_diag = alpha_mul * np.interp(beta, tau_n_beta, tau_n[::, 0])
+    S_diag = alpha_mul * np.interp(beta, tau_n_beta, tau_n[0])
 
     # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, tau_n.shape[1]):
+    for n in range(1, tau_n.shape[0]):
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
         alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        S_diag += alpha_mul * np.interp(beta, tau_n_beta, tau_n[::, n])
+        S_diag += alpha_mul * np.interp(beta, tau_n_beta, tau_n[n])
     return S_diag
 
 @nb.jit("float64[:](float64, float64, float64, float64[:], float64, float64[:, :], float64[:], float64)",
@@ -1105,7 +1105,7 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> delta_beta = pdos.to_beta_grid(T).grid
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     >>> tau_n = tau_n_functions(pdos.get_tau_1(T).values, delta_beta, 1000, 1.0e-14)
-    >>> tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta
+    >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     >>> sd_pdf = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, tau_n, tau_n_beta, debye_waller_coeff)
     >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
     6.7554    0.034511

@@ -602,7 +602,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     # Calculate the cross-section matrix: Loop in theta
     for i in range(start, Ein_arno.shape[0], 1):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
-        tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta[i]
+        tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta[i]
         # Paralelize the loop in Eout:
         update_xs_mat(xs_mat, i, tau_n, tau_n_beta)
 

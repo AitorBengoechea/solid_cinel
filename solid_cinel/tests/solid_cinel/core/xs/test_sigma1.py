@@ -1,9 +1,8 @@
 import pytest
 import os
-import numpy as np
 import pandas as pd
-from solid_cinel.core.xs.ddxs import default_Eout
-from solid_cinel.core.xs.ddxs import Dxs
+from solid_cinel.core.xs.xs_mat import default_Eout
+from solid_cinel.core.xs.dxs import Dxs
 
 
 @pytest.mark.parametrize("T", [300, 1000])

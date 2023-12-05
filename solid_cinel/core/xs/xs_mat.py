@@ -310,9 +310,11 @@ class XsMat:
             tau1, DebyeWallerCoeff, delta_beta = cls.get_pdos_variables(pdos, T_arno)
             threshold = kwargs.pop("threshold", 0.0)
             nphonon = kwargs.pop("nphonon", 1000)
+            tau_to_file = kwargs.pop("tau_to_file", False)
             update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                                T_arno, mu_fit, nphonon, tau1, delta_beta,
-                               threshold, DebyeWallerCoeff)
+                               threshold, DebyeWallerCoeff,
+                               tau_to_file=tau_to_file)
         else:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
@@ -617,7 +619,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     for i in range(start, Ein_arno.shape[0], 1):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
         if tau_to_file:
-            np.savetxt(f"tau_{nphonon}_{T_arno[i]}.txt", tau_n,
+            np.savetxt(f"tau/tau_{nphonon}_{T_arno[i]}.txt", tau_n,
                        delimiter="\t", fmt="%.14f")
         tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta[i]
         # Paralelize the loop in Eout:

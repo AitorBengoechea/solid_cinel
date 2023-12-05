@@ -619,6 +619,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     for i in range(start, Ein_arno.shape[0], 1):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
         if tau_to_file:
+            os.mkdir("tau")
             np.savetxt(f"tau/tau_{nphonon}_{T_arno[i]}.txt", tau_n,
                        delimiter="\t", fmt="%.14f")
         tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta[i]

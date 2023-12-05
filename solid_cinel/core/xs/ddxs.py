@@ -219,7 +219,7 @@ class DDxs:
          0.173648  0.072043   3.820128  31.943965  20.299691  0.982917
          0.766044  0.000029   0.051432  24.534948  15.423312  0.012977
         """
-        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
+        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs)
         return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs_0K))
 
     @classmethod
@@ -382,7 +382,7 @@ class DDxs:
         20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
         10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
         """
-        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs)
+        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs)
         if kwargs.get("model"):
             mu_fit = scatfunction.get_angle
             xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta,

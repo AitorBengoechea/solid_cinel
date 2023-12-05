@@ -697,7 +697,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> ScatFunc.from_Sab(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
@@ -740,7 +740,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             raise ValueError("Invalid input")
 
     @classmethod
-    def from_Sab(cls, Ein: float, M: float, T: float, Eout: np.array,
+    def from_model(cls, Ein: float, M: float, T: float, Eout: np.array,
                  theta: [np.ndarray, float], *args, model: str = "fgm", **kwargs):
         if hasattr(theta, '__len__'):
             scatfunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, *args, model=model, **kwargs)
@@ -832,7 +832,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> M = 238.05077040419212
         >>> T = 1000
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> scattering_function = ScatFunc.from_Sab(Ein, M, T, Eout, theta)
+        >>> scattering_function = ScatFunc.from_model(Ein, M, T, Eout, theta)
         >>> scattering_function.convolve(xs_0K).iloc[::18, ::200].round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu

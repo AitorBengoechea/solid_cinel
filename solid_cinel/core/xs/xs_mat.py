@@ -312,7 +312,7 @@ class XsMat:
             nphonon = kwargs.pop("nphonon", 1000)
             tau_to_file = kwargs.pop("tau_to_file", False)
             if tau_to_file:
-                os.mkdir("tau")
+                os.makedirs("tau", exist_ok=True)
             update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                                T_arno, mu_fit, nphonon, tau1, delta_beta,
                                threshold, DebyeWallerCoeff,

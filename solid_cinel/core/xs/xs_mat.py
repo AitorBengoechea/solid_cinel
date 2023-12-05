@@ -562,7 +562,8 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                        M: float, T_arno: np.ndarray,
                        mu_fit: float, nphonon: int,
                        tau1: np.ndarray, delta_beta: np.ndarray,
-                       threshold: float, DebyeWallerCoeff: np.ndarray):
+                       threshold: float, DebyeWallerCoeff: np.ndarray,
+                       tau_to_file = False):
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -615,6 +616,9 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     # Calculate the cross-section matrix: Loop in theta
     for i in range(start, Ein_arno.shape[0], 1):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+        if tau_to_file:
+            np.savetxt(f"tau_{nphonon}_{T_arno[i]}.txt", tau_n,
+                       delimiter="\t", fmt="%.14f")
         tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta[i]
         # Paralelize the loop in Eout:
         update_xs_mat(xs_mat, i, tau_n, tau_n_beta)

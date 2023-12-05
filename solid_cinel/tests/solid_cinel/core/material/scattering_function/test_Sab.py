@@ -15,7 +15,7 @@ def test_sab_fgm_scatfunc(Ein, M, T):
     os.chdir(wd)
     # Generate data:
     theta = np.arange(0, 181, 1)[1::]
-    ddxs = ScatFunc.from_Sab(Ein, M, T, ddxs_test.columns.values, theta).data
+    ddxs = ScatFunc.from_model(Ein, M, T, ddxs_test.columns.values, theta).data
 
     # Check integral value:
     test_integral = integrate(ddxs_test.apply(integrate, axis=1))

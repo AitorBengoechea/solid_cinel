@@ -9,7 +9,7 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.sab import get_ScatFunc_values
+from solid_cinel.core.material.scattering_function.sab import get_scatfunc_values
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from typing import Iterable
@@ -1126,7 +1126,7 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
     alpha /= (M * kb * T / m)
     Sab_values = get_diag_S_pdos(alpha, beta, tau_n, tau_n_beta,
                                  DebyeWallerCoeff)
-    sd_pdf = get_ScatFunc_values(Sab_values, beta, Ein, T, M)
+    sd_pdf = get_scatfunc_values(Sab_values, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
     return np.interp(Eout, sd_pdf[:, 0], sd_pdf[:, 1])
 

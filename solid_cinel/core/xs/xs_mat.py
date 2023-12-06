@@ -733,7 +733,8 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     dask.compute(*delayed_tasks)
 
 
-@nb.jit(nopython=True, nogil=True, parallel=True)
+@nb.jit("void(float64[:, :], int64, float64[:, :], float64, float64, float64[:], float64, float64[:], float64[:], float64, float64)",
+    nopython=True, nogil=True, parallel=True)
 def update_xs_mat_pdos_row(xs_mat, i, tau_n, delta_beta, debyewallercoeff,
                            Ein, T, xs_values, xs_E, mu_fit, M):
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta

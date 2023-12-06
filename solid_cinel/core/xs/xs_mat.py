@@ -12,6 +12,7 @@ from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.material.vibration.pdos import Pdos
 import dask
 from solid_cinel.core.xs.dxs import Dxs
 import os
@@ -214,7 +215,6 @@ class XsMat:
          10	 9.105490	9.098776	9.091979	9.085087	9.078076	9.070974	9.063804
 
          # sct model:
-         >>> from solid_cinel.core.material.vibration.pdos import Pdos
          >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
          >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
          >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
@@ -329,7 +329,7 @@ class XsMat:
 
     @classmethod
     def from_tau(cls, xs_0K, Ein, M, T, Eout, theta, mu_fit, tau_folder, delta_beta,
-                 DebyeWallerCoeff, check=True, key=None):
+                 DebyeWallerCoeff, check=True, key="tau"):
         """
         Calculate the cross section matrix for a given incident energy, target mass,
         target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -338,18 +338,33 @@ class XsMat:
 
         Parameters
         ----------
-        xs_0K
-        Ein
-        M
-        T
-        Eout
-        theta
-        mu_fit
-        tau_folder
-        delta_beta
-        DebyeWallerCoeff
-        check
-        key
+         xs_0K : pd.Series
+             Cross section at 0K in barns
+         Ein : float
+             The incident energy of the neutron in eV
+         M : float
+             Mass of the material in amu
+         T : float
+             Temperature of the material in K
+         Eout : np.array, (N,)
+             The neutron outgoing energy grid in eV
+         theta : np.array, (M,)
+             The neutron outgoing angle grid in degrees (0, 180]
+        mu_fit: float
+            The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+            with sigma1
+        tau_folder: str
+            Path to the tau_n files. Is important than the temperature is the
+            last number for all the tau_n files.
+        delta_beta: np.ndarray (M,)
+            delta_beta values for each temperature in T_arno
+        DebyeWallerCoeff: np.ndarray (M,)
+            DebyeWallerCoeff values for each temperature in T_arno
+        check: bool, optional
+            Check if the tau_n files are in the correct order and if the temperature
+            grid is correct. The default is True.
+        key: str, optional
+            Key of the tau_n files for hdf5 format. The default is "tau".
 
         Returns
         -------
@@ -370,7 +385,6 @@ class XsMat:
          >>> mu = np.sort(np.cos(np.deg2rad(theta)))
          >>> T_arno = T * (1 + mu) / 2
          >>> mu_fit = np.cos(np.deg2rad(60))
-         >>> from solid_cinel.core.material.vibration.pdos import Pdos
          >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
          >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])[1::]
          >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])[1::]
@@ -391,17 +405,33 @@ class XsMat:
                                         T_arno)
         else:
             tau_n_list = cls.check_tau_folder(tau_folder)
-        key_ = key if key is not None else "tau"
 
         # Begin the calculation:
         xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
         update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                            T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
-                           tau_n_list, key_)
+                           tau_n_list, key)
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @staticmethod
-    def check_tau_folder(tau_folder):
+    def check_tau_folder(tau_folder: str) -> [str]:
+        """
+        Check if the tau_n files are in the correct format and return a sorted
+        list of the tau_n files. If the files are in txt format, they will be
+        converted to hdf5 format. Is important that the temperature is the last
+        number for all the tau_n files.
+
+        Parameters
+        ----------
+        tau_folder: str
+            Path to the tau_n files. Is important than the temperature is the
+            last number for all the tau_n files.
+
+        Returns
+        -------
+        tau_n_list: [str]
+            Sorted list of the tau_n files
+        """
         tau_n_list = [f"{tau_folder}/{f}" for f in os.listdir(tau_folder) if f.endswith(".h5")]
         if len(tau_n_list) == 0:
             tau_n_text = [f for f in os.listdir(tau_folder) if f.endswith(".txt")]
@@ -418,7 +448,29 @@ class XsMat:
         return sorted(tau_n_list, key=extract_number)
 
     @staticmethod
-    def check_data(tau_folder, delta_beta, DebyeWallerCoeff, T_arno):
+    def check_data(tau_folder: str, delta_beta: np.ndarray,
+                   DebyeWallerCoeff: np.ndarray, T_arno: np.ndarray) -> [str]:
+        """
+        Check if the tau_n files are in the correct order and if the temperature
+        grid is correct.
+
+        Parameters
+        ----------
+        tau_folder: str
+            Path to the tau_n files. Is important than the temperature is the
+            last number for all the tau_n files.
+        delta_beta: np.ndarray (M,)
+            delta_beta values for each temperature
+        DebyeWallerCoeff: np.ndarray (M,)
+            DebyeWallerCoeff values for each temperature
+        T_arno: np.ndarray (M,)
+            Target arno temperature grid in K
+
+        Returns
+        -------
+        tau_n_list: [str]
+            Sorted list of the tau_n files
+        """
         tau_n_list = XsMat.check_tau_folder(tau_folder)
         if len(tau_n_list) != len(delta_beta):
             raise ValueError("The number of tau_n files is not equal to the number of delta_beta values")
@@ -431,7 +483,43 @@ class XsMat:
             raise ValueError("The tau_n files are not in the correct order or the temperature grid is not correct")
 
     @staticmethod
-    def common_variables(xs_0K, Ein, M, T, Eout, theta):
+    def common_variables(xs_0K: pd.Series, Ein: float, M: float, T: float,
+                         Eout: np.ndarray, theta: np.ndarray) -> (np.ndarray,
+                                                                  np.ndarray,
+                                                                  np.ndarray,
+                                                                  np.ndarray,
+                                                                  np.ndarray):
+        """
+        Get the common variables for the different models.
+
+        Parameters
+        ----------
+        xs_0K: pd.Series
+            Cross section at 0K in barns
+        Ein: float
+            The incident energy of the neutron in eV
+        M: float
+            Mass of the material in amu
+        T: float
+            Temperature of the material in K
+        Eout: np.array, (N,)
+            The neutron outgoing energy grid in eV
+        theta: np.array, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Returns
+        -------
+        xs_values: np.ndarray, (Z)
+            Cross section values
+        xs_E: np.ndarray, (Z)
+            Cross section energy grid
+        Ein_arno: np.ndarray, (M, N)
+            Arno incident energies
+        mu: np.ndarray, (M,)
+            Cosine of the outgoing angle grid
+        T_arno: np.ndarray, (M,)
+            Arno temperatures for the rows of the cross section matrix
+        """
         mu = np.sort(np.cos(np.deg2rad(theta)))
         T_arno = T * (1 + mu) / 2
         Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
@@ -439,7 +527,9 @@ class XsMat:
         return xs_values, xs_E, Ein_arno, mu, T_arno
 
     @staticmethod
-    def get_pdos_variables(pdos, T_arno):
+    def get_pdos_variables(pdos: Pdos, T_arno: np.ndarray) -> (np.ndarray,
+                                                               np.ndarray,
+                                                               np.ndarray):
         """
         Get the tau1, DebyeWallerCoeff and delta_beta variables for the pdos model.
         If Teff can't be calculated, the values are nan, so we replace them with the
@@ -483,7 +573,7 @@ class XsMat:
         return tau1, DebyeWallerCoeff, delta_beta
 
     @staticmethod
-    def get_Teff(pdos, T_arno):
+    def get_Teff(pdos: Pdos, T_arno):
         """
         Get the effective temperature for the sct model. If Teff can't be calculated,
         the values are nan, so we replace them with the next values.
@@ -629,7 +719,8 @@ def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def Db(xs_values, xs_E, Ein, Eout, pdf):
+def Db(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, Eout: np.ndarray,
+       pdf: np.ndarray) -> float:
     """
     Calculate the doppler broadening of a cross section for a pdf
 
@@ -735,18 +826,76 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
 
 @nb.jit("void(float64[:, :], int64, float64[:, :], float64, float64, float64[:], float64, float64[:], float64[:], float64, float64)",
     nopython=True, nogil=True, parallel=True)
-def update_xs_mat_pdos_row(xs_mat, i, tau_n, delta_beta, debyewallercoeff,
-                           Ein, T, xs_values, xs_E, mu_fit, M):
+def update_xs_mat_pdos_row(xs_mat: np.ndarray, i: int, tau_n: np.ndarray,
+                           delta_beta: float, debyewallercoeff: float,
+                           Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
+                           xs_E: np.ndarray, mu_fit: float, M: float):
+    """
+    Calculate the cross section matrix for a outgoing incident energy using arno
+    model with different tau functions according to the T_arno value.
+
+    Parameters
+    ----------
+    xs_mat: np.ndarray, (M, N)
+        Empty Cross section matrix in barns
+    i: int
+        Index of the row of the cross section matrix
+    tau_n: np.ndarray, (Z, T)
+        tau_n values for all the row T. Z is the number of the phonon expansion
+        order and T is the number of the beta grid
+    delta_beta: float
+        delta_beta value for the row T
+    debyewallercoeff: float
+        DebyeWallerCoeff value for the row T
+    Ein_row: np.ndarray, (N,)
+        Incident energy row for the arno model
+    T: float
+        Target temperature value for the row T
+    xs_values: np.ndarray, (K,)
+        0K Cross section values in barns
+    xs_E: np.ndarray, (K,)
+        0K Cross section energy grid in eV
+    mu_fit: float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns with the row i updated
+    """
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     for j in prange(xs_mat.shape[1]):
-        Eout_db = default_Eout(Ein[j])
-        pdf = get_ScatFunc_pdos_angle(Ein[j], M, T,
+        Eout_db = default_Eout(Ein_row[j])
+        pdf = get_ScatFunc_pdos_angle(Ein_row[j], M, T,
                                       Eout_db, mu_fit, tau_n, tau_n_beta,
                                       debyewallercoeff)
-        xs_mat[i, j] += Db(xs_values, xs_E, Ein[j], Eout_db, pdf)
+        xs_mat[i, j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
 
 
-def save_data(tau_n, nphonon, T, tau_to_file, binary):
+def save_data(tau_n: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
+              binary: bool) -> None:
+    """
+    Save the tau_n values in a file or in a binary file.
+
+    Parameters
+    ----------
+    tau_n: np.ndarray, (Z, T)
+        tau_n values for all the row T. Z is the number of the phonon expansion
+        order and T is the number of the beta grid
+    nphonon: int
+        Phonon expansion order
+    T: float
+        Target temperature value for the caculation of tau_n
+    tau_to_file: bool
+        If True, save the tau_n values in a file. If False, don't save the tau_n
+        values in a file. Default is False
+    binary: bool
+        If True, save the tau_n values in a binary file. If False, save the tau_n
+        values in a txt file. Default is False.
+    """
     name = f"tau_{nphonon}_{T}"
     if tau_to_file:
         np.savetxt(f"tau/{name}.txt", tau_n, delimiter="\t", fmt="%.14f")
@@ -786,7 +935,7 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     Returns
     -------
     np.ndarray, (M, N)
-        Cross section matrix in barns
+        Cross section matrix in barns with the row i updated
     """
     for i in range(start, Ein_arno.shape[0], 1):
         for j in prange(Ein_arno.shape[1]):
@@ -832,7 +981,7 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     Returns
     -------
     np.ndarray, (M, N)
-        Cross section matrix in barns
+        Cross section matrix in barns with the row i updated
     """
     for i in range(start, Ein_arno.shape[0], 1):
         for j in prange(Ein_arno.shape[1]):
@@ -842,5 +991,18 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
 
 
-def extract_number(s):
+def extract_number(s) -> float:
+    """
+    Extract the last number from a string
+
+    Parameters
+    ----------
+    s: str
+        String
+
+    Returns
+    -------
+    float
+        Last number from the string
+    """
     return float(re.findall("\d+\.\d+", s)[-1])

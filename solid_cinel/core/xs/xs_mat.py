@@ -330,7 +330,58 @@ class XsMat:
     @classmethod
     def from_tau(cls, xs_0K, Ein, M, T, Eout, theta, mu_fit, tau_folder, delta_beta,
                  DebyeWallerCoeff, check=True, key=None):
+        """
+        Calculate the cross section matrix for a given incident energy, target mass,
+        target temperature, outgoing energy grid and outgoing angle grid using arno
+        model with the most similar S(alpha, -beta) distribution with sigma1 for
+        a given tau_n folder, delta_beta and DebyeWallerCoeff.
 
+        Parameters
+        ----------
+        xs_0K
+        Ein
+        M
+        T
+        Eout
+        theta
+        mu_fit
+        tau_folder
+        delta_beta
+        DebyeWallerCoeff
+        check
+        key
+
+        Returns
+        -------
+
+        Examples
+        --------
+         # Gen the data:
+         >>> wd = os.getcwd()
+         >>> os.chdir(__file__.replace("xs_mat.py", ""))
+         >>> os.chdir("../../data/xs/U238/")
+         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+         >>> os.chdir(wd)
+         >>> T = 1000
+         >>> Ein = 2.0
+         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+         >>> M = 238.05077040419212
+         >>> theta = np.arange(10, 190, 10)
+         >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+         >>> T_arno = T * (1 + mu) / 2
+         >>> mu_fit = np.cos(np.deg2rad(60))
+         >>> from solid_cinel.core.material.vibration.pdos import Pdos
+         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+         >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])[1::]
+         >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])[1::]
+         >>> nphonon = 100
+         >>> threshold = 1.0e-14
+         >>> xs_values_generate = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos", binary=True)
+         >>> xs_values_tau = XsMat.from_tau(xs_0K, Ein, M, T, Eout, theta, mu_fit, "tau/binary", delta_beta, DebyeWallerCoeff, check=True, key="tau")
+         >>> import shutil
+         >>> shutil.rmtree("tau")
+         >>> assert (xs_values_generate.data.values.round(6) == xs_values_tau.data.values.round(6)).all().all()
+        """
         xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
                                                                      M, T, Eout,
                                                                      theta)
@@ -674,7 +725,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                                                     delta_beta[i_], DebyeWallerCoeff[i_],
                                                     Ein_arno[i], T_arno[i],
                                                     xs_values, xs_E, mu_fit, M)
-    if len(args) == 1:
+    if len(args) == 2:
         calculation = xs_mat_mu_from_tau
     else:
         calculation = gen_xs_mat_mu

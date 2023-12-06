@@ -678,7 +678,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
         calculation = xs_mat_mu_from_tau
     else:
         calculation = gen_xs_mat_mu
-    delayed_tasks = [calculation(i, *args) for i in range(start, xs_mat.shape[0])]
+    delayed_tasks = [calculation(i, *args) for i in range(start, len(T_arno))]
     dask.compute(*delayed_tasks)
 
 

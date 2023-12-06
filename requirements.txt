@@ -15,4 +15,3 @@ statsmodels
 typing
 tables
 dask
-re

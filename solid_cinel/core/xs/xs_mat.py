@@ -6,10 +6,13 @@ Python for working with the Xs matrix from 4PCF.
 import numpy as np
 import pandas as pd
 import numba as nb
+import h5py
+import re
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.material.vibration.tau import tau_n_functions
+import dask
 from solid_cinel.core.xs.dxs import Dxs
 import os
 from math import pi
@@ -311,23 +314,71 @@ class XsMat:
             threshold = kwargs.pop("threshold", 0.0)
             nphonon = kwargs.pop("nphonon", 1000)
             tau_to_file = kwargs.pop("tau_to_file", False)
+            binary = kwargs.pop("binary", False)
             if tau_to_file:
                 os.makedirs("tau", exist_ok=True)
+            if binary:
+                os.makedirs("tau/binary", exist_ok=True)
             update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                               T_arno, mu_fit, nphonon, tau1, delta_beta,
-                               threshold, DebyeWallerCoeff,
-                               tau_to_file=tau_to_file)
+                               T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
+                               tau1, nphonon, threshold,
+                               tau_to_file=tau_to_file, binary=binary)
         else:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @classmethod
-    def from_tau(cls, xs_0K, Ein, M, T, Eout, theta):
+    def from_tau(cls, xs_0K, Ein, M, T, Eout, theta, mu_fit, tau_folder, delta_beta,
+                 DebyeWallerCoeff, check=True, key=None):
+
         xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
                                                                      M, T, Eout,
                                                                      theta)
+        # Check tau_n files:
+        if check:
+            tau_n_list = cls.check_data(tau_folder, delta_beta, DebyeWallerCoeff,
+                                        T_arno)
+        else:
+            tau_n_list = cls.check_tau_folder(tau_folder)
+        key_ = key if key is not None else "tau"
+
+        # Begin the calculation:
         xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-        return
+        update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
+                           T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
+                           tau_n_list, key_)
+        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
+
+    @staticmethod
+    def check_tau_folder(tau_folder):
+        tau_n_list = [f"{tau_folder}/{f}" for f in os.listdir(tau_folder) if f.endswith(".h5")]
+        if len(tau_n_list) == 0:
+            tau_n_text = [f for f in os.listdir(tau_folder) if f.endswith(".txt")]
+            if len(tau_n_text) == 0:
+                raise ValueError("No tau_n files found")
+            else:
+                print("tau_n files are in txt format. It will be use hdf5 format")
+                for tau_n_text_name in tau_n_text:
+                    array = np.loadtxt(tau_folder + "/" + tau_n_text_name)
+                    name = f"{tau_folder}/binary/{tau_n_text_name.replace('.txt', '.h5')}"
+                    tau_n_list.append(name)
+                with h5py.File(name, "w") as f:
+                    f.create_dataset("tau", data=array)
+        return sorted(tau_n_list, key=extract_number)
+
+    @staticmethod
+    def check_data(tau_folder, delta_beta, DebyeWallerCoeff, T_arno):
+        tau_n_list = XsMat.check_tau_folder(tau_folder)
+        if len(tau_n_list) != len(delta_beta):
+            raise ValueError("The number of tau_n files is not equal to the number of delta_beta values")
+        if len(tau_n_list) != len(DebyeWallerCoeff):
+            raise ValueError("The number of tau_n files is not equal to the number of DebyeWallerCoeff values")
+        T_doc = [extract_number(f) for f in tau_n_list]
+        if (T_doc == T_arno[1:] if T_arno[0] == 0 else T_doc == T_arno).all():
+            return tau_n_list
+        else:
+            raise ValueError("The tau_n files are not in the correct order or the temperature grid is not correct")
+
     @staticmethod
     def common_variables(xs_0K, Ein, M, T, Eout, theta):
         mu = np.sort(np.cos(np.deg2rad(theta)))
@@ -335,6 +386,7 @@ class XsMat:
         Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
         xs_values, xs_E = xs_0K.values, xs_0K.index.values
         return xs_values, xs_E, Ein_arno, mu, T_arno
+
     @staticmethod
     def get_pdos_variables(pdos, T_arno):
         """
@@ -564,10 +616,9 @@ def Db(xs_values, xs_E, Ein, Eout, pdf):
 def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                        xs_values: np.ndarray, xs_E: np.ndarray,
                        M: float, T_arno: np.ndarray,
-                       mu_fit: float, nphonon: int,
-                       tau1: np.ndarray, delta_beta: np.ndarray,
-                       threshold: float, DebyeWallerCoeff: np.ndarray,
-                       tau_to_file = False):
+                       mu_fit: float, delta_beta: np.ndarray,
+                       DebyeWallerCoeff: np.ndarray, *args,
+                       tau_to_file = False, binary= False):
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -608,24 +659,48 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     np.ndarray, (M, N)
         Cross section matrix in barns
     """
-    @nb.jit(nopython=True, nogil=True, parallel=True)
-    def update_xs_mat(xs_mat, i, tau_n, tau_n_beta):
-        for j in prange(Ein_arno.shape[1]):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
-                                          Eout_db, mu_fit, tau_n, tau_n_beta,
-                                          DebyeWallerCoeff[i])
-            xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
-
-    # Calculate the cross-section matrix: Loop in theta
-    for i in range(start, Ein_arno.shape[0], 1):
+    def gen_xs_mat_mu(i, tau1, nphonon, threshold):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
-        if tau_to_file:
-            np.savetxt(f"tau/tau_{nphonon}_{T_arno[i]}.txt", tau_n,
-                       delimiter="\t", fmt="%.14f")
-        tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta[i]
-        # Paralelize the loop in Eout:
-        update_xs_mat(xs_mat, i, tau_n, tau_n_beta)
+        save_data(tau_n, nphonon, T_arno[i], tau_to_file, binary)
+        return dask.delayed(update_xs_mat_pdos_row)(xs_mat, i, tau_n,
+                                                    delta_beta[i], DebyeWallerCoeff[i],
+                                                    Ein_arno[i], T_arno[i],
+                                                    xs_values, xs_E, mu_fit, M)
+
+    def xs_mat_mu_from_tau(i, tau_n_list, key):
+        i_ = i - start
+        tau_n = h5py.File(tau_n_list[i_], "r")[key][:]
+        return dask.delayed(update_xs_mat_pdos_row)(xs_mat, i, tau_n,
+                                                    delta_beta[i_], DebyeWallerCoeff[i_],
+                                                    Ein_arno[i], T_arno[i],
+                                                    xs_values, xs_E, mu_fit, M)
+    if len(args) == 1:
+        calculation = xs_mat_mu_from_tau
+    else:
+        calculation = gen_xs_mat_mu
+    delayed_tasks = [calculation(i, *args) for i in range(start, xs_mat.shape[0])]
+    dask.compute(*delayed_tasks)
+
+
+@nb.jit(nopython=True, nogil=True, parallel=True)
+def update_xs_mat_pdos_row(xs_mat, i, tau_n, delta_beta, debyewallercoeff,
+                           Ein, T, xs_values, xs_E, mu_fit, M):
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    for j in prange(xs_mat.shape[1]):
+        Eout_db = default_Eout(Ein[j])
+        pdf = get_ScatFunc_pdos_angle(Ein[j], M, T,
+                                      Eout_db, mu_fit, tau_n, tau_n_beta,
+                                      debyewallercoeff)
+        xs_mat[i, j] += Db(xs_values, xs_E, Ein[j], Eout_db, pdf)
+
+
+def save_data(tau_n, nphonon, T, tau_to_file, binary):
+    name = f"tau_{nphonon}_{T}"
+    if tau_to_file:
+        np.savetxt(f"tau/{name}.txt", tau_n, delimiter="\t", fmt="%.14f")
+    if binary:
+        with h5py.File(f"tau/binary/{name}.h5", "w") as f:
+            f.create_dataset("tau", data=tau_n)
 
 
 @nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:])",
@@ -713,3 +788,7 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             pdf = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno[i, j],
                                        Tarno[i], M, Tarno_eff[i], 1.0)
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+
+
+def extract_number(s):
+    return float(re.findall("\d+\.\d+", s)[-1])

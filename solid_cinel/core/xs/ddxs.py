@@ -6,11 +6,13 @@ Python for working with Double Diferential XS.
 import numpy as np
 import pandas as pd
 import numba as nb
+import h5py
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.generic import integrate, reshift
 from solid_cinel.core.xs.dxs import Dxs, check_dx
-from solid_cinel.core.xs.xs_mat import XsMat
+from solid_cinel.core.xs.xs_mat import XsMat, extract_number
 import os
 
 from typing import Iterable
@@ -382,23 +384,85 @@ class DDxs:
         20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
         10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
         """
-        if len(args) > 1 and isinstance(args[1], str):
-            pass
-        else:
+        if len(args) == 0:  # SIGMA1 or FGM
             ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
                                        *args, **kwargs)
-        return cls(Ein, T, M, "coercelle", ddxs_values)
+        elif isinstance(args[0], Pdos):  # SCT or PDOS
+            ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
+                                       *args, **kwargs)
+        else:  # TAU_N Files
+            ddxs_values = cls.from_tau_4PCF(xs_0K, Ein, M, T, Eout, theta,
+                                            *args, **kwargs)
+        return cls(Ein, T, M, "4PCF", ddxs_values)
 
     @staticmethod
-    def from_tau_4PCF(xs_0K, Ein, M, T, Eout, theta,
-                      tau_folder, delta_beta,
-                      DebyeWallerCoeff, check=True, key="tau", chunksize=100):
+    def from_tau_4PCF(xs_0K: pd.Series, Ein: float, M: float, T: float,
+                      Eout: np.ndarray, theta: np.ndarray,
+                      tau_files: [str, list, np.ndarray], delta_beta: np.ndarray,
+                      DebyeWallerCoeff: np.ndarray, check: bool = True,
+                      key: bool = "tau", chunksize: int = 100) -> pd.DataFrame:
+        """
+        Generate the Double Differential XS for elastic scattering from Fourier
+        double-Laplace transform of a 4-point from pre-calculated tau_n
+        functions
 
+        Parameters
+        ----------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+        tau_files: str, list, np.ndarray
+            str: Path to the tau_n files. Is important than the temperature is the
+                 last number for all the tau_n files.
+            list or np.ndarray: List of the tau_n files. Is important than the
+                                files are in the correct order.
+        delta_beta: np.ndarray (M - 1, )
+            delta_beta values for each temperature in T_arno except theta = 180
+        DebyeWallerCoeff: np.ndarray (M - 1, )
+            DebyeWallerCoeff values for each temperature in T_arno except theta = 180
+        check: bool, optional
+            Check if the tau_n files are in the correct order and if the temperature
+            grid is correct. The default is True.
+        key: str, optional
+            Key of the tau_n files for hdf5 format. The default is "tau".
+        chunksize: int, optional
+            Chunksize for the parallelization of the calculation. The default
+            is 100.
 
-        return
+        Returns
+        -------
+        pd.DataFrame
+            The Double Differential XS for elastic scattering
+        """
+        # Get the tau_n functions file names:
+        tau_n_list = XsMat.tau_folder_to_list(tau_files) if isinstance(tau_files, str) else tau_files
+        # Get the scattering function(Last element of the list):
+        if extract_number(tau_n_list[-1]) != T:
+            raise ValueError(f"The temperature of the tau_n files doesnt have {T}")
+        tau_n = h5py.File(tau_n_list[-1], "r")[key][:]
+        scatfunction = ScatFunc.from_tau(Ein, M, T, Eout, theta, tau_n,
+                                         delta_beta[-1], DebyeWallerCoeff[-1],
+                                         chunksize=chunksize)
+        # Get the xs matrix (all the element except the last one):
+        mu_fit = scatfunction.get_angle
+        xs = XsMat.from_tau(xs_0K, Ein, M, T, Eout, theta, mu_fit,
+                            tau_n_list[:-1], delta_beta[:-1],
+                            DebyeWallerCoeff[:-1], check=check, key=key)
+        return scatfunction.convolve(xs.data)
 
     @staticmethod
-    def gen_4PCF(xs_0K, Ein, M, T, Eout, theta, *args, **kwargs):
+    def gen_4PCF(xs_0K: pd.Series, Ein: float, M: float, T: float,
+                 Eout: np.ndarray, theta: np.ndarray,
+                 *args, **kwargs) -> pd.DataFrame:
         """
         Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
         correlation function modified
@@ -440,8 +504,14 @@ class DDxs:
             1.0e-14 to speed up the calculations. The default is 0.0.
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        pd.DataFrame
+            The Double Differential XS for elastic scattering
         """
-        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs)
+        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,
+                                           *args, **kwargs)
         if kwargs.get("model"):
             mu_fit = scatfunction.get_angle
             xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta,

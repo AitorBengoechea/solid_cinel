@@ -311,10 +311,7 @@ class XsMat:
                               T_arno, mu_fit, Teff)
         elif model == "pdos":
             tau1, DebyeWallerCoeff, delta_beta = cls.get_pdos_variables(pdos, T_arno)
-            threshold = kwargs.pop("threshold", 0.0)
-            nphonon = kwargs.pop("nphonon", 1000)
-            tau_to_file = kwargs.pop("tau_to_file", False)
-            binary = kwargs.pop("binary", False)
+            threshold, nphonon, tau_to_file, binary = cls.get_pdos_optional(kwargs)
             if tau_to_file:
                 os.makedirs("tau", exist_ok=True)
             if binary:
@@ -571,6 +568,33 @@ class XsMat:
             DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
             tau1[nan_indices] = tau1[new_value_index]
         return tau1, DebyeWallerCoeff, delta_beta
+
+    @staticmethod
+    def get_pdos_optional(kwargs: dict) -> (float, int, bool, bool):
+        """
+        Get the optional parameters for the pdos model from kwargs.
+        Parameters
+        ----------
+        kwargs: dict
+            Optional parameters dict for the pdos model calculation use in the
+            XsMat.from_model method.
+
+        Returns
+        -------
+        threshold: float
+            Threshold for the tau_n calculation
+        nphonon: int
+            Number of phonons for the tau_n calculation
+        tau_to_file: bool
+            Save the tau_n values to file
+        binary: bool
+            Save the tau_n values in binary format
+        """
+        threshold = kwargs.pop("threshold", 0.0)
+        nphonon = kwargs.pop("nphonon", 1000)
+        tau_to_file = kwargs.pop("tau_to_file", False)
+        binary = kwargs.pop("binary", False)
+        return threshold, nphonon, tau_to_file, binary
 
     @staticmethod
     def get_Teff(pdos: Pdos, T_arno):

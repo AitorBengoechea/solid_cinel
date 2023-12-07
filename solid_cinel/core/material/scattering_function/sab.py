@@ -1292,8 +1292,6 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     return sab_values
 
 
-@nb.jit("float64[:, :](float64[:], float64[:], int32, float64[:], float64, float64, float64)",
-    nopython=True, nogil=True, cache=True, parallel=False)
 def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
                  nphonon: int, tau1: np.ndarray, delta_beta: float,
                  threshold: float,

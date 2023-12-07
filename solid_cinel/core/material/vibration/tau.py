@@ -93,7 +93,7 @@ def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
     return tau_n_func
 
 
-@cuda.jit("void(float64, float64[:], float64[:], float64[:])")
+@cuda.jit
 def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
               tau_n: np.ndarray) -> np.ndarray:
     """
@@ -144,7 +144,6 @@ def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
                 convol *= 0.5                      # trapz integrate
 
             tau_n[i] += tau1[j] * convol * delta_beta
-
 
 
 def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,

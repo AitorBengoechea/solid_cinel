@@ -412,7 +412,7 @@ class Sab:
         # Get the scattering function values:
         sab_diag = np.array(np.diag(self.data), order='C')
         beta = self.beta.data[:len(sab_diag)]
-        scattfunc = get_ScatFunc_values(sab_diag, beta, Ein, T, M)
+        scattfunc = get_scatfunc_values(sab_diag, beta, Ein, T, M)
 
         # Change the data type:
         scattfunc = pd.Series(scattfunc[:, 1], index=scattfunc[:, 0])
@@ -472,10 +472,10 @@ class Sab:
         alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
             alpha_grid)
         if beta_grid_.kind == "abs":
-            S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
-                                                 - beta_grid_.data,
-                                                 1.0,
-                                                 wt)
+            S_values = get_sab_sct(alpha_grid_.data,
+                                   - beta_grid_.data,
+                                   1.0,
+                                   wt)
         else:
             raise ValueError(
                 "The beta grid contains negative values and the input is the absolute beta grid")
@@ -542,11 +542,10 @@ class Sab:
         alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
             alpha_grid)
         if beta_grid_.kind == "abs":
-            S_values = get_S_sct_from_alpha_beta(alpha_grid_.data,
-                                                 - beta_grid_.data,
-                                                 # S(alpha, -beta)
-                                                 ratio,
-                                                 ws)
+            S_values = get_sab_sct(alpha_grid_.data,
+                                   - beta_grid_.data,  # S(alpha, -beta)
+                                   ratio,
+                                   ws)
         else:
             raise ValueError(
                 "The beta grid contains negative values and the input is the absolute beta grid")
@@ -627,13 +626,13 @@ class Sab:
         delta_beta = pdos.to_beta_grid(T).grid
         if hasattr(delta_beta, "__len__"):
             raise ValueError("Pdos object doesnt have a consistent grid")
-        S_values = get_S_pdos_from_alpha_beta(alpha_grid_.data,
-                                              beta_grid_.data,
-                                              nphonon,
-                                              tau1,
-                                              delta_beta,
-                                              threshold,
-                                              cls.DebyeWallerCoeff)
+        S_values = get_sab_pdos(alpha_grid_.data,
+                                beta_grid_.data,
+                                nphonon,
+                                tau1,
+                                delta_beta,
+                                threshold,
+                                cls.DebyeWallerCoeff)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @classmethod
@@ -759,6 +758,82 @@ class Sab:
             return cls.from_sct(*args, **kwargs)
         elif model.lower() == "pdos":
             return cls.from_pdos(*args, **kwargs)
+
+    @classmethod
+    def from_tau(cls, alpha_grid: Union[Alpha, Iterable],
+                 beta_grid: Union[Beta, Iterable], tau_n: np.ndarray,
+                 delta_beta: float, DebyeWallerCoeff: float):
+        """
+        Generate S(alpha, -beta) matrix using tau_n functions.
+        .. math::
+            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+        Numerical appoximation to get convergence in large exponentiation and
+        factorial numbers. Each element of the array is related with one alpha
+        and represent the following term of the previous equation:
+        ..math::
+           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+        Parameters
+        ----------
+        alpha_grid : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        tau_n: np.ndarray, (Z, T)
+            tau_n functions. The first dimension is the number of the expansion
+            and the second dimension is the number of the beta grid.
+        delta_beta: float
+            Delta beta value.
+        DebyeWallerCoeff: float
+            Debye Waller coefficient.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) based on Phonon Density Of States model.
+
+        Example
+        -------
+        >>> T = 800
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> beta = Beta(beta0_).scale(T)
+        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+        >>> delta_beta = pdos.to_beta_grid(T).grid
+        >>> tau1 = pdos.get_tau_1(T).values
+        >>> tau_n = tau_n_functions(tau1, delta_beta, 1000, 1.0e-14)
+        >>> S_mat = Sab.from_tau(alpha, beta, tau_n, delta_beta, DebyeWallerCoeff)
+        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+        """
+        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
+            beta_grid)
+        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
+            alpha_grid)
+
+        # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
+        # interpolation and normalization check
+        cls.DebyeWallerCoeff = DebyeWallerCoeff
+
+        S_values = phonon_expansion(alpha_grid_.data,
+                                    beta_grid_.data,
+                                    tau_n.shape[0],
+                                    tau_n,
+                                    delta_beta,
+                                    DebyeWallerCoeff)
+        return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @staticmethod
     def sum_rule_check(S: pd.DataFrame) -> None:
@@ -1197,13 +1272,32 @@ def proportionality_factor(alpha: float, alpha_i: float,
         q = 1
     return q
 
+@nb.jit("float64[:, :](float64[:], float64[:], int32, float64[:, :], float64, float64)",
+        nopython=True, nogil=False, cache=True, parallel=False)
+def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
+                     tau_n: np.ndarray, delta_beta: float,
+                     DebyeWallerCoeff: float) -> np.ndarray:
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    # Zero phonon expansion:
+    iter_sum = np.log(alpha * DebyeWallerCoeff)
+    sab_values = np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
+                          np.interp(beta, tau_n_beta, tau_n[0]))
+
+    # Higher phonon expansion (nphonon >= 1):
+    for n in range(1, nphonon):
+        # Compute S(alpha, -beta) for tau_n reshape
+        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        sab_values += np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
+                               np.interp(beta, tau_n_beta, tau_n[n]))
+    return sab_values
+
 
 @nb.jit("float64[:, :](float64[:], float64[:], int32, float64[:], float64, float64, float64)",
     nopython=True, nogil=True, cache=True, parallel=False)
-def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
-                               nphonon: int, tau1: np.ndarray, delta_beta: float,
-                               threshold: float,
-                               DebyeWallerCoeff: float) -> np.ndarray:
+def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
+                 nphonon: int, tau1: np.ndarray, delta_beta: float,
+                 threshold: float,
+                 DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using phonon expansion.
     .. math::
@@ -1247,7 +1341,7 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     >>> alpha_grid = Alpha(alpha0_).scale(T).data
     >>> beta_grid = Beta(beta0_).scale(T).data
-    >>> S_mat = get_S_pdos_from_alpha_beta(alpha_grid, beta_grid, 10, tau1.values, beta_grid[1], 1.0e-14, debye_waller_coeff)
+    >>> S_mat = get_sab_pdos(alpha_grid, beta_grid, 10, tau1.values, beta_grid[1], 1.0e-14, debye_waller_coeff)
     >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
               0         1         2         3         4
     0  0.037829  0.038039  0.038243  0.038444  0.038611
@@ -1262,25 +1356,13 @@ def get_S_pdos_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
     9  0.309121  0.310260  0.310900  0.311366  0.311575
     """
     tau_n = tau_n_functions(tau1, delta_beta, nphonon, threshold)
-    tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta
-    # Zero phonon expansion:
-    iter_sum = np.log(alpha * DebyeWallerCoeff)
-    S_values = np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
-                        np.interp(beta, tau_n_beta, tau_n[::, 0]))
-
-    # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, nphonon):
-        # Compute S(alpha, -beta) for tau_n reshape
-        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        S_values += np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
-                             np.interp(beta, tau_n_beta, tau_n[::, n]))
-    return S_values
+    return phonon_expansion(alpha, beta, nphonon, tau_n, delta_beta,
+                            DebyeWallerCoeff)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
-def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
-                              Tratio: float,
-                              ws: float) -> np.ndarray:
+def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
+                ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time:
     .. math::
@@ -1313,7 +1395,7 @@ def get_S_sct_from_alpha_beta(alpha: np.ndarray, beta: np.ndarray,
 
 @nb.jit("float64[:, :](float64[:], float64[:], float64, float64, float64)",
         nopython=True, nogil=True, cache=True)
-def get_ScatFunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
+def get_scatfunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
                         T: float, M: float) -> np.ndarray:
     """
     Generate the scattering function values from a S(alpha, -beta) table based on

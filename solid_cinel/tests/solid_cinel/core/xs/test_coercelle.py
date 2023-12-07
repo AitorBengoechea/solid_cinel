@@ -72,13 +72,4 @@ def test_coercelle(model):
     elif model == "sct":
         ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, model=model)
 
-    # Check integral value:
-    test_integral = integrate(ddxs_test.apply(integrate, axis=1))
-    assert abs(1 - ddxs.integral / test_integral) <= 0.03
-
-    # Check differential value:
-    assert abs(1 - ddxs.data.round(14) / ddxs_test.round(14)).fillna(0).max().max() <= 0.03
-
-    # Check angular distribution:
-    test_angular_distr = ddxs_test.apply(integrate).round(14)
-    assert abs(1 - ddxs.angular.data.round(14) / test_angular_distr).fillna(0).max() <= 0.03
+    assert (ddxs.data.round(6).values == ddxs_test.round(6).values).all()

@@ -264,7 +264,7 @@ class Dxs:
         2.16036     0.007884
         Name: 0.5000000000000001, dtype: float64
         """
-        scatfunction = ScatFunc.from_Sab(Ein, M, T, Eout, theta, *args, **kwargs).to_sd()
+        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).to_sd()
         Exs = Eout + (Ein - scatfunction.data.idxmax())
         return cls(Ein, T, M, "dopush", scatfunction.convolve(xs_0K, Exs=Exs))
 

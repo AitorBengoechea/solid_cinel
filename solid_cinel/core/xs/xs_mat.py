@@ -6,10 +6,14 @@ Python for working with the Xs matrix from 4PCF.
 import numpy as np
 import pandas as pd
 import numba as nb
+import h5py
+import re
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.material.vibration.pdos import Pdos
+import dask
 from solid_cinel.core.xs.dxs import Dxs
 import os
 from math import pi
@@ -211,7 +215,6 @@ class XsMat:
          10	 9.105490	9.098776	9.091979	9.085087	9.078076	9.070974	9.063804
 
          # sct model:
-         >>> from solid_cinel.core.material.vibration.pdos import Pdos
          >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
          >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
          >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
@@ -290,14 +293,12 @@ class XsMat:
             xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
 
         # Common variables:
-        mu = np.sort(np.cos(np.deg2rad(theta)))
-        T_arno = T * (1 + mu) / 2
-        model = kwargs.pop("model", "sigma1")
-        Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-        xs_values, xs_E = xs_0K.values, xs_0K.index.values
-        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-
+        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
+                                                                     M, T, Eout,
+                                                                     theta)
         # Calculate the cross-section matrix:
+        model = kwargs.pop("model", "sigma1")
+        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
         if model == "sigma1":
             update_xs_mat_sigma1(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                                  T_arno)
@@ -305,90 +306,299 @@ class XsMat:
             update_xs_mat_sct(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                               T_arno, mu_fit, T_arno)
         elif model == "sct":
-            Teff = get_Teff(pdos, T_arno)
+            Teff = cls.get_Teff(pdos, T_arno)
             update_xs_mat_sct(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                               T_arno, mu_fit, Teff)
         elif model == "pdos":
-            tau1, DebyeWallerCoeff, delta_beta = get_pdos_variables(pdos, T_arno)
+            tau1, DebyeWallerCoeff, delta_beta = cls.get_pdos_variables(pdos, T_arno)
             threshold = kwargs.pop("threshold", 0.0)
             nphonon = kwargs.pop("nphonon", 1000)
+            tau_to_file = kwargs.pop("tau_to_file", False)
+            binary = kwargs.pop("binary", False)
+            if tau_to_file:
+                os.makedirs("tau", exist_ok=True)
+            if binary:
+                os.makedirs("tau/binary", exist_ok=True)
             update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                               T_arno, mu_fit, nphonon, tau1, delta_beta,
-                               threshold, DebyeWallerCoeff)
+                               T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
+                               tau1, nphonon, threshold,
+                               tau_to_file=tau_to_file, binary=binary)
         else:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
+    @classmethod
+    def from_tau(cls, xs_0K, Ein, M, T, Eout, theta, mu_fit, tau_folder, delta_beta,
+                 DebyeWallerCoeff, check=True, key="tau"):
+        """
+        Calculate the cross section matrix for a given incident energy, target mass,
+        target temperature, outgoing energy grid and outgoing angle grid using arno
+        model with the most similar S(alpha, -beta) distribution with sigma1 for
+        a given tau_n folder, delta_beta and DebyeWallerCoeff.
 
-def get_pdos_variables(pdos, T_arno):
-    """
-    Get the tau1, DebyeWallerCoeff and delta_beta variables for the pdos model.
-    If Teff can't be calculated, the values are nan, so we replace them with the
-    next values.
+        Parameters
+        ----------
+         xs_0K : pd.Series
+             Cross section at 0K in barns
+         Ein : float
+             The incident energy of the neutron in eV
+         M : float
+             Mass of the material in amu
+         T : float
+             Temperature of the material in K
+         Eout : np.array, (N,)
+             The neutron outgoing energy grid in eV
+         theta : np.array, (M,)
+             The neutron outgoing angle grid in degrees (0, 180]
+        mu_fit: float
+            The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+            with sigma1
+        tau_folder: str
+            Path to the tau_n files. Is important than the temperature is the
+            last number for all the tau_n files.
+        delta_beta: np.ndarray (M,)
+            delta_beta values for each temperature in T_arno
+        DebyeWallerCoeff: np.ndarray (M,)
+            DebyeWallerCoeff values for each temperature in T_arno
+        check: bool, optional
+            Check if the tau_n files are in the correct order and if the temperature
+            grid is correct. The default is True.
+        key: str, optional
+            Key of the tau_n files for hdf5 format. The default is "tau".
 
-    Parameters
-    ----------
-    pdos: 'solid_cinel.core.material.Pdos'
-        Pdos object.
-    T_arno: np.ndarray, (M,)
-        Target arno temperature grid in K
+        Returns
+        -------
 
-    Returns
-    -------
-    tau1: np.ndarray, (M, T)
-        tau1 values for all the T_arno values
-    DebyeWallerCoeff: np.ndarray, (M,)
-        DebyeWallerCoeff values for all the T_arno values
-    delta_beta: np.ndarray, (M,)
-        delta_beta values for all the T_arno values
-    """
-    # Create variables:
-    tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
-    DebyeWallerCoeff = np.zeros(len(T_arno))
-    delta_beta = np.zeros(len(T_arno))
+        Examples
+        --------
+         # Gen the data:
+         >>> wd = os.getcwd()
+         >>> os.chdir(__file__.replace("xs_mat.py", ""))
+         >>> os.chdir("../../data/xs/U238/")
+         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+         >>> os.chdir(wd)
+         >>> T = 1000
+         >>> Ein = 2.0
+         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+         >>> M = 238.05077040419212
+         >>> theta = np.arange(10, 190, 10)
+         >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+         >>> T_arno = T * (1 + mu) / 2
+         >>> mu_fit = np.cos(np.deg2rad(60))
+         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+         >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])[1::]
+         >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])[1::]
+         >>> nphonon = 100
+         >>> threshold = 1.0e-14
+         >>> xs_values_generate = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos", binary=True)
+         >>> xs_values_tau = XsMat.from_tau(xs_0K, Ein, M, T, Eout, theta, mu_fit, "tau/binary", delta_beta, DebyeWallerCoeff, check=True, key="tau")
+         >>> import shutil
+         >>> shutil.rmtree("tau")
+         >>> assert (xs_values_generate.data.values.round(6) == xs_values_tau.data.values.round(6)).all().all()
+        """
+        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
+                                                                     M, T, Eout,
+                                                                     theta)
+        # Check tau_n files:
+        if check:
+            tau_n_list = cls.check_data(tau_folder, delta_beta, DebyeWallerCoeff,
+                                        T_arno)
+        else:
+            tau_n_list = cls.check_tau_folder(tau_folder)
 
-    # Fill variables:
-    for i in range(len(T_arno)):
-        if T_arno[i] > 0.0:
-            tau1[i, :] += pdos.get_tau_1(T_arno[i]).values
-            DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
-            delta_beta[i] += pdos.to_beta_grid(T_arno[i]).grid
+        # Begin the calculation:
+        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+        update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
+                           T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
+                           tau_n_list, key)
+        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
-    # Some values are nan, so we replace them with the next values:
-    nan_indices = np.where(np.isnan(DebyeWallerCoeff))
-    if nan_indices[0].size > 0:
-        new_value_index = nan_indices[0].max() + 1
-        delta_beta[nan_indices] = delta_beta[new_value_index]
-        DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
-        tau1[nan_indices] = tau1[new_value_index]
-    return tau1, DebyeWallerCoeff, delta_beta
+    @staticmethod
+    def check_tau_folder(tau_folder: str) -> [str]:
+        """
+        Check if the tau_n files are in the correct format and return a sorted
+        list of the tau_n files. If the files are in txt format, they will be
+        converted to hdf5 format. Is important that the temperature is the last
+        number for all the tau_n files.
 
-def get_Teff(pdos, T_arno):
-    """
-    Get the effective temperature for the sct model. If Teff can't be calculated,
-    the values are nan, so we replace them with the next values.
+        Parameters
+        ----------
+        tau_folder: str
+            Path to the tau_n files. Is important than the temperature is the
+            last number for all the tau_n files.
 
-    Parameters
-    ----------
-    pdos: 'solid_cinel.core.material.Pdos'
-        Pdos object.
-    T_arno: np.ndarray, (M,)
-        Target arno temperature grid in K
+        Returns
+        -------
+        tau_n_list: [str]
+            Sorted list of the tau_n files
+        """
+        tau_n_list = [f"{tau_folder}/{f}" for f in os.listdir(tau_folder) if f.endswith(".h5")]
+        if len(tau_n_list) == 0:
+            tau_n_text = [f for f in os.listdir(tau_folder) if f.endswith(".txt")]
+            if len(tau_n_text) == 0:
+                raise ValueError("No tau_n files found")
+            else:
+                print("tau_n files are in txt format. It will be use hdf5 format")
+                for tau_n_text_name in tau_n_text:
+                    array = np.loadtxt(tau_folder + "/" + tau_n_text_name)
+                    name = f"{tau_folder}/binary/{tau_n_text_name.replace('.txt', '.h5')}"
+                    tau_n_list.append(name)
+                with h5py.File(name, "w") as f:
+                    f.create_dataset("tau", data=array)
+        return sorted(tau_n_list, key=extract_number)
 
-    Returns
-    -------
-    Teff: np.ndarray, (M,)
-        Effective temperature values for all the T_arno values
-    """
-    Teff = np.array(
-        [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in
-         T_arno]
-    )
-    # Aproximation: if Teff is nan, take the next value of Teff
-    nan_indices = np.where(np.isnan(Teff))
-    if nan_indices[0].size > 0:
-        Teff[nan_indices] = Teff[nan_indices[0].max() + 1]
-    return Teff
+    @staticmethod
+    def check_data(tau_folder: str, delta_beta: np.ndarray,
+                   DebyeWallerCoeff: np.ndarray, T_arno: np.ndarray) -> [str]:
+        """
+        Check if the tau_n files are in the correct order and if the temperature
+        grid is correct.
+
+        Parameters
+        ----------
+        tau_folder: str
+            Path to the tau_n files. Is important than the temperature is the
+            last number for all the tau_n files.
+        delta_beta: np.ndarray (M,)
+            delta_beta values for each temperature
+        DebyeWallerCoeff: np.ndarray (M,)
+            DebyeWallerCoeff values for each temperature
+        T_arno: np.ndarray (M,)
+            Target arno temperature grid in K
+
+        Returns
+        -------
+        tau_n_list: [str]
+            Sorted list of the tau_n files
+        """
+        tau_n_list = XsMat.check_tau_folder(tau_folder)
+        if len(tau_n_list) != len(delta_beta):
+            raise ValueError("The number of tau_n files is not equal to the number of delta_beta values")
+        if len(tau_n_list) != len(DebyeWallerCoeff):
+            raise ValueError("The number of tau_n files is not equal to the number of DebyeWallerCoeff values")
+        T_doc = [extract_number(f) for f in tau_n_list]
+        if (T_doc == T_arno[1:] if T_arno[0] == 0 else T_doc == T_arno).all():
+            return tau_n_list
+        else:
+            raise ValueError("The tau_n files are not in the correct order or the temperature grid is not correct")
+
+    @staticmethod
+    def common_variables(xs_0K: pd.Series, Ein: float, M: float, T: float,
+                         Eout: np.ndarray, theta: np.ndarray) -> (np.ndarray,
+                                                                  np.ndarray,
+                                                                  np.ndarray,
+                                                                  np.ndarray,
+                                                                  np.ndarray):
+        """
+        Get the common variables for the different models.
+
+        Parameters
+        ----------
+        xs_0K: pd.Series
+            Cross section at 0K in barns
+        Ein: float
+            The incident energy of the neutron in eV
+        M: float
+            Mass of the material in amu
+        T: float
+            Temperature of the material in K
+        Eout: np.array, (N,)
+            The neutron outgoing energy grid in eV
+        theta: np.array, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Returns
+        -------
+        xs_values: np.ndarray, (Z)
+            Cross section values
+        xs_E: np.ndarray, (Z)
+            Cross section energy grid
+        Ein_arno: np.ndarray, (M, N)
+            Arno incident energies
+        mu: np.ndarray, (M,)
+            Cosine of the outgoing angle grid
+        T_arno: np.ndarray, (M,)
+            Arno temperatures for the rows of the cross section matrix
+        """
+        mu = np.sort(np.cos(np.deg2rad(theta)))
+        T_arno = T * (1 + mu) / 2
+        Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
+        xs_values, xs_E = xs_0K.values, xs_0K.index.values
+        return xs_values, xs_E, Ein_arno, mu, T_arno
+
+    @staticmethod
+    def get_pdos_variables(pdos: Pdos, T_arno: np.ndarray) -> (np.ndarray,
+                                                               np.ndarray,
+                                                               np.ndarray):
+        """
+        Get the tau1, DebyeWallerCoeff and delta_beta variables for the pdos model.
+        If Teff can't be calculated, the values are nan, so we replace them with the
+        next values.
+
+        Parameters
+        ----------
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T_arno: np.ndarray, (M,)
+            Target arno temperature grid in K
+
+        Returns
+        -------
+        tau1: np.ndarray, (M, T)
+            tau1 values for all the T_arno values
+        DebyeWallerCoeff: np.ndarray, (M,)
+            DebyeWallerCoeff values for all the T_arno values
+        delta_beta: np.ndarray, (M,)
+            delta_beta values for all the T_arno values
+        """
+        # Create variables:
+        tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
+        DebyeWallerCoeff = np.zeros(len(T_arno))
+        delta_beta = np.zeros(len(T_arno))
+
+        # Fill variables:
+        for i in range(len(T_arno)):
+            if T_arno[i] > 0.0:
+                tau1[i, :] += pdos.get_tau_1(T_arno[i]).values
+                DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
+                delta_beta[i] += pdos.to_beta_grid(T_arno[i]).grid
+
+        # Some values are nan, so we replace them with the next values:
+        nan_indices = np.where(np.isnan(DebyeWallerCoeff))
+        if nan_indices[0].size > 0:
+            new_value_index = nan_indices[0].max() + 1
+            delta_beta[nan_indices] = delta_beta[new_value_index]
+            DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
+            tau1[nan_indices] = tau1[new_value_index]
+        return tau1, DebyeWallerCoeff, delta_beta
+
+    @staticmethod
+    def get_Teff(pdos: Pdos, T_arno):
+        """
+        Get the effective temperature for the sct model. If Teff can't be calculated,
+        the values are nan, so we replace them with the next values.
+
+        Parameters
+        ----------
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T_arno: np.ndarray, (M,)
+            Target arno temperature grid in K
+
+        Returns
+        -------
+        Teff: np.ndarray, (M,)
+            Effective temperature values for all the T_arno values
+        """
+        Teff = np.array(
+            [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in
+             T_arno]
+        )
+        # Aproximation: if Teff is nan, take the next value of Teff
+        nan_indices = np.where(np.isnan(Teff))
+        if nan_indices[0].size > 0:
+            Teff[nan_indices] = Teff[nan_indices[0].max() + 1]
+        return Teff
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
@@ -509,7 +719,8 @@ def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def Db(xs_values, xs_E, Ein, Eout, pdf):
+def Db(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, Eout: np.ndarray,
+       pdf: np.ndarray) -> float:
     """
     Calculate the doppler broadening of a cross section for a pdf
 
@@ -547,9 +758,9 @@ def Db(xs_values, xs_E, Ein, Eout, pdf):
 def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                        xs_values: np.ndarray, xs_E: np.ndarray,
                        M: float, T_arno: np.ndarray,
-                       mu_fit: float, nphonon: int,
-                       tau1: np.ndarray, delta_beta: np.ndarray,
-                       threshold: float, DebyeWallerCoeff: np.ndarray):
+                       mu_fit: float, delta_beta: np.ndarray,
+                       DebyeWallerCoeff: np.ndarray, *args,
+                       tau_to_file = False, binary= False):
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -590,21 +801,107 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     np.ndarray, (M, N)
         Cross section matrix in barns
     """
-    @nb.jit(nopython=True, nogil=True, parallel=True)
-    def update_xs_mat(xs_mat, i, tau_n, tau_n_beta):
-        for j in prange(Ein_arno.shape[1]):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_ScatFunc_pdos_angle(Ein_arno[i, j], M, T_arno[i],
-                                          Eout_db, mu_fit, tau_n, tau_n_beta,
-                                          DebyeWallerCoeff[i])
-            xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
-
-    # Calculate the cross-section matrix: Loop in theta
-    for i in range(start, Ein_arno.shape[0], 1):
+    def gen_xs_mat_mu(i, tau1, nphonon, threshold):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
-        tau_n_beta = np.arange(tau_n.shape[0]) * delta_beta[i]
-        # Paralelize the loop in Eout:
-        update_xs_mat(xs_mat, i, tau_n, tau_n_beta)
+        save_data(tau_n, nphonon, T_arno[i], tau_to_file, binary)
+        return dask.delayed(update_xs_mat_pdos_row)(xs_mat, i, tau_n,
+                                                    delta_beta[i], DebyeWallerCoeff[i],
+                                                    Ein_arno[i], T_arno[i],
+                                                    xs_values, xs_E, mu_fit, M)
+
+    def xs_mat_mu_from_tau(i, tau_n_list, key):
+        i_ = i - start
+        tau_n = h5py.File(tau_n_list[i_], "r")[key][:]
+        return dask.delayed(update_xs_mat_pdos_row)(xs_mat, i, tau_n,
+                                                    delta_beta[i_], DebyeWallerCoeff[i_],
+                                                    Ein_arno[i], T_arno[i],
+                                                    xs_values, xs_E, mu_fit, M)
+    if len(args) == 2:
+        calculation = xs_mat_mu_from_tau
+    else:
+        calculation = gen_xs_mat_mu
+    delayed_tasks = [calculation(i, *args) for i in range(start, len(T_arno))]
+    dask.compute(*delayed_tasks)
+
+
+@nb.jit("void(float64[:, :], int64, float64[:, :], float64, float64, float64[:], float64, float64[:], float64[:], float64, float64)",
+    nopython=True, nogil=True, parallel=True)
+def update_xs_mat_pdos_row(xs_mat: np.ndarray, i: int, tau_n: np.ndarray,
+                           delta_beta: float, debyewallercoeff: float,
+                           Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
+                           xs_E: np.ndarray, mu_fit: float, M: float):
+    """
+    Calculate the cross section matrix for a outgoing incident energy using arno
+    model with different tau functions according to the T_arno value.
+
+    Parameters
+    ----------
+    xs_mat: np.ndarray, (M, N)
+        Empty Cross section matrix in barns
+    i: int
+        Index of the row of the cross section matrix
+    tau_n: np.ndarray, (Z, T)
+        tau_n values for all the row T. Z is the number of the phonon expansion
+        order and T is the number of the beta grid
+    delta_beta: float
+        delta_beta value for the row T
+    debyewallercoeff: float
+        DebyeWallerCoeff value for the row T
+    Ein_row: np.ndarray, (N,)
+        Incident energy row for the arno model
+    T: float
+        Target temperature value for the row T
+    xs_values: np.ndarray, (K,)
+        0K Cross section values in barns
+    xs_E: np.ndarray, (K,)
+        0K Cross section energy grid in eV
+    mu_fit: float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns with the row i updated
+    """
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    for j in prange(xs_mat.shape[1]):
+        Eout_db = default_Eout(Ein_row[j])
+        pdf = get_ScatFunc_pdos_angle(Ein_row[j], M, T,
+                                      Eout_db, mu_fit, tau_n, tau_n_beta,
+                                      debyewallercoeff)
+        xs_mat[i, j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
+
+
+def save_data(tau_n: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
+              binary: bool) -> None:
+    """
+    Save the tau_n values in a file or in a binary file.
+
+    Parameters
+    ----------
+    tau_n: np.ndarray, (Z, T)
+        tau_n values for all the row T. Z is the number of the phonon expansion
+        order and T is the number of the beta grid
+    nphonon: int
+        Phonon expansion order
+    T: float
+        Target temperature value for the caculation of tau_n
+    tau_to_file: bool
+        If True, save the tau_n values in a file. If False, don't save the tau_n
+        values in a file. Default is False
+    binary: bool
+        If True, save the tau_n values in a binary file. If False, save the tau_n
+        values in a txt file. Default is False.
+    """
+    name = f"tau_{nphonon}_{T}"
+    if tau_to_file:
+        np.savetxt(f"tau/{name}.txt", tau_n, delimiter="\t", fmt="%.14f")
+    if binary:
+        with h5py.File(f"tau/binary/{name}.h5", "w") as f:
+            f.create_dataset("tau", data=tau_n)
 
 
 @nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:])",
@@ -638,7 +935,7 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     Returns
     -------
     np.ndarray, (M, N)
-        Cross section matrix in barns
+        Cross section matrix in barns with the row i updated
     """
     for i in range(start, Ein_arno.shape[0], 1):
         for j in prange(Ein_arno.shape[1]):
@@ -684,7 +981,7 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     Returns
     -------
     np.ndarray, (M, N)
-        Cross section matrix in barns
+        Cross section matrix in barns with the row i updated
     """
     for i in range(start, Ein_arno.shape[0], 1):
         for j in prange(Ein_arno.shape[1]):
@@ -692,3 +989,20 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             pdf = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno[i, j],
                                        Tarno[i], M, Tarno_eff[i], 1.0)
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+
+
+def extract_number(s) -> float:
+    """
+    Extract the last number from a string
+
+    Parameters
+    ----------
+    s: str
+        String
+
+    Returns
+    -------
+    float
+        Last number from the string
+    """
+    return float(re.findall("\d+\.\d+", s)[-1])

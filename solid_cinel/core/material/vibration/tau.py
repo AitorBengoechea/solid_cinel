@@ -172,7 +172,7 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
     tau_n_func: 'np.ndarray', (N * nphonon, nphonon)
         All Tau(-beta) function values for n expansion.
     """
-    tau_n_func = np.zeros((len(tau1) * nphonon, nphonon))
+    tau_n_func = np.zeros((nphonon, len(tau1) * nphonon))
     tau_n_func[0, :len(tau1)] += tau1
     N = len(tau1)
     Ntau = 2 * N - 1

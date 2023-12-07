@@ -93,7 +93,7 @@ def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
     return tau_n_func
 
 
-@cuda.jit()
+@cuda.jit("void(float64, float64[:], float64[:], float64[:])")
 def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
               tau_n: np.ndarray) -> np.ndarray:
     """
@@ -121,7 +121,7 @@ def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
     Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
     N = len(tau1)
 
-    for i in prange(start,  len(tau_n), stride):  # loop for tau_n
+    for i in range(start,  len(tau_n), stride):  # loop for tau_n
         # 1 iteration: j = 0
         tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
 

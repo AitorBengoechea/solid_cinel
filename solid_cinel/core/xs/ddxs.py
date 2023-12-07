@@ -382,9 +382,20 @@ class DDxs:
         20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
         10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
         """
-        ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta, *args, **kwargs)
+        if len(args) > 1 and isinstance(args[1], str):
+            pass
+        else:
+            ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
+                                       *args, **kwargs)
         return cls(Ein, T, M, "coercelle", ddxs_values)
 
+    @staticmethod
+    def from_tau_4PCF(xs_0K, Ein, M, T, Eout, theta,
+                      tau_folder, delta_beta,
+                      DebyeWallerCoeff, check=True, key="tau", chunksize=100):
+
+
+        return
 
     @staticmethod
     def gen_4PCF(xs_0K, Ein, M, T, Eout, theta, *args, **kwargs):

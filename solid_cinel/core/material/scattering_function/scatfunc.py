@@ -500,7 +500,7 @@ class ScatFuncDD:
     @classmethod
     def from_tau(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                  theta: np.ndarray, tau_n: np.ndarray, delta_beta: float,
-                 debye_waller_coeff: float, chunksize = 100):
+                 debye_waller_coeff: float, chunksize=100):
         """
         Generate the double differential scattering function from tau_n function
         using the phonon expansion model.

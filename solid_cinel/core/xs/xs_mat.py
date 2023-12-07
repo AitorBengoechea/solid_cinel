@@ -328,8 +328,10 @@ class XsMat:
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @classmethod
-    def from_tau(cls, xs_0K, Ein, M, T, Eout, theta, mu_fit, tau_folder, delta_beta,
-                 DebyeWallerCoeff, check=True, key="tau"):
+    def from_tau(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
+                 Eout: np.ndarray, theta: np.ndarray, mu_fit: float,
+                 tau_files: [str, list, np.ndarray], delta_beta: np.ndarray,
+                 DebyeWallerCoeff: np.ndarray, check=True, key="tau"):
         """
         Calculate the cross section matrix for a given incident energy, target mass,
         target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -346,20 +348,22 @@ class XsMat:
              Mass of the material in amu
          T : float
              Temperature of the material in K
-         Eout : np.array, (N,)
+         Eout : np.ndarray, (N,)
              The neutron outgoing energy grid in eV
-         theta : np.array, (M,)
+         theta : np.ndarray, (M,)
              The neutron outgoing angle grid in degrees (0, 180]
         mu_fit: float
             The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
             with sigma1
-        tau_folder: str
-            Path to the tau_n files. Is important than the temperature is the
-            last number for all the tau_n files.
-        delta_beta: np.ndarray (M,)
-            delta_beta values for each temperature in T_arno
-        DebyeWallerCoeff: np.ndarray (M,)
-            DebyeWallerCoeff values for each temperature in T_arno
+        tau_files: str, list, np.ndarray
+            str: Path to the tau_n files. Is important than the temperature is the
+                 last number for all the tau_n files.
+            list or np.ndarray: List of the tau_n files. Is important than the
+                                files are in the correct order.
+        delta_beta: np.ndarray (M - 1, )
+            delta_beta values for each temperature in T_arno except theta = 180
+        DebyeWallerCoeff: np.ndarray (M - 1, )
+            DebyeWallerCoeff values for each temperature in T_arno except theta = 180
         check: bool, optional
             Check if the tau_n files are in the correct order and if the temperature
             grid is correct. The default is True.
@@ -368,6 +372,8 @@ class XsMat:
 
         Returns
         -------
+        XsMat
+            Cross section matrix in barns
 
         Examples
         --------
@@ -399,12 +405,12 @@ class XsMat:
         xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
                                                                      M, T, Eout,
                                                                      theta)
-        # Check tau_n files:
+        # Create list of tau_n files:
+        tau_n_list = cls.tau_folder_to_list(tau_files) if isinstance(tau_files, str) else tau_files
+
         if check:
-            tau_n_list = cls.check_data(tau_folder, delta_beta, DebyeWallerCoeff,
+            tau_n_list = cls.check_data(tau_n_list, delta_beta, DebyeWallerCoeff,
                                         T_arno)
-        else:
-            tau_n_list = cls.check_tau_folder(tau_folder)
 
         # Begin the calculation:
         xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
@@ -414,7 +420,7 @@ class XsMat:
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @staticmethod
-    def check_tau_folder(tau_folder: str) -> [str]:
+    def tau_folder_to_list(tau_folder: str) -> [str]:
         """
         Check if the tau_n files are in the correct format and return a sorted
         list of the tau_n files. If the files are in txt format, they will be
@@ -448,7 +454,7 @@ class XsMat:
         return sorted(tau_n_list, key=extract_number)
 
     @staticmethod
-    def check_data(tau_folder: str, delta_beta: np.ndarray,
+    def check_data(tau_n_list: [list, np.ndarray], delta_beta: np.ndarray,
                    DebyeWallerCoeff: np.ndarray, T_arno: np.ndarray) -> [str]:
         """
         Check if the tau_n files are in the correct order and if the temperature
@@ -456,22 +462,16 @@ class XsMat:
 
         Parameters
         ----------
-        tau_folder: str
-            Path to the tau_n files. Is important than the temperature is the
-            last number for all the tau_n files.
+        tau_n_list: [list, np.ndarray]
+            List or array of the file names. Is important than the temperature
+            is the last number for all the tau_n files.
         delta_beta: np.ndarray (M,)
             delta_beta values for each temperature
         DebyeWallerCoeff: np.ndarray (M,)
             DebyeWallerCoeff values for each temperature
         T_arno: np.ndarray (M,)
             Target arno temperature grid in K
-
-        Returns
-        -------
-        tau_n_list: [str]
-            Sorted list of the tau_n files
         """
-        tau_n_list = XsMat.check_tau_folder(tau_folder)
         if len(tau_n_list) != len(delta_beta):
             raise ValueError("The number of tau_n files is not equal to the number of delta_beta values")
         if len(tau_n_list) != len(DebyeWallerCoeff):

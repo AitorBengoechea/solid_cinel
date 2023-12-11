@@ -9,7 +9,7 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.sab import get_scatfunc_values
+from solid_cinel.core.material.scattering_function.sab import get_scatfunc_values, save_tau
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from typing import Iterable
@@ -483,10 +483,13 @@ class ScatFuncDD:
         if model.lower() == "pdos":
             delta_beta = args[-1].to_beta_grid(T).grid
             debye_waller_coeff = args[-1].DebyeWallerCoeff(T)
+            nphonon = kwargs.get("nphonon", 1000)
             tau_n = tau_n_functions(args[-1].get_tau_1(T).values,
                                     delta_beta,
-                                    kwargs.get("nphonon", 1000),
+                                    nphonon,
                                     kwargs.get("threshold", 0.0))
+            save_tau(tau_n, nphonon, T, kwargs.get("tau_to_file", False),
+                     kwargs.get("binary", False))
             return cls.from_tau(Ein, M, T, Eout, theta, tau_n, delta_beta, debye_waller_coeff,
                                 chunksize=kwargs.get("chunksize", 100))
         else:

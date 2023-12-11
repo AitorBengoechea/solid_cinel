@@ -65,6 +65,7 @@ rho_in_energy_U238_str = '''
 rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 
+
 class XsMat:
     """
     Xs matrix class
@@ -677,6 +678,16 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
 
 
+@nb.jit("float64[:](float64, float64[:], float64, float64)",
+    nopython=True, nogil=True, cache=True)
+def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                 M: float) -> np.ndarray:
+    alpha = (Ein + Eout - 2 * mu * np.sqrt(Ein * Eout)) * m / M
+    mu_Ein_arno = (Eout + Ein) / 2 - Ein * mu * m / M
+    mu_Ein_arno += 0.5 * alpha / (1 - mu)
+    return mu_Ein_arno
+
+
 @nb.jit("float64[:, :](float64, float64[:], float64[:], float64)",
     nopython=True, nogil=True, cache=True)
 def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
@@ -702,9 +713,7 @@ def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     """
     Ein_arno = np.empty((len(mu), len(Eout)))
     for i in range(len(mu)):
-        alpha = (Ein + Eout - 2 * mu[i] * np.sqrt(Ein * Eout)) * m / M
-        Ein_arno[i, :] = (Eout + Ein) / 2 - Ein * mu[i] * m / M
-        Ein_arno[i, :] += 0.5 * alpha / (1 - mu[i])
+        Ein_arno[i, :] = Ein_arno_row(Ein, Eout, mu[i], M)
     return Ein_arno
 
 
@@ -833,7 +842,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     def gen_xs_mat_mu(i, tau1, nphonon, threshold):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
         save_tau(tau_n, nphonon, T_arno[i], tau_to_file, binary)
-        return dask.delayed(update_xs_mat_pdos_row)(xs_mat, i, tau_n,
+        return dask.delayed(update_xs_mat_pdos_row)(xs_mat[i], tau_n,
                                                     delta_beta[i], DebyeWallerCoeff[i],
                                                     Ein_arno[i], T_arno[i],
                                                     xs_values, xs_E, mu_fit, M)
@@ -841,7 +850,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     def xs_mat_mu_from_tau(i, tau_n_list, key):
         i_ = i - start
         tau_n = h5py.File(tau_n_list[i_], "r")[key][:]
-        return dask.delayed(update_xs_mat_pdos_row)(xs_mat, i, tau_n,
+        return dask.delayed(update_xs_mat_pdos_row)(xs_mat[i], tau_n,
                                                     delta_beta[i_], DebyeWallerCoeff[i_],
                                                     Ein_arno[i], T_arno[i],
                                                     xs_values, xs_E, mu_fit, M)
@@ -853,9 +862,9 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     dask.compute(*delayed_tasks)
 
 
-@nb.jit("void(float64[:, :], int64, float64[:, :], float64, float64, float64[:], float64, float64[:], float64[:], float64, float64)",
+@nb.jit("void(float64[:], float64[:, :], float64, float64, float64[:], float64, float64[:], float64[:], float64, float64)",
     nopython=True, nogil=True, parallel=True)
-def update_xs_mat_pdos_row(xs_mat: np.ndarray, i: int, tau_n: np.ndarray,
+def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
                            delta_beta: float, debyewallercoeff: float,
                            Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
                            xs_E: np.ndarray, mu_fit: float, M: float):
@@ -865,10 +874,8 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, i: int, tau_n: np.ndarray,
 
     Parameters
     ----------
-    xs_mat: np.ndarray, (M, N)
+    xs_mat: np.ndarray, (1, N)
         Empty Cross section matrix in barns
-    i: int
-        Index of the row of the cross section matrix
     tau_n: np.ndarray, (Z, T)
         tau_n values for all the row T. Z is the number of the phonon expansion
         order and T is the number of the beta grid
@@ -896,12 +903,12 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, i: int, tau_n: np.ndarray,
         Cross section matrix in barns with the row i updated
     """
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
-    for j in prange(xs_mat.shape[1]):
+    for j in prange(len(xs_mat)):
         Eout_db = default_Eout(Ein_row[j])
         pdf = get_ScatFunc_pdos_angle(Ein_row[j], M, T,
                                       Eout_db, mu_fit, tau_n, tau_n_beta,
                                       debyewallercoeff)
-        xs_mat[i, j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
+        xs_mat[j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
 
 
 @nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:])",

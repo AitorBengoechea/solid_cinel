@@ -1005,4 +1005,8 @@ def extract_number(s) -> float:
     float
         Last number from the string
     """
-    return float(re.findall("\d+\.\d+", s)[-1])
+    matches = re.findall("\d+\.\d+", s)
+    if matches:
+        return float(matches[-1])
+    else:
+        return int(re.findall("\d+\.", s)[-1])

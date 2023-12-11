@@ -1009,4 +1009,4 @@ def extract_number(s) -> float:
     if matches:
         return float(matches[-1])
     else:
-        return int(re.findall("\d+\.", s)[-1])
+        return float(re.findall("\d+\.", s)[-1])

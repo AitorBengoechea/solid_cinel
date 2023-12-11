@@ -10,6 +10,7 @@ import h5py
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
+from solid_cinel.core.material.scattering_function.sab import save_tau
 from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.vibration.pdos import Pdos
@@ -819,6 +820,10 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
         Minimun value to take into account in the creation of tau_n
     DebyeWallerCoeff: np.ndarray, (M,)
         DebyeWallerCoeff values for all the T_arno values
+    tau_to_file: bool
+        Save the tau_n values to file txt
+    binary: bool
+        Save the tau_n values in binary format
 
     Returns
     -------
@@ -827,7 +832,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     """
     def gen_xs_mat_mu(i, tau1, nphonon, threshold):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
-        save_data(tau_n, nphonon, T_arno[i], tau_to_file, binary)
+        save_tau(tau_n, nphonon, T_arno[i], tau_to_file, binary)
         return dask.delayed(update_xs_mat_pdos_row)(xs_mat, i, tau_n,
                                                     delta_beta[i], DebyeWallerCoeff[i],
                                                     Ein_arno[i], T_arno[i],
@@ -897,35 +902,6 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, i: int, tau_n: np.ndarray,
                                       Eout_db, mu_fit, tau_n, tau_n_beta,
                                       debyewallercoeff)
         xs_mat[i, j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
-
-
-def save_data(tau_n: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
-              binary: bool) -> None:
-    """
-    Save the tau_n values in a file or in a binary file.
-
-    Parameters
-    ----------
-    tau_n: np.ndarray, (Z, T)
-        tau_n values for all the row T. Z is the number of the phonon expansion
-        order and T is the number of the beta grid
-    nphonon: int
-        Phonon expansion order
-    T: float
-        Target temperature value for the caculation of tau_n
-    tau_to_file: bool
-        If True, save the tau_n values in a file. If False, don't save the tau_n
-        values in a file. Default is False
-    binary: bool
-        If True, save the tau_n values in a binary file. If False, save the tau_n
-        values in a txt file. Default is False.
-    """
-    name = f"tau_{nphonon}_{T}"
-    if tau_to_file:
-        np.savetxt(f"tau/{name}.txt", tau_n, delimiter="\t", fmt="%.14f")
-    if binary:
-        with h5py.File(f"tau/binary/{name}.h5", "w") as f:
-            f.create_dataset("tau", data=tau_n)
 
 
 @nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:])",

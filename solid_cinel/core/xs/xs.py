@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import dask
 from solid_cinel.core.xs.ddxs import DDxs
 
 # Example variables:
@@ -153,13 +154,34 @@ class Xs:
         else:
             Ein_grid_ = self.xs_0K.index.values
         theta = np.arange(1, 180 + theta_diff, theta_diff)
-        xs_db = {}
-        for Ein in Ein_grid_:
-            Eout = np.linspace(Ein * 0.95, Ein * 1.05, num_Eout)
-            ddxs = DDxs.from_4PCF(self.xs_0K, Ein, self.M, T_new, Eout, theta, *args, **kwargs)
-            xs_db[Ein] = {"xs": ddxs.integral}
-            if prob:
-                xs_db[Ein].update(ddxs.E_prob)
+        xs_db = self.sct_db(self.xs_0K, Ein_grid_, self.M, T_new, theta,
+                            num_Eout, prob, *args, **kwargs)
         xs_db = pd.DataFrame(xs_db).T.sort_index()
         xs_db.index.name = "Ein"
         return xs_db
+
+    @staticmethod
+    def clm_db():
+        return
+
+    @staticmethod
+    def sct_db(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
+               theta: np.ndarray, num_Eout: int, prob: bool, *args, **kwargs):
+        @dask.delayed
+        def compute_ddxs(Ein, M, T, theta, *args, **kwargs):
+            Eout = np.linspace(Ein * 0.95, Ein * 1.05, num_Eout)
+            ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, *args,
+                                  **kwargs)
+            result = {"xs": ddxs.integral}
+            if prob:
+                result.update(ddxs.E_prob)
+            return Ein, result
+
+        # Create a list to hold the delayed tasks
+        tasks = [compute_ddxs(Ein, M, T, theta, *args, **kwargs) for Ein
+                 in Ein_grid]
+
+        # Compute the results in parallel
+        results = dask.compute(*tasks)
+
+        return {Ein: result for Ein, result in results}

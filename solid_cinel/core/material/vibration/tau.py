@@ -5,6 +5,13 @@ from math import exp
 from numba import prange, cuda
 
 
+@nb.jit(nopython=True)
+def first_all_zero_column(tau_n):
+    for i in range(tau_n.shape[1]):
+        if np.all(tau_n[:, i] == 0):
+            return i
+    return -1
+
 @nb.jit("float64[:](float64, float64[:], float64[:], float64)",
     nopython=True, nogil=True, cache=True, parallel=True)
 def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
@@ -90,7 +97,8 @@ def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
         tau_n_func[n, :len(tau_n)] += tau_n
         # Next tau_n
         tau_n_minus_1 = tau_n
-    return tau_n_func
+    # Erase the zeros in the last part of the array
+    return tau_n_func[::, :first_all_zero_column(tau_n_func)]
 
 
 @cuda.jit
@@ -196,7 +204,8 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
         # Next tau_n
         tau_n_minus_1 = tau_n_device
         Ntau += N - 1
-    return tau_n_func
+    # Erase the zeros in the last part of the array
+    return tau_n_func[::, :first_all_zero_column(tau_n_func)]
 
 
 if cuda.is_available():

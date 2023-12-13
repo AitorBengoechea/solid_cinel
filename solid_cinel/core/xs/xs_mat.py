@@ -680,8 +680,27 @@ def default_Eout(Ein: float) -> np.ndarray:
 
 @nb.jit("float64[:](float64, float64[:], float64, float64)",
     nopython=True, nogil=True, cache=True)
-def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
                  M: float) -> np.ndarray:
+    """
+    Get the incident energy row for the arno model.
+
+    Parameters
+    ----------
+    Ein: float
+        The incident energy of the neutron in eV
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    mu: float
+        The cosine of the neutron outgoing angle in degrees radians (0, 180]
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    Ein_arno_row: np.ndarray, (Z,)
+        Incident energy row for the arno model
+    """
     alpha = (Ein + Eout - 2 * mu * np.sqrt(Ein * Eout)) * m / M
     mu_Ein_arno = (Eout + Ein) / 2 - Ein * mu * m / M
     mu_Ein_arno += 0.5 * alpha / (1 - mu)

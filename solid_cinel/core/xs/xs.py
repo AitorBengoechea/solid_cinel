@@ -1,8 +1,12 @@
 import numpy as np
 import pandas as pd
+import numba as nb
+from numba import prange
+
 import dask
-import shutil
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.material.scattering_function.scatfunc import get_ScatFunc_pdos_angle, ScatFunc
+from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
 from solid_cinel.core.xs.ddxs import DDxs
 
 # Example variables:
@@ -164,7 +168,82 @@ class Xs:
 
     @staticmethod
     def clm_db(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-               theta: np.ndarray, num_Eout: int, prob: bool, *args, **kwargs):
+               theta: np.ndarray, num_Eout: int, prob: bool, pdos,
+               nphonon: int = 1000, threshold: float = 0.0):
+        """
+
+        Parameters
+        ----------
+        xs_0K
+        Ein_grid
+        M
+        T
+        theta
+        num_Eout
+        prob
+        pdos
+        args
+        nphonon
+        threshold
+        kwargs
+
+        Returns
+        -------
+
+        """
+        # Get common variables:
+        xs_values, xs_E = xs_0K.values, xs_0K.index.values
+        mu = np.sort(np.cos(np.deg2rad(theta)))
+        T_arno = T * (1 + mu) / 2
+        # Get Scattering function data:
+        tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt = pdos.get_clm_param(T, nphonon=nphonon, threshold=threshold)
+        # 1 Scatfunct for getting mu_fit:
+        Eout = np.linspace(Ein_grid[0] * 0.9, Ein_grid[0] * 1.1, num_Eout)
+        mu_fit = ScatFunc.from_tau(Ein_grid[0], M, T, Eout, theta, tau_n_scatt,
+                                   delta_beta_scatt,
+                                   debye_waller_coeff_scatt).get_angle
+
+        # Create xs_mat creation data:
+        tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+
+        # Create a list to hold the results
+        result = []
+        for i in range(len(theta)):
+            # Create angle tau_n function:
+            tau_n_angle = tau_n_functions(tau1[i], delta_beta[i], nphonon,
+                                          threshold)
+            # Select the especific data for the next function:
+            for Ein in Ein_grid:
+                # Gen Eout grid:
+                Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
+
+                # Scattering function for selected angle:
+                tau_n_beta_scatt = np.arange(
+                    tau_n_scatt.shape[1]) * delta_beta_scatt
+                scattfunc_row = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu[i],
+                                                        tau_n_scatt,
+                                                        tau_n_beta_scatt,
+                                                        debye_waller_coeff_scatt)
+
+                # xs_mat row for selected angle:
+                Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
+                xs_mat_row = db_pdos_row(tau_n_angle, delta_beta[i],
+                                         DebyeWallerCoeff[i],
+                                         Ein_row, T_arno[i],
+                                         xs_values, xs_E, mu_fit, M)
+
+                # Get row data:
+                row_results = scattfunc_row * xs_mat_row
+                Ein_results = [mu, Ein, np.trapz(row_results, x=Eout)]
+
+                # Get probability of upscattering and downscattering:
+                if prob:
+                    mask_up, mask_down = Eout > Ein, Eout < Ein
+                    Ein_results.append(np.trapz(row_results[mask_up], x=Eout[mask_up]))
+                    Ein_results.append(np.trapz(row_results[mask_down], x=Eout[mask_down]))
+
+                # Update results:
+                result.append([Ein_results])
         return
 
     @staticmethod
@@ -189,3 +268,19 @@ def compute_ddxs(xs_0K, Ein, M, T, theta, num_Eout, prob, *args, **kwargs):
     if prob:
         result.update(ddxs.E_prob)
     return Ein, result
+
+
+@nb.jit(nopython=True, nogil=True, parallel=True)
+def db_pdos_row(tau_n: np.ndarray,
+                           delta_beta: float, debyewallercoeff: float,
+                           Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
+                           xs_E: np.ndarray, mu_fit: float, M: float):
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    xs_mat = np.empty(len(Ein_row))
+    for j in prange(len(Ein_row)):
+        Eout_db = np.linspace(Ein_row[j] * 0.9, Ein_row[j] * 1.1, 3000)
+        pdf = get_ScatFunc_pdos_angle(Ein_row[j], M, T,
+                                      Eout_db, mu_fit, tau_n, tau_n_beta,
+                                      debyewallercoeff)
+        xs_mat[j] = Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
+    return xs_mat

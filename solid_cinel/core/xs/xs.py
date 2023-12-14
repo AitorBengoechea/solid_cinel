@@ -234,7 +234,7 @@ class Xs:
 
                 # Get row data:
                 row_results = scattfunc_row * xs_mat_row
-                Ein_results = [mu, Ein, np.trapz(row_results, x=Eout)]
+                Ein_results = [mu[i], Ein, np.trapz(row_results, x=Eout)]
 
                 # Get probability of upscattering and downscattering:
                 if prob:
@@ -243,8 +243,8 @@ class Xs:
                     Ein_results.append(np.trapz(row_results[mask_down], x=Eout[mask_down]))
 
                 # Update results:
-                result.append([Ein_results])
-        return
+                result.append(Ein_results)
+        return result
 
     @staticmethod
     def sct_db(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,

@@ -13,7 +13,7 @@ def first_all_zero_column(tau_n, threshold=None):
                 return i
     else:
         for i in range(tau_n.shape[1]):
-            if np.all(tau_n[:, i] == 0):
+            if not np.any(tau_n[:, i]):
                 return i
     return -1
 

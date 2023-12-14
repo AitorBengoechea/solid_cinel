@@ -424,8 +424,8 @@ class Pdos:
         tau1.name = 1
         return tau1
 
-    def get_tau(self, T: float, nphonon: int = 1000,
-                threshold: float = 0.0, check: bool = True) -> pd.DataFrame:
+    def get_tau(self, T: float, nphonon, threshold, check: bool = True,
+                values: bool = False) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism.
 
@@ -437,6 +437,11 @@ class Pdos:
             Number of phonon to calculate the tau functions.
         threshold: 'float'
             Minimun value to take into account.
+        check: 'bool', optional
+            Check the normalization condition. The default is True and is only
+            check if df is True.
+        df: 'bool', optional
+            Return a pandas dataframe. The default is True.
 
         Returns
         -------
@@ -448,8 +453,8 @@ class Pdos:
         Object initialization:
         >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> T = 800
-        >>> nphonon = 5
-        >>> tau_n = p.get_tau(T, nphonon=nphonon)
+        >>> threshold = 0.0
+        >>> tau_n = p.get_tau(T, 5, threshold)
         >>> tau_n.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
@@ -458,8 +463,7 @@ class Pdos:
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
 
-        >>> nphonon = 10
-        >>> tau_n = p.get_tau(T, nphonon=nphonon, check=False)
+        >>> tau_n = p.get_tau(T, 10, threshold, check=False)
         >>> tau_n.iloc[::2, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
@@ -468,17 +472,77 @@ class Pdos:
         7  0.479140  0.515558  0.508476  0.458931  0.378055
         9  0.416041  0.451569  0.457651  0.432693  0.381067
         """
-        delta_beta = self.to_beta_grid(T).grid
-        tau_n = pd.DataFrame(
-            tau_n_functions(self.get_tau_1(T).values, delta_beta,
-                            nphonon, threshold)
-        )
-        tau_n.columns *= delta_beta
-        tau_n.index += 1
-        if check:
-            # tau1 is not included in the check:
-            integrals_value = tau_n.apply(integrate, axis=1).iloc[1::]
-            if (integrals_value < 1.e-5).any():
-                raise ValueError(
-                    "Tau function doesnt satisfy the normalization condition")
-        return tau_n
+        tau1 = self.get_tau_1(T)
+        delta_beta = tau1.index.values[1] - tau1.index.values[0]
+        tau_n = tau_n_functions(tau1.values, delta_beta, nphonon, threshold)
+        if values:
+            return tau_n
+        else:
+            tau_n = pd.DataFrame(tau_n)
+            tau_n.columns *= delta_beta
+            tau_n.index += 1
+            if check:
+                # tau1 is not included in the check:
+                integrals_value = tau_n.apply(integrate, axis=1).iloc[1::]
+                if (integrals_value < 1.e-5).any():
+                    raise ValueError(
+                        "Tau function doesnt satisfy the normalization condition")
+            return tau_n
+
+    def get_clm_param(self, T: float, nphonon: int = 1000,
+                      threshold: float = 0.0,
+                      values: bool = True) -> [(np.ndarray, float, float),
+                                               (pd.DataFrame, float)]:
+        """
+        Get the tau_n functions, the Delta beta value and the debye waller
+        coefficient, that are the parameters needed the scattering function
+        values.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        nphonon: 'int', optional
+            Phonon expansion order. The default is 1000.
+        threshold: 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        values: 'bool', optional
+            If True, return tau_n values and delta beta. If False, return a
+            DataFrame with all the information. The default is True.
+
+        Returns
+        -------
+        "np.ndarray", (N * nphonon, nphonon)
+            Tau(-beta) function for n phonon.
+        "float"
+            Delta beta value.
+        "float"
+            Debye Waller Coefficient.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> T = 800
+        >>> threshold = 0.0
+        >>> tau_n, delta_beta, debye_waller_coeff = p.get_clm_param(T, nphonon=5, threshold=0.0)
+        >>> tau_n[::, :100:20].round(6)
+        array([[0.862582, 1.32289 , 0.341423, 0.      , 0.      ],
+               [1.068786, 0.835423, 0.650492, 0.3974  , 0.06764 ],
+               [0.721827, 0.778009, 0.645243, 0.43171 , 0.257169],
+               [0.649349, 0.669368, 0.60838 , 0.476611, 0.305529],
+               [0.572522, 0.608795, 0.572271, 0.475181, 0.348585]])
+        >>> round(delta_beta, 6), round(debye_waller_coeff, 6)
+        (0.011605, 24.426138)
+        """
+        debye_waller_coeff = self.DebyeWallerCoeff(T)
+        if values:
+            tau_n = self.get_tau(T, nphonon, threshold, values=True)
+            delta_beta = self.to_beta_grid(T).grid
+            return tau_n, delta_beta, debye_waller_coeff
+        else:
+            tau_n = self.get_tau(T, nphonon, threshold, values=False,
+                                 check=False)
+            return tau_n, debye_waller_coeff

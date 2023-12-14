@@ -14,9 +14,12 @@ from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
+import h5py
+import os
 from math import exp, sqrt, pi
 from numba import prange
 import warnings
+
 
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
@@ -555,7 +558,8 @@ class Sab:
     @classmethod
     def from_pdos(cls, alpha_grid: Union[Alpha, Iterable],
                   beta_grid: Union[Beta, Iterable], T: float, pdos: Pdos,
-                  threshold: float = 0.0, nphonon: int = 1000):
+                  threshold: float = 0.0, nphonon: int = 1000,
+                  tau_to_file: bool = False, binary: bool = False):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -583,6 +587,10 @@ class Sab:
             the calculations. The default is 0.0.
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
+        tau_to_file : 'bool', optional
+            Save the tau_n functions into a file. The default is False.
+        binary : 'bool', optional
+            Save the tau_n functions into a binary file. The default is False.
 
         Returns
         -------
@@ -595,8 +603,8 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
-        >>> S_mat.data.round(6).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, nphonon=700)
+        >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -622,17 +630,15 @@ class Sab:
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos
 
-        tau1 = pdos.get_tau_1(T).values
-        delta_beta = pdos.to_beta_grid(T).grid
-        if hasattr(delta_beta, "__len__"):
-            raise ValueError("Pdos object doesnt have a consistent grid")
-        S_values = get_sab_pdos(alpha_grid_.data,
-                                beta_grid_.data,
-                                nphonon,
-                                tau1,
-                                delta_beta,
-                                threshold,
-                                cls.DebyeWallerCoeff)
+        # Get the parameters for calculation:
+        tau_n, delta_beta, DebyeWallerCoeff = pdos.get_clm_param(T, nphonon=nphonon, threshold=threshold)
+        save_tau(tau_n, nphonon, T, tau_to_file, binary)
+        S_values = phonon_expansion(alpha_grid_.data,
+                                    beta_grid_.data,
+                                    nphonon,
+                                    tau_n,
+                                    delta_beta,
+                                    DebyeWallerCoeff)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @classmethod
@@ -738,7 +744,7 @@ class Sab:
         >>> T = 800
         >>> beta_grid = Beta(beta0_).scale(T).data
         >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="pdos", threshold=1.0e-14).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="pdos", nphonon=700).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -802,7 +808,7 @@ class Sab:
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         >>> delta_beta = pdos.to_beta_grid(T).grid
         >>> tau1 = pdos.get_tau_1(T).values
-        >>> tau_n = tau_n_functions(tau1, delta_beta, 1000, 1.0e-14)
+        >>> tau_n = tau_n_functions(tau1, delta_beta, 700, 0.0)
         >>> S_mat = Sab.from_tau(alpha, beta, tau_n, delta_beta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
@@ -1292,72 +1298,35 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     return sab_values
 
 
-@nb.jit("float64[:, :](float64[:], float64[:], int32, float64[:], float64, float64, float64)",
-    nopython=True, nogil=True, cache=True, parallel=False)
-def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
-                 nphonon: int, tau1: np.ndarray, delta_beta: float,
-                 threshold: float,
-                 DebyeWallerCoeff: float) -> np.ndarray:
+def save_tau(tau_n: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
+              binary: bool) -> None:
     """
-    Generate S(alpha, -beta) matrix using phonon expansion.
-    .. math::
-        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
-
-    Numerical appoximation to get convergence in large exponentiation and
-    factorial numbers. Each element of the array is related with one alpha
-    and represent the following term of the previous equation:
-    ..math::
-        \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+    Save the tau_n values in a file or in a binary file.
 
     Parameters
     ----------
-    alpha : 'np.ndarray', (N,)
-        alpha grid values.
-    beta : 'np.ndarray', (M,)
-        beta grid values.
-    nphonon : 'int', optional
-        Phonon expansion order.
-    tau1 : 'np.ndarray', (Z,)
-        tau1 function values.
-    delta_beta : float
-        Space between beta grid points.
-    threshold : 'float', optional
-        Minimun value to take into account in the creation of tau_n
-        functions. For T>200 is convenient to set into 1.0e-14 to speed up
-        the calculations.
-    DebyeWallerCoeff : 'float'
-        Debye Waller Coefficient in LEAPR formalism.
-
-    Returns
-    -------
-    'np.ndarray', (N, M)
-        S(alpha, beta) matrix values
-
-    Example
-    -------
-    >>> T = 800
-    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> tau1 = pdos.get_tau_1(T)
-    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> alpha_grid = Alpha(alpha0_).scale(T).data
-    >>> beta_grid = Beta(beta0_).scale(T).data
-    >>> S_mat = get_sab_pdos(alpha_grid, beta_grid, 10, tau1.values, beta_grid[1], 1.0e-14, debye_waller_coeff)
-    >>> pd.DataFrame(S_mat.round(6)).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
-              0         1         2         3         4
-    0  0.037829  0.038039  0.038243  0.038444  0.038611
-    1  0.074018  0.074411  0.074776  0.075133  0.075422
-    2  0.108603  0.109154  0.109645  0.110117  0.110490
-    3  0.141624  0.142311  0.142895  0.143444  0.143867
-    4  0.173120  0.173922  0.174570  0.175165  0.175607
-    5  0.203131  0.204030  0.204716  0.205328  0.205763
-    6  0.231696  0.232675  0.233377  0.233982  0.234387
-    7  0.258856  0.259901  0.260599  0.261175  0.261531
-    8  0.284651  0.285748  0.286425  0.286954  0.287244
-    9  0.309121  0.310260  0.310900  0.311366  0.311575
+    tau_n: np.ndarray, (Z, T)
+        tau_n values for all the row T. Z is the number of the phonon expansion
+        order and T is the number of the beta grid
+    nphonon: int
+        Phonon expansion order
+    T: float
+        Target temperature value for the caculation of tau_n
+    tau_to_file: bool
+        If True, save the tau_n values in a file. If False, don't save the tau_n
+        values in a file. Default is False
+    binary: bool
+        If True, save the tau_n values in a binary file. If False, save the tau_n
+        values in a txt file. Default is False.
     """
-    tau_n = tau_n_functions(tau1, delta_beta, nphonon, threshold)
-    return phonon_expansion(alpha, beta, nphonon, tau_n, delta_beta,
-                            DebyeWallerCoeff)
+    name = f"tau_{nphonon}_{T}"
+    if tau_to_file:
+        os.makedirs("tau", exist_ok=True)
+        np.savetxt(f"tau/{name}.txt", tau_n, delimiter="\t", fmt="%.14f")
+    if binary:
+        os.makedirs("tau/binary", exist_ok=True)
+        with h5py.File(f"tau/binary/{name}.h5", "w") as f:
+            f.create_dataset("tau", data=tau_n)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

@@ -5,10 +5,22 @@ from math import exp
 from numba import prange, cuda
 
 
-@nb.jit("float64[:](float64, float64[:], float64[:], float64)",
+@nb.jit(nopython=True)
+def first_all_zero_column(tau_n, threshold=None):
+    if threshold:
+        for i in range(tau_n.shape[1]):
+            if np.all(tau_n[:, i] <= threshold):
+                return i
+    else:
+        for i in range(tau_n.shape[1]):
+            if np.all(tau_n[:, i] == 0):
+                return i
+    return -1
+
+@nb.jit("float64[:](float64, float64[:], float64[:])",
     nopython=True, nogil=True, cache=True, parallel=True)
-def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
-              threshold: float) -> np.ndarray:
+def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray,
+                  tau_n_minus_1: np.ndarray) -> np.ndarray:
     """
     Get the tau_{n}(-beta) function values.
 
@@ -56,7 +68,7 @@ def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
 
             tau_n[i] += tau1[j] * convol * delta_beta
 
-    return tau_n[tau_n >= threshold] if threshold > 0.0 else tau_n
+    return tau_n
 
 
 @nb.jit("float64[:, :](float64[:], float64, int32, float64)",
@@ -86,14 +98,15 @@ def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
     tau_n_func[0, :len(tau1)] += tau1
     tau_n_minus_1 = tau1.copy()
     for n in range(1, nphonon):
-        tau_n = get_tau_n_cpu(delta_beta, tau1, tau_n_minus_1, threshold)
+        tau_n = get_tau_n_cpu(delta_beta, tau1, tau_n_minus_1)
         tau_n_func[n, :len(tau_n)] += tau_n
         # Next tau_n
         tau_n_minus_1 = tau_n
-    return tau_n_func
+    # Erase the zeros in the last part of the array
+    return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
 
 
-@cuda.jit()
+@cuda.jit
 def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
               tau_n: np.ndarray) -> np.ndarray:
     """
@@ -121,7 +134,7 @@ def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
     Nnm1 = len(tau_n_minus_1)  # length of tau_n_minus_1
     N = len(tau1)
 
-    for i in prange(start,  len(tau_n), stride):  # loop for tau_n
+    for i in range(start,  len(tau_n), stride):  # loop for tau_n
         # 1 iteration: j = 0
         tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
 
@@ -144,7 +157,6 @@ def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
                 convol *= 0.5                      # trapz integrate
 
             tau_n[i] += tau1[j] * convol * delta_beta
-
 
 
 def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
@@ -172,7 +184,7 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
     tau_n_func: 'np.ndarray', (N * nphonon, nphonon)
         All Tau(-beta) function values for n expansion.
     """
-    tau_n_func = np.zeros((len(tau1) * nphonon, nphonon))
+    tau_n_func = np.zeros((nphonon, len(tau1) * nphonon))
     tau_n_func[0, :len(tau1)] += tau1
     N = len(tau1)
     Ntau = 2 * N - 1
@@ -190,14 +202,13 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
                                                       tau_n_device)
         # Copy the data back to the host
         tau_n = tau_n_device.copy_to_host()
-        if threshold > 0.0:
-            tau_n[tau_n <= threshold] = 0.0
         tau_n_func[n, :Ntau] += tau_n
 
         # Next tau_n
         tau_n_minus_1 = tau_n_device
         Ntau += N - 1
-    return tau_n_func
+    # Erase the zeros in the last part of the array
+    return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
 
 
 if cuda.is_available():

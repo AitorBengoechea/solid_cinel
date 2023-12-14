@@ -395,7 +395,7 @@ class Sab:
         >>> M = 26
         >>> Ein = 3
         >>> Eout = np.linspace(Ein, Ein * 1.05, 1000)
-        >>> beta_grid = Beta.from_parameters(Eout, Ein, T).data
+        >>> beta_grid = Beta.from_Eout(Eout, Ein, T).data
         >>> alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, 60).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).to_ScatFunc(Ein, T, M).iloc[295:305].round(6) #doctest: +NORMALIZE_WHITESPACE
         Eout

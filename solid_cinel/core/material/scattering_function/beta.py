@@ -241,6 +241,24 @@ class Beta:
         """Transform the Beta class data into a pandas Index."""
         return pd.Index(self.data, name="beta")
 
+    @property
+    def kind(self) -> str:
+        """
+        Analise the beta grid to know if the beta grid contains only absolute
+        values or mix (positive and negative) values.
+
+        Returns
+        -------
+        kind : "str"
+            "abs" if the beta grid contains only absolute values or "mix" if
+            the beta grid contains mix (positive and negative) values
+        """
+        if (self.data >= 0).all():
+            kind = "abs"
+        else:
+            kind = "mix"
+        return kind
+
     @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,
                       thermal_threshold: float = 5., scale: bool = False,

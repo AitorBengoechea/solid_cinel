@@ -476,3 +476,15 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
                     alpha_value /= (M * kb * T[i] / m)
                     alpha.append(alpha_value)
     return np.array(alpha)
+
+
+@nb.jit("float64[:, :](float64[:], float64, float64, float64, float64[:])",
+    nopython=True, nogil=False, cache=True, parallel=True)
+def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
+                  mu: np.ndarray) -> np.ndarray:
+    n = len(mu)
+    alpha_mat = np.zeros((n, len(Eout)))
+    for i in range(n):
+        alpha_mu = Eout + Ein - 2 * mu[i] * np.sqrt(Eout * Ein)
+        alpha_mat[i] += alpha_mu / (M * kb * T / m)
+    return alpha_mat

@@ -6,16 +6,21 @@ from numba import prange, cuda
 
 
 @nb.jit(nopython=True)
-def first_all_zero_column(tau_n):
-    for i in range(tau_n.shape[1]):
-        if np.all(tau_n[:, i] == 0):
-            return i
+def first_all_zero_column(tau_n, threshold=None):
+    if threshold:
+        for i in range(tau_n.shape[1]):
+            if np.all(tau_n[:, i] <= threshold):
+                return i
+    else:
+        for i in range(tau_n.shape[1]):
+            if np.all(tau_n[:, i] == 0):
+                return i
     return -1
 
-@nb.jit("float64[:](float64, float64[:], float64[:], float64)",
+@nb.jit("float64[:](float64, float64[:], float64[:])",
     nopython=True, nogil=True, cache=True, parallel=True)
-def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray,
-              threshold: float) -> np.ndarray:
+def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray,
+                  tau_n_minus_1: np.ndarray) -> np.ndarray:
     """
     Get the tau_{n}(-beta) function values.
 
@@ -63,7 +68,7 @@ def get_tau_n_cpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
 
             tau_n[i] += tau1[j] * convol * delta_beta
 
-    return tau_n[tau_n >= threshold] if threshold > 0.0 else tau_n
+    return tau_n
 
 
 @nb.jit("float64[:, :](float64[:], float64, int32, float64)",
@@ -93,12 +98,12 @@ def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
     tau_n_func[0, :len(tau1)] += tau1
     tau_n_minus_1 = tau1.copy()
     for n in range(1, nphonon):
-        tau_n = get_tau_n_cpu(delta_beta, tau1, tau_n_minus_1, threshold)
+        tau_n = get_tau_n_cpu(delta_beta, tau1, tau_n_minus_1)
         tau_n_func[n, :len(tau_n)] += tau_n
         # Next tau_n
         tau_n_minus_1 = tau_n
     # Erase the zeros in the last part of the array
-    return tau_n_func[::, :first_all_zero_column(tau_n_func)]
+    return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
 
 
 @cuda.jit
@@ -197,15 +202,13 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
                                                       tau_n_device)
         # Copy the data back to the host
         tau_n = tau_n_device.copy_to_host()
-        if threshold > 0.0:
-            tau_n[tau_n <= threshold] = 0.0
         tau_n_func[n, :Ntau] += tau_n
 
         # Next tau_n
         tau_n_minus_1 = tau_n_device
         Ntau += N - 1
     # Erase the zeros in the last part of the array
-    return tau_n_func[::, :first_all_zero_column(tau_n_func)]
+    return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
 
 
 if cuda.is_available():

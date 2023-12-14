@@ -603,8 +603,8 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
-        >>> S_mat.data.round(6).iloc[:10, :5] #doctest: +NORMALIZE_WHITESPACE
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, nphonon=700)
+        >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -744,7 +744,7 @@ class Sab:
         >>> T = 800
         >>> beta_grid = Beta(beta0_).scale(T).data
         >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="pdos", threshold=1.0e-14).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="pdos", nphonon=700).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -808,7 +808,7 @@ class Sab:
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         >>> delta_beta = pdos.to_beta_grid(T).grid
         >>> tau1 = pdos.get_tau_1(T).values
-        >>> tau_n = tau_n_functions(tau1, delta_beta, 1000, 1.0e-14)
+        >>> tau_n = tau_n_functions(tau1, delta_beta, 700, 0.0)
         >>> S_mat = Sab.from_tau(alpha, beta, tau_n, delta_beta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699

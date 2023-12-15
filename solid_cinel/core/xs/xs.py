@@ -5,7 +5,8 @@ from numba import prange
 
 import dask
 from solid_cinel.core.material.vibration.tau import tau_n_functions
-from solid_cinel.core.material.scattering_function.scatfunc import get_ScatFunc_pdos_angle, ScatFunc
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.xs.xs_mat import get_ScatFunc_pdos_angle
 from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
 from solid_cinel.core.xs.ddxs import DDxs
 

@@ -1278,8 +1278,8 @@ def proportionality_factor(alpha: float, alpha_i: float,
         q = 1
     return q
 
-@nb.jit("float64[:, :](float64[:], float64[:], int32, float64[:, :], float64, float64)",
-        nopython=True, nogil=False, cache=True, parallel=False)
+
+@nb.jit(nopython=True, nogil=True, cache=True)
 def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
                      tau_n: np.ndarray, delta_beta: float,
                      DebyeWallerCoeff: float) -> np.ndarray:
@@ -1362,8 +1362,7 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     return Sab
 
 
-@nb.jit("float64[:, :](float64[:], float64[:], float64, float64, float64)",
-        nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def get_scatfunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
                         T: float, M: float) -> np.ndarray:
     """

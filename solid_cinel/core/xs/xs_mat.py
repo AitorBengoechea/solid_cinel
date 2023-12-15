@@ -11,7 +11,8 @@ import re
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.sab import save_tau
-from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
+from solid_cinel.core.material.scattering_function.sab import get_scatfunc_values
+from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.vibration.pdos import Pdos
 import dask
@@ -626,6 +627,118 @@ class XsMat:
             Teff[nan_indices] = Teff[nan_indices[0].max() + 1]
         return Teff
 
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
+                    tau_n: np.ndarray, tau_n_beta: np.ndarray,
+                    DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate the scattering function from a S(alpha, -beta) table based on
+    the phonon expansion model using a single angle.
+
+    Parameters
+    ----------
+    alpha : 'np.ndarray', (N,)
+        alpha grid values.
+    beta : 'np.ndarray', (N,)
+        beta grid values.
+    nphonon : 'int', optional
+        Phonon expansion order.
+    tau_n : 'np.ndarray', (M, T)
+        all tau n functions in one array.
+    tau_n_beta : 'np.ndarray', (M,)
+        Space between beta grid points of tau n functions.
+    DebyeWallerCoeff : 'float'
+        Debye Waller Coefficient in LEAPR formalism.
+
+    Returns
+    -------
+    S_diag : 'np.ndarray', (N,)
+        Scattering function values for a single angle.
+    """
+    if len(alpha) != len(beta):
+        raise ValueError("alpha and beta must have the same length")
+
+    # Zero phonon expansion:
+    iter_sum = np.log(alpha * DebyeWallerCoeff)
+    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+    S_diag = alpha_mul * np.interp(beta, tau_n_beta, tau_n[0])
+
+    # Higher phonon expansion (nphonon >= 1):
+    for n in range(1, tau_n.shape[0]):
+        # Compute S(alpha, -beta) for tau_n reshape
+        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+        S_diag += alpha_mul * np.interp(beta, tau_n_beta, tau_n[n])
+    return S_diag
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
+                 mu: float, tau_n: np.ndarray, tau_n_beta: np.ndarray,
+                 DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate the scattering function from a S(alpha, -beta) table based on
+    the phonon expansion model.
+
+    Parameters
+    ----------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray, (N,)
+        The neutron outgoing energy grid in eV
+    mu : float
+        Cosine of the scattering angle
+    tau_n : 'np.ndarray', (M, T)
+        all tau n functions in one array.
+    tau_n_beta : 'np.ndarray', (M,)
+        Space between beta grid points of tau n functions.
+    DebyeWallerCoeff : float
+        Debye Waller coefficient
+
+    Returns
+    -------
+    S_diag : 'np.ndarray', (N,)
+        Scattering function values for a single angle.
+
+    Examples
+    --------
+    >>> Ein = 7.2
+    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> mu = np.cos(np.deg2rad(120))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    >>> sd_pdf = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu, tau_n, tau_n_beta, debye_waller_coeff)
+    >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
+    6.7554    0.034511
+    6.9050    0.426488
+    7.0439    1.383082
+    7.2000    1.262613
+    7.3157    0.415630
+    7.4480    0.042074
+    dtype: float64
+    """
+    beta = (Eout - Ein) / (kb * T)
+    beta = np.unique(np.absolute(beta))
+    if len(beta) < len(Eout): # same beta values but one negative and one positive
+        Eout_ = beta * kb * T + Ein
+    else:
+        Eout_ = Eout.copy()
+    alpha = Eout_ + Ein - 2 * mu * np.sqrt(Eout_ * Ein)
+    alpha /= (M * kb * T / m)
+    Sab_values = get_diag_S_pdos(alpha, beta, tau_n, tau_n_beta,
+                                 DebyeWallerCoeff)
+    sd_pdf = get_scatfunc_values(Sab_values, beta, Ein, T, M)
+    # Interpolation for avoiding numerical fluctuations:
+    return np.interp(Eout, sd_pdf[:, 0], sd_pdf[:, 1])
+
 
 @nb.jit(nopython=True, nogil=True, cache=True)
 def default_Eout(Ein: float) -> np.ndarray:
@@ -678,8 +791,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
 
 
-@nb.jit("float64[:](float64, float64[:], float64, float64)",
-    nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
                  M: float) -> np.ndarray:
     """
@@ -707,8 +819,7 @@ def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
     return mu_Ein_arno
 
 
-@nb.jit("float64[:, :](float64, float64[:], float64[:], float64)",
-    nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
                  M: float) -> np.ndarray:
     """
@@ -736,7 +847,7 @@ def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     return Ein_arno
 
 
-@nb.jit("Tuple((float64[:, :], int8))(float64[:], float64[:], float64[:, :], float64)", nopython=True)
+@nb.jit(nopython=True, nogil=True)
 def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
                    Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
     """
@@ -881,8 +992,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     dask.compute(*delayed_tasks)
 
 
-@nb.jit("void(float64[:], float64[:, :], float64, float64, float64[:], float64, float64[:], float64[:], float64, float64)",
-    nopython=True, nogil=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, parallel=True)
 def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
                            delta_beta: float, debyewallercoeff: float,
                            Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
@@ -930,8 +1040,7 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
         xs_mat[j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
 
 
-@nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:])",
-    nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                          xs_values: np.ndarray, xs_E: np.ndarray,
                          M: float, T_arno: np.ndarray) -> np.ndarray:
@@ -970,8 +1079,8 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db,
                                 pdf)
 
-@nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:], float64, float64[:])",
-    nopython=True, nogil=True, cache=True, parallel=True)
+
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                       xs_values: np.ndarray, xs_E: np.ndarray,
                       M: float, Tarno: np.ndarray, mu_fit: float,
@@ -1009,11 +1118,12 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     np.ndarray, (M, N)
         Cross section matrix in barns with the row i updated
     """
+    mu_fit_ = np.array([mu_fit])
     for i in range(start, Ein_arno.shape[0], 1):
         for j in prange(Ein_arno.shape[1]):
             Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno[i, j],
-                                       Tarno[i], M, Tarno_eff[i], 1.0)
+            pdf = get_scat_sct_angular(Eout_db, mu_fit_, Ein_arno[i, j],
+                                       Tarno[i], M, Tarno_eff[i], 1.0)[0]
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
 
 

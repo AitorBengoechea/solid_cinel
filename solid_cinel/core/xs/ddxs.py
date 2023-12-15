@@ -430,7 +430,7 @@ class DDxs:
                       Eout: np.ndarray, theta: np.ndarray,
                       tau_files: [str, list, np.ndarray], delta_beta: np.ndarray,
                       DebyeWallerCoeff: np.ndarray, check: bool = True,
-                      key: bool = "tau", chunksize: int = 100) -> pd.DataFrame:
+                      key: bool = "tau") -> pd.DataFrame:
         """
         Generate the Double Differential XS for elastic scattering from Fourier
         double-Laplace transform of a 4-point from pre-calculated tau_n
@@ -464,9 +464,6 @@ class DDxs:
             grid is correct. The default is True.
         key: str, optional
             Key of the tau_n files for hdf5 format. The default is "tau".
-        chunksize: int, optional
-            Chunksize for the parallelization of the calculation. The default
-            is 100.
 
         Returns
         -------
@@ -480,8 +477,7 @@ class DDxs:
             raise ValueError(f"The temperature of the tau_n files doesnt have {T}")
         tau_n = h5py.File(tau_n_list[-1], "r")[key][:]
         scatfunction = ScatFunc.from_tau(Ein, M, T, Eout, theta, tau_n,
-                                         delta_beta[-1], DebyeWallerCoeff[-1],
-                                         chunksize=chunksize)
+                                         delta_beta[-1], DebyeWallerCoeff[-1])
         # Get the xs matrix (all the element except the last one):
         mu_fit = scatfunction.get_angle
         xs = XsMat.from_tau(xs_0K, Ein, M, T, Eout, theta, mu_fit,

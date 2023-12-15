@@ -466,7 +466,7 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     'np.ndarray', (N + M + Z + K,)
         Array containing all posible alpha values for the input parameters.
     """
-    alpha = []
+    alpha = np.empty((len(T), len(Ein), len(Eout), len(mu)))
     for i in prange(len(T)):
         for j in prange(len(Ein)):
             for k in prange(len(Eout)):
@@ -474,11 +474,11 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
                     alpha_value = Eout[k] + Ein[j]
                     alpha_value -= 2 * mu[ll] * np.sqrt(Eout[k] * Ein[j])
                     alpha_value /= (M * kb * T[i] / m)
-                    alpha.append(alpha_value)
-    return np.array(alpha)
+                    alpha[i, j, k, ll] = alpha_value
+    return np.unique(alpha.ravel())
 
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
                   mu: np.ndarray) -> np.ndarray:
     """

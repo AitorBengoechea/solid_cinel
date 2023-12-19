@@ -9,16 +9,15 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.sab import save_tau
 from solid_cinel.core.material.scattering_function.beta import get_beta
 from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat
 from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.vibration.tau import save_tau
 from typing import Iterable
 from math import sqrt, pi
 from scipy.stats import entropy, wasserstein_distance
 from scipy.spatial.distance import euclidean
 from scipy.spatial import distance
-import dask.array as da
 import warnings
 
 # constants
@@ -1052,9 +1051,6 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
     4.330699  0.024589
     5.135233  0.006799
     """
-    if alpha.shape[1] != len(beta):
-        raise ValueError("alpha and beta must have the same length")
-
     # Zero phonon expansion:
     iter_sum = np.log(alpha * DebyeWallerCoeff)
     alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
@@ -1068,9 +1064,58 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
         S_diag += alpha_mul * np.interp(beta, tau_n_beta, tau_n[n])
     return S_diag
 
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def normalization_factor(Eout_calc: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
+    M_div_m = M / m
+    aws = ((M_div_m + 1) / M_div_m) ** 2
+    two_kb_T = 2 * kb * T
+    return aws * np.sqrt(Eout_calc / Ein) / two_kb_T
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
+                        T: float, M: float) -> (np.ndarray, np.ndarray):
+    """
+    Generate the scattering function values from a S(alpha, -beta) table based on
+    the phonon expansion model for a single angle
+
+    Parameters
+    ----------
+    Sab_mat : 'np.ndarray', (N,)
+        S(alpha, -beta) matrix values.
+    beta: 'np.ndarray', (N,)
+        Minus beta grid values.
+    Ein : 'float'
+        Incident energy in eV.
+    T : 'float'
+        Temperature in K.
+    M : 'float'
+        Mass of the target nucleus in amu.
+
+    Returns
+    -------
+    'np.ndarray', (N, 2)
+        Scattering function values for a single angle for tau_n expansion.
+    """
+    # Scattering function values calculation:
+    ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::] * np.exp(-beta[1:])))
+
+    # Eout calculation
+    Eout_calc = Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T
+
+    # Ensure the Eout values are positive:
+    positive_mask = Eout_calc > 0
+    Eout_calc = Eout_calc[positive_mask]
+
+    # Normalization constant
+    norm = normalization_factor(Eout_calc, Ein, T, M)
+
+    return Eout_calc, ScatFunc_values[positive_mask] * norm
+
 @nb.jit(nopython=True, cache=True, nogil=True)
 def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: float,
-                                T: float, M: float) -> (np.ndarray, np.ndarray):
+                              T: float, M: float) -> (np.ndarray, np.ndarray):
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model. The scattering function is calculated for all
@@ -1137,10 +1182,9 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
     Eout_calc = Eout_calc[positive_mask]
 
     # Normalization constant
-    aws = ((M / m + 1) / (M / m)) ** 2
-    normalization_factor = aws * np.sqrt(Eout_calc / Ein) / (2 * kb * T)
+    norm = normalization_factor(Eout_calc, Ein, T, M)
 
-    return Eout_calc, ScatFunc_values[::, positive_mask] * normalization_factor
+    return Eout_calc, ScatFunc_values[::, positive_mask] * norm
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)

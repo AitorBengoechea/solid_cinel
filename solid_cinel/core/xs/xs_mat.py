@@ -10,10 +10,8 @@ import h5py
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.sab import save_tau
-from solid_cinel.core.material.scattering_function.sab import get_scatfunc_values
-from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular
-from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, scatfunc_values_alpha_vec, get_sab_pdos
+from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
 from solid_cinel.core.material.vibration.pdos import Pdos
 import dask
 from solid_cinel.core.xs.dxs import Dxs
@@ -327,98 +325,6 @@ class XsMat:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
-    @classmethod
-    def from_tau(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
-                 Eout: np.ndarray, theta: np.ndarray, mu_fit: float,
-                 tau_files: [str, list, np.ndarray], delta_beta: np.ndarray,
-                 DebyeWallerCoeff: np.ndarray, check=True, key="tau"):
-        """
-        Calculate the cross section matrix for a given incident energy, target mass,
-        target temperature, outgoing energy grid and outgoing angle grid using arno
-        model with the most similar S(alpha, -beta) distribution with sigma1 for
-        a given tau_n folder, delta_beta and DebyeWallerCoeff.
-
-        Parameters
-        ----------
-         xs_0K : pd.Series
-             Cross section at 0K in barns
-         Ein : float
-             The incident energy of the neutron in eV
-         M : float
-             Mass of the material in amu
-         T : float
-             Temperature of the material in K
-         Eout : np.ndarray, (N,)
-             The neutron outgoing energy grid in eV
-         theta : np.ndarray, (M,)
-             The neutron outgoing angle grid in degrees (0, 180]
-        mu_fit: float
-            The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
-            with sigma1
-        tau_files: str, list, np.ndarray
-            str: Path to the tau_n files. Is important than the temperature is the
-                 last number for all the tau_n files.
-            list or np.ndarray: List of the tau_n files. Is important than the
-                                files are in the correct order.
-        delta_beta: np.ndarray (M - 1, )
-            delta_beta values for each temperature in T_arno except theta = 180
-        DebyeWallerCoeff: np.ndarray (M - 1, )
-            DebyeWallerCoeff values for each temperature in T_arno except theta = 180
-        check: bool, optional
-            Check if the tau_n files are in the correct order and if the temperature
-            grid is correct. The default is True.
-        key: str, optional
-            Key of the tau_n files for hdf5 format. The default is "tau".
-
-        Returns
-        -------
-        XsMat
-            Cross section matrix in barns
-
-        Examples
-        --------
-         # Gen the data:
-         >>> wd = os.getcwd()
-         >>> os.chdir(__file__.replace("xs_mat.py", ""))
-         >>> os.chdir("../../data/xs/U238/")
-         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-         >>> os.chdir(wd)
-         >>> T = 1000
-         >>> Ein = 2.0
-         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
-         >>> M = 238.05077040419212
-         >>> theta = np.arange(10, 190, 10)
-         >>> mu = np.sort(np.cos(np.deg2rad(theta)))
-         >>> T_arno = T * (1 + mu) / 2
-         >>> mu_fit = np.cos(np.deg2rad(60))
-         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-         >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])[1::]
-         >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])[1::]
-         >>> nphonon = 100
-         >>> threshold = 1.0e-14
-         >>> xs_values_generate = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos", binary=True)
-         >>> xs_values_tau = XsMat.from_tau(xs_0K, Ein, M, T, Eout, theta, mu_fit, "tau/binary", delta_beta, DebyeWallerCoeff, check=True, key="tau")
-         >>> import shutil
-         >>> shutil.rmtree("tau")
-         >>> assert (xs_values_generate.data.values.round(6) == xs_values_tau.data.values.round(6)).all().all()
-        """
-        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
-                                                                     M, T, Eout,
-                                                                     theta)
-        # Create list of tau_n files:
-        tau_n_list = cls.tau_folder_to_list(tau_files) if isinstance(tau_files, str) else tau_files
-
-        if check:
-            tau_n_list = cls.check_data(tau_n_list, delta_beta, DebyeWallerCoeff,
-                                        T_arno)
-
-        # Begin the calculation:
-        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-        update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                           T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
-                           tau_n_list, key)
-        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
-
     @staticmethod
     def tau_folder_to_list(tau_folder: str) -> [str]:
         """
@@ -628,50 +534,6 @@ class XsMat:
         return Teff
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def get_diag_S_pdos(alpha: np.ndarray, beta: np.ndarray,
-                    tau_n: np.ndarray, tau_n_beta: np.ndarray,
-                    DebyeWallerCoeff: float) -> np.ndarray:
-    """
-    Generate the scattering function from a S(alpha, -beta) table based on
-    the phonon expansion model using a single angle.
-
-    Parameters
-    ----------
-    alpha : 'np.ndarray', (N,)
-        alpha grid values.
-    beta : 'np.ndarray', (N,)
-        beta grid values.
-    nphonon : 'int', optional
-        Phonon expansion order.
-    tau_n : 'np.ndarray', (M, T)
-        all tau n functions in one array.
-    tau_n_beta : 'np.ndarray', (M,)
-        Space between beta grid points of tau n functions.
-    DebyeWallerCoeff : 'float'
-        Debye Waller Coefficient in LEAPR formalism.
-
-    Returns
-    -------
-    S_diag : 'np.ndarray', (N,)
-        Scattering function values for a single angle.
-    """
-    if len(alpha) != len(beta):
-        raise ValueError("alpha and beta must have the same length")
-
-    # Zero phonon expansion:
-    iter_sum = np.log(alpha * DebyeWallerCoeff)
-    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    S_diag = alpha_mul * np.interp(beta, tau_n_beta, tau_n[0])
-
-    # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, tau_n.shape[0]):
-        # Compute S(alpha, -beta) for tau_n reshape
-        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        S_diag += alpha_mul * np.interp(beta, tau_n_beta, tau_n[n])
-    return S_diag
-
-@nb.jit(nopython=True, nogil=True, cache=True)
 def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: float, tau_n: np.ndarray, tau_n_beta: np.ndarray,
                  DebyeWallerCoeff: float) -> np.ndarray:
@@ -733,11 +595,11 @@ def get_ScatFunc_pdos_angle(Ein: float, M: float, T: float, Eout: np.ndarray,
         Eout_ = Eout.copy()
     alpha = Eout_ + Ein - 2 * mu * np.sqrt(Eout_ * Ein)
     alpha /= (M * kb * T / m)
-    Sab_values = get_diag_S_pdos(alpha, beta, tau_n, tau_n_beta,
+    Sab_values = get_sab_pdos(alpha, beta, tau_n, tau_n_beta,
                                  DebyeWallerCoeff)
-    sd_pdf = get_scatfunc_values(Sab_values, beta, Ein, T, M)
+    Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(Sab_values, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
-    return np.interp(Eout, sd_pdf[:, 0], sd_pdf[:, 1])
+    return np.interp(Eout, Eout_calc, scatfunc_values)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)

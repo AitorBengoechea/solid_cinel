@@ -1,6 +1,8 @@
 
 import numpy as np
 import numba as nb
+import h5py
+import os
 from math import exp
 from numba import prange, cuda
 
@@ -215,3 +217,34 @@ if cuda.is_available():
     tau_n_functions = tau_n_functions_gpu
 else:
     tau_n_functions = tau_n_functions_cpu
+
+
+def save_tau(tau_n: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
+              binary: bool) -> None:
+    """
+    Save the tau_n values in a file or in a binary file.
+
+    Parameters
+    ----------
+    tau_n: np.ndarray, (Z, T)
+        tau_n values for all the row T. Z is the number of the phonon expansion
+        order and T is the number of the beta grid
+    nphonon: int
+        Phonon expansion order
+    T: float
+        Target temperature value for the caculation of tau_n
+    tau_to_file: bool
+        If True, save the tau_n values in a file. If False, don't save the tau_n
+        values in a file. Default is False
+    binary: bool
+        If True, save the tau_n values in a binary file. If False, save the tau_n
+        values in a txt file. Default is False.
+    """
+    name = f"tau_{nphonon}_{T}"
+    if tau_to_file:
+        os.makedirs("tau", exist_ok=True)
+        np.savetxt(f"tau/{name}.txt", tau_n, delimiter="\t", fmt="%.14f")
+    if binary:
+        os.makedirs("tau/binary", exist_ok=True)
+        with h5py.File(f"tau/binary/{name}.h5", "w") as f:
+            f.create_dataset("tau", data=tau_n)

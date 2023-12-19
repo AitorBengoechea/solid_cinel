@@ -1097,6 +1097,37 @@ def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     -------
     'np.ndarray', (N, 2)
         Scattering function values for a single angle for tau_n expansion.
+
+    Examples
+    --------
+    >>> Ein = 7.2
+    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> mu = np.cos(np.deg2rad([120]))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    >>> beta = get_beta(Eout, Ein, T)
+    >>> from solid_cinel.core.material.scattering_function.alpha import get_alpha_from_Eout
+    >>> alpha_mat = get_alpha_from_Eout(beta * kb * T + Ein, Ein, T, M, mu)
+    >>> sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, debye_waller_coeff)
+    >>> Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_values, beta, Ein, T, M)
+    >>> pd.Series(scatfunc_values, index=Eout_calc).iloc[::200].round(6)
+    6.755400  0.036933
+    6.894059  0.381007
+    6.991813  1.027909
+    7.060847  1.470584
+    7.129778  1.569325
+    7.199108  1.238804
+    7.268142  0.716554
+    7.337073  0.307374
+    7.406107  0.098213
+    7.501782  0.012632
+    7.640440  0.000258
+    dtype: float64
     """
     # Scattering function values calculation:
     ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::] * np.exp(-beta[1:])))

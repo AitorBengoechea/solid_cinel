@@ -10,7 +10,7 @@ import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.scattering_function.beta import get_beta
-from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat
+from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import save_tau
 from typing import Iterable
@@ -1282,6 +1282,68 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     for i in range(len(mu)):
         select_scarfunc[i] += np.interp(Eout, Eout_calc, scatfunc_values[i])
     return select_scarfunc
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
+                 mu: float, tau_n: np.ndarray, delta_beta: float,
+                 DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate the scattering function from a S(alpha, -beta) table based on
+    the phonon expansion model.
+
+    Parameters
+    ----------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray, (N,)
+        The neutron outgoing energy grid in eV
+    mu : float
+        Cosine of the scattering angle
+    tau_n : 'np.ndarray', (M, T)
+        all tau n functions in one array.
+    tau_n_beta : 'np.ndarray', (M,)
+        Space between beta grid points of tau n functions.
+    DebyeWallerCoeff : float
+        Debye Waller coefficient
+
+    Returns
+    -------
+    S_diag : 'np.ndarray', (N,)
+        Scattering function values for a single angle.
+
+    Examples
+    --------
+    >>> Ein = 7.2
+    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> mu = np.cos(np.deg2rad(120))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> sd_pdf = get_scatfunc_pdos_row(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff)
+    >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
+    6.7554    0.034511
+    6.9050    0.426488
+    7.0439    1.383082
+    7.2000    1.262613
+    7.3157    0.415630
+    7.4480    0.042074
+    dtype: float64
+    """
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    beta = get_beta(Eout, Ein, T)
+    alpha = get_alpha_from_Eout(beta * kb * T + Ein if len(beta) < len(Eout) else Eout, Ein, T, M, mu)
+    sab_values = get_sab_pdos(alpha, beta, tau_n, tau_n_beta, DebyeWallerCoeff)
+    Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_values, beta, Ein, T, M)
+    # Interpolation for avoiding numerical fluctuations:
+    return np.interp(Eout, Eout_calc, scatfunc_values)
 
 
 def total_variation_distance(p: np.ndarray, q: np.ndarray) -> float:

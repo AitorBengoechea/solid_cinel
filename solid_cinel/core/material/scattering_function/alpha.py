@@ -440,6 +440,11 @@ class Alpha:
         return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
 
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_alpha_from_Eout(Eout: np.ndarray, Ein: float, T: float, M: float, mu: float) -> np.ndarray:
+    return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M * kb * T / m)
+
+
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
               mu: np.ndarray) -> np.ndarray:
@@ -466,15 +471,11 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     'np.ndarray', (N + M + Z + K,)
         Array containing all posible alpha values for the input parameters.
     """
-    alpha = np.empty((len(T), len(Ein), len(Eout), len(mu)))
+    alpha = np.zeros((len(T), len(Ein), len(mu), len(Eout)))
     for i in prange(len(T)):
         for j in prange(len(Ein)):
-            for k in prange(len(Eout)):
-                for ll in prange(len(mu)):
-                    alpha_value = Eout[k] + Ein[j]
-                    alpha_value -= 2 * mu[ll] * np.sqrt(Eout[k] * Ein[j])
-                    alpha_value /= (M * kb * T[i] / m)
-                    alpha[i, j, k, ll] = alpha_value
+            for ll in prange(len(mu)):
+                    alpha[i, j, ll, :] += get_alpha_from_Eout(Eout, Ein[j], T[i], M, mu[ll])
     return np.unique(alpha.ravel())
 
 
@@ -528,6 +529,5 @@ def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
     n = len(mu)
     alpha_mat = np.zeros((n, len(Eout)))
     for i in range(n):
-        alpha_mu = Eout + Ein - 2 * mu[i] * np.sqrt(Eout * Ein)
-        alpha_mat[i] += alpha_mu / (M * kb * T / m)
+        alpha_mat[i] += get_alpha_from_Eout(Eout, Ein, T, M, mu[i])
     return alpha_mat

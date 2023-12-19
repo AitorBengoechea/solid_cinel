@@ -968,6 +968,33 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     -------
     np.ndarray, (M, N)
         Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs_mat.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 30, 10)
+    >>> mu_fit = np.cos(np.deg2rad(60))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M, T_arno, mu_fit, delta_beta, DebyeWallerCoeff, tau1, nphonon, threshold)
+    >>> pd.DataFrame(xs_mat, index=theta[::-1], columns=Eout).round(6)
+        1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+    20  9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
+    10  9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
     def gen_xs_mat_mu(i, tau1, nphonon, threshold):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
@@ -984,10 +1011,8 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                                                     delta_beta[i_], DebyeWallerCoeff[i_],
                                                     Ein_arno[i], T_arno[i],
                                                     xs_values, xs_E, mu_fit, M)
-    if len(args) == 2:
-        calculation = xs_mat_mu_from_tau
-    else:
-        calculation = gen_xs_mat_mu
+
+    calculation = xs_mat_mu_from_tau if len(args) == 2 else gen_xs_mat_mu
     delayed_tasks = [calculation(i, *args) for i in range(start, len(T_arno))]
     dask.compute(*delayed_tasks)
 
@@ -1030,6 +1055,40 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     -------
     np.ndarray, (M, N)
         Cross section matrix in barns with the row i updated
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs_mat.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 30, 10)
+    >>> mu_fit = np.cos(np.deg2rad(60))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> i = 0
+    >>> tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+    >>> update_xs_mat_pdos_row(xs_mat[i], tau_n, delta_beta[i], DebyeWallerCoeff[i], Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
+    >>> pd.Series(xs_mat[i], index=Eout).round(6)
+    1.800000    9.105109
+    1.866667    9.098356
+    1.933333    9.091553
+    2.000000    9.084671
+    2.066667    9.077696
+    2.133333    9.070658
+    2.200000    9.063578
+    dtype: float64
     """
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     for j in prange(len(xs_mat)):

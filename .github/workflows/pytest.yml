@@ -11,6 +11,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:11.0-base
 
     steps:
       - name: Check out repository code

@@ -1,6 +1,17 @@
 from setuptools import setup, find_packages
 import multiprocessing
-requirements = "requirements.txt"
+import subprocess
+
+requirements_file = "requirements.txt"
+
+# Check for CUDA JIT
+try:
+    result = subprocess.run(['nvcc', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if 'release' in result.stdout.decode('utf-8'):
+        with open(requirements_file, 'a') as f:
+            f.write('\ncupy\n')
+except FileNotFoundError:
+    pass
 
 if __name__ == "__main__":
     # Freeze to support parallel compilation when using spawn instead of fork
@@ -18,9 +29,8 @@ if __name__ == "__main__":
             'Programming Language :: Python :: 3',
         ],
         packages=find_packages(exclude=["tests"]),
-        install_requires=open(requirements).read().splitlines(),
+        install_requires=open(requirements_file).read().splitlines(),
         zip_safe=False,
-        # setup_requires=["pytest-runner",],
         tests_require=[
             "pytest",
         ],

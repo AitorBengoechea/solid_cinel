@@ -15,6 +15,3 @@ statsmodels
 typing
 tables
 dask
-cupy
-
-cupy

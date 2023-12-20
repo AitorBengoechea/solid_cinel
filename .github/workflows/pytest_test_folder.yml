@@ -24,7 +24,7 @@ jobs:
     name: Big Test checkout
     runs-on: ubuntu-latest
     container:
-      image: nvidia/cuda:11.0-base
+      image: nvidia/cuda:12.1.0-base-ubi8
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it

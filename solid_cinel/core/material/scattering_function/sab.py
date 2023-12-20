@@ -7,15 +7,14 @@ from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
+from solid_cinel.core.material.scattering_function.scatfunc import scatfunc_values_alpha_vec
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
-import h5py
-import os
 from math import exp, sqrt, pi
 from numba import prange
 import warnings
@@ -395,7 +394,7 @@ class Sab:
         >>> M = 26
         >>> Ein = 3
         >>> Eout = np.linspace(Ein, Ein * 1.05, 1000)
-        >>> beta_grid = Beta.from_parameters(Eout, Ein, T).data
+        >>> beta_grid = Beta.from_Eout(Eout, Ein, T).data
         >>> alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, 60).data
         >>> Sab.from_fgm(alpha_grid, beta_grid).to_ScatFunc(Ein, T, M).iloc[295:305].round(6) #doctest: +NORMALIZE_WHITESPACE
         Eout
@@ -415,10 +414,10 @@ class Sab:
         # Get the scattering function values:
         sab_diag = np.array(np.diag(self.data), order='C')
         beta = self.beta.data[:len(sab_diag)]
-        scattfunc = get_scatfunc_values(sab_diag, beta, Ein, T, M)
+        Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_diag, beta, Ein, T, M)
 
         # Change the data type:
-        scattfunc = pd.Series(scattfunc[:, 1], index=scattfunc[:, 0])
+        scattfunc = pd.Series(scatfunc_values, index=Eout_calc)
         scattfunc = scattfunc[~scattfunc.index.duplicated(keep='first')]
         # Output style:
         scattfunc.index.name = 'Eout'
@@ -1278,8 +1277,8 @@ def proportionality_factor(alpha: float, alpha_i: float,
         q = 1
     return q
 
-@nb.jit("float64[:, :](float64[:], float64[:], int32, float64[:, :], float64, float64)",
-        nopython=True, nogil=False, cache=True, parallel=False)
+
+@nb.jit(nopython=True, nogil=True, cache=True)
 def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
                      tau_n: np.ndarray, delta_beta: float,
                      DebyeWallerCoeff: float) -> np.ndarray:
@@ -1296,37 +1295,6 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
         sab_values += np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
                                np.interp(beta, tau_n_beta, tau_n[n]))
     return sab_values
-
-
-def save_tau(tau_n: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
-              binary: bool) -> None:
-    """
-    Save the tau_n values in a file or in a binary file.
-
-    Parameters
-    ----------
-    tau_n: np.ndarray, (Z, T)
-        tau_n values for all the row T. Z is the number of the phonon expansion
-        order and T is the number of the beta grid
-    nphonon: int
-        Phonon expansion order
-    T: float
-        Target temperature value for the caculation of tau_n
-    tau_to_file: bool
-        If True, save the tau_n values in a file. If False, don't save the tau_n
-        values in a file. Default is False
-    binary: bool
-        If True, save the tau_n values in a binary file. If False, save the tau_n
-        values in a txt file. Default is False.
-    """
-    name = f"tau_{nphonon}_{T}"
-    if tau_to_file:
-        os.makedirs("tau", exist_ok=True)
-        np.savetxt(f"tau/{name}.txt", tau_n, delimiter="\t", fmt="%.14f")
-    if binary:
-        os.makedirs("tau/binary", exist_ok=True)
-        with h5py.File(f"tau/binary/{name}.h5", "w") as f:
-            f.create_dataset("tau", data=tau_n)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
@@ -1360,52 +1328,3 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
             Sab[i, j] *= exp(- (abs(beta[j]) + beta[j]) / 2)
             Sab[i, j] /= sqrt(4 * pi * ws * alpha[i] * Tratio)
     return Sab
-
-
-@nb.jit("float64[:, :](float64[:], float64[:], float64, float64, float64)",
-        nopython=True, nogil=True, cache=True)
-def get_scatfunc_values(Sab_mat: np.ndarray, beta_grid: np.ndarray, Ein: float,
-                        T: float, M: float) -> np.ndarray:
-    """
-    Generate the scattering function values from a S(alpha, -beta) table based on
-    the phonon expansion model for a single angle
-
-    Parameters
-    ----------
-    Sab_mat : 'np.ndarray', (N,)
-        S(alpha, -beta) matrix values.
-    beta_grid : 'np.ndarray', (N,)
-        Minus beta grid values.
-    Ein : 'float'
-        Incident energy in eV.
-    T : 'float'
-        Temperature in K.
-    M : 'float'
-        Mass of the target nucleus in amu.
-
-    Returns
-    -------
-    'np.ndarray', (N, 2)
-        Scattering function values for a single angle for tau_n expansion.
-    """
-    # Scattering function values calculation:
-    ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::]))
-    ScatFunc_values[len(Sab_mat)::] *= np.exp(-beta_grid[1::])
-
-    # Eout calculation
-    Eout = np.sort(
-        Ein + np.concatenate((-beta_grid[::-1], beta_grid[1::])) * kb * T)
-
-    # Ensure the Eout values are positive:
-    positive_mask = Eout > 0
-    ScatFunc_values = ScatFunc_values[positive_mask]
-    Eout = Eout[positive_mask]
-
-    # Handle nan values:
-    ScatFunc_values[np.isnan(ScatFunc_values)] = 0
-
-    # Normalization constant
-    aws = ((M / m + 1) / (M / m)) ** 2
-    normalization_factor = aws * np.sqrt(Eout / Ein) / (2 * kb * T)
-
-    return np.vstack((Eout, ScatFunc_values * normalization_factor)).T

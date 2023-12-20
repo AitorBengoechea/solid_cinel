@@ -5,7 +5,7 @@ from numba import prange
 
 import dask
 from solid_cinel.core.material.vibration.tau import tau_n_functions
-from solid_cinel.core.material.scattering_function.scatfunc import get_ScatFunc_pdos_angle, ScatFunc
+from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, get_scatfunc_pdos_row
 from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
 from solid_cinel.core.xs.ddxs import DDxs
 
@@ -220,10 +220,10 @@ class Xs:
                 # Scattering function for selected angle:
                 tau_n_beta_scatt = np.arange(
                     tau_n_scatt.shape[1]) * delta_beta_scatt
-                scattfunc_row = get_ScatFunc_pdos_angle(Ein, M, T, Eout, mu[i],
-                                                        tau_n_scatt,
-                                                        tau_n_beta_scatt,
-                                                        debye_waller_coeff_scatt)
+                scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu[i],
+                                                      tau_n_scatt,
+                                                      tau_n_beta_scatt,
+                                                      debye_waller_coeff_scatt)
 
                 # xs_mat row for selected angle:
                 Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
@@ -279,8 +279,8 @@ def db_pdos_row(tau_n: np.ndarray,
     xs_mat = np.empty(len(Ein_row))
     for j in prange(len(Ein_row)):
         Eout_db = np.linspace(Ein_row[j] * 0.9, Ein_row[j] * 1.1, 3000)
-        pdf = get_ScatFunc_pdos_angle(Ein_row[j], M, T,
-                                      Eout_db, mu_fit, tau_n, tau_n_beta,
-                                      debyewallercoeff)
+        pdf = get_scatfunc_pdos_row(Ein_row[j], M, T,
+                                    Eout_db, mu_fit, tau_n, tau_n_beta,
+                                    debyewallercoeff)
         xs_mat[j] = Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
     return xs_mat

@@ -252,47 +252,12 @@ class Beta:
         kind : "str"
             "abs" if the beta grid contains only absolute values or "mix" if
             the beta grid contains mix (positive and negative) values
-
-        Examples
-        --------
-        >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> T = 1000
-        >>> Beta.from_parameters(Eout, Ein, T).kind
-        'mix'
-
-        >>> Eout = np.array([7.2   , 7.3157, 7.448 ])
-        >>> Beta.from_parameters(Eout, Ein, T).kind
-        'abs'
         """
         if (self.data >= 0).all():
             kind = "abs"
         else:
             kind = "mix"
         return kind
-
-    @property
-    def unique(self) -> np.array:
-        """
-        Return the absolute unique values of the beta grid
-
-        Returns
-        -------
-        "np.array"
-            Array with the absolute unique values of the beta grid
-
-        Examples
-        --------
-        >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> T = 1000
-        >>> Beta.from_parameters(Eout, Ein, T).unique.round(2)
-        array([0.  , 1.34, 1.81, 2.88, 3.42, 5.16])
-        """
-        if self.kind == "mix":
-            return np.sort(abs(self.data))
-        else:
-            return self.data
 
     @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,
@@ -377,9 +342,7 @@ class Beta:
         return cls(np.array(energy_grid) / (kb * T))
 
     @classmethod
-    def from_parameters(cls, Eout: Union[Iterable, float],
-                        Ein: Union[Iterable, float],
-                        T: float):
+    def from_Eout(cls, Eout: np.ndarray, Ein: float, T: float):
         """
         Generate a beta grid based on the output energies and the incident
         neutron energy.
@@ -388,9 +351,9 @@ class Beta:
 
         Parameters
         ----------
-        Eout : 1D iterable or 'float'
+        Eout : np.ndarray
             Neutron output energies in eV.
-        Ein : 1D iterable or 'float'
+        Ein : 'float'
             Neutron incident energy in eV.
         T : 1D iterable or 'float'
             Temperature in Kelvin.
@@ -404,14 +367,44 @@ class Beta:
         -------
         >>> T = 800
         >>> Ein = 0.33118
-        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> Beta.from_parameters(Eout, Ein, T).data.round(6)
+        >>> Eout = np.array([0.331180, 0.331812, 0.332445, 0.333077, 0.333710])
+        >>> Beta.from_Eout(Eout, Ein, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
-        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-        Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
-        T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
-        return cls(get_beta(Eout_, Ein_, T_))
+        return cls(get_beta(Eout, Ein, T))
+
+    @classmethod
+    def from_Ein(cls, Eout: float, Ein: np.ndarray, T: float):
+        """
+        Generate a beta grid based on the incident energies and the output
+        neutron energy.
+        .. math::
+            \beta=\dfrac{E_{out} - E_{in}}{k_BT}
+        Parameters
+        ----------
+        Eout: 'float'
+            Neutron output energy in eV.
+        Ein: np.ndarray
+            Neutron incident energies in eV.
+        T: 'float'
+            Temperature in Kelvin.
+
+        Returns
+        -------
+        Returns
+        -------
+        "Beta"
+            Generate beta grid from the parameters of the equation.
+
+        Example
+        -------
+        >>> T = 800
+        >>> Eout = 0.33118
+        >>> Ein = np.array([0.331180, 0.331812, 0.332445, 0.333077, 0.333710])
+        >>> Beta.from_Ein(Eout, Ein, T).data.round(6)
+        array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
+        """
+        return cls(get_beta(Ein, Eout, T))
 
     def get_dE(self, T: float) -> pd.Series:
         """
@@ -554,33 +547,27 @@ class Beta:
         return Beta(scale_grid)
 
 
-@nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
-def get_beta(Eout: np.ndarray, Ein: np.ndarray,
-             T: np.ndarray) -> np.ndarray:
+@nb.jit(nopython=True, cache=True)
+def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
+             T: float) -> np.ndarray:
     """
-    Get all the posible beta values from the parameters of the function:
+    Get the positive beta values from the parameters of the function:
     .. math::
         \beta=\dfrac{E_{out} - E_{in}}{k_BT}
 
     Parameters
     ----------
-    Eout : 'np.ndarray', (N,)
+    Eout : 'np.ndarray', (N,) or 'float'
         Output energy of the neutron.
-    Ein : 'np.ndarray', (M,)
+    Ein : 'np.ndarray', (N,) or 'float'
         Incidente energy of the neutron.
-    T : 'np.ndarray', (Z,)
+    T : float
         Temperature in K.
 
     Returns
     -------
-    'np.ndarray', (N + M + Z,)
+    'np.ndarray', (N,)
         Array containing all posible beta values for the input parameters.
     """
-    beta = []
-    for i in prange(len(T)):
-        for j in prange(len(Ein)):
-            for k in prange(len(Eout)):
-                beta_value = Eout[k] - Ein[j]
-                beta_value /= kb * T[i]
-                beta.append(beta_value)
-    return np.array(beta)
+    beta = (Eout - Ein) / (kb * T)
+    return np.unique(np.absolute(beta))

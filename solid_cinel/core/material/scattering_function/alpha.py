@@ -376,8 +376,8 @@ class Alpha:
 
         >>> T = 800
         >>> Ein = 0.33118
-        >>> Eout = [0.331180, 0.331812, 0.332445, 0.333077, 0.333710]
-        >>> beta_grid = Beta.from_parameters(Eout, Ein, T)
+        >>> Eout = np.array([0.331180, 0.331812, 0.332445, 0.333077, 0.333710])
+        >>> beta_grid = Beta.from_Eout(Eout, Ein, T)
         >>> M = 26.98153433356103
         >>> theta = 45
         >>> alpha = Alpha.from_parameters(Eout, Ein, T, M, theta)
@@ -440,6 +440,11 @@ class Alpha:
         return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
 
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_alpha_from_Eout(Eout: np.ndarray, Ein: float, T: float, M: float, mu: float) -> np.ndarray:
+    return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M * kb * T / m)
+
+
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
               mu: np.ndarray) -> np.ndarray:
@@ -466,13 +471,63 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     'np.ndarray', (N + M + Z + K,)
         Array containing all posible alpha values for the input parameters.
     """
-    alpha = []
+    alpha = np.zeros((len(T), len(Ein), len(mu), len(Eout)))
     for i in prange(len(T)):
         for j in prange(len(Ein)):
-            for k in prange(len(Eout)):
-                for ll in prange(len(mu)):
-                    alpha_value = Eout[k] + Ein[j]
-                    alpha_value -= 2 * mu[ll] * np.sqrt(Eout[k] * Ein[j])
-                    alpha_value /= (M * kb * T[i] / m)
-                    alpha.append(alpha_value)
-    return np.array(alpha)
+            for ll in prange(len(mu)):
+                    alpha[i, j, ll, :] += get_alpha_from_Eout(Eout, Ein[j], T[i], M, mu[ll])
+    return np.unique(alpha.ravel())
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
+                  mu: np.ndarray) -> np.ndarray:
+    """
+    Get all the posible alpha values from the parameters of the function:
+    .. math::
+        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
+
+    Parameters
+    ----------
+    Eout: 'np.ndarray', (N,)
+        Output energy of the neutron in eV.
+    Ein: 'float'
+        Incidente energy of the neutron in eV.
+    T: 'float'
+        Temperature in K.
+    M: "float"
+        Mass in amu of the scatterer.
+    mu: 'np.ndarray', (K,)
+        Cosine of the scattering angle.
+
+    Returns
+    -------
+    'np.ndarray', (K, N)
+        Array containing all posible alpha values for the input parameters.
+
+    Example
+    -------
+    >>> T = 800
+    >>> Ein = 0.33118
+    >>> Eout = np.array([0.331180, 0.331812, 0.332445, 0.333077, 0.333710])
+    >>> M = 26.98153433356103
+    >>> theta = np.array([45, 90, 135, 180])
+    >>> mu = np.cos(np.deg2rad(theta))
+    >>> pd.DataFrame(get_alpha_mat(Eout, Ein, T, M, mu).round(6), index=theta, columns=Eout)
+         0.331180  0.331812  0.332445  0.333077  0.333710
+    45   0.105201  0.105302  0.105403  0.105504  0.105605
+    90   0.359179  0.359522  0.359865  0.360208  0.360551
+    135  0.613158  0.613743  0.614328  0.614913  0.615498
+    180  0.718359  0.719044  0.719730  0.720415  0.721100
+
+    >>> theta = np.array([90])
+    >>> mu = np.cos(np.deg2rad(theta))
+    >>> pd.DataFrame(get_alpha_mat(Eout, Ein, T, M, mu).round(6), index=theta, columns=Eout)
+        0.331180  0.331812  0.332445  0.333077  0.333710
+    90  0.359179  0.359522  0.359865  0.360208  0.360551
+    """
+    n = len(mu)
+    alpha_mat = np.zeros((n, len(Eout)))
+    for i in range(n):
+        alpha_mat[i] += get_alpha_from_Eout(Eout, Ein, T, M, mu[i])
+    return alpha_mat

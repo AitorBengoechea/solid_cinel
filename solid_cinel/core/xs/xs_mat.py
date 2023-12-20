@@ -10,9 +10,8 @@ import h5py
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.sab import save_tau
-from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_ScatFunc_pdos_angle
-from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
+from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
 from solid_cinel.core.material.vibration.pdos import Pdos
 import dask
 from solid_cinel.core.xs.dxs import Dxs
@@ -326,98 +325,6 @@ class XsMat:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
-    @classmethod
-    def from_tau(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
-                 Eout: np.ndarray, theta: np.ndarray, mu_fit: float,
-                 tau_files: [str, list, np.ndarray], delta_beta: np.ndarray,
-                 DebyeWallerCoeff: np.ndarray, check=True, key="tau"):
-        """
-        Calculate the cross section matrix for a given incident energy, target mass,
-        target temperature, outgoing energy grid and outgoing angle grid using arno
-        model with the most similar S(alpha, -beta) distribution with sigma1 for
-        a given tau_n folder, delta_beta and DebyeWallerCoeff.
-
-        Parameters
-        ----------
-         xs_0K : pd.Series
-             Cross section at 0K in barns
-         Ein : float
-             The incident energy of the neutron in eV
-         M : float
-             Mass of the material in amu
-         T : float
-             Temperature of the material in K
-         Eout : np.ndarray, (N,)
-             The neutron outgoing energy grid in eV
-         theta : np.ndarray, (M,)
-             The neutron outgoing angle grid in degrees (0, 180]
-        mu_fit: float
-            The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
-            with sigma1
-        tau_files: str, list, np.ndarray
-            str: Path to the tau_n files. Is important than the temperature is the
-                 last number for all the tau_n files.
-            list or np.ndarray: List of the tau_n files. Is important than the
-                                files are in the correct order.
-        delta_beta: np.ndarray (M - 1, )
-            delta_beta values for each temperature in T_arno except theta = 180
-        DebyeWallerCoeff: np.ndarray (M - 1, )
-            DebyeWallerCoeff values for each temperature in T_arno except theta = 180
-        check: bool, optional
-            Check if the tau_n files are in the correct order and if the temperature
-            grid is correct. The default is True.
-        key: str, optional
-            Key of the tau_n files for hdf5 format. The default is "tau".
-
-        Returns
-        -------
-        XsMat
-            Cross section matrix in barns
-
-        Examples
-        --------
-         # Gen the data:
-         >>> wd = os.getcwd()
-         >>> os.chdir(__file__.replace("xs_mat.py", ""))
-         >>> os.chdir("../../data/xs/U238/")
-         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-         >>> os.chdir(wd)
-         >>> T = 1000
-         >>> Ein = 2.0
-         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
-         >>> M = 238.05077040419212
-         >>> theta = np.arange(10, 190, 10)
-         >>> mu = np.sort(np.cos(np.deg2rad(theta)))
-         >>> T_arno = T * (1 + mu) / 2
-         >>> mu_fit = np.cos(np.deg2rad(60))
-         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-         >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])[1::]
-         >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])[1::]
-         >>> nphonon = 100
-         >>> threshold = 1.0e-14
-         >>> xs_values_generate = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos", binary=True)
-         >>> xs_values_tau = XsMat.from_tau(xs_0K, Ein, M, T, Eout, theta, mu_fit, "tau/binary", delta_beta, DebyeWallerCoeff, check=True, key="tau")
-         >>> import shutil
-         >>> shutil.rmtree("tau")
-         >>> assert (xs_values_generate.data.values.round(6) == xs_values_tau.data.values.round(6)).all().all()
-        """
-        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
-                                                                     M, T, Eout,
-                                                                     theta)
-        # Create list of tau_n files:
-        tau_n_list = cls.tau_folder_to_list(tau_files) if isinstance(tau_files, str) else tau_files
-
-        if check:
-            tau_n_list = cls.check_data(tau_n_list, delta_beta, DebyeWallerCoeff,
-                                        T_arno)
-
-        # Begin the calculation:
-        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-        update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                           T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
-                           tau_n_list, key)
-        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
-
     @staticmethod
     def tau_folder_to_list(tau_folder: str) -> [str]:
         """
@@ -678,8 +585,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
 
 
-@nb.jit("float64[:](float64, float64[:], float64, float64)",
-    nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
                  M: float) -> np.ndarray:
     """
@@ -707,8 +613,7 @@ def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
     return mu_Ein_arno
 
 
-@nb.jit("float64[:, :](float64, float64[:], float64[:], float64)",
-    nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
                  M: float) -> np.ndarray:
     """
@@ -736,7 +641,7 @@ def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     return Ein_arno
 
 
-@nb.jit("Tuple((float64[:, :], int8))(float64[:], float64[:], float64[:, :], float64)", nopython=True)
+@nb.jit(nopython=True, nogil=True)
 def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
                    Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
     """
@@ -857,6 +762,33 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     -------
     np.ndarray, (M, N)
         Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs_mat.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 30, 10)
+    >>> mu_fit = np.cos(np.deg2rad(60))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M, T_arno, mu_fit, delta_beta, DebyeWallerCoeff, tau1, nphonon, threshold)
+    >>> pd.DataFrame(xs_mat, index=theta[::-1], columns=Eout).round(6)
+        1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+    20  9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
+    10  9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
     def gen_xs_mat_mu(i, tau1, nphonon, threshold):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
@@ -873,16 +805,13 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                                                     delta_beta[i_], DebyeWallerCoeff[i_],
                                                     Ein_arno[i], T_arno[i],
                                                     xs_values, xs_E, mu_fit, M)
-    if len(args) == 2:
-        calculation = xs_mat_mu_from_tau
-    else:
-        calculation = gen_xs_mat_mu
+
+    calculation = xs_mat_mu_from_tau if len(args) == 2 else gen_xs_mat_mu
     delayed_tasks = [calculation(i, *args) for i in range(start, len(T_arno))]
     dask.compute(*delayed_tasks)
 
 
-@nb.jit("void(float64[:], float64[:, :], float64, float64, float64[:], float64, float64[:], float64[:], float64, float64)",
-    nopython=True, nogil=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, parallel=True)
 def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
                            delta_beta: float, debyewallercoeff: float,
                            Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
@@ -920,18 +849,50 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     -------
     np.ndarray, (M, N)
         Cross section matrix in barns with the row i updated
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs_mat.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 30, 10)
+    >>> mu_fit = np.cos(np.deg2rad(60))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> i = 0
+    >>> tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+    >>> update_xs_mat_pdos_row(xs_mat[i], tau_n, delta_beta[i], DebyeWallerCoeff[i], Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
+    >>> pd.Series(xs_mat[i], index=Eout).round(6)
+    1.800000    9.105109
+    1.866667    9.098356
+    1.933333    9.091553
+    2.000000    9.084671
+    2.066667    9.077696
+    2.133333    9.070658
+    2.200000    9.063578
+    dtype: float64
     """
-    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     for j in prange(len(xs_mat)):
         Eout_db = default_Eout(Ein_row[j])
-        pdf = get_ScatFunc_pdos_angle(Ein_row[j], M, T,
-                                      Eout_db, mu_fit, tau_n, tau_n_beta,
-                                      debyewallercoeff)
+        pdf = get_scatfunc_pdos_row(Ein_row[j], M, T,
+                                    Eout_db, mu_fit, tau_n, delta_beta,
+                                    debyewallercoeff)
         xs_mat[j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
 
 
-@nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:])",
-    nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                          xs_values: np.ndarray, xs_E: np.ndarray,
                          M: float, T_arno: np.ndarray) -> np.ndarray:
@@ -970,8 +931,8 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db,
                                 pdf)
 
-@nb.jit("void(float64[:, :], float64[:, :], int8, float64[:], float64[:], float64, float64[:], float64, float64[:])",
-    nopython=True, nogil=True, cache=True, parallel=True)
+
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                       xs_values: np.ndarray, xs_E: np.ndarray,
                       M: float, Tarno: np.ndarray, mu_fit: float,
@@ -1009,11 +970,12 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     np.ndarray, (M, N)
         Cross section matrix in barns with the row i updated
     """
+    mu_fit_ = np.array([mu_fit])
     for i in range(start, Ein_arno.shape[0], 1):
         for j in prange(Ein_arno.shape[1]):
             Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_scat_sct_angular(Eout_db, mu_fit, Ein_arno[i, j],
-                                       Tarno[i], M, Tarno_eff[i], 1.0)
+            pdf = get_scat_sct_angular(Eout_db, mu_fit_, Ein_arno[i, j],
+                                       Tarno[i], M, Tarno_eff[i], 1.0)[0]
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
 
 

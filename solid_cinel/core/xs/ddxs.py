@@ -362,7 +362,7 @@ class DDxs:
         # demonstration purposes)
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
         >>> theta = np.arange(10, 190, 10)
-        >>> ddxs_test = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=100, model="pdos", binary=True).data
+        >>> ddxs_test = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=100, model="pdos").data
         >>> ddxs_test.set_axis(theta[::-1]).round(6)
         Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
         180   2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
@@ -383,36 +383,6 @@ class DDxs:
         30    0.000001  0.001397   0.987060  103.939037   0.488590  0.000339  0.000000
         20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
         10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
-
-        # Coercelle with pdos model from tau_n files:
-        >>> mu = np.sort(np.cos(np.deg2rad(theta)))
-        >>> T_arno = np.append(T * (1 + mu) / 2, T)
-        >>> delta_beta = np.array([interv_in_energy_U238 / (kb * T) if T > 0.0 else 0.0 for T in T_arno])[1::]
-        >>> DebyeWallerCoeff = np.array([pdos.DebyeWallerCoeff(T) if T > 0.0 else 0.0 for T in T_arno])[1::]
-        >>> ddxs_test = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, "tau/binary", delta_beta, DebyeWallerCoeff).data
-        >>> ddxs_test.set_axis(theta[::-1]).round(6)
-        Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
-        180   2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
-        170   2.322242  9.709096  21.591080   22.629430  10.248767  2.236507  0.261395
-        160   2.184305  9.495283  21.680440   22.942594  10.293308  2.188585  0.246138
-        150   1.963128  9.127680  21.817322   23.476630  10.361956  2.106059  0.221630
-        140   1.673261  8.592115  21.983471   24.253407  10.446299  1.985547  0.189424
-        130   1.336876  7.872568  22.147225   25.305572  10.531655  1.823139  0.151908
-        120   0.984164  6.957435  22.257099   26.680161  10.594023  1.615780  0.112375
-        110   0.651328  5.850551  22.232566   28.445456  10.595724  1.363767  0.074832
-        100   0.374294  4.587258  21.949746   30.701521  10.478464  1.074447  0.043334
-        90    0.178027  3.253160  21.222714   33.598268  10.154164  0.766695  0.020801
-        80    0.065776  1.993485  19.787501   37.371072   9.496498  0.473504  0.007766
-        70    0.017496  0.986708  17.317657   42.432964   8.346393  0.236599  0.002087
-        60    0.003118  0.359353  13.554393   49.718219   6.570866  0.087061  0.000375
-        50    0.000357  0.086814   8.694447   61.832770   4.247230  0.021201  0.000043
-        40    0.000026  0.013420   3.927192   83.133021   1.934737  0.003275  0.000003
-        30    0.000001  0.001397   0.987060  103.939037   0.488590  0.000339  0.000000
-        20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
-        10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
-
-        >>> import shutil
-        >>> shutil.rmtree("tau")
         """
         if len(args) == 0:  # SIGMA1 or FGM
             ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
@@ -421,73 +391,8 @@ class DDxs:
             ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
                                        *args, **kwargs)
         else:  # TAU_N Files
-            ddxs_values = cls.from_tau_4PCF(xs_0K, Ein, M, T, Eout, theta,
-                                            *args, **kwargs)
+            raise ValueError('Not implemented yet')
         return cls(Ein, T, M, "4PCF", ddxs_values)
-
-    @staticmethod
-    def from_tau_4PCF(xs_0K: pd.Series, Ein: float, M: float, T: float,
-                      Eout: np.ndarray, theta: np.ndarray,
-                      tau_files: [str, list, np.ndarray], delta_beta: np.ndarray,
-                      DebyeWallerCoeff: np.ndarray, check: bool = True,
-                      key: bool = "tau", chunksize: int = 100) -> pd.DataFrame:
-        """
-        Generate the Double Differential XS for elastic scattering from Fourier
-        double-Laplace transform of a 4-point from pre-calculated tau_n
-        functions
-
-        Parameters
-        ----------
-        xs_0K : pd.Series, (Z,)
-            0K xs data for the given material in barns
-        Ein : float
-        The incident energy of the neutron in eV
-        M : float
-            Mass of the material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.ndarray, (N,)
-            The neutron outgoing energy grid in eV
-        theta : np.ndarray, (M,)
-            The neutron outgoing angle grid in degrees (0, 180]
-        tau_files: str, list, np.ndarray
-            str: Path to the tau_n files. Is important than the temperature is the
-                 last number for all the tau_n files.
-            list or np.ndarray: List of the tau_n files. Is important than the
-                                files are in the correct order.
-        delta_beta: np.ndarray (M - 1, )
-            delta_beta values for each temperature in T_arno except theta = 180
-        DebyeWallerCoeff: np.ndarray (M - 1, )
-            DebyeWallerCoeff values for each temperature in T_arno except theta = 180
-        check: bool, optional
-            Check if the tau_n files are in the correct order and if the temperature
-            grid is correct. The default is True.
-        key: str, optional
-            Key of the tau_n files for hdf5 format. The default is "tau".
-        chunksize: int, optional
-            Chunksize for the parallelization of the calculation. The default
-            is 100.
-
-        Returns
-        -------
-        pd.DataFrame
-            The Double Differential XS for elastic scattering
-        """
-        # Get the tau_n functions file names:
-        tau_n_list = XsMat.tau_folder_to_list(tau_files) if isinstance(tau_files, str) else tau_files
-        # Get the scattering function(Last element of the list):
-        if extract_number(tau_n_list[-1]) != T:
-            raise ValueError(f"The temperature of the tau_n files doesnt have {T}")
-        tau_n = h5py.File(tau_n_list[-1], "r")[key][:]
-        scatfunction = ScatFunc.from_tau(Ein, M, T, Eout, theta, tau_n,
-                                         delta_beta[-1], DebyeWallerCoeff[-1],
-                                         chunksize=chunksize)
-        # Get the xs matrix (all the element except the last one):
-        mu_fit = scatfunction.get_angle
-        xs = XsMat.from_tau(xs_0K, Ein, M, T, Eout, theta, mu_fit,
-                            tau_n_list[:-1], delta_beta[:-1],
-                            DebyeWallerCoeff[:-1], check=check, key=key)
-        return scatfunction.convolve(xs.data)
 
     @staticmethod
     def gen_4PCF(xs_0K: pd.Series, Ein: float, M: float, T: float,

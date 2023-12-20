@@ -10,7 +10,8 @@ import h5py
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
+from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular
+from solid_cinel.core.material.scattering_function.clm import get_scatfunc_pdos_row
 from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
 from solid_cinel.core.material.vibration.pdos import Pdos
 import dask

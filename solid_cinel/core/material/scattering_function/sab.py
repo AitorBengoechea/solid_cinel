@@ -10,7 +10,7 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
-from solid_cinel.core.material.scattering_function.scatfunc import scatfunc_values_alpha_vec
+from solid_cinel.core.material.scattering_function.clm import scatfunc_values_alpha_vec
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd

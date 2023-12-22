@@ -124,6 +124,7 @@ class Xs:
         2.0  8.313812
 
         # Doppler broadening using 4PCF(SCT) algorithm:
+        >>> Ein = np.array([2.0, 6.67])
         >>> from solid_cinel.core.material.vibration.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.Doppler_broad(T, pdos, Ein_grid=Ein, num_Eout=1000, prob=True, model="sct").round(6)
@@ -132,10 +133,10 @@ class Xs:
         2.00    8.310310        0.590390      0.407398  0.002211
         6.67  281.437747        0.733844      0.262325  0.003831
         """
-        if Ein_grid:
-            Ein_grid_ = Ein_grid if hasattr(Ein_grid, '__len__') else [Ein_grid]
-        else:
+        if Ein_grid is None:
             Ein_grid_ = self.xs_0K.index.values
+        else:
+            Ein_grid_ = Ein_grid if hasattr(Ein_grid, '__len__') else [Ein_grid]
         theta = np.arange(1, 180 + theta_diff, theta_diff)
         if kwargs.get('model') == "pdos":
             nphonon = kwargs.get('nphonon', 1000)

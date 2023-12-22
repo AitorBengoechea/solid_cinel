@@ -2,8 +2,6 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from numba import prange
-
-import dask
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, get_scatfunc_pdos_row
 from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
@@ -105,8 +103,6 @@ class Xs:
 
         Examples
         --------
-        Examples
-        --------
         # 0K xs data for U238:
         >>> import os
         >>> wd = os.getcwd()
@@ -127,44 +123,30 @@ class Xs:
         Ein
         2.0  8.313812
 
-        >>> xs.Doppler_broad(T, Ein_grid=Ein, num_Eout=1000, prob=True).round(6)
-             Ein=Eout  downscattering  upscattering        xs
-        Ein
-        2.0  0.002214        0.590631      0.407155  8.313812
-
-        >>> Ein = [2.0, 6.67]
-        >>> xs.Doppler_broad(T, Ein_grid=Ein, num_Eout=1000, prob=True).round(6)
-                      xs  upscattering  downscattering  Ein=Eout
-        Ein
-        2.00    8.313812      0.407155        0.590631  0.002214
-        6.67  282.747095      0.259304        0.736903  0.003793
-
         # Doppler broadening using 4PCF(SCT) algorithm:
+        >>> Ein = np.array([2.0, 6.67])
         >>> from solid_cinel.core.material.vibration.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.Doppler_broad(T, pdos, Ein_grid=Ein, num_Eout=1000, prob=True, model="sct").round(6)
-                      xs  upscattering  downscattering  Ein=Eout
+                      xs  downscattering  upscattering  Ein=Eout
         Ein
-        2.00    8.310310      0.407398        0.590390  0.002211
-        6.67  281.437747      0.262325        0.733844  0.003831
-
-        # Doppler broadening using 4PCF(PDOS) algorithm (not very accurate):
-#        >>> xs.Doppler_broad(T, pdos, nphonon=10, Ein_grid=Ein, num_Eout=1000, theta_diff= 15, prob=True, model="pdos").round(6)
-#                     xs  upscattering  downscattering  Ein=Eout
-#        Ein
-#        2.00   2.179519      0.439105        0.557491  0.003404
-#        6.67  33.519221      0.458024        0.529928  0.012048
+        2.00    8.310310        0.590390      0.407398  0.002211
+        6.67  281.437747        0.733844      0.262325  0.003831
         """
-        if Ein_grid:
-            Ein_grid_ = Ein_grid if hasattr(Ein_grid, '__len__') else [Ein_grid]
-        else:
+        if Ein_grid is None:
             Ein_grid_ = self.xs_0K.index.values
+        else:
+            Ein_grid_ = Ein_grid if hasattr(Ein_grid, '__len__') else [Ein_grid]
         theta = np.arange(1, 180 + theta_diff, theta_diff)
-        xs_db = self.sct_db(self.xs_0K, Ein_grid_, self.M, T_new, theta,
-                            num_Eout, prob, *args, **kwargs)
-        xs_db = pd.DataFrame(xs_db).T.sort_index()
-        xs_db.index.name = "Ein"
-        return xs_db
+        if kwargs.get('model') == "pdos":
+            nphonon = kwargs.get('nphonon', 1000)
+            threshold = kwargs.get('threshold', 0.0)
+            return self.clm_db(self.xs_0K, Ein_grid_, self.M, T_new, theta,
+                               num_Eout, prob, *args, nphonon=nphonon,
+                               threshold=threshold)
+        else:
+            return self.sct_db(self.xs_0K, Ein_grid_, self.M, T_new, theta,
+                                num_Eout, prob, *args, **kwargs)
 
     @staticmethod
     def clm_db(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
@@ -174,25 +156,60 @@ class Xs:
 
         Parameters
         ----------
-        xs_0K
-        Ein_grid
-        M
-        T
-        theta
-        num_Eout
-        prob
-        pdos
-        args
-        nphonon
-        threshold
-        kwargs
+        xs_0K: pd.Series
+            Cross section at 0K.
+        Ein_grid: np.ndarray
+            Incident energy grid for doppler broadened cross section.
+        M: float
+            Mass of the target in amu.
+        T: float
+            Temperature in Kelvin.
+        theta: np.ndarray
+            Scattering angle grid.
+        num_Eout: int
+            Number of energy grid for outgoing energy grid in each Ein grid.
+        prob: bool
+            If True, return probability of upscattering and downscattering.
+            Default is False.
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        nphonon: int
+            Phonon expansion order. Default is 1000.
+        threshold: float
+            Minimun value to take into account in the creation of tau_n functions.
 
         Returns
         -------
+        pd.DataFrame
+            Cross section or cross section and probability of upscattering and
+            downscattering.
 
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([10, 46, 90])
+        >>> Ein_grid = np.array([2.0, 6.67, 36.6])
+        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Xs.clm_db(xs_0K, Ein_grid, M, T, theta, 1000, True, pdos, nphonon=10, threshold=0.0).round(6)
+                       xs  downscattering  upscattering  Ein=Eout
+        Ein
+        2.00     9.868716        0.727364      0.271210  0.001426
+        6.67    40.636358        0.633586      0.360698  0.005716
+        36.60  746.548920        0.521897      0.452571  0.025532
         """
         # Get common variables:
-        xs_values, xs_E = xs_0K.values, xs_0K.index.values
+        xs_0K_values, xs_0K_E = xs_0K.values, xs_0K.index.values
         mu = np.sort(np.cos(np.deg2rad(theta)))
         T_arno = T * (1 + mu) / 2
         # Get Scattering function data:
@@ -216,24 +233,13 @@ class Xs:
             for Ein in Ein_grid:
                 # Gen Eout grid:
                 Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
+                row_results = ddxs_clm_row(Ein, M, T, Eout, mu[i], tau_n_scatt,
+                                           delta_beta_scatt,
+                                           debye_waller_coeff_scatt,
+                                           tau_n_angle, delta_beta[i],
+                                           DebyeWallerCoeff[i], xs_0K_values,
+                                           xs_0K_E, mu_fit, T_arno[i])
 
-                # Scattering function for selected angle:
-                tau_n_beta_scatt = np.arange(
-                    tau_n_scatt.shape[1]) * delta_beta_scatt
-                scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu[i],
-                                                      tau_n_scatt,
-                                                      tau_n_beta_scatt,
-                                                      debye_waller_coeff_scatt)
-
-                # xs_mat row for selected angle:
-                Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
-                xs_mat_row = db_pdos_row(tau_n_angle, delta_beta[i],
-                                         DebyeWallerCoeff[i],
-                                         Ein_row, T_arno[i],
-                                         xs_values, xs_E, mu_fit, M)
-
-                # Get row data:
-                row_results = scattfunc_row * xs_mat_row
                 Ein_results = [mu[i], Ein, np.trapz(row_results, x=Eout)]
 
                 # Get probability of upscattering and downscattering:
@@ -244,37 +250,189 @@ class Xs:
 
                 # Update results:
                 result.append(Ein_results)
-        return result
+
+        if prob:
+            df = pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"])
+            df_grouped = df.groupby("Ein")
+            xs_db = df_grouped.apply(lambda group: pd.Series({
+                'xs': np.trapz(group['xs'], x=group['mu']),
+                'upscattering': np.trapz(group['xs_up'], x=group['mu']),
+                'downscattering': np.trapz(group['xs_down'], x=group['mu'])
+            }))
+            xs_db['upscattering'] /= xs_db['xs']
+            xs_db['downscattering'] /= xs_db['xs']
+            xs_db['Ein=Eout'] = 1.0 - xs_db['upscattering'] - xs_db['downscattering']
+            xs_db = xs_db[["xs", "downscattering", "upscattering", "Ein=Eout"]]
+        else:
+            df = pd.DataFrame(result, columns=["mu", "Ein", "xs"])
+            df_grouped = df.groupby("Ein")
+            xs_db = df_grouped.apply(lambda group: pd.Series({
+                'xs': np.trapz(group['xs'], x=group['mu'])}))
+        return xs_db
 
     @staticmethod
     def sct_db(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-               theta: np.ndarray, num_Eout: int, prob: bool, *args, **kwargs):
+               theta: np.ndarray, num_Eout: int, prob: bool, *args, **kwargs) -> pd.DataFrame:
+        """
+        Doppler broadening of cross section using 4PCF (SCT) algorithm
 
-        # Create a list to hold the delayed tasks
-        tasks = [compute_ddxs(xs_0K, Ein, M, T, theta, num_Eout, prob, *args, **kwargs) for Ein
-                 in Ein_grid]
-        # Compute the results in parallel
-        results = dask.compute(*tasks)
+        Parameters
+        ----------
+        xs_0K: pd.Series
+            Cross section at 0K.
+        Ein_grid: np.ndarray
+            Incident energy grid for output cross section.
+        M: float
+            Mass of the target.
+        T: float
+            Temperature in Kelvin.
+        theta: np.ndarray
+            Scattering angle grid.
+        num_Eout: int
+            Number of energy grid for outgoing energy grid
+        prob: bool
+            If True, return probability of upscattering and downscattering.
+            Default is False.
 
-        return {Ein: result for Ein, result in results}
+        Parameters for 4PCF (FGM or SCT) algorithm
+        ------------------------------------------
+        model: str
+            Model for 4PCF. Default is None, so sigma1 algorith is going to be used. The available models are:
+                - "fgm": Free Gas Model
+                - "sct": Short Collision Time model
+
+        Parameters for 4PCF (SCT) algorithm
+        -----------------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+
+        Returns
+        -------
+        pd.DataFrame
+            Cross section or cross section and probability of upscattering and
+            downscattering.
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> Ein_grid = [2.0]
+        >>> theta = np.arange(1, 181, 1)
+        >>> num_Eout = 1000
+        >>> Xs.sct_db(xs_0K, Ein_grid, M, T, theta, num_Eout, prob=True).round(6)
+                   xs  downscattering  upscattering  Ein=Eout
+        Ein
+        2.0  8.313812        0.590631      0.407155  0.002214
+        """
+        results = {}
+        for Ein in Ein_grid:
+            Eout = np.linspace(Ein * 0.95, Ein * 1.05, num_Eout)
+            ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, *args,
+                                  **kwargs)
+            result = {"xs": ddxs.integral}
+            if prob:
+                result.update(ddxs.E_prob)
+            results[Ein] = result
+        xs_db = pd.DataFrame(results).T.sort_index()
+        xs_db.index.name = "Ein"
+        return xs_db[["xs", "downscattering", "upscattering", "Ein=Eout"]] if prob else xs_db
 
 
-@dask.delayed
-def compute_ddxs(xs_0K, Ein, M, T, theta, num_Eout, prob, *args, **kwargs):
-    Eout = np.linspace(Ein * 0.95, Ein * 1.05, num_Eout)
-    ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, *args,
-                          **kwargs)
-    result = {"xs": ddxs.integral}
-    if prob:
-        result.update(ddxs.E_prob)
-    return Ein, result
+@nb.jit(nopython=True, nogil=True, cache=True)
+def ddxs_clm_row(Ein: float, M: float, T: float, Eout: np.ndarray, mu: float, tau_n_scatt: np.ndarray,
+                 delta_beta_scatt: float, debye_waller_coeff_scatt: float, tau_n_mu: np.ndarray, delta_beta_mu: float,
+                 debye_waller_coeff_mu: float, xs_0K_values: np.ndarray, xs_0K_E: np.ndarray, mu_fit: float,
+                 T_mu: float) -> np.ndarray:
+    """
+    Compute the ddxs for a given angle and energy.
+
+    Parameters
+    ----------
+    Ein : float
+        Incoming energy.
+    M : float
+        Mass of the target.
+    T : float
+        Temperature.
+    Eout : np.ndarray
+        Outgoing energy grid.
+    mu : float
+        Cosine of the scattering angle.
+    tau_n_scatt : np.ndarray
+        Tau(-beta) function for n expansion for calculation of the scattering function.
+    delta_beta_scatt : float
+        Interval of beta for the scattering function.
+    debye_waller_coeff_scatt : float
+        Debye-Waller coefficient for the scattering function.
+    tau_n_mu : np.ndarray
+        Tau(-beta) function for n expansion for calculation of the xs_mat in the selected mu.
+    delta_beta_mu : float
+        Interval of beta for the xs_mat in the selected mu.
+    debye_waller_coeff_mu : float
+        Debye-Waller coefficient for the xs_mat in the selected mu.
+    xs_values : np.ndarray
+        Cross section values at 0K.
+    xs_E : np.ndarray
+        Cross section energy grid.
+    mu_fit : float
+        Cosine of the scattering angle for the scattering function.
+    T_mu : float
+        Temperature for the xs_mat in the selected mu.
+
+    Returns
+    -------
+    np.ndarray, (len(Eout),)
+        ddxs for a given angle and energy.
+    """
+    # Scattering function for selected angle and Ein:
+    tau_n_beta_scatt = np.arange(tau_n_scatt.shape[1]) * delta_beta_scatt
+    scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu,
+                                          tau_n_scatt,
+                                          tau_n_beta_scatt,
+                                          debye_waller_coeff_scatt)
+
+    # xs_mat row for selected angle and Ein:
+    Ein_row = Ein_arno_row(Ein, Eout, mu, M)
+    xs_mat_row = db_pdos_row(tau_n_mu, delta_beta_mu,
+                             debye_waller_coeff_mu,
+                             Ein_row, T_mu,
+                             xs_0K_values, xs_0K_E, mu_fit, M)
+
+    return scattfunc_row * xs_mat_row
 
 
-@nb.jit(nopython=True, nogil=True, parallel=True)
-def db_pdos_row(tau_n: np.ndarray,
-                           delta_beta: float, debyewallercoeff: float,
-                           Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
-                           xs_E: np.ndarray, mu_fit: float, M: float):
+@nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
+def db_pdos_row(tau_n: np.ndarray, delta_beta: float, debyewallercoeff: float, Ein_row: np.ndarray, T: float,
+                xs_0K_values: np.ndarray, xs_0K_E: np.ndarray, mu_fit: float, M: float):
+    """
+    Compute the xs_mat for a given angle and energy
+
+    Parameters
+    ----------
+    tau_n : np.ndarray
+        Tau(-beta) function for n expansion for calculation of the xs_mat in the selected mu.
+    delta_beta : float
+        Interval of beta for the xs_mat in the selected mu.
+    debyewallercoeff : float
+        Debye-Waller coefficient for the xs_mat in the selected mu.
+    Ein_row : np.ndarray
+        Incoming energy grid for the xs_mat.
+    T : float
+        Temperature for the xs_mat in the selected mu.
+    xs_0K_values : np.ndarray
+        Cross section values at 0K.
+    xs_0K_E : np.ndarray
+        Cross section energy grid.
+    """
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     xs_mat = np.empty(len(Ein_row))
     for j in prange(len(Ein_row)):
@@ -282,5 +440,5 @@ def db_pdos_row(tau_n: np.ndarray,
         pdf = get_scatfunc_pdos_row(Ein_row[j], M, T,
                                     Eout_db, mu_fit, tau_n, tau_n_beta,
                                     debyewallercoeff)
-        xs_mat[j] = Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
+        xs_mat[j] = Db(xs_0K_values, xs_0K_E, Ein_row[j], Eout_db, pdf)
     return xs_mat

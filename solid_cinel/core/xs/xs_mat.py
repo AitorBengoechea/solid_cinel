@@ -312,81 +312,14 @@ class XsMat:
                               T_arno, mu_fit, Teff)
         elif model == "pdos":
             tau1, DebyeWallerCoeff, delta_beta = cls.get_pdos_variables(pdos, T_arno)
-            threshold, nphonon, tau_to_file, binary = cls.get_pdos_optional(kwargs)
-            if tau_to_file:
-                os.makedirs("tau", exist_ok=True)
-            if binary:
-                os.makedirs("tau/binary", exist_ok=True)
+            threshold = kwargs.pop("threshold", 0.0)
+            nphonon = kwargs.pop("nphonon", 1000)
             update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                                T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
-                               tau1, nphonon, threshold,
-                               tau_to_file=tau_to_file, binary=binary)
+                               tau1, nphonon, threshold)
         else:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
-
-    @staticmethod
-    def tau_folder_to_list(tau_folder: str) -> [str]:
-        """
-        Check if the tau_n files are in the correct format and return a sorted
-        list of the tau_n files. If the files are in txt format, they will be
-        converted to hdf5 format. Is important that the temperature is the last
-        number for all the tau_n files.
-
-        Parameters
-        ----------
-        tau_folder: str
-            Path to the tau_n files. Is important than the temperature is the
-            last number for all the tau_n files.
-
-        Returns
-        -------
-        tau_n_list: [str]
-            Sorted list of the tau_n files
-        """
-        tau_n_list = [f"{tau_folder}/{f}" for f in os.listdir(tau_folder) if f.endswith(".h5")]
-        if len(tau_n_list) == 0:
-            tau_n_text = [f for f in os.listdir(tau_folder) if f.endswith(".txt")]
-            if len(tau_n_text) == 0:
-                raise ValueError("No tau_n files found")
-            else:
-                print("tau_n files are in txt format. It will be use hdf5 format")
-                for tau_n_text_name in tau_n_text:
-                    array = np.loadtxt(tau_folder + "/" + tau_n_text_name)
-                    name = f"{tau_folder}/binary/{tau_n_text_name.replace('.txt', '.h5')}"
-                    tau_n_list.append(name)
-                with h5py.File(name, "w") as f:
-                    f.create_dataset("tau", data=array)
-        return sorted(tau_n_list, key=extract_number)
-
-    @staticmethod
-    def check_data(tau_n_list: [list, np.ndarray], delta_beta: np.ndarray,
-                   DebyeWallerCoeff: np.ndarray, T_arno: np.ndarray) -> [str]:
-        """
-        Check if the tau_n files are in the correct order and if the temperature
-        grid is correct.
-
-        Parameters
-        ----------
-        tau_n_list: [list, np.ndarray]
-            List or array of the file names. Is important than the temperature
-            is the last number for all the tau_n files.
-        delta_beta: np.ndarray (M,)
-            delta_beta values for each temperature
-        DebyeWallerCoeff: np.ndarray (M,)
-            DebyeWallerCoeff values for each temperature
-        T_arno: np.ndarray (M,)
-            Target arno temperature grid in K
-        """
-        if len(tau_n_list) != len(delta_beta):
-            raise ValueError("The number of tau_n files is not equal to the number of delta_beta values")
-        if len(tau_n_list) != len(DebyeWallerCoeff):
-            raise ValueError("The number of tau_n files is not equal to the number of DebyeWallerCoeff values")
-        T_doc = [extract_number(f) for f in tau_n_list]
-        if (T_doc == T_arno[1:] if T_arno[0] == 0 else T_doc == T_arno).all():
-            return tau_n_list
-        else:
-            raise ValueError("The tau_n files are not in the correct order or the temperature grid is not correct")
 
     @staticmethod
     def common_variables(xs_0K: pd.Series, Ein: float, M: float, T: float,
@@ -477,33 +410,6 @@ class XsMat:
             DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
             tau1[nan_indices] = tau1[new_value_index]
         return tau1, DebyeWallerCoeff, delta_beta
-
-    @staticmethod
-    def get_pdos_optional(kwargs: dict) -> (float, int, bool, bool):
-        """
-        Get the optional parameters for the pdos model from kwargs.
-        Parameters
-        ----------
-        kwargs: dict
-            Optional parameters dict for the pdos model calculation use in the
-            XsMat.from_model method.
-
-        Returns
-        -------
-        threshold: float
-            Threshold for the tau_n calculation
-        nphonon: int
-            Number of phonons for the tau_n calculation
-        tau_to_file: bool
-            Save the tau_n values to file
-        binary: bool
-            Save the tau_n values in binary format
-        """
-        threshold = kwargs.pop("threshold", 0.0)
-        nphonon = kwargs.pop("nphonon", 1000)
-        tau_to_file = kwargs.pop("tau_to_file", False)
-        binary = kwargs.pop("binary", False)
-        return threshold, nphonon, tau_to_file, binary
 
     @staticmethod
     def get_Teff(pdos: Pdos, T_arno):
@@ -717,8 +623,8 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                        xs_values: np.ndarray, xs_E: np.ndarray,
                        M: float, T_arno: np.ndarray,
                        mu_fit: float, delta_beta: np.ndarray,
-                       DebyeWallerCoeff: np.ndarray, *args,
-                       tau_to_file = False, binary= False):
+                       DebyeWallerCoeff: np.ndarray, tau1: np.ndarray, nphonon: int,
+                       threshold: float):
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -753,10 +659,13 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
         Minimun value to take into account in the creation of tau_n
     DebyeWallerCoeff: np.ndarray, (M,)
         DebyeWallerCoeff values for all the T_arno values
-    tau_to_file: bool
-        Save the tau_n values to file txt
-    binary: bool
-        Save the tau_n values in binary format
+    tau1: np.ndarray, (O, P)
+        tau1 values for all the row T. O is the number of the phonon expansion
+        order and P is the number of the beta grid
+    nphonon: int
+        Phonon expansion order
+    threshold: float
+        Minimun value to take into account in the creation of tau_n
 
     Returns
     -------
@@ -790,25 +699,10 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     20  9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10  9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
-    def gen_xs_mat_mu(i, tau1, nphonon, threshold):
+    for i in range(start, len(T_arno)):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
-        save_tau(tau_n, nphonon, T_arno[i], tau_to_file, binary)
-        return dask.delayed(update_xs_mat_pdos_row)(xs_mat[i], tau_n,
-                                                    delta_beta[i], DebyeWallerCoeff[i],
-                                                    Ein_arno[i], T_arno[i],
-                                                    xs_values, xs_E, mu_fit, M)
-
-    def xs_mat_mu_from_tau(i, tau_n_list, key):
-        i_ = i - start
-        tau_n = h5py.File(tau_n_list[i_], "r")[key][:]
-        return dask.delayed(update_xs_mat_pdos_row)(xs_mat[i], tau_n,
-                                                    delta_beta[i_], DebyeWallerCoeff[i_],
-                                                    Ein_arno[i], T_arno[i],
-                                                    xs_values, xs_E, mu_fit, M)
-
-    calculation = xs_mat_mu_from_tau if len(args) == 2 else gen_xs_mat_mu
-    delayed_tasks = [calculation(i, *args) for i in range(start, len(T_arno))]
-    dask.compute(*delayed_tasks)
+        update_xs_mat_pdos_row(xs_mat[i], tau_n, delta_beta[i], DebyeWallerCoeff[i],
+                               Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
 
 
 @nb.jit(nopython=True, nogil=True, parallel=True)

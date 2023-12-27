@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import numba as nb
+from math import pi
 from numba import prange
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, get_scatfunc_pdos_row
@@ -197,14 +198,14 @@ class Xs:
         # Generate DDXS test variables:
         >>> T = 1000
         >>> M = 238.05077040419212
-        >>> theta = np.array([10, 46, 90])
+        >>> theta = np.array([10, 46, 90, 180])
         >>> Ein_grid = np.array([2.0, 6.67, 36.6])
         >>> from solid_cinel.core.material.vibration.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Xs.clm_db(xs_0K, Ein_grid, M, T, theta, 1000, True, pdos, nphonon=10, threshold=0.0).round(6)
                        xs  downscattering  upscattering  Ein=Eout
         Ein
-        2.00     9.868716        0.727364      0.271210  0.001426
+        2.00     9.909883        0.727215      0.271357  0.001428
         6.67    40.636358        0.633586      0.360698  0.005716
         36.60  746.548920        0.521897      0.452571  0.025532
         """
@@ -224,8 +225,15 @@ class Xs:
         tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
 
         # Create a list to hold the results
-        result = []
-        for i in range(len(theta)):
+        if mu[0] == np.cos(pi):
+            result = ddxs_clm_0K(Ein_grid, num_Eout, M, T,
+                        tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt,
+                        xs_0K_values, xs_0K_E, prob)
+            start = 1
+        else:
+            result = []
+            start = 0
+        for i in range(start, len(theta)):
             # Create angle tau_n function:
             tau_n_angle = tau_n_functions(tau1[i], delta_beta[i], nphonon,
                                           threshold)
@@ -345,6 +353,89 @@ class Xs:
         xs_db = pd.DataFrame(results).T.sort_index()
         xs_db.index.name = "Ein"
         return xs_db[["xs", "downscattering", "upscattering", "Ein=Eout"]] if prob else xs_db
+
+
+def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
+                tau_n_scatt: np.ndarray, delta_beta_scatt: float, debye_waller_coeff_scatt: float,
+                xs_0K_values: np.ndarray, xs_0K_E: np.ndarray, prob: bool) -> list:
+    """
+    Compute the ddxs for 180 degree in clm model using
+
+    Parameters
+    ----------
+    Ein_grid : np.ndarray
+        Incoming energy grid.
+    num_Eout : int
+        Number of energy grid for outgoing energy grid.
+    M : float
+        Mass of the target in amu.
+    T : float
+        Temperature in kelvin.
+    tau_n_scatt : np.ndarray
+        Tau(-beta) function for n expansion for calculation of the scattering function.
+    delta_beta_scatt : float
+        Interval of beta for the scattering function.
+    debye_waller_coeff_scatt : float
+        Debye-Waller coefficient for the scattering function.
+    xs_0K_values : np.ndarray
+        Cross section values at 0K.
+    xs_0K_E : np.ndarray
+        Cross section energy grid.
+    prob : bool
+        If True, return probability of upscattering and downscattering.
+
+    Returns
+    -------
+    list
+        Cross section or cross section and probability of upscattering and
+        downscattering.
+
+    # 0K xs data for U238:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    # Generate DDXS test variables:
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> Ein_grid = np.array([2.0, 6.67, 36.6])
+    >>> num_Eout = 1000
+    >>> xs_0K_values, xs_0K_E = xs_0K.values, xs_0K.index.values
+    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt = pdos.get_clm_param(T, nphonon=10, threshold=0.0)
+    >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
+    >>> pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).round(6)
+        mu    Ein   xs  xs_up  xs_down
+    0 -1.0   2.00  0.0    0.0      0.0
+    1 -1.0   6.67  0.0    0.0      0.0
+    2 -1.0  36.60  0.0    0.0      0.0
+    """
+    result = []
+    tau_n_beta_scatt = np.arange(tau_n_scatt.shape[1]) * delta_beta_scatt
+    for Ein in Ein_grid:
+        # Gen Eout grid:
+        Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
+        Ein_row = Ein_arno_row(Ein, Eout, -1.0, M)
+        scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, -1.0,
+                                              tau_n_scatt,
+                                              tau_n_beta_scatt,
+                                              debye_waller_coeff_scatt)
+        row_results = scattfunc_row * np.interp(Ein_row, xs_0K_E, xs_0K_values)
+        Ein_results = [-1.0, Ein, np.trapz(row_results, x=Eout)]
+
+        # Get probability of upscattering and downscattering:
+        if prob:
+            mask_up, mask_down = Eout > Ein, Eout < Ein
+            Ein_results.append(np.trapz(row_results[mask_up], x=Eout[mask_up]))
+            Ein_results.append(np.trapz(row_results[mask_down], x=Eout[mask_down]))
+
+        # Update results:
+        result.append(Ein_results)
+    return result
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)

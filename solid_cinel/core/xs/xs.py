@@ -415,14 +415,13 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     2 -1.0  36.60  0.0    0.0      0.0
     """
     result = []
-    tau_n_beta_scatt = np.arange(tau_n_scatt.shape[1]) * delta_beta_scatt
     for Ein in Ein_grid:
         # Gen Eout grid:
         Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
         Ein_row = Ein_arno_row(Ein, Eout, -1.0, M)
         scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, -1.0,
                                               tau_n_scatt,
-                                              tau_n_beta_scatt,
+                                              delta_beta_scatt,
                                               debye_waller_coeff_scatt)
         row_results = scattfunc_row * np.interp(Ein_row, xs_0K_E, xs_0K_values)
         Ein_results = [-1.0, Ein, np.trapz(row_results, x=Eout)]

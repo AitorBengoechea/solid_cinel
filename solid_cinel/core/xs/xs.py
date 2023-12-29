@@ -205,9 +205,9 @@ class Xs:
         >>> Xs.clm_db(xs_0K, Ein_grid, M, T, theta, 1000, True, pdos, nphonon=10, threshold=0.0).round(6)
                        xs  downscattering  upscattering  Ein=Eout
         Ein
-        2.00     9.909883        0.727215      0.271357  0.001428
-        6.67    40.636358        0.633586      0.360698  0.005716
-        36.60  746.548920        0.521897      0.452571  0.025532
+        2.00     2.329461        0.558445      0.435488  0.006067
+        6.67    22.870601        0.495122      0.473631  0.031247
+        36.60  261.888165        0.376235      0.524058  0.099708
         """
         # Get common variables:
         xs_0K_values, xs_0K_E = xs_0K.values, xs_0K.index.values
@@ -485,10 +485,9 @@ def ddxs_clm_row(Ein: float, M: float, T: float, Eout: np.ndarray, mu: float, ta
         ddxs for a given angle and energy.
     """
     # Scattering function for selected angle and Ein:
-    tau_n_beta_scatt = np.arange(tau_n_scatt.shape[1]) * delta_beta_scatt
     scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu,
                                           tau_n_scatt,
-                                          tau_n_beta_scatt,
+                                          delta_beta_scatt,
                                           debye_waller_coeff_scatt)
 
     # xs_mat row for selected angle and Ein:
@@ -524,12 +523,11 @@ def db_pdos_row(tau_n: np.ndarray, delta_beta: float, debyewallercoeff: float, E
     xs_0K_E : np.ndarray
         Cross section energy grid.
     """
-    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     xs_mat = np.empty(len(Ein_row))
     for j in prange(len(Ein_row)):
         Eout_db = np.linspace(Ein_row[j] * 0.9, Ein_row[j] * 1.1, 3000)
         pdf = get_scatfunc_pdos_row(Ein_row[j], M, T,
-                                    Eout_db, mu_fit, tau_n, tau_n_beta,
+                                    Eout_db, mu_fit, tau_n, delta_beta,
                                     debyewallercoeff)
         xs_mat[j] = Db(xs_0K_values, xs_0K_E, Ein_row[j], Eout_db, pdf)
     return xs_mat

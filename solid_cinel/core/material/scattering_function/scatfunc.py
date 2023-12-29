@@ -1339,7 +1339,8 @@ def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
     """
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     beta = get_beta(Eout, Ein, T)
-    alpha = get_alpha_from_Eout(beta * kb * T + Ein if len(beta) < len(Eout) else Eout, Ein, T, M, mu)
+    Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
+    alpha = get_alpha_from_Eout(Eout_, Ein, T, M, mu)
     sab_values = get_sab_pdos(alpha, beta, tau_n, tau_n_beta, DebyeWallerCoeff)
     Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_values, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:

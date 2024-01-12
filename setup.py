@@ -19,6 +19,9 @@ if __name__ == "__main__":
         ],
         packages=find_packages(exclude=["tests"]),
         install_requires=open(requirements).read().splitlines(),
+        extras_require={
+            'gpu':  ['cupy'],  # general cupy package
+        },
         zip_safe=False,
         # setup_requires=["pytest-runner",],
         tests_require=[

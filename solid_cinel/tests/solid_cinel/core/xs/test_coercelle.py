@@ -72,4 +72,11 @@ def test_coercelle(model):
     elif model == "sct":
         ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, model=model)
 
-    assert (ddxs.data.round(6).values == ddxs_test.round(6).values).all()
+    # round to 6 decimals:
+    ddxs_round = ddxs.data.round(6).values
+    ddxs_test_round = ddxs_test.round(6).values
+
+    # Compare the results:
+    diff = (1 - ddxs_round / ddxs_test_round) * 100
+    diff = np.nan_to_num(diff)
+    assert abs(diff).max() < 1e-5

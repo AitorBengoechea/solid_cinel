@@ -3,7 +3,7 @@ Python file for working with Phonon Density Of States.
 
 @author: AB272525
 """
-from solid_cinel.core.generic import integrate
+from solid_cinel.core.generic import integrate, gpu_available
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 import pandas as pd
@@ -11,6 +11,11 @@ import numpy as np
 import scipy as sp
 from typing import Iterable, Union
 import matplotlib
+try:
+    import cupy as cp
+    xp = cp
+except ImportError:
+    xp = np
 
 
 # Examples variables:
@@ -475,6 +480,9 @@ class Pdos:
         tau1 = self.get_tau_1(T)
         delta_beta = tau1.index.values[1] - tau1.index.values[0]
         tau_n = tau_n_functions(tau1.values, delta_beta, nphonon, threshold)
+        # Copy to host if gpu is available:
+        tau_n = tau_n.get() if gpu_available else tau_n
+
         if values:
             return tau_n
         else:

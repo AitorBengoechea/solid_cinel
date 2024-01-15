@@ -5,6 +5,7 @@ import h5py
 import os
 from math import exp
 from numba import prange, cuda
+from solid_cinel.core.generic import gpu_available
 try:
     import cupy as cp
     xp = cp
@@ -172,7 +173,7 @@ def get_tau_n_gpu(delta_beta: float, tau1: np.ndarray, tau_n_minus_1: np.ndarray
 
 def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
                         nphonon: int, threshold: float,
-                        threadsperblock: int = 128):
+                        threadsperblock: int = 128) -> xp.ndarray:
     """
     Get the tau_{n}(-beta) function values for all n.
 
@@ -226,10 +227,10 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
     max_column = find_first_zero_column_gpu(tau_n_func, threshold, Ntau)
 
     # copy the data back to the host:
-    return xp.asnumpy(tau_n_func[::, :max_column])
+    return tau_n_func[::, :max_column]
 
 
-if cuda.is_available():
+if gpu_available:
     tau_n_functions = tau_n_functions_gpu
 else:
     tau_n_functions = tau_n_functions_cpu

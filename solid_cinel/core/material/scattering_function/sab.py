@@ -808,6 +808,8 @@ class Sab:
         >>> delta_beta = pdos.to_beta_grid(T).grid
         >>> tau1 = pdos.get_tau_1(T).values
         >>> tau_n = tau_n_functions(tau1, delta_beta, 700, 0.0)
+        >>> from numba import cuda
+        >>> tau_n = tau_n.get() if cuda.is_available() else tau_n
         >>> S_mat = Sab.from_tau(alpha, beta, tau_n, delta_beta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699

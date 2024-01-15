@@ -5,7 +5,7 @@ Python file for working with S(alpha, -beta) matrixs.
 """
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
-from solid_cinel.core.generic import integrate, reshape_differential
+from solid_cinel.core.generic import integrate, reshape_differential, gpu_available, optional_jit
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
 from solid_cinel.core.material.scattering_function.beta import Beta
@@ -18,6 +18,11 @@ import numba as nb
 from math import exp, sqrt, pi
 from numba import prange
 import warnings
+try:
+    import cupy as cp
+    xp = cp
+except ImportError:
+    xp = np
 
 
 kb = const["Boltzmann constant in eV/K"][0]
@@ -1280,23 +1285,32 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
-def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
-                     tau_n: np.ndarray, delta_beta: float,
-                     DebyeWallerCoeff: float) -> np.ndarray:
-    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+@optional_jit
+def _phonon_expansion(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
+                      tau_n: xp.ndarray, delta_beta: float,
+                      DebyeWallerCoeff: float) -> xp.ndarray:
+    tau_n_beta = xp.arange(tau_n.shape[1]) * delta_beta
     # Zero phonon expansion:
-    iter_sum = np.log(alpha * DebyeWallerCoeff)
-    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    sab_values = np.outer(alpha_mul, np.interp(beta, tau_n_beta, tau_n[0]))
+    iter_sum = xp.log(alpha * DebyeWallerCoeff)
+    alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + iter_sum)
+    sab_values = xp.outer(alpha_mul, xp.interp(beta, tau_n_beta, tau_n[0]))
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tau_n reshape
-        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        sab_values += np.outer(alpha_mul, np.interp(beta, tau_n_beta, tau_n[n]))
+        iter_sum += xp.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + iter_sum)
+        sab_values += xp.outer(alpha_mul, xp.interp(beta, tau_n_beta, tau_n[n]))
     return sab_values
+
+
+def phonon_expansion(*args) -> np.ndarray:
+    if gpu_available:
+        arg_gpu = [xp.asarray(arg) if isinstance(arg, np.ndarray) else arg
+                   for arg in args]
+        return _phonon_expansion(*arg_gpu).get()
+    else:
+        return _phonon_expansion(*args)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

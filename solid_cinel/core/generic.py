@@ -20,9 +20,9 @@ else:
 def optional_jit(func):
     """Decorator to optionally apply jit compilation."""
     if gpu_available:
-        return nb.jit(func, nopython=True, nogil=True, cache=True, parallel=True)
-    else:
         return func
+    else:
+        return nb.jit(func, nopython=True, nogil=True, cache=True, parallel=True)
 
 
 def integrate(series: pd.Series, kind="trapezoidal") -> float:

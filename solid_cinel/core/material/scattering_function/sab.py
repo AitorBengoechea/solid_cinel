@@ -1289,6 +1289,21 @@ def proportionality_factor(alpha: float, alpha_i: float,
 def _phonon_expansion(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
                       tau_n: xp.ndarray, delta_beta: float,
                       DebyeWallerCoeff: float) -> xp.ndarray:
+    """
+
+    Parameters
+    ----------
+    alpha
+    beta
+    nphonon
+    tau_n
+    delta_beta
+    DebyeWallerCoeff
+
+    Returns
+    -------
+
+    """
     tau_n_beta = xp.arange(tau_n.shape[1]) * delta_beta
     # Zero phonon expansion:
     iter_sum = xp.log(alpha * DebyeWallerCoeff)

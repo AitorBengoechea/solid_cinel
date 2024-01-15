@@ -4,6 +4,7 @@ import numba as nb
 from math import pi
 from numba import prange
 from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.generic import gpu_available
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, get_scatfunc_pdos_row
 from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
 from solid_cinel.core.xs.ddxs import DDxs
@@ -215,6 +216,7 @@ class Xs:
         T_arno = T * (1 + mu) / 2
         # Get Scattering function data:
         tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt = pdos.get_clm_param(T, nphonon=nphonon, threshold=threshold)
+        tau_n_scatt = tau_n_scatt.get() if gpu_available else tau_n_scatt
         # 1 Scatfunct for getting mu_fit:
         Eout = np.linspace(Ein_grid[0] * 0.9, Ein_grid[0] * 1.1, num_Eout)
         mu_fit = ScatFunc.from_tau(Ein_grid[0], M, T, Eout, theta, tau_n_scatt,
@@ -237,6 +239,7 @@ class Xs:
             # Create angle tau_n function:
             tau_n_angle = tau_n_functions(tau1[i], delta_beta[i], nphonon,
                                           threshold)
+            tau_n_angle = tau_n_angle.get() if gpu_available else tau_n_angle
             # Select the especific data for the next function:
             for Ein in Ein_grid:
                 # Gen Eout grid:
@@ -407,6 +410,7 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt = pdos.get_clm_param(T, nphonon=10, threshold=0.0)
+    >>> tau_n_scatt = tau_n_scatt.get() if gpu_available else tau_n_scatt
     >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
     >>> pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).round(6)
         mu    Ein   xs  xs_up  xs_down

@@ -480,13 +480,11 @@ class Pdos:
         tau1 = self.get_tau_1(T)
         delta_beta = tau1.index.values[1] - tau1.index.values[0]
         tau_n = tau_n_functions(tau1.values, delta_beta, nphonon, threshold)
-        # Copy to host if gpu is available:
-        tau_n = tau_n.get() if gpu_available else tau_n
-
         if values:
             return tau_n
         else:
-            tau_n = pd.DataFrame(tau_n)
+            # Copy to host if gpu is available:
+            tau_n = pd.DataFrame(tau_n.get() if gpu_available else tau_n)
             tau_n.columns *= delta_beta
             tau_n.index += 1
             if check:
@@ -499,7 +497,7 @@ class Pdos:
 
     def get_clm_param(self, T: float, nphonon: int = 1000,
                       threshold: float = 0.0,
-                      values: bool = True) -> [(np.ndarray, float, float),
+                      values: bool = True) -> [(xp.ndarray, float, float),
                                                (pd.DataFrame, float)]:
         """
         Get the tau_n functions, the Delta beta value and the debye waller
@@ -522,7 +520,7 @@ class Pdos:
 
         Returns
         -------
-        "np.ndarray", (N * nphonon, nphonon)
+        "np.ndarray" or "cupy.array", (N * nphonon, nphonon)
             Tau(-beta) function for n phonon.
         "float"
             Delta beta value.
@@ -536,6 +534,7 @@ class Pdos:
         >>> T = 800
         >>> threshold = 0.0
         >>> tau_n, delta_beta, debye_waller_coeff = p.get_clm_param(T, nphonon=5, threshold=0.0)
+        >>> tau_n = tau_n.get() if gpu_available else tau_n
         >>> tau_n[::, :100:20].round(6)
         array([[0.862582, 1.32289 , 0.341423, 0.      , 0.      ],
                [1.068786, 0.835423, 0.650492, 0.3974  , 0.06764 ],

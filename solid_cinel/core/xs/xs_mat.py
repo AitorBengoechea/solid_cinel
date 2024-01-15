@@ -6,14 +6,13 @@ Python for working with the Xs matrix from 4PCF.
 import numpy as np
 import pandas as pd
 import numba as nb
-import h5py
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
-from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
+from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.vibration.pdos import Pdos
-import dask
+from solid_cinel.core.generic import gpu_available
 from solid_cinel.core.xs.dxs import Dxs
 import os
 from math import pi
@@ -701,6 +700,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     """
     for i in range(start, len(T_arno)):
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+        tau_n = tau_n.get() if gpu_available else tau_n
         update_xs_mat_pdos_row(xs_mat[i], tau_n, delta_beta[i], DebyeWallerCoeff[i],
                                Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
 
@@ -767,6 +767,7 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
     >>> i = 0
     >>> tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+    >>> tau_n = tau_n.get() if gpu_available else tau_n
     >>> update_xs_mat_pdos_row(xs_mat[i], tau_n, delta_beta[i], DebyeWallerCoeff[i], Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
     >>> pd.Series(xs_mat[i], index=Eout).round(6)
     1.800000    9.105109

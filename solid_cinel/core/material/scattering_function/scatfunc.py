@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 import os
 from scipy.constants import physical_constants as const
-from solid_cinel.core.generic import integrate, reshape_differential
+from solid_cinel.core.generic import integrate, reshape_differential, gpu_available
 from solid_cinel.core.material.scattering_function.beta import get_beta
 from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout
 from solid_cinel.core.material.vibration.pdos import Pdos
@@ -275,6 +275,7 @@ class ScatFuncSD:
             tau_n, delta_beta, debye_waller_coeff = args[-1].get_clm_param(T,
                                                                            kwargs.pop("nphonon", 1000),
                                                                            kwargs.pop("threshold", 0.0))
+            tau_n = tau_n.get() if gpu_available else tau_n
             scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n,
                                           delta_beta, debye_waller_coeff)[0]
         else:
@@ -481,6 +482,7 @@ class ScatFuncDD:
             tau_n, delta_beta, debye_waller_coeff = args[-1].get_clm_param(T,
                                                                            nphonon=nphonon,
                                                                            threshold=kwargs.get("threshold", 0.0))
+            tau_n = tau_n.get() if gpu_available else tau_n
             save_tau(tau_n, nphonon, T, kwargs.get("tau_to_file", False),
                      kwargs.get("binary", False))
             return cls.from_tau(Ein, M, T, Eout, theta, tau_n, delta_beta, debye_waller_coeff)
@@ -534,6 +536,7 @@ class ScatFuncDD:
         >>> theta = np.array([40, 80, 120, 160])
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+        >>> tau_n = tau_n.get() if gpu_available else tau_n
         >>> ScatFuncDD.from_tau(Ein, M, T, Eout, theta, tau_n, delta_beta, debye_waller_coeff).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
@@ -1032,6 +1035,7 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> tau_n = tau_n.get() if gpu_available else tau_n
     >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     >>> beta = get_beta(Eout, Ein, T)
     >>> alpha_mat = get_alpha_mat(beta * kb * T + Ein, Ein, T, M, mu)
@@ -1108,6 +1112,7 @@ def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> tau_n = tau_n.get() if gpu_available else tau_n
     >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     >>> beta = get_beta(Eout, Ein, T)
     >>> from solid_cinel.core.material.scattering_function.alpha import get_alpha_from_Eout
@@ -1183,6 +1188,7 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> tau_n = tau_n.get() if gpu_available else tau_n
     >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     >>> beta = get_beta(Eout, Ein, T)
     >>> alpha_mat = get_alpha_mat(beta * kb * T + Ein, Ein, T, M, mu)
@@ -1260,6 +1266,7 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> tau_n = tau_n.get() if gpu_available else tau_n
     >>> sd_pdf = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff)
     >>> pd.Series(sd_pdf[0], index=Eout).loc[Eout_test].round(6)
     6.7554    0.034511
@@ -1326,6 +1333,7 @@ def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> mu = np.cos(np.deg2rad(120))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> tau_n, delta_beta, debye_waller_coeff = pdos.get_clm_param(T, nphonon=1000, threshold=1.0e-14)
+    >>> tau_n = tau_n.get() if gpu_available else tau_n
     >>> sd_pdf = get_scatfunc_pdos_row(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff)
     >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
     6.7554    0.034511

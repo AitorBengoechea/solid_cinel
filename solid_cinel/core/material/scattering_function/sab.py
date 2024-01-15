@@ -1358,11 +1358,15 @@ def phonon_expansion(*args) -> np.ndarray:
         S(alpha, -beta) matrix values.
     """
     if gpu_available:
+        # Copy to device memory:
         arg_gpu = [xp.asarray(arg) if isinstance(arg, np.ndarray) else arg
                    for arg in args]
         return _phonon_expansion(*arg_gpu).get()
     else:
-        return _phonon_expansion(*args)
+        # Copy to host memory:
+        arg_cpu = [arg.get() if isinstance(arg, xp.ndarray) else arg
+                   for arg in args]
+        return _phonon_expansion(*arg_cpu)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

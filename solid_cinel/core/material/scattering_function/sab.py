@@ -813,8 +813,7 @@ class Sab:
         >>> delta_beta = pdos.to_beta_grid(T).grid
         >>> tau1 = pdos.get_tau_1(T).values
         >>> tau_n = tau_n_functions(tau1, delta_beta, 700, 0.0)
-        >>> from numba import cuda
-        >>> tau_n = tau_n.get() if cuda.is_available() else tau_n
+        >>> tau_n = tau_n.get() if gpu_available else tau_n
         >>> S_mat = Sab.from_tau(alpha, beta, tau_n, delta_beta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
@@ -1290,19 +1289,31 @@ def _phonon_expansion(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
                       tau_n: xp.ndarray, delta_beta: float,
                       DebyeWallerCoeff: float) -> xp.ndarray:
     """
+    Generate S(alpha, -beta) matrix using tau_n functions:
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
 
     Parameters
     ----------
-    alpha
-    beta
-    nphonon
-    tau_n
-    delta_beta
-    DebyeWallerCoeff
+    alpha: 'xp.ndarray', (N,)
+        alpha grid values in the cpu as numpy array or in the gpu as cupy array.
+    beta: 'xp.ndarray', (M,)
+        beta grid values in the cpu as numpy array or in the gpu as cupy array.
+    nphonon: 'int'
+        Number of phonon expansion.
+    tau_n: 'xp.ndarray', (Z, T)
+        tau_n functions. The first dimension is the number of the expansion
+        and the second dimension is the number of the beta grid. In the cpu as
+        numpy array or in the gpu as cupy array.
+    delta_beta: 'float'
+        Delta beta value.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
 
     Returns
     -------
-
+    'xp.ndarray', (N, M)
+        S(alpha, -beta) matrix values.
     """
     tau_n_beta = xp.arange(tau_n.shape[1]) * delta_beta
     # Zero phonon expansion:
@@ -1320,6 +1331,32 @@ def _phonon_expansion(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
 
 
 def phonon_expansion(*args) -> np.ndarray:
+    """
+    Generate S(alpha, -beta) matrix using tau_n functions:
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Parameters
+    ----------
+    alpha: 'xp.ndarray', (N,)
+        alpha grid values
+    beta: 'xp.ndarray', (M,)
+        beta grid values
+    nphonon: 'int'
+        Number of phonon expansion.
+    tau_n: 'xp.ndarray', (Z, T)
+        tau_n functions. The first dimension is the number of the expansion
+        and the second dimension is the number of the beta grid.
+    delta_beta: 'float'
+        Delta beta value.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
+
+    Returns
+    -------
+    'xp.ndarray', (N, M)
+        S(alpha, -beta) matrix values.
+    """
     if gpu_available:
         arg_gpu = [xp.asarray(arg) if isinstance(arg, np.ndarray) else arg
                    for arg in args]

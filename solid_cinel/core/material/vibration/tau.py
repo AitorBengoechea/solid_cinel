@@ -5,6 +5,11 @@ import h5py
 import os
 from math import exp
 from numba import prange, cuda
+try:
+    import cupy as cp
+    xp = cp
+except ImportError:
+    xp = np
 
 
 @nb.jit(nopython=True)
@@ -186,13 +191,17 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
     tau_n_func: 'np.ndarray', (N * nphonon, nphonon)
         All Tau(-beta) function values for n expansion.
     """
-    tau_n_func = np.zeros((nphonon, len(tau1) * nphonon))
-    tau_n_func[0, :len(tau1)] += tau1
     N = len(tau1)
     Ntau = 2 * N - 1
     # Copy the data to the device
+    tau_n_func = xp.zeros((nphonon, len(tau1) * nphonon))
     tau1 = cuda.to_device(tau1)
     tau_n_minus_1 = cuda.to_device(tau1)
+
+    # First tau_n function:
+    tau_n_func[0, :len(tau1)] += tau1
+
+    # Next tau_n functions:
     for n in range(1, nphonon):
         # Perform the calculation on the device:
         tau_n_device = cuda.to_device(np.zeros(Ntau))
@@ -203,12 +212,14 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
                                                       tau_n_minus_1,
                                                       tau_n_device)
         # Copy the data back to the host
-        tau_n = tau_n_device.copy_to_host()
-        tau_n_func[n, :Ntau] += tau_n
+        tau_n_func[n, :Ntau] += tau_n_device
 
         # Next tau_n
         tau_n_minus_1 = tau_n_device
         Ntau += N - 1
+
+    # copy the data back to the host:
+    tau_n_func = xp.asnumpy(tau_n_func)
     # Erase the zeros in the last part of the array
     return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
 

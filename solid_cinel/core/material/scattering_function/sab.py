@@ -1285,15 +1285,15 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     # Zero phonon expansion:
     iter_sum = np.log(alpha * DebyeWallerCoeff)
-    sab_values = np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
-                          np.interp(beta, tau_n_beta, tau_n[0]))
+    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+    sab_values = np.outer(alpha_mul, np.interp(beta, tau_n_beta, tau_n[0]))
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tau_n reshape
         iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        sab_values += np.outer(np.exp(- alpha * DebyeWallerCoeff + iter_sum),
-                               np.interp(beta, tau_n_beta, tau_n[n]))
+        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+        sab_values += np.outer(alpha_mul, np.interp(beta, tau_n_beta, tau_n[n]))
     return sab_values
 
 

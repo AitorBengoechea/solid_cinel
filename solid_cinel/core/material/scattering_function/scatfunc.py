@@ -983,14 +983,13 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     np.ndarray, (M, N)
         The scattering function values for a single angle
     """
-    awr = ((M / m + 1) / (M / m)) ** 2
     beta = (Eout - Ein) / (kb * T)
     alpha_mat = get_alpha_mat(Eout, Ein, T, M, mu)
     scattfunc = np.zeros(alpha_mat.shape)
     for i in range(alpha_mat.shape[0]):
         scattfunc_mu = np.exp(-(ws * alpha_mat[i] + beta) ** 2 / (4 * alpha_mat[i] * Teff / T * ws))
         scattfunc_mu /= np.sqrt(4 * pi * ws * alpha_mat[i] * Teff / T)
-        scattfunc[i] += scattfunc_mu * awr * np.sqrt(Eout / Ein) / (2 * kb * T)
+        scattfunc[i] += scattfunc_mu * normalization_factor(Eout, Ein, T, M)
     return scattfunc
 
 

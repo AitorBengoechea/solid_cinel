@@ -13,16 +13,19 @@ except ImportError:
 
 
 @nb.jit(nopython=True)
-def first_all_zero_column(tau_n, threshold=None):
-    if threshold:
-        for i in range(tau_n.shape[1]):
-            if np.all(tau_n[:, i] <= threshold):
-                return i
-    else:
-        for i in range(tau_n.shape[1]):
-            if not np.any(tau_n[:, i]):
-                return i
+def find_first_all_zero_column_cpu(tau_n, threshold):
+    for i in range(tau_n.shape[1]):
+        if np.all(tau_n[:, i] <= threshold):
+            return i
     return -1
+
+
+def find_first_zero_column_gpu(tau_n, threshold, Ntau):
+    for i in range(Ntau):
+        if xp.all(tau_n[:, i] <= threshold):
+            return i
+    return -1  # Return -1 if no column with all zeros is found
+
 
 @nb.jit("float64[:](float64, float64[:], float64[:])",
     nopython=True, nogil=True, cache=True, parallel=True)
@@ -110,7 +113,8 @@ def tau_n_functions_cpu(tau1: np.ndarray, delta_beta: float,
         # Next tau_n
         tau_n_minus_1 = tau_n
     # Erase the zeros in the last part of the array
-    return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
+    max_column = find_first_all_zero_column_cpu(tau_n_func, threshold)
+    return tau_n_func[::, :max_column]
 
 
 @cuda.jit
@@ -218,10 +222,11 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
         tau_n_minus_1 = tau_n_device
         Ntau += N - 1
 
-    # copy the data back to the host:
-    tau_n_func = xp.asnumpy(tau_n_func)
     # Erase the zeros in the last part of the array
-    return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
+    max_column = find_first_zero_column_gpu(tau_n_func, threshold, Ntau)
+
+    # copy the data back to the host:
+    return xp.asnumpy(tau_n_func[::, :max_column])
 
 
 if cuda.is_available():

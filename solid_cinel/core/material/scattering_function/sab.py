@@ -7,7 +7,7 @@ from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
+from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau, gpu_available
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
 from solid_cinel.core.material.scattering_function.scatfunc import scatfunc_values_alpha_vec
@@ -1403,15 +1403,15 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     'xp.ndarray', (N, M)
         S(alpha, -beta) matrix values.
     """
-    try:
-        alpha = xp.asarray(alpha)
-        beta = xp.asarray(beta)
-        tau_n = xp.asarray(tau_n)
-        return _phonon_expansion_gpu(alpha, beta, nphonon, tau_n, delta_beta,
-                                     DebyeWallerCoeff).get()
-    except xp.cuda.memory.OutOfMemoryError:
-        return _phonon_expansion_cpu(alpha, beta, nphonon, tau_n, delta_beta,
-                                     DebyeWallerCoeff)
+    if gpu_available:
+        try:
+            return _phonon_expansion_gpu(xp.asarray(alpha), xp.asarray(beta),
+                                         nphonon, xp.asarray(tau_n), delta_beta,
+                                         DebyeWallerCoeff).get()
+        except xp.cuda.memory.OutOfMemoryError:
+            pass
+    return _phonon_expansion_cpu(alpha, beta, nphonon, tau_n, delta_beta,
+                                 DebyeWallerCoeff)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

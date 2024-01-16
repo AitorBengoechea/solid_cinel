@@ -198,13 +198,19 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
     """
     N = len(tau1)
     Ntau = 2 * N - 1
-    # Copy the data to the device
-    tau_n_func = xp.zeros((nphonon, len(tau1) * nphonon))
-    tau1 = cuda.to_device(tau1)
+    # Copy the data to the device if is posible:
+    try:
+        tau_n_func = xp.zeros((nphonon, len(tau1) * nphonon))
+        tau1 = cuda.to_device(tau1)
+        # First tau_n function:
+        tau_n_func[0, :len(tau1)] += tau1
+        gpu_memory_available = True
+    except xp.cuda.memory.OutOfMemoryError:
+        tau_n_func = np.zeros((nphonon, len(tau1) * nphonon))
+        tau_n_func[0, :len(tau1)] += tau1
+        tau1 = cuda.to_device(tau1)
+        gpu_memory_available = False
     tau_n_minus_1 = cuda.to_device(tau1)
-
-    # First tau_n function:
-    tau_n_func[0, :len(tau1)] += tau1
 
     # Next tau_n functions:
     for n in range(1, nphonon):
@@ -216,18 +222,18 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
                                                       tau1,
                                                       tau_n_minus_1,
                                                       tau_n_device)
-        # Copy the data back to the host
-        tau_n_func[n, :Ntau] += tau_n_device
+        # Copy the data back to the host if is needed:
+        tau_n_func[n, :Ntau] += tau_n_device if gpu_memory_available else tau_n_device.copy_to_host()
 
         # Next tau_n
         tau_n_minus_1 = tau_n_device
         Ntau += N - 1
-
-    # Erase the zeros in the last part of the array
-    max_column = find_first_zero_column_gpu(tau_n_func, threshold, Ntau)
-
-    # copy the data back to the host:
-    return tau_n_func[::, :max_column]
+    if gpu_memory_available:
+        max_column = find_first_zero_column_gpu(tau_n_func, threshold, Ntau)
+    else:
+        max_column = find_first_all_zero_column_cpu(tau_n_func, threshold)
+    # copy the data back to the device :
+    return xp.asarray(tau_n_func[::, :max_column])
 
 
 if gpu_available:

@@ -5,6 +5,7 @@ import h5py
 import os
 from math import exp
 from numba import prange, cuda
+gpu_available = True if cuda.is_available() else False
 
 
 @nb.jit(nopython=True)
@@ -207,10 +208,7 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
     return tau_n_func[::, :first_all_zero_column(tau_n_func, threshold)]
 
 
-if cuda.is_available():
-    tau_n_functions = tau_n_functions_gpu
-else:
-    tau_n_functions = tau_n_functions_cpu
+tau_n_functions = tau_n_functions_gpu if gpu_available else tau_n_functions_cpu
 
 
 def save_tau(tau_n: np.ndarray, nphonon: int, T: float, tau_to_file: bool,

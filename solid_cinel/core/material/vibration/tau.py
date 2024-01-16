@@ -8,15 +8,10 @@ from numba import prange, cuda
 
 
 @nb.jit(nopython=True)
-def first_all_zero_column(tau_n, threshold=None):
-    if threshold:
-        for i in range(tau_n.shape[1]):
-            if np.all(tau_n[:, i] <= threshold):
-                return i
-    else:
-        for i in range(tau_n.shape[1]):
-            if not np.any(tau_n[:, i]):
-                return i
+def first_all_zero_column(tau_n, threshold):
+    for i in range(tau_n.shape[1]):
+        if np.all(tau_n[:, i] <= threshold):
+            return i
     return -1
 
 @nb.jit("float64[:](float64, float64[:], float64[:])",
@@ -203,8 +198,7 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
                                                       tau_n_minus_1,
                                                       tau_n_device)
         # Copy the data back to the host
-        tau_n = tau_n_device.copy_to_host()
-        tau_n_func[n, :Ntau] += tau_n
+        tau_n_func[n, :Ntau] += tau_n_device.copy_to_host()
 
         # Next tau_n
         tau_n_minus_1 = tau_n_device

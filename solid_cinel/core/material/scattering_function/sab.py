@@ -7,7 +7,7 @@ from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
+from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau, gpu_available
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
 from solid_cinel.core.material.scattering_function.scatfunc import scatfunc_values_alpha_vec
@@ -18,6 +18,11 @@ import numba as nb
 from math import exp, sqrt, pi
 from numba import prange
 import warnings
+try:
+    import cupy as cp
+    xp = cp
+except ImportError:
+    xp = np
 
 
 kb = const["Boltzmann constant in eV/K"][0]
@@ -1278,10 +1283,82 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
-def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
-                     tau_n: np.ndarray, delta_beta: float,
-                     DebyeWallerCoeff: float) -> np.ndarray:
+def _phonon_expansion_gpu(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
+                          tau_n: xp.ndarray, delta_beta: float,
+                          DebyeWallerCoeff: float) -> xp.ndarray:
+    """
+    Generate S(alpha, -beta) matrix using tau_n functions:
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Parameters
+    ----------
+    alpha: 'xp.ndarray', (N,)
+        alpha grid values in the cpu as numpy array or in the gpu as cupy array.
+    beta: 'xp.ndarray', (M,)
+        beta grid values in the cpu as numpy array or in the gpu as cupy array.
+    nphonon: 'int'
+        Number of phonon expansion.
+    tau_n: 'xp.ndarray', (Z, T)
+        tau_n functions. The first dimension is the number of the expansion
+        and the second dimension is the number of the beta grid. In the cpu as
+        numpy array or in the gpu as cupy array.
+    delta_beta: 'float'
+        Delta beta value.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
+
+    Returns
+    -------
+    'xp.ndarray', (N, M)
+        S(alpha, -beta) matrix values.
+    """
+    tau_n_beta = xp.arange(tau_n.shape[1]) * delta_beta
+    # Zero phonon expansion:
+    iter_sum = xp.log(alpha * DebyeWallerCoeff)
+    alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + iter_sum)
+    sab_values = xp.outer(alpha_mul, xp.interp(beta, tau_n_beta, tau_n[0]))
+
+    # Higher phonon expansion (nphonon >= 1):
+    for n in range(1, nphonon):
+        # Compute S(alpha, -beta) for tau_n reshape
+        iter_sum += xp.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + iter_sum)
+        sab_values += xp.outer(alpha_mul, xp.interp(beta, tau_n_beta, tau_n[n]))
+    return sab_values
+
+
+@nb.jit(nopython=True, cache=True, nogil=True)
+def _phonon_expansion_cpu(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
+                          tau_n: np.ndarray, delta_beta: float,
+                          DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate S(alpha, -beta) matrix using tau_n functions:
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Parameters
+    ----------
+    alpha: 'xp.ndarray', (N,)
+        alpha grid values in the cpu as numpy array or in the gpu as cupy array.
+    beta: 'xp.ndarray', (M,)
+        beta grid values in the cpu as numpy array or in the gpu as cupy array.
+    nphonon: 'int'
+        Number of phonon expansion.
+    tau_n: 'xp.ndarray', (Z, T)
+        tau_n functions. The first dimension is the number of the expansion
+        and the second dimension is the number of the beta grid. In the cpu as
+        numpy array or in the gpu as cupy array.
+    delta_beta: 'float'
+        Delta beta value.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
+
+    Returns
+    -------
+    'xp.ndarray', (N, M)
+        S(alpha, -beta) matrix values.
+    """
     tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     # Zero phonon expansion:
     iter_sum = np.log(alpha * DebyeWallerCoeff)
@@ -1295,6 +1372,46 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
         alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
         sab_values += np.outer(alpha_mul, np.interp(beta, tau_n_beta, tau_n[n]))
     return sab_values
+
+
+def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
+                     tau_n: np.ndarray, delta_beta: float,
+                     DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate S(alpha, -beta) matrix using tau_n functions:
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Parameters
+    ----------
+    alpha: 'xp.ndarray', (N,)
+        alpha grid values
+    beta: 'xp.ndarray', (M,)
+        beta grid values
+    nphonon: 'int'
+        Number of phonon expansion.
+    tau_n: 'xp.ndarray', (Z, T)
+        tau_n functions. The first dimension is the number of the expansion
+        and the second dimension is the number of the beta grid.
+    delta_beta: 'float'
+        Delta beta value.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
+
+    Returns
+    -------
+    'xp.ndarray', (N, M)
+        S(alpha, -beta) matrix values.
+    """
+    if gpu_available:
+        try:
+            return _phonon_expansion_gpu(xp.asarray(alpha), xp.asarray(beta),
+                                         nphonon, xp.asarray(tau_n), delta_beta,
+                                         DebyeWallerCoeff).get()
+        except xp.cuda.memory.OutOfMemoryError:
+            pass
+    return _phonon_expansion_cpu(alpha, beta, nphonon, tau_n, delta_beta,
+                                 DebyeWallerCoeff)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

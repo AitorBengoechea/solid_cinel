@@ -233,7 +233,10 @@ def tau_n_functions_gpu(tau1: np.ndarray, delta_beta: float,
     else:
         max_column = find_first_all_zero_column_cpu(tau_n_func, threshold)
     # copy the data back to the device :
-    return xp.asarray(tau_n_func[::, :max_column])
+    try:
+        return xp.asarray(tau_n_func[::, :max_column])
+    except xp.cuda.memory.OutOfMemoryError:
+        return tau_n_func[::, :max_column]
 
 
 if gpu_available:

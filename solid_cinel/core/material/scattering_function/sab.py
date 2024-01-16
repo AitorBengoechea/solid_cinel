@@ -1363,10 +1363,7 @@ def phonon_expansion(*args) -> np.ndarray:
                    for arg in args]
         return _phonon_expansion(*arg_gpu).get()
     else:
-        # Copy to host memory tau_N functions values:
-        tau_n_cpu = args[3].get() if gpu_available else args[3]
-        return _phonon_expansion(args[0], args[1], args[2], tau_n_cpu, args[4],
-                                 args[5])
+        return _phonon_expansion(*args)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

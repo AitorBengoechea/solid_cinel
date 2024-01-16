@@ -5,7 +5,7 @@ Python file for working with S(alpha, -beta) matrixs.
 """
 from scipy.constants import physical_constants as const
 from scipy.integrate import trapezoid
-from solid_cinel.core.generic import integrate, reshape_differential, gpu_available, optional_jit
+from solid_cinel.core.generic import integrate, reshape_differential, gpu_available
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau
 from solid_cinel.core.material.scattering_function.beta import Beta
@@ -1284,10 +1284,9 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-@optional_jit
-def _phonon_expansion(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
-                      tau_n: xp.ndarray, delta_beta: float,
-                      DebyeWallerCoeff: float) -> xp.ndarray:
+def _phonon_expansion_gpu(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
+                          tau_n: xp.ndarray, delta_beta: float,
+                          DebyeWallerCoeff: float) -> xp.ndarray:
     """
     Generate S(alpha, -beta) matrix using tau_n functions:
     .. math::
@@ -1330,7 +1329,55 @@ def _phonon_expansion(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
     return sab_values
 
 
-def phonon_expansion(*args) -> np.ndarray:
+@nb.jit(nopython=True, cache=True, nogil=True)
+def _phonon_expansion_cpu(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
+                          tau_n: np.ndarray, delta_beta: float,
+                          DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate S(alpha, -beta) matrix using tau_n functions:
+    .. math::
+        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+    Parameters
+    ----------
+    alpha: 'xp.ndarray', (N,)
+        alpha grid values in the cpu as numpy array or in the gpu as cupy array.
+    beta: 'xp.ndarray', (M,)
+        beta grid values in the cpu as numpy array or in the gpu as cupy array.
+    nphonon: 'int'
+        Number of phonon expansion.
+    tau_n: 'xp.ndarray', (Z, T)
+        tau_n functions. The first dimension is the number of the expansion
+        and the second dimension is the number of the beta grid. In the cpu as
+        numpy array or in the gpu as cupy array.
+    delta_beta: 'float'
+        Delta beta value.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
+
+    Returns
+    -------
+    'xp.ndarray', (N, M)
+        S(alpha, -beta) matrix values.
+    """
+    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    # Zero phonon expansion:
+    iter_sum = np.log(alpha * DebyeWallerCoeff)
+    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+    sab_values = np.outer(alpha_mul, np.interp(beta, tau_n_beta, tau_n[0]))
+
+    # Higher phonon expansion (nphonon >= 1):
+    for n in range(1, nphonon):
+        # Compute S(alpha, -beta) for tau_n reshape
+        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+        sab_values += np.outer(alpha_mul, np.interp(beta, tau_n_beta, tau_n[n]))
+    return sab_values
+
+
+def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
+                     tau_n: [np.ndarray, xp.ndarray], delta_beta: float,
+                     DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using tau_n functions:
     .. math::
@@ -1357,13 +1404,14 @@ def phonon_expansion(*args) -> np.ndarray:
     'xp.ndarray', (N, M)
         S(alpha, -beta) matrix values.
     """
-    if gpu_available:
-        # Copy to device memory the alpha and beta grid values:
-        arg_gpu = [xp.asarray(arg) if isinstance(arg, np.ndarray) else arg
-                   for arg in args]
-        return _phonon_expansion(*arg_gpu).get()
+    if isinstance(tau_n, np.ndarray):
+        return _phonon_expansion_cpu(alpha, beta, nphonon, tau_n, delta_beta,
+                                     DebyeWallerCoeff)
     else:
-        return _phonon_expansion(*args)
+        alpha = xp.asarray(alpha)
+        beta = xp.asarray(beta)
+        return _phonon_expansion_gpu(alpha, beta, nphonon, tau_n, delta_beta,
+                                     DebyeWallerCoeff).get()
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)

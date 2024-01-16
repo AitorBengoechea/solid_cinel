@@ -7,7 +7,6 @@ Python file for generic function.
 import scipy as sp
 import numpy as np
 import pandas as pd
-import numba as nb
 from typing import Iterable
 from scipy.stats import qmc
 from numba import cuda
@@ -15,14 +14,6 @@ if cuda.is_available():
     gpu_available = True
 else:
     gpu_available = False
-
-
-def optional_jit(func):
-    """Decorator to optionally apply jit compilation."""
-    if gpu_available:
-        return func
-    else:
-        return nb.jit(func, nopython=True, nogil=True, cache=True, parallel=True)
 
 
 def integrate(series: pd.Series, kind="trapezoidal") -> float:

@@ -634,7 +634,7 @@ class Sab:
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
-        cls.DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+        cls.DebyeWallerCoeff = debye_waller_coeff = pdos.DebyeWallerCoeff(T)
 
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos
@@ -646,12 +646,12 @@ class Sab:
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
             n_order_max = kwargs.get("n_order_max", 5000)
-            nphonon = alpha_grid_.expansion_order(cls.DebyeWallerCoeff, decimal, n_order_max)
+            nphonon = alpha_grid_.expansion_order(debye_waller_coeff, decimal, n_order_max)
 
         # Get the parameters for calculation:
-        tau_n, delta_beta, DebyeWallerCoeff = pdos.get_clm_param(T,
-                                                                 nphonon=nphonon,
-                                                                 threshold=kwargs.get("threshold", 0.0))
+        delta_beta = pdos.to_beta_grid(T).grid
+        tau_n = pdos.get_tau(T, nphonon, threshold=kwargs.get("threshold", 0.0),
+                             values=True)
         save_tau(tau_n, nphonon, T, kwargs.get("tau_to_file", False),
                  kwargs.get("binary", False))
         S_values = phonon_expansion(alpha_grid_.data,
@@ -659,7 +659,7 @@ class Sab:
                                     nphonon,
                                     tau_n,
                                     delta_beta,
-                                    DebyeWallerCoeff)
+                                    debye_waller_coeff)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
     @classmethod

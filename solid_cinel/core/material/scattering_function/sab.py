@@ -1445,3 +1445,71 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
             Sab[i, j] *= exp(- (abs(beta[j]) + beta[j]) / 2)
             Sab[i, j] /= sqrt(4 * pi * ws * alpha[i] * Tratio)
     return Sab
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_expansion_order(alpha: np.ndarray, DebyeWallerCoeff: float,
+                        decimal: float = 1.0e-6, order_max: int = 5000) -> int:
+    """
+    Get the expansion order for the phonon expansion method using the maximun
+    alpha value and the decimal precision.
+    .. math::
+        \exp(-\alpha\lambda)\sum_{n=0}^{N}\dfrac{(\alpha\lambda)^n}{n!} = 1.0
+
+    Parameters
+    ----------
+    alpha: 'np.ndarray', (N,) or (N, M)
+        alpha grid values.
+    decimal: 'float', optional
+        Decimal precision. The default is 1.0e-6.
+
+    Returns
+    -------
+    n: 'int'
+        Expansion order.
+
+    Example
+    -------
+    >>> from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat
+    >>> M = 238.05077040419212
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
+    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> T = 300
+    >>> debye_waller = pdos.DebyeWallerCoeff(T)
+    >>> Ein = 6.68
+    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansion_order(alpha_mat, debye_waller)
+    39
+
+    >>> Ein =  36.68
+    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansion_order(alpha_mat, debye_waller)
+    139
+
+    >>> T = 1474
+    >>> debye_waller = pdos.DebyeWallerCoeff(T)
+    >>> Ein = 6.68
+    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansion_order(alpha_mat, debye_waller)
+    122
+
+    >>> Ein = 36.68
+    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansion_order(alpha_mat, debye_waller)
+    525
+
+    >>> Ein = 100
+    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansion_order(alpha_mat, debye_waller)
+    1321
+    """
+    alpha_max = alpha.max()
+    n = 1
+    iter_sum = np.log(alpha_max * DebyeWallerCoeff)
+    alpha_mul = alpha_cumsum = np.exp(- alpha_max * DebyeWallerCoeff + iter_sum)
+    while (abs(alpha_mul - 1.0) > decimal) and (n < order_max):
+        iter_sum += np.log(alpha_max * DebyeWallerCoeff / (n + 1))
+        alpha_mul += np.exp(- alpha_max * DebyeWallerCoeff + iter_sum)
+        alpha_cumsum += alpha_mul
+        n += 1
+    return n

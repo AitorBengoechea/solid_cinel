@@ -646,8 +646,7 @@ class Sab:
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
             n_order_max = kwargs.get("n_order_max", 5000)
-            nphonon = get_expansion_order(alpha_grid_.data, cls.DebyeWallerCoeff,
-                                          decimal, n_order_max)
+            nphonon = alpha_grid_.expansion_order(cls.DebyeWallerCoeff, decimal, n_order_max)
 
         # Get the parameters for calculation:
         tau_n, delta_beta, DebyeWallerCoeff = pdos.get_clm_param(T,
@@ -830,7 +829,7 @@ class Sab:
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         >>> delta_beta = pdos.to_beta_grid(T).grid
         >>> tau1 = pdos.get_tau_1(T).values
-        >>> nphonon = get_expansion_order(alpha.data, DebyeWallerCoeff, 1.0e-6, 5000)
+        >>> nphonon = alpha.expansion_order(DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tau_n = tau_n_functions(tau1, delta_beta, nphonon, 0.0)
         >>> S_mat = Sab.from_tau(alpha, beta, tau_n, delta_beta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
@@ -1464,77 +1463,3 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
             Sab[i, j] *= exp(- (abs(beta[j]) + beta[j]) / 2)
             Sab[i, j] /= sqrt(4 * pi * ws * alpha[i] * Tratio)
     return Sab
-
-
-@nb.jit(nopython=True, nogil=True, cache=True)
-def get_expansion_order(alpha: np.ndarray, DebyeWallerCoeff: float,
-                        decimal: float, order_max: int) -> int:
-    """
-    Get the expansion order for the phonon expansion method using the maximun
-    alpha value and the decimal precision.
-    .. math::
-        \exp(-\alpha\lambda)\sum_{n=0}^{N}\dfrac{(\alpha\lambda)^n}{n!} = 1.0
-
-    Parameters
-    ----------
-    alpha: 'np.ndarray', (N,) or (N, M)
-        alpha grid values.
-    DebyeWallerCoeff: 'float'
-        Debye Waller coefficient.
-    decimal: 'float'
-        Decimal precision
-    order_max: 'int'
-        Maximun order for the expansion.
-
-    Returns
-    -------
-    n: 'int'
-        Expansion order.
-
-    Example
-    -------
-    >>> from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat
-    >>> decimal = 1.0e-6
-    >>> order_max = 5000
-    >>> M = 238.05077040419212
-    >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
-    >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> T = 300
-    >>> debye_waller = pdos.DebyeWallerCoeff(T)
-    >>> Ein = 6.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
-    39
-
-    >>> Ein =  36.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
-    139
-
-    >>> T = 1474
-    >>> debye_waller = pdos.DebyeWallerCoeff(T)
-    >>> Ein = 6.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
-    122
-
-    >>> Ein = 36.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
-    525
-
-    >>> Ein = 100
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
-    1321
-    """
-    alpha_max = alpha.max()
-    n = 1
-    iter_sum = np.log(alpha_max * DebyeWallerCoeff)
-    alpha_mul = alpha_cumsum = np.exp(- alpha_max * DebyeWallerCoeff + iter_sum)
-    while (abs(alpha_mul - 1.0) > decimal) and (n < order_max):
-        iter_sum += np.log(alpha_max * DebyeWallerCoeff / (n + 1))
-        alpha_mul += np.exp(- alpha_max * DebyeWallerCoeff + iter_sum)
-        alpha_cumsum += alpha_mul
-        n += 1
-    return n

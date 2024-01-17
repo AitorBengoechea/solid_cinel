@@ -5,8 +5,10 @@ from math import pi
 from numba import prange
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, get_scatfunc_pdos_row
+from solid_cinel.core.material.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order
 from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
 from solid_cinel.core.xs.ddxs import DDxs
+import warnings
 
 # Example variables:
 interv_in_energy_U238 = 6.956193E-04
@@ -152,7 +154,9 @@ class Xs:
     @staticmethod
     def clm_db(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                theta: np.ndarray, num_Eout: int, prob: bool, pdos,
-               nphonon: int = 1000, threshold: float = 0.0):
+               nphonon: int = None, decimal: float = 1.0e-6,
+               n_order_max: int = 5000,
+               threshold: float = 0.0):
         """
 
         Parameters
@@ -214,7 +218,15 @@ class Xs:
         mu = np.sort(np.cos(np.deg2rad(theta)))
         T_arno = T * (1 + mu) / 2
         # Get Scattering function data:
-        tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt = pdos.get_clm_param(T, nphonon=nphonon, threshold=threshold)
+        debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
+        delta_beta_scatt = pdos.to_beta_grid(T).grid
+        if nphonon:
+            warnings.warn(
+                "Is posible that the expansion order is not enough to get the correct results")
+        else:
+            alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1], M, T, mu.min())
+            nphonon = get_expansion_order( alpha_max, debye_waller_coeff_scatt, decimal, n_order_max)
+        tau_n_scatt = pdos.get_tau(T, nphonon, threshold, values=True)
         # 1 Scatfunct for getting mu_fit:
         Eout = np.linspace(Ein_grid[0] * 0.9, Ein_grid[0] * 1.1, num_Eout)
         mu_fit = ScatFunc.from_tau(Ein_grid[0], M, T, Eout, theta, tau_n_scatt,
@@ -406,7 +418,9 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     >>> xs_0K_values, xs_0K_E = xs_0K.values, xs_0K.index.values
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt = pdos.get_clm_param(T, nphonon=10, threshold=0.0)
+    >>> debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
+    >>> delta_beta_scatt = pdos.to_beta_grid(T).grid
+    >>> tau_n_scatt = pdos.get_tau(T, 10, 0.0, values=True)
     >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tau_n_scatt, delta_beta_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
     >>> pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).round(6)
         mu    Ein   xs  xs_up  xs_down

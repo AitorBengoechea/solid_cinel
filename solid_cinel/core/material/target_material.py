@@ -1001,7 +1001,7 @@ class Target_mat(Solid, Pdos):
                                                                  w_s=w_s[x.name]))
             elif model.lower() == "phonon expansion":
                 threshold = {key: kwargs.get("threshold", {}).get(key, 0.0) for key in index}
-                nphonon = {key: kwargs.get("nphonon", {}).get(key, 1000) for key in index}
+                nphonon = {key: kwargs.get("nphonon", {}).get(key) for key in index}
                 Sab_matrix = groups.apply(lambda x: Sab.from_pdos(alpha_grid[x.name],
                                                                   beta_grid[x.name],
                                                                   T,

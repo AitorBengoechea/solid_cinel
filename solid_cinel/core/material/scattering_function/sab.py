@@ -10,12 +10,11 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau, gpu_available
 from solid_cinel.core.material.scattering_function.beta import Beta
 from solid_cinel.core.material.scattering_function.alpha import Alpha
-from solid_cinel.core.material.scattering_function.scatfunc import scatfunc_values_alpha_vec
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
-from math import exp, sqrt, pi
+from math import pi
 from numba import prange
 import warnings
 try:
@@ -373,62 +372,6 @@ class Sab:
         Sab_negative = self.data.set_axis(-beta, axis=1).sort_index(axis=1)
         Sab_positive = self.data.apply(lambda x: x * np.exp(-beta), axis=1)
         return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
-
-    def to_ScatFunc(self, Ein, T, M, mu=None) -> pd.Series:
-        """
-        Get the scattering function from the S(alpha, -beta) matrix.
-
-        Parameters
-        ----------
-        Ein : 'float'
-            Incident energy in eV.
-        T : 'float'
-            Temperature in K.
-        mu : 'float', optional
-            The Cosine of the scattering angle used for the creation of the
-            S(alpha, -beta) table. The default is None.
-
-        Returns
-        -------
-        'pd.Series'
-            Scattering function of these S(alpha, -beta) table
-
-        Example
-        -------
-        >>> T = 300
-        >>> M = 26
-        >>> Ein = 3
-        >>> Eout = np.linspace(Ein, Ein * 1.05, 1000)
-        >>> beta_grid = Beta.from_Eout(Eout, Ein, T).data
-        >>> alpha_grid = Alpha.from_parameters(Eout, Ein, T, M, 60).data
-        >>> Sab.from_fgm(alpha_grid, beta_grid).to_ScatFunc(Ein, T, M).iloc[295:305].round(6) #doctest: +NORMALIZE_WHITESPACE
-        Eout
-        2.894294    2.665969
-        2.894444    2.665249
-        2.894595    2.664520
-        2.894745    2.663782
-        2.894895    2.663034
-        2.895045    2.662277
-        2.895195    2.661511
-        2.895345    2.660736
-        2.895495    2.659952
-        2.895646    2.659158
-        dtype: float64
-        """
-        Ein, T, M = float(Ein), float(T), float(M)
-        # Get the scattering function values:
-        sab_diag = np.array(np.diag(self.data), order='C')
-        beta = self.beta.data[:len(sab_diag)]
-        Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_diag, beta, Ein, T, M)
-
-        # Change the data type:
-        scattfunc = pd.Series(scatfunc_values, index=Eout_calc)
-        scattfunc = scattfunc[~scattfunc.index.duplicated(keep='first')]
-        # Output style:
-        scattfunc.index.name = 'Eout'
-        if mu:
-            scattfunc.name = mu
-        return scattfunc.sort_index()
 
     @classmethod
     def from_fgm(cls, alpha_grid: Union[Alpha, Iterable],
@@ -1456,10 +1399,8 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values.
     """
-    Sab = np.empty((len(alpha), len(beta)))
+    Sab = np.zeros((len(alpha), len(beta)))
     for i in prange(len(alpha)):
-        for j in prange(len(beta)):
-            Sab[i, j] = exp(-(abs(beta[j]) - alpha[i] * ws) ** 2 / (4 * alpha[i] * ws * Tratio))
-            Sab[i, j] *= exp(- (abs(beta[j]) + beta[j]) / 2)
-            Sab[i, j] /= sqrt(4 * pi * ws * alpha[i] * Tratio)
+        sab_values = np.exp(-(ws * alpha[i] + beta) ** 2 / (4 * alpha[i] * Tratio * ws))
+        Sab[i] += sab_values / np.sqrt(4 * pi * ws * alpha[i] * Tratio)
     return Sab

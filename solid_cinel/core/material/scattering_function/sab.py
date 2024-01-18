@@ -1375,6 +1375,35 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
                                  DebyeWallerCoeff)
 
 
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_sab_sct_alpha(alpha: float, beta: np.ndarray, Tratio: float,
+                      ws:float) -> np.ndarray:
+    """
+    Generate S(alpha, beta) matrix using Short Collision Time for a single
+    alpha value
+    .. math::
+        S(\alpha, \beta)=\dfrac{1}{\sqrt{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\mid\beta\mid - \omega_{s}\alpha)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T} - \frac{\mid\beta\mid - \beta}{2}\right)
+
+    Parameters
+    ----------
+    alpha: float
+        alpha grid value
+    beta: np.ndarray, (M,)
+        beta grid values
+    Tratio: float
+        Effective temperature divide by the temperature.
+    ws: float
+        normalization for continuous (vibrational) part. For solid is 1.
+
+    Returns
+    -------
+    'np.ndarray', (M,)
+        S(alpha, beta) matrix values for a single alpha value.
+    """
+    sab_values = np.exp(-(ws * alpha + beta) ** 2 / (4 * alpha * Tratio * ws))
+    return sab_values / np.sqrt(4 * pi * ws * alpha * Tratio)
+
+
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
                 ws: float) -> np.ndarray:
@@ -1401,6 +1430,6 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     """
     Sab = np.zeros((len(alpha), len(beta)))
     for i in prange(len(alpha)):
-        sab_values = np.exp(-(ws * alpha[i] + beta) ** 2 / (4 * alpha[i] * Tratio * ws))
-        Sab[i] += sab_values / np.sqrt(4 * pi * ws * alpha[i] * Tratio)
+        Sab[i] += get_sab_sct_alpha(alpha[i], beta, Tratio, ws)
     return Sab
+

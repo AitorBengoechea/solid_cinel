@@ -478,7 +478,30 @@ class Alpha:
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def get_alpha_from_Eout(Eout: np.ndarray, Ein: float, T: float, M: float, mu: float) -> np.ndarray:
+def get_alpha_from_Eout(Eout: np.ndarray, Ein: float, T: float, M: float,
+                        mu: float) -> np.ndarray:
+    """
+    Get the alpha value from the parameters of the function:
+    .. math::
+        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{Ak_BT}
+    Parameters
+    ----------
+    Eout: 'np.ndarray', (N,)
+        Output energy of the neutron in eV.
+    Ein: 'float'
+        Incidente energy of the neutron in eV.
+    T: 'float'
+        Temperature in K.
+    M: "float"
+        Mass in amu of the scatterer.
+    mu: 'float'
+        Cosine of the scattering angle.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Array containing all posible alpha values for the input parameters.
+    """
     return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M * kb * T / m)
 
 
@@ -571,7 +594,7 @@ def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def get_expansion_order(alpha: np.ndarray, DebyeWallerCoeff: float,
+def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
                         decimal: float, order_max: int) -> int:
     """
     Get the expansion order for the phonon expansion method using the maximun
@@ -632,7 +655,7 @@ def get_expansion_order(alpha: np.ndarray, DebyeWallerCoeff: float,
     >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
     1321
     """
-    alpha_max = alpha.max()
+    alpha_max = alpha if isinstance(alpha, (int, float)) else alpha.max()
     n = 1
     iter_sum = np.log(alpha_max * DebyeWallerCoeff)
     alpha_mul = alpha_cumsum = np.exp(- alpha_max * DebyeWallerCoeff + iter_sum)

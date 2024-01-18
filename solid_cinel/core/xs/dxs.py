@@ -183,7 +183,7 @@ class Dxs:
         2.16036     0.020645
         dtype: float64
         """
-        scatfunction = ScatFunc.from_MD(Ein, M, T, Eout)
+        scatfunction = ScatFunc.from_sigma1(Ein, M, T, Eout)
         return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs_0K))
 
     @classmethod

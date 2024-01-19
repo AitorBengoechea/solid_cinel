@@ -253,7 +253,26 @@ def calculate_tau_n_functions_gpu(tau_n_func: np.ndarray, tau1: np.ndarray,
 
 
 def tau_n_functions(tau1: np.ndarray, delta_beta: float,
-                    nphonon: int, threshold: float):
+                    nphonon: int, threshold: float) -> np.ndarray:
+    """
+    Get the tau_{n}(-beta) function values for all n.
+
+    Parameters
+    ----------
+    tau1: 'np.ndarray', (N,)
+        Tau(-beta) function values for n = 1 expansion.
+    delta_beta: 'float'
+        Interval of beta for the PDOS.
+    nphonon: 'int'
+        Number of phonon to calculate the tau functions.
+    threshold: 'float'
+        Minimun value to take into account.
+
+    Returns
+    -------
+    tau_n_func: 'np.ndarray', (nphonon, N * nphonon)
+        All Tau(-beta) function values for n expansion.
+    """
     Ntau1 = len(tau1)
     column_max = Ntau1 * nphonon
     tau_n_func = np.zeros((nphonon, column_max))

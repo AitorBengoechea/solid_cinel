@@ -4,7 +4,7 @@ import numba as nb
 import h5py
 import os
 from math import exp
-from numba import prange, cuda
+from numba import cuda
 gpu_available = True if cuda.is_available() else False
 
 
@@ -113,7 +113,7 @@ def calculate_tau_n(delta_beta, tau1, tau_n_minus_1, tau_n,
     """
     Nnm1 = len(tau_n_minus_1)
     # Tau_N(-beta) loop:
-    for i in prange(start, final, stride):
+    for i in range(start, final, stride):
         # 1 iteration: j = 0
         tau_n[i] += tau1[0] * tau_n_minus_1[i] * delta_beta if i < Nnm1 else 0.
         # rest of iterations:

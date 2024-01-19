@@ -1106,9 +1106,11 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
     def from_model(cls, Ein: float, M: float, T: float, Eout: np.array,
                  theta: [np.ndarray, float], *args, model: str = "fgm", **kwargs):
         if hasattr(theta, '__len__'):
-            scatfunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta, *args, model=model, **kwargs)
+            scatfunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta,
+                                             *args, model=model, **kwargs)
         else:
-            scatfunc = ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, *args, model=model, **kwargs)
+            scatfunc = ScatFuncSD.from_model(Ein, M, T, Eout, theta,
+                                             *args, model=model, **kwargs)
         return cls(scatfunc)
 
     # called when an attribute is not found:

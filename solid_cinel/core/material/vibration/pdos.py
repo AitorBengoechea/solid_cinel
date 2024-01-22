@@ -4,7 +4,7 @@ Python file for working with Phonon Density Of States.
 @author: AB272525
 """
 from solid_cinel.core.generic import integrate
-from solid_cinel.core.material.scattering_function.beta import Beta
+from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 import pandas as pd
 import numpy as np

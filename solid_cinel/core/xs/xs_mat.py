@@ -9,7 +9,7 @@ import numba as nb
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
+from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.xs.dxs import Dxs

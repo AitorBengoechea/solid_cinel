@@ -6,13 +6,12 @@ Python for working with Double Diferential XS.
 import numpy as np
 import pandas as pd
 import numba as nb
-import h5py
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.scattering_function import ScatFunc
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.generic import integrate, reshift
 from solid_cinel.core.xs.dxs import Dxs, check_dx
-from solid_cinel.core.xs.xs_mat import XsMat, extract_number
+from solid_cinel.core.xs.xs_mat import XsMat
 import os
 
 from typing import Iterable

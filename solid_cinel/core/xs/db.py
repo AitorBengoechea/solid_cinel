@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos
-from solid_cinel.core.material.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order
+from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order
 from solid_cinel.core.material.vibration.tau import save_tau
 import warnings
 

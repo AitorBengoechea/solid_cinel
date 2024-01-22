@@ -9,9 +9,9 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.beta import get_beta
-from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout, get_expansion_order
-from solid_cinel.core.material.scattering_function.sab import get_sab_sct, get_sab_sct_alpha
+from solid_cinel.core.scattering_function.beta import get_beta
+from solid_cinel.core.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout, get_expansion_order
+from solid_cinel.core.scattering_function.sab import get_sab_sct, get_sab_sct_alpha
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import save_tau
 from typing import Iterable
@@ -1145,7 +1145,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         # 0K xs data for U238:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
-        >>> os.chdir("../../../data/xs/U238/")
+        >>> os.chdir("../../data/xs/U238/")
         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 

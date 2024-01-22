@@ -4,8 +4,8 @@ import numba as nb
 from math import pi
 from numba import prange
 from solid_cinel.core.material.vibration.tau import tau_n_functions
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, get_scatfunc_pdos_row
-from solid_cinel.core.material.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order
+from solid_cinel.core.scattering_function import ScatFunc, get_scatfunc_pdos_row
+from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order
 from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
 from solid_cinel.core.xs.ddxs import DDxs
 import warnings

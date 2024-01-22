@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.scattering_function import ScatFunc
 from solid_cinel.core.generic import integrate, reshift
 import os
 

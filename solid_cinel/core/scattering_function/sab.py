@@ -4,7 +4,6 @@ Python file for working with S(alpha, -beta) matrixs.
 @author: AB272525
 """
 from scipy.constants import physical_constants as const
-from scipy.integrate import trapezoid
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import tau_n_functions, save_tau, gpu_available
@@ -1180,8 +1179,7 @@ def _sum_rule(x: pd.Series, n: int = 1) -> float:
     0.001087
     """
     beta = x.index.values
-    S_values = x.values
-    return trapezoid(np.power(beta, n) * S_values * (1 - np.exp(-beta)), beta)
+    return integrate(beta * x * (1 - np.exp(-beta)))
 
 
 def _normalization(x: pd.Series) -> float:
@@ -1207,9 +1205,7 @@ def _normalization(x: pd.Series) -> float:
     1.0
     """
     beta = x.index.values
-    S_asymm_values = x.values
-    S = pd.Series((1 + np.exp(-beta)) * S_asymm_values, index=beta)
-    return integrate(S)
+    return integrate((1 + np.exp(-beta)) * x)
 
 
 def proportionality_factor(alpha: float, alpha_i: float,

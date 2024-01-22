@@ -4,7 +4,7 @@ Python file for working with Phonon Density Of States.
 @author: AB272525
 """
 from solid_cinel.core.generic import integrate
-from solid_cinel.core.material.scattering_function.beta import Beta
+from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 import pandas as pd
 import numpy as np
@@ -110,7 +110,7 @@ class Pdos:
         >>> p = pdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
-        >>> assert sp.integrate.trapezoid(p.data.values, p.data.index) == 1.0
+        >>> assert integrate(p.data) == 1.0
         """
         rho_ = pd.Series(rho_data, name="rho")
 
@@ -299,7 +299,7 @@ class Pdos:
         P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
         return pd.Series(P_values, index=beta_rho.index, name="P")
 
-    def Teff(self, T: float, twt: float = None) -> float:
+    def Teff(self, T: float, twt: float = 0.0) -> float:
         """
         Calculate the effective temperature for a certain pdos information.
         .. math::
@@ -310,7 +310,7 @@ class Pdos:
         T : 'float'
             Temperature in K.
         twt : 'float', optional
-            Translational weight, for solid is zero. The default is None.
+            Translational weight, for solid is zero. The default is 0.
 
         Returns
         -------
@@ -329,12 +329,9 @@ class Pdos:
         159.1632
         """
         P = self.P(T)
-        P_values, beta = P.values, P.index.values
-        Teff_weight = sp.integrate.trapezoid(beta ** 2 * P_values * np.cosh(0.5 * beta),
-                                             x=beta)
-        if twt is not None:
-            Teff_weight += twt
-        return Teff_weight * T
+        beta = P.index.values
+        P *= beta ** 2 * np.cosh(0.5 * beta)
+        return (integrate(P) + twt) * T
 
     def DebyeWallerCoeff(self, T: float) -> float:
         """
@@ -371,9 +368,8 @@ class Pdos:
         0.379937
         """
         P = self.P(T)
-        P_values, beta = P.values, P.index.values
-        return 2 * sp.integrate.trapezoid(P_values * np.cosh(0.5 * beta),
-                                          x=beta)
+        P *= 2 * np.cosh(0.5 * P.index.values)
+        return integrate(P)
 
     def get_tau_1(self, T: float) -> pd.Series:
         """

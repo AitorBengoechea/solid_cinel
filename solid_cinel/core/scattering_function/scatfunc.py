@@ -9,8 +9,9 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.scattering_function.beta import get_beta
-from solid_cinel.core.material.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout, get_expansion_order
+from solid_cinel.core.scattering_function.beta import get_beta
+from solid_cinel.core.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout, get_expansion_order
+from solid_cinel.core.scattering_function.sab import get_sab_sct, get_sab_sct_alpha
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import save_tau
 from typing import Iterable
@@ -125,7 +126,7 @@ class ScatFuncSD:
         self._data = pdf_
 
     @classmethod
-    def from_MD(cls, Ein: float, M: float, T: float, Eout: np.array):
+    def from_sigma1(cls, Ein: float, M: float, T: float, Eout: np.array):
         """
         Calculate the scattering function using Maxwellian velocity distribution
         and angular integration
@@ -157,7 +158,7 @@ class ScatFuncSD:
         >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> pdf = ScatFuncSD.from_MD(Ein, M, T, Eout)
+        >>> pdf = ScatFuncSD.from_sigma1(Ein, M, T, Eout)
         >>> pdf.data.iloc[::100]
         Eout
         35.953485    8.937086e-15
@@ -177,8 +178,8 @@ class ScatFuncSD:
                    index=pd.Index(Eout_, name="Eout"))
 
     @classmethod
-    def from_SabSD(cls, Ein: float, M: float, T: float, Eout: np.array,
-                 theta: float, *args, model: str = "fgm", **kwargs):
+    def from_model(cls, Ein: float, M: float, T: float, Eout: np.array,
+                   theta: float, *args, model: str = "fgm", **kwargs):
         """
         Generate the single differential scattering function from a selected
         angle using S(alpha, -beta) table.
@@ -195,8 +196,8 @@ class ScatFuncSD:
             Temperature of the material in K
         Eout : np.array
             The neutron outgoing energy grid in eV
-        theta : np.array
-            Grid of cosine of the scattering angle
+        theta : float
+            The angle of the distribution in degrees
         model: str
             The model used to generate the S(alpha, beta) table. The available
             models are:
@@ -227,7 +228,7 @@ class ScatFuncSD:
         Returns
         -------
         ScatFuncSD
-            Double differential scattering scattering function
+            Single differential scattering function for the selected angle
 
         Examples
         --------
@@ -240,7 +241,7 @@ class ScatFuncSD:
         >>> theta = 60
 
         # Using the Free Gas Model:
-        >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, model="fgm").data.loc[Eout_test].round(6)
+        >>> ScatFuncSD.from_model(Ein, M, T, Eout, theta, model="fgm").data.loc[Eout_test].round(6)
         6.7554    0.000000
         6.9050    0.005957
         7.0439    1.196663
@@ -251,7 +252,7 @@ class ScatFuncSD:
 
         # Using the Short Collision Time model:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, pdos, model="sct").data.loc[Eout_test].round(6)
+        >>> ScatFuncSD.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.loc[Eout_test].round(6)
         6.7554    0.000000
         6.9050    0.006089
         7.0439    1.200917
@@ -261,7 +262,7 @@ class ScatFuncSD:
         dtype: float64
 
         # Using the Phonon expansion model:
-        >>> ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
+        >>> ScatFuncSD.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
         6.7554    0.000005
         6.9050    0.010414
         7.0439    1.179140
@@ -270,29 +271,197 @@ class ScatFuncSD:
         7.4480    0.004105
         dtype: float64
         """
-        mu = np.cos(np.deg2rad([theta]))
+        mu = np.cos(np.deg2rad(theta))
         if model.lower() == "pdos":
-            debye_waller_coeff = args[-1].DebyeWallerCoeff(T)
-            delta_beta = args[-1].to_beta_grid(T).grid
-            if kwargs.get("nphonon"):
-                nphonon = kwargs.get("nphonon")
-                warnings.warn(
-                    "Is posible that the expansion order is not enough to get the correct results")
-            else:
-                decimal = kwargs.get("decimal", 1.0e-6)
-                n_order_max = kwargs.get("n_order_max", 5000)
-                nphonon = get_expansion_order(
-                    get_alpha_from_Eout(Eout, Ein, M, T, mu),
-                    debye_waller_coeff, decimal, n_order_max
-                )
-            tau_n = args[-1].get_tau(T, nphonon, kwargs.get("threshold", 0.0), values=True)
-            scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n,
-                                          delta_beta, debye_waller_coeff)[0]
+            return cls.from_pdos(Ein, M, T, Eout, mu, *args, **kwargs)
+        elif model.lower() == "sct":
+            return cls.from_sct(Ein, M, T, Eout, mu, *args, **kwargs)
         else:
-            ws = kwargs.pop("ws", 1.0)
-            Teff = args[0].Teff(T) if model == "sct" else T
-            scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)[0]
-        norm = integrate(pd.Series(scattfunc, index=Eout))
+            return cls.from_fgm(Ein, M, T, Eout, mu)
+
+    @classmethod
+    def from_pdos(cls, Ein: float, M: float, T: float, Eout: np.array,
+                  mu: float, pdos, nphonon: int = None,
+                  decimal: float = 1.0e-6,
+                  n_order_max: int = 5000, threshold: float = 0.0,
+                  tau_to_file: bool = False,
+                  binary: bool = False):
+        """
+        Generate the single differential scattering function from a selected
+        angle using S(alpha, -beta) table based on Phonon expansion model.
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        mu : float
+            The cosine of the angle of the distribution in degrees
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        nphonon: 'int', optional
+            Phonon expansion order. The default is None and the order is
+            calculated using the get_expansion_order function.
+        decimal: 'float', optional
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        n_order_max: 'int', optional
+            Maximun expansion order. The default is 5000.
+        threshold: 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions
+        tau_to_file: 'bool', optional
+            Save tau_n functions to file. The default is False.
+        binary: 'bool', optional
+            Save tau_n functions to binary file. The default is False.
+
+        Returns
+        -------
+        ScatFuncSD
+            Single differential scattering function for the selected angle using
+            S(alpha, -beta) table based on Phonon expansion model
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> mu = 0.5
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncSD.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[Eout_test].round(6)
+        6.7554    0.000005
+        6.9050    0.010414
+        7.0439    1.179140
+        7.2000    5.157190
+        7.3157    0.705790
+        7.4480    0.004105
+        dtype: float64
+        """
+        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        delta_beta = pdos.to_beta_grid(T).grid
+        if nphonon:
+            warnings.warn(
+                "Is posible that the expansion order is not enough to get the correct results")
+        else:
+            nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu),
+                                          debye_waller_coeff, decimal, n_order_max)
+        tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
+        save_tau(tau_n, nphonon, T, tau_to_file, binary)
+        mu = np.array(mu) if hasattr(mu, '__len__') else np.array([mu])
+        scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff)[0]
+        norm = np.trapz(scattfunc, x=Eout)
+        return cls(Ein, T, M, scattfunc / norm, index=Eout)
+
+    @classmethod
+    def from_sct(cls, Ein: float, M: float, T: float, Eout: np.array,
+                    mu: float, pdos, ws: float = 1.0):
+        """
+        Generate the single differential scattering function from a selected
+        angle using S(alpha, -beta) table based on Short Collision Time model.
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        mu : float
+            The cosine of the angle of the distribution in degrees
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Returns
+        -------
+        ScatFuncSD
+            Single differential scattering function for the selected angle using
+            S(alpha, -beta) table based on Short Collision Time model
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> mu = 0.5
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncSD.from_sct(Ein, M, T, Eout, mu, pdos).data.loc[Eout_test].round(6)
+        6.7554    0.000000
+        6.9050    0.006089
+        7.0439    1.200917
+        7.2000    5.050131
+        7.3157    0.737298
+        7.4480    0.003939
+        dtype: float64
+        """
+        Teff = pdos.Teff(T)
+        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
+        norm = np.trapz(scattfunc, x=Eout)
+        return cls(Ein, T, M, scattfunc / norm, index=Eout)
+
+    @classmethod
+    def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.array,
+                 mu: float, ws: float = 1.0):
+        """
+        Generate the single differential scattering function from a selected
+        angle using S(alpha, -beta) table based on Free Gas Model.
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        mu : float
+            The cosine of the angle of the distribution in degrees
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Returns
+        -------
+        ScatFuncSD
+            Single differential scattering function for the selected angle using
+            S(alpha, -beta) table based on Free Gas Model
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> mu = 0.5
+        >>> ScatFuncSD.from_fgm(Ein, M, T, Eout, mu).data.loc[Eout_test].round(6)
+        6.7554    0.000000
+        6.9050    0.005957
+        7.0439    1.196663
+        7.2000    5.057344
+        7.3157    0.733417
+        7.4480    0.003848
+        dtype: float64
+        """
+        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, T, ws)
+        norm = np.trapz(scattfunc, x=Eout)
         return cls(Ein, T, M, scattfunc / norm, index=Eout)
 
     @property
@@ -375,7 +544,7 @@ class ScatFuncDD:
         self._data = dd_pdf_
 
     @classmethod
-    def from_SabDD(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
+    def from_model(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                  theta: np.ndarray, *args, model: str = "fgm", **kwargs):
         """
         Generate the double differential scattering function from a
@@ -415,12 +584,21 @@ class ScatFuncDD:
         -------------------------
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
-        threshold : 'float', optional
+        nphonon: 'int', optional
+            Phonon expansion order. The default is None and the order is
+            calculated using the get_expansion_order function.
+        decimal: 'float', optional
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        n_order_max: 'int', optional
+            Maximun expansion order. The default is 5000.
+        threshold: 'float', optional
             Minimun value to take into account in the creation of tau_n
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        nphonon : 'int', optional
-            Phonon expansion order. The default is 1000.
+            functions
+        tau_to_file: 'bool', optional
+            Save tau_n functions to file. The default is False.
+        binary: 'bool', optional
+            Save tau_n functions to binary file. The default is False.
 
         Returns
         -------
@@ -436,7 +614,7 @@ class ScatFuncDD:
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
 
         # Using the Free Gas Model:
-        >>> ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        >>> ScatFuncDD.from_model(Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
@@ -453,7 +631,7 @@ class ScatFuncDD:
 
         # Using the Short Collision Time model:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
+        >>> ScatFuncDD.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
@@ -478,7 +656,7 @@ class ScatFuncDD:
         >>> M = 238.05077040419212
         >>> theta = np.array([40, 80, 120, 160])
 
-        >>> ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
+        >>> ScatFuncDD.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346118  1.029210  0.373644  0.053219
@@ -486,35 +664,209 @@ class ScatFuncDD:
          0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
+        mu = np.cos(np.deg2rad(theta))
         if model.lower() == "pdos":
-            debye_waller_coeff = args[-1].DebyeWallerCoeff(T)
-            delta_beta = args[-1].to_beta_grid(T).grid
-            if kwargs.get("nphonon"):
-                nphonon = kwargs.get("nphonon")
-                warnings.warn(
-                    "Is posible that the expansion order is not enough to get the correct results")
-            else:
-                decimal = kwargs.get("decimal", 1.0e-6)
-                n_order_max = kwargs.get("n_order_max", 5000)
-                mu_min = np.cos(np.deg2rad(theta.max()))
-                nphonon = get_expansion_order(
-                    get_alpha_from_Eout(Eout, Ein, M, T, mu_min),
-                    debye_waller_coeff, decimal, n_order_max
-                )
-            tau_n = args[-1].get_tau(T, nphonon, kwargs.get("threshold", 0.0), values=True)
-            save_tau(tau_n, nphonon, T, kwargs.get("tau_to_file", False),
-                     kwargs.get("binary", False))
-            return cls.from_tau(Ein, M, T, Eout, theta, tau_n, delta_beta, debye_waller_coeff)
+            return cls.from_pdos(Ein, M, T, Eout, mu, *args, **kwargs)
+        elif model.lower() == "sct":
+            return cls.from_sct(Ein, M, T, Eout, mu, *args, **kwargs)
         else:
-            mu = np.cos(np.deg2rad(theta))
-            ws = kwargs.pop("ws", 1.0)
-            Teff = args[0].Teff(T) if model == "sct" else T
-            scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
-            return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
+            return cls.from_fgm(Ein, M, T, Eout, mu)
+
+    @classmethod
+    def from_pdos(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
+                  mu: np.ndarray, pdos, nphonon: int = None,
+                  decimal: float = 1.0e-6,
+                  n_order_max: int = 5000, threshold: float = 0.0,
+                  tau_to_file: bool = False,
+                  binary: bool = False):
+        """
+        Generate the double differential scattering function from a
+        S(alpha, -beta) table based on Phonon expansion model.
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        mu : np.ndarray
+            The cosine of the angle of the distribution in degrees
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        nphonon: 'int', optional
+            Phonon expansion order. The default is None and the order is
+            calculated using the get_expansion_order function.
+        decimal: 'float', optional
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        n_order_max: 'int', optional
+            Maximun expansion order. The default is 5000.
+        threshold: 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions
+        tau_to_file: 'bool', optional
+            Save tau_n functions to file. The default is False.
+        binary: 'bool', optional
+            Save tau_n functions to binary file. The default is False.
+
+        Returns
+        -------
+        ScatFuncDD
+            Double differential scattering function from a S(alpha, -beta) table
+            based on Phonon expansion model.
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([40, 80, 120, 160])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncDD.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[::, Eout_test].round(6)
+        Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
+        mu
+        -0.939693  0.109061  0.644157  1.346118  1.029210  0.373644  0.053219
+        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
+         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
+         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
+        """
+        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        delta_beta = pdos.to_beta_grid(T).grid
+        if nphonon:
+            warnings.warn(
+                "Is posible that the expansion order is not enough to get the correct results")
+        else:
+            alpha_max = get_alpha_from_Eout(Eout, Ein, M, T, mu.min())
+            nphonon = get_expansion_order(alpha_max, debye_waller_coeff,
+                                          decimal, n_order_max)
+        tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
+        save_tau(tau_n, nphonon, T, tau_to_file, binary)
+        return cls.from_tau(Ein, M, T, Eout, mu, tau_n, delta_beta,
+                            debye_waller_coeff)
+
+    @classmethod
+    def from_sct(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
+                 mu: np.ndarray, pdos: Pdos, ws: float = 1.0):
+        """
+        Generate the double differential scattering function from a
+        S(alpha, -beta) table based on Short Collision Time model.
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        mu : np.ndarray
+            The cosine of the angle of the distribution in degrees
+        pdos: 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Returns
+        -------
+        ScatFuncDD
+            Double differential scattering function from a S(alpha, -beta) table
+            based on Short Collision Time model
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncDD.from_sct(Ein, M, T, Eout, mu, pdos).data.round(6)
+        Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
+        mu
+        -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
+        -8.660254e-01  0.075434  0.592611  1.358169   1.031486  0.377620  0.053100
+        -7.071068e-01  0.050039  0.516194  1.377318   1.109089  0.393570  0.049515
+        -5.000000e-01  0.025312  0.406041  1.386155   1.227206  0.413997  0.043483
+        -2.588190e-01  0.008381  0.269913  1.359573   1.397842  0.435292  0.034377
+         6.123234e-17  0.001348  0.133285  1.255372   1.641602  0.449328  0.022419
+         2.588190e-01  0.000056  0.037238  1.014880   1.995877  0.438696  0.010033
+         5.000000e-01  0.000000  0.003057  0.602973   2.535640  0.370193  0.001978
+         7.071068e-01  0.000000  0.000011  0.156817   3.436247  0.206125  0.000047
+         8.660254e-01  0.000000  0.000000  0.002116   5.225195  0.024538  0.000000
+         9.659258e-01  0.000000  0.000000  0.000000  10.545191  0.000000  0.000000
+        """
+        Teff = pdos.Teff(T)
+        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
+        return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
+
+    @classmethod
+    def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
+                 mu: np.ndarray, ws: float = 1.0):
+        """
+        Generate the double differential scattering function from a
+        S(alpha, -beta) table based on Free Gas Model.
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        mu : np.ndarray
+            The cosine of the angle of the distribution in degrees
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Returns
+        -------
+        ScatFuncDD
+            Double differential scattering function from a S(alpha, -beta) table
+            based on Free Gas Model
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> ScatFuncDD.from_fgm(Ein, M, T, Eout, mu).data.round(6)
+        Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
+        mu
+        -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
+        -8.660254e-01  0.074800  0.591841  1.360299   1.032095  0.376520  0.052584
+        -7.071068e-01  0.049539  0.515196  1.379332   1.109853  0.392419  0.049014
+        -5.000000e-01  0.024994  0.404827  1.387900   1.228207  0.412767  0.043015
+        -2.588190e-01  0.008241  0.268643  1.360778   1.399190  0.433942  0.033969
+         6.123234e-17  0.001317  0.132279  1.255634   1.643445  0.447804  0.022111
+         2.588190e-01  0.000054  0.036774  1.013814   1.998435  0.436944  0.009862
+         5.000000e-01  0.000000  0.002991  0.600838   2.539266  0.368245  0.001932
+         7.071068e-01  0.000000  0.000010  0.155387   3.441598  0.204433  0.000045
+         8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
+         9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
+        """
+        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, T, ws)
+        return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
 
     @classmethod
     def from_tau(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 theta: np.ndarray, tau_n: np.ndarray, delta_beta: float,
+                 mu: np.ndarray, tau_n: np.ndarray, delta_beta: float,
                  debye_waller_coeff: float):
         """
         Generate the double differential scattering function from tau_n function
@@ -554,13 +906,13 @@ class ScatFuncDD:
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([40, 80, 120, 160])
+        >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
         >>> delta_beta = pdos.to_beta_grid(T).grid
-        >>> mu_min = np.cos(np.deg2rad(theta.max()))
-        >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu_min), debye_waller_coeff, 1.0e-6, 5000)
+        >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu.min()), debye_waller_coeff, 1.0e-6, 5000)
         >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-        >>> ScatFuncDD.from_tau(Ein, M, T, Eout, theta, tau_n, delta_beta, debye_waller_coeff).data.loc[::, Eout_test].round(6)
+        >>> ScatFuncDD.from_tau(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346118  1.029210  0.373644  0.053219
@@ -568,9 +920,9 @@ class ScatFuncDD:
          0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
-        mu = np.cos(np.deg2rad(theta))
         scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu,
-                                      tau_n, delta_beta, debye_waller_coeff)
+                                      tau_n, delta_beta,
+                                      debye_waller_coeff)
         return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
 
     def to_sd(self, theta: float = None) -> ScatFuncSD:
@@ -598,7 +950,7 @@ class ScatFuncDD:
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> ddScatFunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta)
+        >>> ddScatFunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta)
         >>> ddScatFunc.to_sd().data.round(6)
         Eout
         6.7554    0.000000
@@ -644,7 +996,7 @@ class ScatFuncDD:
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> ddScatFunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta)
+        >>> ddScatFunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta)
         >>> round(ddScatFunc.get_angle, 2)
         0.5
         """
@@ -658,7 +1010,7 @@ class ScatFuncDD:
             mu_fit_max = abs(angular_max - MD).idxmin()
             return mu_fit_max
         else:
-            sigma1_pdf = ScatFuncSD.from_MD(self.Ein, self.M, self.T,
+            sigma1_pdf = ScatFuncSD.from_sigma1(self.Ein, self.M, self.T,
                                         scatfunc.columns.values).data
             return mu_fit_calc(scatfunc, sigma1_pdf, self.Ein).mode()[0]
 
@@ -727,7 +1079,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> ScatFunc.from_MD(Ein, M, T, Eout).data.iloc[::100]
+        >>> ScatFunc.from_sigma1(Ein, M, T, Eout).data.iloc[::100]
         Eout
         35.953485    8.937086e-15
         36.100381    1.841784e-09
@@ -754,9 +1106,11 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
     def from_model(cls, Ein: float, M: float, T: float, Eout: np.array,
                  theta: [np.ndarray, float], *args, model: str = "fgm", **kwargs):
         if hasattr(theta, '__len__'):
-            scatfunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta, *args, model=model, **kwargs)
+            scatfunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta,
+                                             *args, model=model, **kwargs)
         else:
-            scatfunc = ScatFuncSD.from_SabSD(Ein, M, T, Eout, theta, *args, model=model, **kwargs)
+            scatfunc = ScatFuncSD.from_model(Ein, M, T, Eout, theta,
+                                             *args, model=model, **kwargs)
         return cls(scatfunc)
 
     # called when an attribute is not found:
@@ -791,7 +1145,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         # 0K xs data for U238:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
-        >>> os.chdir("../../../data/xs/U238/")
+        >>> os.chdir("../../data/xs/U238/")
         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
@@ -800,7 +1154,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> scattering_function = ScatFunc.from_MD(Ein, M, T, Eout)
+        >>> scattering_function = ScatFunc.from_sigma1(Ein, M, T, Eout)
         >>> scattering_function.convolve(xs_0K).iloc[::100]
         Eout
         35.953485    7.227742e-14
@@ -863,7 +1217,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         9.07
 
         # Compare with Sigma1 algorithm:
-        >>> round(ScatFunc.from_MD(Ein, M, T, Eout).convolve(xs_0K, integral=True), 2)
+        >>> round(ScatFunc.from_sigma1(Ein, M, T, Eout).convolve(xs_0K, integral=True), 2)
         9.09
 
         # Use a displaced xs for the convolution (1D desplacement):
@@ -979,7 +1333,7 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
 
 @nb.jit(nopython=True, cache=True, nogil=True)
 def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
-                M: float, Teff: float, ws: float) -> np.array:
+                         M: float, Teff: float, ws: float) -> np.array:
     """
     Calculate the scattering function from the Short Collision Time model using
     a single angle.
@@ -1010,13 +1364,14 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
         The scattering function values for a single angle
     """
     beta = (Eout - Ein) / (kb * T)
-    alpha_mat = get_alpha_mat(Eout, Ein, T, M, mu)
-    scattfunc = np.zeros(alpha_mat.shape)
-    for i in range(alpha_mat.shape[0]):
-        scattfunc_mu = np.exp(-(ws * alpha_mat[i] + beta) ** 2 / (4 * alpha_mat[i] * Teff / T * ws))
-        scattfunc_mu /= np.sqrt(4 * pi * ws * alpha_mat[i] * Teff / T)
-        scattfunc[i] += scattfunc_mu * normalization_factor(Eout, Ein, T, M)
-    return scattfunc
+    Tratio = Teff / T
+    if isinstance(mu, (int, float)):
+        alpha = get_alpha_from_Eout(Eout, Ein, T, M, mu)
+        sab_values = get_sab_sct_alpha(alpha, beta, Tratio, ws)
+    else:
+        alpha = get_alpha_mat(Eout, Ein, T, M, mu)
+        sab_values = get_sab_sct(alpha, beta, Tratio, ws)
+    return sab_values * normalization_factor(Eout, Ein, T, M)
 
 
 @nb.jit(nopython=True, cache=True, nogil=True)
@@ -1499,9 +1854,9 @@ def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd
     >>> T = 1000
     >>> M = 238.05077040419212
     >>> Eout = np.linspace(Ein * 0.9, Ein * 1.1, 3000)
-    >>> sigma1 = ScatFunc.from_MD(Ein, M, T, Eout).data
+    >>> sigma1 = ScatFunc.from_sigma1(Ein, M, T, Eout).data
     >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-    >>> ddScatFunc = ScatFuncDD.from_SabDD(Ein, M, T, Eout, theta).data
+    >>> ddScatFunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta).data
     >>> mu_fit_calc(ddScatFunc, sigma1, Ein).round(2)
     KL               0.5
     JS               0.5

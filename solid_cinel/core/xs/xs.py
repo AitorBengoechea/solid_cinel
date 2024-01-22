@@ -4,8 +4,8 @@ import numba as nb
 from math import pi
 from numba import prange
 from solid_cinel.core.material.vibration.tau import tau_n_functions
-from solid_cinel.core.material.scattering_function.scatfunc import ScatFunc, get_scatfunc_pdos_row
-from solid_cinel.core.material.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order
+from solid_cinel.core.scattering_function import ScatFunc, get_scatfunc_pdos_row
+from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order
 from solid_cinel.core.xs import XsMat, Ein_arno_row, Db
 from solid_cinel.core.xs.ddxs import DDxs
 import warnings
@@ -224,12 +224,14 @@ class Xs:
             warnings.warn(
                 "Is posible that the expansion order is not enough to get the correct results")
         else:
-            alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1], M, T, mu.min())
-            nphonon = get_expansion_order( alpha_max, debye_waller_coeff_scatt, decimal, n_order_max)
+            alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1],
+                                            M, T, mu.min())
+            nphonon = get_expansion_order(alpha_max, debye_waller_coeff_scatt,
+                                           decimal, n_order_max)
         tau_n_scatt = pdos.get_tau(T, nphonon, threshold, values=True)
         # 1 Scatfunct for getting mu_fit:
         Eout = np.linspace(Ein_grid[0] * 0.9, Ein_grid[0] * 1.1, num_Eout)
-        mu_fit = ScatFunc.from_tau(Ein_grid[0], M, T, Eout, theta, tau_n_scatt,
+        mu_fit = ScatFunc.from_tau(Ein_grid[0], M, T, Eout, mu, tau_n_scatt,
                                    delta_beta_scatt,
                                    debye_waller_coeff_scatt).get_angle
 

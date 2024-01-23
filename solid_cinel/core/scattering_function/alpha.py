@@ -332,6 +332,37 @@ class Alpha:
             np.array([theta]) * np.pi / 180)
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
+    @classmethod
+    def from_recoil(cls, Ein: [int, float, np.ndarray] , T: float,
+                        M: float):
+        """
+        Generate the alpha values using the recoil energy.
+
+        Parameters
+        ----------
+        Ein: 'int', 'float' or 'np.ndarray'
+            Incident energy in eV.
+        T: 'float'
+            Temperature in K.
+        M: 'float'
+            Mass in amu.
+
+        Returns
+        -------
+        "Alpha"
+            Alpha grid generated for the given combination of the input
+            parameters.
+
+        Example
+        -------
+        >>> T = 800
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 26.98153433356103
+        >>> Alpha.from_recoil(Ein, T, M).data.round(6)
+        array([0.118447, 0.155038, 0.36413 , 0.730042, 1.164525])
+        """
+        return cls(get_gressier_recoil(Ein, T, M) / (kb * T))
+
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:
         """
@@ -719,3 +750,34 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
         # is zero, the expansion order is the maximun order.
         n_min = np.argmax(np.diff(alpha_cumsum) == 0)
     return n_min if n_min > 0 else order_max
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_gressier_recoil(Ein: [int, float, np.ndarray] , T: float,
+                        M: float) -> np.ndarray:
+    """
+    Get the recoil energy for a given incident energy, temperature and mass.
+
+    Parameters
+    ----------
+    Ein: 'int', 'float' or 'np.ndarray'
+        Incident energy in eV.
+    T: 'float'
+        Temperature in K.
+    M: 'float'
+        Mass in amu.
+
+    Returns
+    -------
+    'np.ndarray'
+        Recoil energy in eV.
+
+    Example
+    -------
+    >>> T = 800
+    >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+    >>> M = 26.98153433356103
+    >>> get_gressier_recoil(Ein, T, M).round(6)
+    array([0.008166, 0.010688, 0.025103, 0.050328, 0.080281])
+    """
+    return m / (m + M) * (Ein - 3 / 2 * kb * T)

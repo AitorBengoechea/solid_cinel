@@ -805,6 +805,101 @@ class Sab:
                                     DebyeWallerCoeff)
         return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
 
+    @classmethod
+    def from_recoil(cls, Ein: [int, float, np.ndarray], T: float, M: float,
+                    beta_grid: Union[Beta, Iterable], *args,
+                    model: str = "pdos", **kwargs):
+        """
+        Generate S(alpha, -beta) matrix using gressier recoil energy alpha grid.
+
+        Parameters
+        ----------
+        Ein: 'float' or 'np.ndarray'
+            Incident neutron energy in eV.
+        T: 'float'
+            Temperature in K.
+        M: 'float'
+            Mass of the target in amu.
+        beta_grid: 'Beta' or 'Iterable'
+            Beta grid.
+        model: 'str'
+            Model to calculate the S(alpha, -beta) matrix.
+
+        Parameters for FGM model:
+        -------------------------
+        wt: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for SCT model:
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for Phonon Expansion model:
+        --------------------------------------
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) matrix.
+
+        Example
+        -------
+        >>> T = 300
+        >>> beta_grid = Beta.generate_grid(T).data
+        >>> Ein = np.array([6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0])
+        >>> M = 26
+        >>> Sab.from_recoil(Ein, T, M, beta_grid, model="fgm").data.iloc[::, :5].round(6)
+        beta       0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        9.045004   0.009776  0.009839  0.009902  0.009966  0.010030
+        9.189465   0.009354  0.009415  0.009476  0.009537  0.009598
+        9.333925   0.008953  0.009010  0.009069  0.009127  0.009186
+        9.478386   0.008569  0.008624  0.008680  0.008736  0.008792
+        9.622847   0.008203  0.008256  0.008309  0.008363  0.008416
+        9.767307   0.007853  0.007904  0.007955  0.008006  0.008058
+        9.911768   0.007519  0.007568  0.007616  0.007666  0.007715
+        10.056229  0.007200  0.007247  0.007293  0.007340  0.007388
+
+        SCT:
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Sab.from_recoil(Ein, T, M, beta_grid, pdos, model="sct").data.iloc[::, :5].round(6)
+        beta       0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        9.045004   0.011253  0.011320  0.011387  0.011455  0.011522
+        9.189465   0.010800  0.010864  0.010929  0.010993  0.011058
+        9.333925   0.010366  0.010428  0.010490  0.010552  0.010614
+        9.478386   0.009951  0.010010  0.010070  0.010129  0.010189
+        9.622847   0.009554  0.009610  0.009667  0.009725  0.009782
+        9.767307   0.009173  0.009228  0.009282  0.009337  0.009393
+        9.911768   0.008809  0.008861  0.008914  0.008966  0.009019
+        10.056229  0.008460  0.008510  0.008560  0.008611  0.008662
+
+        Phonon Expansion:
+        >>> Sab.from_recoil(Ein, T, M, beta_grid, pdos, model="pdos").data.iloc[::, :5].round(6)
+        beta       0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        9.045004   0.010582  0.010650  0.010719  0.010788  0.010857
+        9.189465   0.010132  0.010198  0.010264  0.010330  0.010396
+        9.333925   0.009703  0.009766  0.009829  0.009893  0.009956
+        9.478386   0.009294  0.009354  0.009414  0.009475  0.009536
+        9.622847   0.008903  0.008960  0.009018  0.009076  0.009135
+        9.767307   0.008529  0.008584  0.008639  0.008695  0.008751
+        9.911768   0.008172  0.008225  0.008278  0.008331  0.008385
+        10.056229  0.007830  0.007881  0.007932  0.007983  0.008034
+        """
+        alpha = Alpha.from_recoil(Ein, T, M)
+        return cls.from_model(alpha, beta_grid, T, *args, model=model,
+                              **kwargs)
+
     @staticmethod
     def sum_rule_check(S: pd.DataFrame) -> None:
         """
@@ -1428,4 +1523,3 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     for i in prange(len(alpha)):
         Sab[i] += get_sab_sct_alpha(alpha[i], beta, Tratio, ws)
     return Sab
-

@@ -473,7 +473,7 @@ class Alpha:
         >>> alpha_grid.expansion_order(debye_waller, 1.0e-6, 5000)
         798
         """
-        return get_expansion_order(self.data, DebyeWallerCoeff, decimal,
+        return get_expansion_order(self.data.max(), DebyeWallerCoeff, decimal,
                                    order_max)
 
 
@@ -594,7 +594,7 @@ def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
 
 @nb.jit(nopython=True, nogil=True, cache=True)
 def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
-                  order_max: int) -> np.ndarray:
+                         order_max: int) -> np.ndarray:
     """
     Get the alpha multiplication for the phonon expansion cumulative sum for
     the given alpha value and Debye Waller coefficient and the maximun order
@@ -713,4 +713,9 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     """
     alpha_max = alpha if isinstance(alpha, (int, float)) else alpha.max()
     alpha_cumsum = get_alpha_mul_cumsum(alpha_max, DebyeWallerCoeff, order_max)
-    return np.argmax((1 - alpha_cumsum) <= decimal)
+    n_min = np.argmax((1 - alpha_cumsum) <= decimal)
+    if n_min == 0:
+        # Decimal precision not reached, so when the cumulative sum difference
+        # is zero, the expansion order is the maximun order.
+        n_min = np.argmax(np.diff(alpha_cumsum) == 0)
+    return n_min if n_min > 0 else order_max

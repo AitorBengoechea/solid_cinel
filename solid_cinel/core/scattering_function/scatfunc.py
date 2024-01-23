@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout, get_expansion_order
-from solid_cinel.core.scattering_function.sab import get_sab_sct, get_sab_sct_alpha
+from solid_cinel.core.scattering_function.sab import get_sab_sct, get_sab_sct_alpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import save_tau
 from typing import Iterable
@@ -178,7 +178,7 @@ class ScatFuncSD:
                    index=pd.Index(Eout_, name="Eout"))
 
     @classmethod
-    def from_model(cls, Ein: float, M: float, T: float, Eout: np.array,
+    def from_theta(cls, Ein: float, M: float, T: float, Eout: np.array,
                    theta: float, *args, model: str = "fgm", **kwargs):
         """
         Generate the single differential scattering function from a selected
@@ -241,7 +241,7 @@ class ScatFuncSD:
         >>> theta = 60
 
         # Using the Free Gas Model:
-        >>> ScatFuncSD.from_model(Ein, M, T, Eout, theta, model="fgm").data.loc[Eout_test].round(6)
+        >>> ScatFuncSD.from_theta(Ein, M, T, Eout, theta, model="fgm").data.loc[Eout_test].round(6)
         6.7554    0.000000
         6.9050    0.005957
         7.0439    1.196663
@@ -252,7 +252,7 @@ class ScatFuncSD:
 
         # Using the Short Collision Time model:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncSD.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.loc[Eout_test].round(6)
+        >>> ScatFuncSD.from_theta(Ein, M, T, Eout, theta, pdos, model="sct").data.loc[Eout_test].round(6)
         6.7554    0.000000
         6.9050    0.006089
         7.0439    1.200917
@@ -262,7 +262,7 @@ class ScatFuncSD:
         dtype: float64
 
         # Using the Phonon expansion model:
-        >>> ScatFuncSD.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
+        >>> ScatFuncSD.from_theta(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[Eout_test].round(6)
         6.7554    0.000005
         6.9050    0.010414
         7.0439    1.179140
@@ -463,6 +463,80 @@ class ScatFuncSD:
         scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, T, ws)
         norm = np.trapz(scattfunc, x=Eout)
         return cls(Ein, T, M, scattfunc / norm, index=Eout)
+
+    @classmethod
+    def from_recoil(cls, Ein: float, M: float, T: float, Eout: np.array,
+                    *args, model: str = "fgm", **kwargs):
+        """
+        Generate the single differential scattering function from gressier
+        recoil energy
+
+        Parameters
+        ----------
+        Ein: float
+            The incident energy of the neutron in eV
+        M: float
+            The mass of the target material in amu
+        T: float
+            Temperature of the material in K
+        Eout: np.array
+            The neutron outgoing energy grid in eV
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        ScatFuncSD
+            Single differential scattering function using S(alpha, -beta) table
+            based on the gressier recoil energy
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncSD.from_recoil(Ein, M, T, Eout, model="fgm").data.loc[Eout_test].round(6)
+        6.7554    0.000000
+        6.9050    0.005968
+        7.0439    1.180420
+        7.2000    5.102312
+        7.3157    0.709369
+        7.4480    0.003058
+        dtype: float64
+        """
+        beta = get_beta(Eout, Ein, T)
+        sab = Sab.from_recoil(Ein, T, M, beta,*args, model=model,
+                              **kwargs).full
+        scatfunc = np.interp(Eout, Ein + sab.index.values * kb * T, sab.values)
+        return cls(Ein, T, M, scatfunc / (kb * T), index=Eout)
 
     @property
     def cdf(self) -> pd.Series:

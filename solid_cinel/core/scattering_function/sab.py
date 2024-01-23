@@ -220,7 +220,7 @@ class Sab:
     -------
     to_sym -> pd.DataFrame
         Return the symmetric S(alpha, -beta) matrix
-    to_full -> pd.DataFrame
+    full -> pd.DataFrame
         Return the full S(alpha, beta) matrix
     from_fgm -> Sab
         Return the S(alpha, beta) matrix from the FGM model
@@ -346,7 +346,8 @@ class Sab:
             S_sym = S_asym
         return S_sym
 
-    def to_full(self) -> pd.DataFrame:
+    @property
+    def full(self) -> pd.DataFrame:
         """
         Get the full S(alpha, beta) matrix.
 
@@ -361,7 +362,7 @@ class Sab:
         >>> alpha_grid = Alpha.generate_grid(300, 26)
         >>> Sab_matrix = Sab.from_fgm(alpha_grid, beta_grid)
         >>> Sab_matrix_norm = Sab_matrix.data.apply(_normalization, axis=1)
-        >>> Sab_matrix_full = Sab_matrix.to_full()
+        >>> Sab_matrix_full = Sab_matrix.full
         >>> assert (Sab_matrix_full.apply(integrate, axis=1).round(6) == Sab_matrix_norm.round(6)).all()
 
         >>> Sab_matrix_sum = Sab_matrix.data.apply(_sum_rule, axis=1)
@@ -370,7 +371,9 @@ class Sab:
         beta = self.beta.to_index
         Sab_negative = self.data.set_axis(-beta, axis=1).sort_index(axis=1)
         Sab_positive = self.data.apply(lambda x: x * np.exp(-beta), axis=1)
-        return pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]], axis=1)
+        Sab_complete = pd.concat([Sab_negative, Sab_positive.iloc[::, 1::]],
+                                 axis=1)
+        return Sab_complete if len(Sab_complete.index) > 1 else Sab_complete.iloc[0]
 
     @classmethod
     def from_fgm(cls, alpha_grid: Union[Alpha, Iterable],

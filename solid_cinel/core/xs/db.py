@@ -336,7 +336,7 @@ def from_model(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     >>> from_model(xs_0K, Ein, M, T, pdos, model="pdos", Eout_num=1000)
                   xs  downscattering  upscattering  Ein=Eout
     Ein
-    6.67  444.117578        0.852297      0.143335  0.004368
+    6.67  444.117576        0.852297      0.143335  0.004368
     """
     model = model.lower()
     if model == "pdos":

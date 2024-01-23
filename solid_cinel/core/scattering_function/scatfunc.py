@@ -531,6 +531,24 @@ class ScatFuncSD:
         7.3157    0.709369
         7.4480    0.003058
         dtype: float64
+
+        >>> ScatFuncSD.from_recoil(Ein, M, T, Eout, pdos, model="sct").data.loc[Eout_test].round(6)
+        6.7554    0.000000
+        6.9050    0.006101
+        7.0439    1.184721
+        7.2000    5.094991
+        7.3157    0.709901
+        7.4480    0.003102
+        dtype: float64
+
+        >>> ScatFuncSD.from_recoil(Ein, M, T, Eout, pdos, model="pdos").data.loc[Eout_test].round(6)
+        6.7554    0.000003
+        6.9050    0.008814
+        7.0439    1.168497
+        7.2000    5.145645
+        7.3157    0.698292
+        7.4480    0.003580
+        dtype: float64
         """
         beta = get_beta(Eout, Ein, T)
         sab = Sab.from_recoil(Ein, T, M, beta,*args, model=model,

@@ -8,6 +8,7 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import ScatFunc
+from solid_cinel.core.scattering_function.alpha import get_gressier_recoil
 from solid_cinel.core.generic import integrate, reshift
 import os
 
@@ -187,8 +188,8 @@ class Dxs:
         return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs_0K))
 
     @classmethod
-    def from_dopush(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
-                    **kwargs):
+    def from_recoil(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
+                    Eout: np.ndarray, *args, **kwargs):
         """
         Generate the Differential xs for elastic scattering from the most similar distribution of the S(alpha, -beta)
         tables and sigma1 algorithm
@@ -207,8 +208,6 @@ class Dxs:
             Temperature of the material in K
         Eout : np.ndarray, (N,)
             The neutron outgoing energy grid in eV
-        theta : np.ndarray, (M,)
-            The neutron outgoing angle grid in degrees (0, 180]
         model : str
             The model used to calculate the S(alpha, beta) distribution. The available models are:
                 - "fgm": Free Gas Model (default)
@@ -247,25 +246,24 @@ class Dxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> theta = np.arange(0, 180, 1)[1::]
 
         # DOPUSH algorithm:
-        >>> Dxs.from_dopush(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::100]
+        >>> Dxs.from_recoil(xs_0K, Ein, M, T, Eout, model="fgm").data.iloc[::100]
         Eout
-        1.80000     0.000163
-        1.84004     0.025374
-        1.88008     1.152552
-        1.92012    15.775754
-        1.96016    67.355332
-        2.00020    92.796544
-        2.04024    42.650046
-        2.08028     6.756453
-        2.12032     0.380893
-        2.16036     0.007884
-        Name: 0.5000000000000001, dtype: float64
+        1.80000     0.000127
+        1.84004     0.020078
+        1.88008     0.977778
+        1.92012    14.653507
+        1.96016    67.580932
+        2.00020    95.914649
+        2.04024    41.890458
+        2.08028     5.630233
+        2.12032     0.232873
+        2.16036     0.002964
+        dtype: float64
         """
-        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).to_sd()
-        Exs = Eout + (Ein - scatfunction.data.idxmax())
+        scatfunction = ScatFunc.from_recoil(Ein, M, T, Eout, *args, **kwargs)
+        Exs = Eout + get_gressier_recoil(Ein, T, M)
         return cls(Ein, T, M, "dopush", scatfunction.convolve(xs_0K, Exs=Exs))
 
     @property
@@ -299,7 +297,7 @@ class Dxs:
 
         # DOPUSH algorithm:
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> round(Dxs.from_dopush(xs_0K, Ein, M, T, Eout, theta, model="fgm").integral, 2)
+        >>> round(Dxs.from_recoil(xs_0K, Ein, M, T, Eout, model="fgm").integral, 2)
         9.09
         """
         return integrate(self.data)

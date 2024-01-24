@@ -553,8 +553,10 @@ class ScatFuncSD:
         beta = get_beta(Eout, Ein, T)
         sab = Sab.from_recoil(Ein, T, M, beta,*args, model=model,
                               **kwargs).full
-        scatfunc = np.interp(Eout, Ein + sab.index.values * kb * T, sab.values)
-        return cls(Ein, T, M, scatfunc / (kb * T), index=Eout)
+        Eout_calc = Ein + sab.index.values * kb * T
+        scatfunc = np.interp(Eout, Eout_calc, sab.values)
+        scatfunc /= kb * T
+        return cls(Ein, T, M, scatfunc, index=Eout)
 
     @property
     def cdf(self) -> pd.Series:

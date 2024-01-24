@@ -1381,7 +1381,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             return scattfunc_conv
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     """
     Sigma1 function for Energy differential scattering function
@@ -1428,7 +1428,7 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     return scattfunc
 
 
-@nb.jit(nopython=True, cache=True, nogil=True)
+@nb.jit(nopython=True, cache=True, nogil=False)
 def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
                          M: float, Teff: float, ws: float) -> np.array:
     """
@@ -1471,7 +1471,7 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     return sab_values * normalization_factor(Eout, Ein, T, M)
 
 
-@nb.jit(nopython=True, cache=True, nogil=True)
+@nb.jit(nopython=True, cache=True, nogil=False)
 def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
                  tau_n: np.ndarray, tau_n_beta: np.ndarray,
                  DebyeWallerCoeff: float) -> np.ndarray:
@@ -1545,7 +1545,7 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
     return S_diag
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def normalization_factor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the scattering function calculation.
@@ -1572,7 +1572,7 @@ def normalization_factor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
                         T: float, M: float) -> (np.ndarray, np.ndarray):
     """
@@ -1645,7 +1645,7 @@ def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
 
     return Eout_calc, ScatFunc_values[positive_mask] * norm
 
-@nb.jit(nopython=True, cache=True, nogil=True)
+@nb.jit(nopython=True, cache=True, nogil=False)
 def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: float,
                               T: float, M: float) -> (np.ndarray, np.ndarray):
     """
@@ -1722,7 +1722,7 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
     return Eout_calc, ScatFunc_values[::, positive_mask] * norm
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
                       mu: np.ndarray, tau_n: np.ndarray, delta_beta: float,
                       DebyeWallerCoeff: float) -> np.ndarray:
@@ -1791,7 +1791,7 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     return select_scarfunc
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: float, tau_n: np.ndarray, delta_beta: float,
                  DebyeWallerCoeff: float) -> np.ndarray:

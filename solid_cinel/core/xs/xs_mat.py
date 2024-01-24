@@ -610,7 +610,7 @@ class XsMat:
         return Teff
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def default_Eout(Ein: float) -> np.ndarray:
     """
     Generate the default Eout grid for the convolution. The grid is tested with
@@ -661,7 +661,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def default_abs_beta(T: float) -> np.ndarray:
     """
     Generate the default beta grid for a certain temperature
@@ -683,7 +683,7 @@ def default_abs_beta(T: float) -> np.ndarray:
     return np.concatenate((beta_small, beta_great[1::]))
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def default_beta(T: float) -> np.ndarray:
     """
     Generate the default beta grid for a certain temperature
@@ -702,7 +702,7 @@ def default_beta(T: float) -> np.ndarray:
     return np.concatenate((-beta_abs[::-1], beta_abs[1::]))
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
                  M: float) -> np.ndarray:
     """
@@ -730,7 +730,7 @@ def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
     return mu_Ein_arno
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
                  M: float) -> np.ndarray:
     """
@@ -758,7 +758,7 @@ def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     return Ein_arno
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, nogil=False)
 def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
                    Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
     """
@@ -793,7 +793,7 @@ def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
     return xs_mat, start
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def Db(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, Eout: np.ndarray,
        pdf: np.ndarray) -> float:
     """
@@ -916,7 +916,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                                Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
 
 
-@nb.jit(nopython=True, nogil=True, parallel=True)
+@nb.jit(nopython=True, nogil=False, parallel=True)
 def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
                            delta_beta: float, debyewallercoeff: float,
                            Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
@@ -997,7 +997,7 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
         xs_mat[j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                          xs_values: np.ndarray, xs_E: np.ndarray,
                          M: float, T_arno: np.ndarray) -> np.ndarray:
@@ -1037,7 +1037,7 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                                 pdf)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
                       xs_values: np.ndarray, xs_E: np.ndarray,
                       M: float, Tarno: np.ndarray, mu_fit: float,
@@ -1084,7 +1084,7 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
 def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
                              start: int, xs_values: np.ndarray,
                              xs_E: np.ndarray,
@@ -1141,7 +1141,7 @@ def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
             xs_mat[i, j] += np.trapz(xs_Eout * pdf, x=Eout)
 
 
-@nb.jit(nopython=True, nogil=True, parallel=True)
+@nb.jit(nopython=True, nogil=False, parallel=True)
 def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
                                   beta: np.ndarray, recoil: np.ndarray,
                                   Ein_row: np.ndarray, T: float,

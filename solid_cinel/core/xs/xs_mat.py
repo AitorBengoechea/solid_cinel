@@ -12,7 +12,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.scattering_function.alpha import get_gressier_recoil
+from solid_cinel.core.scattering_function.alpha import get_gressier_recoil, get_recoil_mat, get_expansion_order
 from solid_cinel.core.scattering_function.sab import Sab, get_sab_sct_alpha
 from solid_cinel.core.xs.dxs import Dxs
 import os
@@ -298,7 +298,7 @@ class XsMat:
                                                                      M, T, Eout,
                                                                      theta)
         # Calculate the cross-section matrix:
-        model = kwargs.pop("model", "sigma1")
+        model = kwargs.get("model", "sigma1")
         xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
         if model == "sigma1":
             update_xs_mat_sigma1(xs_mat, Ein_arno, start, xs_values, xs_E, M,
@@ -312,8 +312,8 @@ class XsMat:
                               T_arno, mu_fit, Teff)
         elif model == "pdos":
             tau1, DebyeWallerCoeff, delta_beta = cls.get_pdos_variables(pdos, T_arno)
-            threshold = kwargs.pop("threshold", 0.0)
-            nphonon = kwargs.pop("nphonon", 1000)
+            threshold = kwargs.get("threshold", 0.0)
+            nphonon = kwargs.get("nphonon", 1000)
             update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                                T_arno, mu_fit, delta_beta, DebyeWallerCoeff,
                                tau1, nphonon, threshold)
@@ -428,6 +428,32 @@ class XsMat:
         30   9.105545  9.098754  9.091918  9.085011  9.078011  9.070948  9.063851
         20   9.105650  9.098872  9.092043  9.085139  9.078139  9.071071  9.063963
         10   9.105616  9.098901  9.092109  9.085218  9.078207  9.071104  9.063939
+
+        # pdos model:
+        >>> decimal = 1.0e-6
+        >>> order_max = 100
+        >>> threshold = 1.0e-14
+        >>> xs_values = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="pdos", decimal=decimal, order_max=order_max, threshold=threshold)
+        >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+             1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+        180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
+        170  4.176742  4.226157  4.274931  4.323037  4.370432  4.417199  4.463351
+        160  4.374217  4.424810  4.474707  4.523879  4.572285  4.620010  4.667070
+        150  5.260832  5.314590  5.367391  5.419199  5.469988  5.519856  5.568824
+        140  6.536530  6.588215  6.638561  6.687530  6.735121  6.781453  6.826565
+        130  7.621618  7.662735  7.702292  7.740261  7.776664  7.811643  7.845259
+        120  8.333261  8.360114  8.385483  8.409351  8.431755  8.452848  8.472705
+        110  8.731259  8.745414  8.758371  8.770122  8.780703  8.790263  8.798878
+        100  8.931463  8.936654  8.940988  8.944455  8.947083  8.949003  8.950286
+        90   9.025565  9.025286  9.024439  9.023009  9.021011  9.018552  9.015697
+        80   9.068235  9.064912  9.061224  9.057151  9.052697  9.047948  9.042958
+        70   9.087439  9.082510  9.077342  9.071916  9.066223  9.060335  9.054298
+        60   9.096242  9.090483  9.084562  9.078456  9.072152  9.065709  9.059167
+        50   9.100440  9.094254  9.087948  9.081501  9.074895  9.068180  9.061392
+        40   9.102551  9.096143  9.089639  9.083017  9.076260  9.069408  9.062498
+        30   9.103665  9.097142  9.090535  9.083824  9.076988  9.070066  9.063090
+        20   9.104252  9.097677  9.091022  9.084265  9.077388  9.070424  9.063407
+        10   9.104449  9.097905  9.091258  9.084491  9.077583  9.070568  9.063477
         """
 
         # Common arguments:
@@ -441,7 +467,7 @@ class XsMat:
                                                                      M, T, Eout,
                                                                      theta)
         # Calculate the cross-section matrix:
-        model = kwargs.pop("model", "fgm")
+        model = kwargs.get("model", "fgm")
         xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
         if model == "fgm":
             update_xs_mat_sct_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
@@ -450,6 +476,14 @@ class XsMat:
             Teff = cls.get_Teff(pdos, T_arno)
             update_xs_mat_sct_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
                                      T_arno, Teff)
+        elif model == "pdos":
+            tau1, DebyeWallerCoeff, delta_beta = cls.get_pdos_variables(pdos, T_arno)
+            threshold = kwargs.get("threshold", 0.0)
+            decimal = kwargs.get("decimal", 1.0e-6)
+            order_max = kwargs.get("order_max", 5000)
+            update_xs_mat_pdos_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
+                                      T_arno, delta_beta, DebyeWallerCoeff,
+                                      tau1, threshold, decimal, order_max)
         else:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
@@ -1193,7 +1227,7 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
                               xs_E: np.ndarray, M: float, T_arno: np.ndarray,
                               delta_beta: np.ndarray,
                               DebyeWallerCoeff: np.ndarray, tau1: np.ndarray,
-                              nphonon: int, threshold: float):
+                              threshold: float, decimal: float, order_max: int):
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1256,29 +1290,29 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     >>> M = 238.05077040419212
     >>> theta = np.arange(10, 30, 10)
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> nphonon = 100
+    >>> decimal = 1.0e-6
+    >>> order_max = 100
     >>> threshold = 1.0e-14
     >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
     >>> tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
     >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-    >>> update_xs_mat_pdos_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M, T_arno, delta_beta, DebyeWallerCoeff, tau1, nphonon, threshold)
+    >>> update_xs_mat_pdos_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M, T_arno, delta_beta, DebyeWallerCoeff, tau1, threshold, decimal, order_max)
     >>> pd.DataFrame(xs_mat, index=theta[::-1], columns=Eout).round(6)
         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     20  9.104252  9.097677  9.091022  9.084265  9.077388  9.070424  9.063407
     10  9.104449  9.097905  9.091258  9.084491  9.077583  9.070568  9.063477
     """
+    recoil_mat = get_recoil_mat(Ein_arno, T_arno, M)
     for i in range(start, len(T_arno)):
+        alpha = recoil_mat[i] / (kb * T_arno[i])
+        nphonon = get_expansion_order(alpha, DebyeWallerCoeff[i], decimal, order_max)
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
-        # Calculate the recoil energy:
-        recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
-        # Get the alpha value for the Ein value:
-        alpha = recoil / (kb * T_arno[i])
         # Generate the outgoing energy grid based on alpha value:
         beta = default_abs_beta(T_arno[i])
         sab = Sab.from_tau(alpha, beta, tau_n, delta_beta[i], DebyeWallerCoeff[i]).full
         sab /= (kb * T_arno[i])
         update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values,
-                                      recoil, Ein_arno[i], T_arno[i], xs_values,
+                                      recoil_mat[i], Ein_arno[i], T_arno[i], xs_values,
                                       xs_E)
 
 

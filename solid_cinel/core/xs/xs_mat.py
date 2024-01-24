@@ -359,8 +359,11 @@ class XsMat:
              Minimun value to take into account in the creation of tau_n
              functions. For T>200 is convenient to set into 1.0e-14 to speed up
              the calculations. The default is 0.0.
-         nphonon : 'int', optional
-             Phonon expansion order. The default is 1000.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
 
          Returns
          -------
@@ -1265,10 +1268,12 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     tau1: np.ndarray, (O, P)
         tau1 values for all the row T. O is the number of the phonon expansion
         order and P is the number of the beta grid
-    nphonon: int
-        Phonon expansion order
     threshold: float
         Minimun value to take into account in the creation of tau_n
+    decimal: float
+        Decimal precision to use in the obtention of the tau_n values
+    order_max: int
+        Maximum order to use in the expansion of the tau_n values
 
     Returns
     -------

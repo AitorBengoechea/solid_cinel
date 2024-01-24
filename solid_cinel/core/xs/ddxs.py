@@ -453,6 +453,87 @@ class DDxs:
         else:
             xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
         return scatfunction.convolve(xs.data)
+
+    @classmethod
+    def from_4PCF_recoil(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
+                        Eout: np.ndarray, theta: np.ndarray, *args,
+                        **kwargs) -> pd.DataFrame:
+        """
+        Generate the Double Differential XS for elastic scattering from Fourier
+        double-Laplace transform of a 4-point correlation function modified
+        ..math::
+            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E + \frac{\alpha k_{B} T}{1-\mu})/2 - E \mu / A)
+
+        For the xs matrix calculation, the gressier recoil energy is used to
+        get the doppler broadening cross sections.
+
+        Common parameters
+        -----------------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n functions. For T>200 is convenient to set into
+            1.0e-14 to speed up the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        pd.DataFrame
+            The Double Differential XS for elastic scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 10)[1::]
+        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
+        # Coercelle with FGM algorithm:
+        >>> DDxs.from_4PCF_recoil(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
+
+        """
+        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,
+                                           *args, **kwargs)
+        xs = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, *args,
+                               **kwargs)
+        ddxs = scatfunction.convolve(xs.data)
+        return cls(Ein, T, M, "4PCF", ddxs)
+
     @property
     def angular(self) -> Dxs:
         """

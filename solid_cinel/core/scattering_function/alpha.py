@@ -697,6 +697,8 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
         alpha grid values.
     DebyeWallerCoeff: 'float'
         Debye Waller coefficient.
+    decimal: 'float'
+        Decimal precision
     order_max: 'int'
         Maximun order for the expansion.
 

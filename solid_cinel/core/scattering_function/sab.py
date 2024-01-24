@@ -539,7 +539,7 @@ class Sab:
         decimal : 'float', optional
             Decimal precision to calculate the expansion order. The default is
             1.0e-6.
-        n_order_max : 'int', optional
+        order_max : 'int', optional
             Maximum expansion order. The default is 5000.
         tau_to_file : 'bool', optional
             Save the tau_n functions into a file. The default is False.
@@ -590,8 +590,8 @@ class Sab:
                 "Is posible that the expansion order is not enough to get the correct results")
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
-            n_order_max = kwargs.get("n_order_max", 5000)
-            nphonon = alpha_grid_.expansion_order(debye_waller_coeff, decimal, n_order_max)
+            order_max = kwargs.get("order_max", 5000)
+            nphonon = alpha_grid_.expansion_order(debye_waller_coeff, decimal, order_max)
 
         # Get the parameters for calculation:
         delta_beta = pdos.to_beta_grid(T).grid

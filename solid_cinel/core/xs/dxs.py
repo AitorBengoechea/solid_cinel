@@ -227,8 +227,11 @@ class Dxs:
             Minimun value to take into account in the creation of tau_n
             functions. For T>200 is convenient to set into 1.0e-14 to speed up
             the calculations. The default is 0.0.
-        nphonon : 'int', optional
-            Phonon expansion order. The default is 1000.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
 
         Returns
         -------

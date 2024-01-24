@@ -283,7 +283,7 @@ class ScatFuncSD:
     def from_pdos(cls, Ein: float, M: float, T: float, Eout: np.array,
                   mu: float, pdos, nphonon: int = None,
                   decimal: float = 1.0e-6,
-                  n_order_max: int = 5000, threshold: float = 0.0,
+                  order_max: int = 5000, threshold: float = 0.0,
                   tau_to_file: bool = False,
                   binary: bool = False):
         """
@@ -310,7 +310,7 @@ class ScatFuncSD:
         decimal: 'float', optional
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
-        n_order_max: 'int', optional
+        order_max: 'int', optional
             Maximun expansion order. The default is 5000.
         threshold: 'float', optional
             Minimun value to take into account in the creation of tau_n
@@ -352,7 +352,7 @@ class ScatFuncSD:
                 "Is posible that the expansion order is not enough to get the correct results")
         else:
             nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu),
-                                          debye_waller_coeff, decimal, n_order_max)
+                                          debye_waller_coeff, decimal, order_max)
         tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
         save_tau(tau_n, nphonon, T, tau_to_file, binary)
         mu = np.array(mu) if hasattr(mu, '__len__') else np.array([mu])
@@ -687,7 +687,7 @@ class ScatFuncDD:
         decimal: 'float', optional
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
-        n_order_max: 'int', optional
+        order_max: 'int', optional
             Maximun expansion order. The default is 5000.
         threshold: 'float', optional
             Minimun value to take into account in the creation of tau_n
@@ -800,7 +800,7 @@ class ScatFuncDD:
         decimal: 'float', optional
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
-        n_order_max: 'int', optional
+        order_max: 'int', optional
             Maximun expansion order. The default is 5000.
         threshold: 'float', optional
             Minimun value to take into account in the creation of tau_n

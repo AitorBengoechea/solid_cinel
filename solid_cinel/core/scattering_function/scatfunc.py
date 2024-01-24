@@ -773,7 +773,7 @@ class ScatFuncDD:
     def from_pdos(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                   mu: np.ndarray, pdos, nphonon: int = None,
                   decimal: float = 1.0e-6,
-                  n_order_max: int = 5000, threshold: float = 0.0,
+                  order_max: int = 5000, threshold: float = 0.0,
                   tau_to_file: bool = False,
                   binary: bool = False):
         """
@@ -843,7 +843,7 @@ class ScatFuncDD:
         else:
             alpha_max = get_alpha_from_Eout(Eout, Ein, M, T, mu.min())
             nphonon = get_expansion_order(alpha_max, debye_waller_coeff,
-                                          decimal, n_order_max)
+                                          decimal, order_max)
         tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
         save_tau(tau_n, nphonon, T, tau_to_file, binary)
         return cls.from_tau(Ein, M, T, Eout, mu, tau_n, delta_beta,

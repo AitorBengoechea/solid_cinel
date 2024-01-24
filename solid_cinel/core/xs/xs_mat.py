@@ -12,6 +12,8 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
 from solid_cinel.core.material.vibration.tau import tau_n_functions
 from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.scattering_function.alpha import get_gressier_recoil
+from solid_cinel.core.scattering_function.sab import Sab, get_sab_sct_alpha
 from solid_cinel.core.xs.dxs import Dxs
 import os
 from math import pi
@@ -132,8 +134,8 @@ class XsMat:
 
          Extra parameters for sct
          ------------------------
-         Teff : float
-             Effective temperature of the material in K
+         pdos : 'solid_cinel.core.material.Pdos'
+             Pdos object.
 
          Extra parameters for pdos
          -------------------------
@@ -319,6 +321,139 @@ class XsMat:
             raise ValueError("Model not implemented")
         return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
+    @classmethod
+    def from_recoil(cls, *args, **kwargs):
+        """
+         Calculate the cross section matrix for a given incident energy, target mass,
+         target temperature, outgoing energy grid and outgoing angle grid using arno
+         model with the most similar S(alpha, -beta) distribution based on recoil
+         energy of gressier
+         .. math::
+             \sigma^{T(1+\mu)/2}\left( \frac{E + E^\prime}{2} - E\frac{\mu m}{M}\right)
+
+         Parameters for fgm, sct and pdos models
+         ---------------------------------------
+         xs_0K : pd.Series
+             Cross section at 0K in barns
+         Ein : float
+             The incident energy of the neutron in eV
+         M : float
+             Mass of the material in amu
+         T : float
+             Temperature of the material in K
+         Eout : np.array, (N,)
+             The neutron outgoing energy grid in eV
+         theta : np.array, (M,)
+             The neutron outgoing angle grid in degrees (0, 180]
+
+         Extra parameters for sct
+         ------------------------
+         pdos : 'solid_cinel.core.material.Pdos'
+             Pdos object.
+
+         Extra parameters for pdos
+         -------------------------
+         pdos : 'solid_cinel.core.material.Pdos'
+             Pdos object.
+         threshold : 'float', optional
+             Minimun value to take into account in the creation of tau_n
+             functions. For T>200 is convenient to set into 1.0e-14 to speed up
+             the calculations. The default is 0.0.
+         nphonon : 'int', optional
+             Phonon expansion order. The default is 1000.
+
+         Returns
+         -------
+         np.ndarray, (M, N)
+             Cross section matrix in barns
+
+        Examples
+        --------
+         # 0K xs data for U238:
+         >>> wd = os.getcwd()
+         >>> os.chdir(__file__.replace("xs_mat.py", ""))
+         >>> os.chdir("../../data/xs/U238/")
+         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+         >>> os.chdir(wd)
+
+         >>> T = 1000
+         >>> Ein = 2.0
+         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+         >>> M = 238.05077040419212
+         >>> theta = np.arange(10, 190, 10)
+
+         # fgm model:
+         >>> xs_values = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta)
+         >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+              1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+         180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
+         170  9.102381  9.095558  9.088736  9.081785  9.074706  9.067627  9.060548
+         160  9.102459  9.095636  9.088814  9.081866  9.074787  9.067708  9.060629
+         150  9.102586  9.095764  9.088940  9.081996  9.074919  9.067840  9.060761
+         140  9.102759  9.095936  9.089111  9.082171  9.075098  9.068019  9.060940
+         130  9.102971  9.096149  9.089320  9.082385  9.075319  9.068240  9.061160
+         120  9.103217  9.096396  9.089564  9.082632  9.075575  9.068496  9.061415
+         110  9.103489  9.096669  9.089834  9.082906  9.075858  9.068780  9.061698
+         100  9.103778  9.096961  9.090124  9.083199  9.076160  9.069083  9.061999
+         90   9.104077  9.097262  9.090423  9.083502  9.076471  9.069396  9.062311
+         80   9.104374  9.097563  9.090723  9.083804  9.076781  9.069709  9.062622
+         70   9.104663  9.097854  9.091014  9.084098  9.077081  9.070012  9.062924
+         60   9.104932  9.098127  9.091287  9.084373  9.077363  9.070296  9.063206
+         50   9.105174  9.098374  9.091533  9.084622  9.077616  9.070552  9.063461
+         40   9.105382  9.098585  9.091746  9.084837  9.077835  9.070772  9.063679
+         30   9.105545  9.098754  9.091918  9.085011  9.078011  9.070948  9.063851
+         20   9.105650  9.098872  9.092043  9.085140  9.078139  9.071071  9.063964
+         10   9.105616  9.098901  9.092109  9.085218  9.078207  9.071104  9.063939
+
+        # sct model:
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> xs_values = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct")
+        >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+             1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+        180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
+        170  9.102381  9.095558  9.088733  9.081782  9.074706  9.067627  9.060548
+        160  9.102459  9.095636  9.088811  9.081863  9.074787  9.067708  9.060629
+        150  9.102586  9.095764  9.088938  9.081993  9.074919  9.067840  9.060761
+        140  9.102758  9.095936  9.089109  9.082168  9.075098  9.068019  9.060940
+        130  9.102971  9.096149  9.089319  9.082383  9.075319  9.068240  9.061160
+        120  9.103217  9.096396  9.089563  9.082631  9.075575  9.068496  9.061415
+        110  9.103489  9.096669  9.089834  9.082906  9.075858  9.068780  9.061698
+        100  9.103778  9.096961  9.090123  9.083199  9.076160  9.069084  9.061999
+        90   9.104077  9.097262  9.090423  9.083501  9.076471  9.069397  9.062311
+        80   9.104374  9.097563  9.090723  9.083804  9.076781  9.069709  9.062622
+        70   9.104662  9.097854  9.091014  9.084098  9.077081  9.070012  9.062923
+        60   9.104932  9.098127  9.091287  9.084373  9.077363  9.070296  9.063206
+        50   9.105174  9.098374  9.091533  9.084622  9.077616  9.070552  9.063461
+        40   9.105382  9.098585  9.091746  9.084837  9.077835  9.070772  9.063678
+        30   9.105545  9.098754  9.091918  9.085011  9.078011  9.070948  9.063851
+        20   9.105650  9.098872  9.092043  9.085139  9.078139  9.071071  9.063963
+        10   9.105616  9.098901  9.092109  9.085218  9.078207  9.071104  9.063939
+        """
+
+        # Common arguments:
+        if len(args) == 6:
+            xs_0K, Ein, M, T, Eout, theta = args
+        else:
+            xs_0K, Ein, M, T, Eout, theta, pdos = args
+
+        # Common variables:
+        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
+                                                                     M, T, Eout,
+                                                                     theta)
+        # Calculate the cross-section matrix:
+        model = kwargs.pop("model", "fgm")
+        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+        if model == "fgm":
+            update_xs_mat_sct_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
+                                     T_arno, T_arno)
+        elif model == "sct":
+            Teff = cls.get_Teff(pdos, T_arno)
+            update_xs_mat_sct_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
+                                     T_arno, Teff)
+        else:
+            raise ValueError("Model not implemented")
+        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
+
     @staticmethod
     def common_variables(xs_0K: pd.Series, Ein: float, M: float, T: float,
                          Eout: np.ndarray, theta: np.ndarray) -> (np.ndarray,
@@ -487,6 +622,47 @@ def default_Eout(Ein: float) -> np.ndarray:
                                  np.log10(2 * Ein),
                                  2000)
     return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def default_abs_beta(T: float) -> np.ndarray:
+    """
+    Generate the default beta grid for a certain temperature
+
+    Parameters
+    ----------
+    T: float
+        Temperature in K
+
+    Returns
+    -------
+    beta: np.ndarray
+        Beta grid
+    """
+    beta_mid = 0.08 / (kb * T)
+    beta_max = 5.0 / (kb * T)
+    beta_small = np.linspace(0, beta_mid,2000)
+    beta_great = np.logspace(np.log10(beta_mid), np.log10(beta_max), 1000)
+    return np.concatenate((beta_small, beta_great[1::]))
+
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def default_beta(T: float) -> np.ndarray:
+    """
+    Generate the default beta grid for a certain temperature
+
+    Parameters
+    ----------
+    T: float
+        Temperature in K
+
+    Returns
+    -------
+    beta: np.ndarray
+        Beta grid
+    """
+    beta_abs = default_abs_beta(T)
+    return np.concatenate((-beta_abs[::-1], beta_abs[1::]))
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
@@ -869,6 +1045,241 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
             pdf = get_scat_sct_angular(Eout_db, mu_fit_, Ein_arno[i, j],
                                        Tarno[i], M, Tarno_eff[i], 1.0)[0]
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+
+
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
+                             start: int, xs_values: np.ndarray,
+                             xs_E: np.ndarray,
+                             M: float, Tarno: np.ndarray,
+                             Tarno_eff: np.ndarray) -> np.ndarray:
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with the pdf calculated with S(alpha, -beta) algorithm of sct.
+
+    Parameters
+    ----------
+    xs_mat: np.ndarray, (M, N)
+        Cross section matrix in barns
+    Ein_arno: np.ndarray, (M, N)
+        Incident energy matrix for the arno model
+    start: int
+        Start index for the loop in theta. If mu_min == -1.0, start = 1, else
+        start = 0
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns at 0K
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    M: float
+        Mass of the material in amu
+    T_arno: np.ndarray, (M,)
+        Target temperature grid in K
+    mu_fit: float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with SIGMA1 algoritm
+    Tarno_eff: np.ndarray, (M,)
+        Effective temperature grid in K
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+    """
+    for i in range(start, Ein_arno.shape[0], 1):
+        beta = default_beta(Tarno[i])
+        Tratio = Tarno_eff[i] / Tarno[i]
+        for j in prange(Ein_arno.shape[1]):
+            # Generate the outgoing energy grid based on beta grid:
+            Eout = Ein_arno[i, j] + beta * kb * Tarno[i]
+            # Calculate the recoil energy:
+            recoil = get_gressier_recoil(Ein_arno[i, j], Tarno[i], M)
+            # Get the alpha value for the Ein value:
+            alpha = recoil / (kb * Tarno[i])
+            # Generate the pdf and get the xs 0K values:
+            pdf = get_sab_sct_alpha(alpha, beta, Tratio, 1.0)
+            pdf /= (kb * Tarno[i])
+            xs_Eout = np.interp(Eout + recoil, xs_E, xs_values)
+            # Calculate the cross section:
+            xs_mat[i, j] += np.trapz(xs_Eout * pdf, x=Eout)
+
+
+@nb.jit(nopython=True, nogil=True, parallel=True)
+def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
+                                  beta: np.ndarray, recoil: np.ndarray,
+                                  Ein_row: np.ndarray, T: float,
+                                  xs_values: np.ndarray, xs_E: np.ndarray):
+    """
+    Calculate the cross section matrix for a outgoing incident energy using arno
+    model with different tau functions according to the T_arno value.
+
+    Parameters
+    ----------
+    xs_mat: np.ndarray, (1, N)
+        Empty Cross section matrix in barns
+    tau_n: np.ndarray, (Z, T)
+        tau_n values for all the row T. Z is the number of the phonon expansion
+        order and T is the number of the beta grid
+    delta_beta: float
+        delta_beta value for the row T
+    debyewallercoeff: float
+        DebyeWallerCoeff value for the row T
+    Ein_row: np.ndarray, (N,)
+        Incident energy row for the arno model
+    T: float
+        Target temperature value for the row T
+    xs_values: np.ndarray, (K,)
+        0K Cross section values in barns
+    xs_E: np.ndarray, (K,)
+        0K Cross section energy grid in eV
+    mu_fit: float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns with the row i updated
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs_mat.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 30, 10)
+    >>> mu_fit = np.cos(np.deg2rad(60))
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> i = 0
+    >>> tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+    >>> recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
+    >>> alpha = recoil / (kb * T_arno[i])
+    >>> beta = default_abs_beta(T_arno[i])
+    >>> sab = Sab.from_tau(alpha, beta, tau_n, delta_beta[i], DebyeWallerCoeff[i]).full
+    >>> sab /= (kb * T_arno[i])
+    >>> update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values, recoil, Ein_arno[i], T_arno[i], xs_values, xs_E)
+    >>> pd.Series(xs_mat[i], index=Eout).round(6)
+    1.800000    9.104252
+    1.866667    9.097677
+    1.933333    9.091022
+    2.000000    9.084265
+    2.066667    9.077388
+    2.133333    9.070424
+    2.200000    9.063407
+    dtype: float64
+    """
+    for j in prange(len(xs_mat)):
+        Eout = Ein_row[j] + beta * kb * T
+        xs_Eout = np.interp(Eout + recoil[j], xs_E, xs_values)
+        xs_mat[j] += np.trapz(xs_Eout * pdf_mat[j], x=Eout)
+
+
+def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
+                              start: int, xs_values: np.ndarray,
+                              xs_E: np.ndarray, M: float, T_arno: np.ndarray,
+                              delta_beta: np.ndarray,
+                              DebyeWallerCoeff: np.ndarray, tau1: np.ndarray,
+                              nphonon: int, threshold: float):
+    """
+    Calculate the cross section matrix for a given incident energy, target mass,
+    target temperature, outgoing energy grid and outgoing angle grid using arno
+    model with different pdf.
+
+    Parameters
+    ----------
+    xs_values: np.ndarray, (N,)
+        Cross section values in barns
+    xs_E: np.ndarray, (N,)
+        Cross section energy grid in eV
+    Ein: float
+        The incident energy of the neutron in eV
+    M: float
+        Mass of the material in amu
+    T_arno: np.ndarray, (M,)
+        Target temperature grid in K
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    mu: np.ndarray, (M,)
+        The neutron outgoing angle grid in degrees (0, 180]
+    mu_fit: float
+        The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
+        with sigma1
+    nphonon: int
+        Phonon expansion order
+    tau1: np.ndarray, (M, T)
+        tau1 values for all the T_arno values
+    delta_beta: np.ndarray, (M,)
+        delta_beta values for all the T_arno values
+    threshold: float
+        Minimun value to take into account in the creation of tau_n
+    DebyeWallerCoeff: np.ndarray, (M,)
+        DebyeWallerCoeff values for all the T_arno values
+    tau1: np.ndarray, (O, P)
+        tau1 values for all the row T. O is the number of the phonon expansion
+        order and P is the number of the beta grid
+    nphonon: int
+        Phonon expansion order
+    threshold: float
+        Minimun value to take into account in the creation of tau_n
+
+    Returns
+    -------
+    np.ndarray, (M, N)
+        Cross section matrix in barns
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs_mat.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+    >>> M = 238.05077040419212
+    >>> theta = np.arange(10, 30, 10)
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> nphonon = 100
+    >>> threshold = 1.0e-14
+    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> update_xs_mat_pdos_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M, T_arno, delta_beta, DebyeWallerCoeff, tau1, nphonon, threshold)
+    >>> pd.DataFrame(xs_mat, index=theta[::-1], columns=Eout).round(6)
+        1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
+    20  9.104252  9.097677  9.091022  9.084265  9.077388  9.070424  9.063407
+    10  9.104449  9.097905  9.091258  9.084491  9.077583  9.070568  9.063477
+    """
+    for i in range(start, len(T_arno)):
+        tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
+        # Calculate the recoil energy:
+        recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
+        # Get the alpha value for the Ein value:
+        alpha = recoil / (kb * T_arno[i])
+        # Generate the outgoing energy grid based on alpha value:
+        beta = default_abs_beta(T_arno[i])
+        sab = Sab.from_tau(alpha, beta, tau_n, delta_beta[i], DebyeWallerCoeff[i]).full
+        sab /= (kb * T_arno[i])
+        update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values,
+                                      recoil, Ein_arno[i], T_arno[i], xs_values,
+                                      xs_E)
 
 
 def extract_number(s) -> float:

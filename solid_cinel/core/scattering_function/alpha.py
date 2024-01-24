@@ -781,3 +781,48 @@ def get_gressier_recoil(Ein: [int, float, np.ndarray] , T: float,
     array([0.008166, 0.010688, 0.025103, 0.050328, 0.080281])
     """
     return m / (m + M) * (Ein - 3 / 2 * kb * T)
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_recoil_mat(Ein: np.ndarray, T: [float, np.ndarray],
+                   M: float) -> np.ndarray:
+    """
+    Get the recoil energy for a given incident energy, temperature and mass.
+
+    Parameters
+    ----------
+    Ein: 'np.ndarray', (N,)
+        Incident energy in eV.
+    T: 'float'
+        Temperature in K.
+    M: 'float'
+        Mass in amu.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Recoil energy in eV.
+
+    Example
+    -------
+    >>> T = 800
+    >>> Ein = np.array([[0.33, 0.4, 0.8, 1.5, 2.33118], [0.4, 0.5, 0.9, 1.6, 2.43118]])
+    >>> M = 26.98153433356103
+    >>> pd.DataFrame(get_recoil_mat(Ein, T, M)).round(6)
+              0         1         2         3         4
+    0  0.008166  0.010688  0.025103  0.050328  0.080281
+    1  0.010688  0.014292  0.028706  0.053932  0.083884
+
+    >>> T = np.array([300, 800])
+    >>> pd.DataFrame(get_recoil_mat(Ein, T, M)).round(6)
+              0         1         2         3         4
+    0  0.010495  0.013017  0.027432  0.052657  0.082610
+    1  0.010688  0.014292  0.028706  0.053932  0.083884
+    """
+    recoil_mat = np.zeros(Ein.shape)
+    if isinstance(T, (int, float)):
+        for i in range(Ein.shape[0]):
+            recoil_mat[i] += get_gressier_recoil(Ein[i], T, M)
+    else:
+        for i in range(Ein.shape[0]):
+            recoil_mat[i] += get_gressier_recoil(Ein[i], T[i], M)
+    return recoil_mat

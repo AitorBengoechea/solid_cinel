@@ -750,7 +750,7 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     if n_min == 0:
         # Decimal precision not reached, so when the cumulative sum difference
         # is zero, the expansion order is the maximun order.
-        n_min = np.argmax(np.diff(alpha_cumsum) == 0)
+        n_min = np.argmax(np.diff(alpha_cumsum) <= decimal)
     return n_min if n_min > 0 else order_max
 
 

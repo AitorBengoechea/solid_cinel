@@ -332,6 +332,37 @@ class Alpha:
             np.array([theta]) * np.pi / 180)
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
+    @classmethod
+    def from_recoil(cls, Ein: [int, float, np.ndarray] , T: float,
+                        M: float):
+        """
+        Generate the alpha values using the recoil energy.
+
+        Parameters
+        ----------
+        Ein: 'int', 'float' or 'np.ndarray'
+            Incident energy in eV.
+        T: 'float'
+            Temperature in K.
+        M: 'float'
+            Mass in amu.
+
+        Returns
+        -------
+        "Alpha"
+            Alpha grid generated for the given combination of the input
+            parameters.
+
+        Example
+        -------
+        >>> T = 800
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 26.98153433356103
+        >>> Alpha.from_recoil(Ein, T, M).data.round(6)
+        array([0.118447, 0.155038, 0.36413 , 0.730042, 1.164525])
+        """
+        return cls(get_gressier_recoil(Ein, T, M) / (kb * T))
+
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:
         """
@@ -477,7 +508,7 @@ class Alpha:
                                    order_max)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alpha_from_Eout(Eout: np.ndarray, Ein: float, T: float, M: float,
                         mu: float) -> np.ndarray:
     """
@@ -539,7 +570,7 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     return np.unique(alpha.ravel())
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
                   mu: np.ndarray) -> np.ndarray:
     """
@@ -592,7 +623,7 @@ def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
         alpha_mat[i] += get_alpha_from_Eout(Eout, Ein, T, M, mu[i])
     return alpha_mat
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
                          order_max: int) -> np.ndarray:
     """
@@ -651,7 +682,7 @@ def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
     return alpha_mul.cumsum()
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
                         decimal: int, order_max: int) -> int:
     """
@@ -666,6 +697,8 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
         alpha grid values.
     DebyeWallerCoeff: 'float'
         Debye Waller coefficient.
+    decimal: 'float'
+        Decimal precision
     order_max: 'int'
         Maximun order for the expansion.
 
@@ -714,8 +747,116 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     alpha_max = alpha if isinstance(alpha, (int, float)) else alpha.max()
     alpha_cumsum = get_alpha_mul_cumsum(alpha_max, DebyeWallerCoeff, order_max)
     n_min = np.argmax((1 - alpha_cumsum) <= decimal)
-    if n_min == 0:
-        # Decimal precision not reached, so when the cumulative sum difference
-        # is zero, the expansion order is the maximun order.
-        n_min = np.argmax(np.diff(alpha_cumsum) == 0)
-    return n_min if n_min > 0 else order_max
+    if n_min > 0:
+        return n_min
+    else:
+        # If the decimal precision is not reached, the difference between the
+        # cumulative sum of the alpha values will identify the order of the
+        # expansion.
+        return check_diff(alpha_cumsum, decimal, order_max)
+
+
+@nb.jit(nopython=True, nogil=False, cache=True)
+def check_diff(alpha_cumsum: np.ndarray, decimal: float, order_max: int) -> int:
+    """
+    Check the difference between the cumulative sum of the alpha values because
+    the cumulative sum can not reach the unity, so the difference between the
+    cumulative sum value will identify the order of the expansion.
+
+    Parameters
+    ----------
+    alpha_cumsum: 'np.ndarray', (N,)
+        alpha cumulative sum.
+    decimal: 'float'
+        Decimal precision
+    order_max: 'int'
+        Maximun order for the expansion.
+
+    Returns
+    -------
+    n: 'int'
+        Expansion order.
+    """
+    alpha_cumsum_diff = np.diff(alpha_cumsum)
+    n = alpha_cumsum_diff == 0.0
+    if n.any():
+        return np.argmax(n)
+    else:
+        n = alpha_cumsum_diff <= decimal
+        return np.argmax(n) if n.any() else order_max
+
+
+@nb.jit(nopython=True, nogil=False, cache=True)
+def get_gressier_recoil(Ein: [int, float, np.ndarray] , T: float,
+                        M: float) -> np.ndarray:
+    """
+    Get the recoil energy for a given incident energy, temperature and mass.
+
+    Parameters
+    ----------
+    Ein: 'int', 'float' or 'np.ndarray'
+        Incident energy in eV.
+    T: 'float'
+        Temperature in K.
+    M: 'float'
+        Mass in amu.
+
+    Returns
+    -------
+    'np.ndarray'
+        Recoil energy in eV.
+
+    Example
+    -------
+    >>> T = 800
+    >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+    >>> M = 26.98153433356103
+    >>> get_gressier_recoil(Ein, T, M).round(6)
+    array([0.008166, 0.010688, 0.025103, 0.050328, 0.080281])
+    """
+    return m / (m + M) * (Ein - 3 / 2 * kb * T)
+
+@nb.jit(nopython=True, nogil=False, cache=True)
+def get_recoil_mat(Ein: np.ndarray, T: [float, np.ndarray],
+                   M: float) -> np.ndarray:
+    """
+    Get the recoil energy for a given incident energy, temperature and mass.
+
+    Parameters
+    ----------
+    Ein: 'np.ndarray', (N,)
+        Incident energy in eV.
+    T: 'float'
+        Temperature in K.
+    M: 'float'
+        Mass in amu.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Recoil energy in eV.
+
+    Example
+    -------
+    >>> T = 800
+    >>> Ein = np.array([[0.33, 0.4, 0.8, 1.5, 2.33118], [0.4, 0.5, 0.9, 1.6, 2.43118]])
+    >>> M = 26.98153433356103
+    >>> pd.DataFrame(get_recoil_mat(Ein, T, M)).round(6)
+              0         1         2         3         4
+    0  0.008166  0.010688  0.025103  0.050328  0.080281
+    1  0.010688  0.014292  0.028706  0.053932  0.083884
+
+    >>> T = np.array([300, 800])
+    >>> pd.DataFrame(get_recoil_mat(Ein, T, M)).round(6)
+              0         1         2         3         4
+    0  0.010495  0.013017  0.027432  0.052657  0.082610
+    1  0.010688  0.014292  0.028706  0.053932  0.083884
+    """
+    recoil_mat = np.zeros(Ein.shape)
+    if isinstance(T, (int, float)):
+        for i in range(Ein.shape[0]):
+            recoil_mat[i] += get_gressier_recoil(Ein[i], T, M)
+    else:
+        for i in range(Ein.shape[0]):
+            recoil_mat[i] += get_gressier_recoil(Ein[i], T[i], M)
+    return recoil_mat

@@ -453,6 +453,153 @@ class DDxs:
         else:
             xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
         return scatfunction.convolve(xs.data)
+
+    @classmethod
+    def from_4PCF_recoil(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
+                        Eout: np.ndarray, theta: np.ndarray, *args,
+                        **kwargs) -> pd.DataFrame:
+        """
+        Generate the Double Differential XS for elastic scattering from Fourier
+        double-Laplace transform of a 4-point correlation function modified
+        ..math::
+            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E + \frac{\alpha k_{B} T}{1-\mu})/2 - E \mu / A)
+
+        For the xs matrix calculation, the gressier recoil energy is used to
+        get the doppler broadening cross sections.
+
+        Common parameters
+        -----------------
+        xs_0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tau_n functions. For T>200 is convenient to set into
+            1.0e-14 to speed up the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        pd.DataFrame
+            The Double Differential XS for elastic scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> M = 238.05077040419212
+        >>> theta = np.arange(0, 180, 10)[1::]
+        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
+        # Coercelle with FGM algorithm:
+        >>> DDxs.from_4PCF_recoil(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
+        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -9.848078e-01  1.799454  12.011827  23.795201  15.058833  3.254168
+        -9.396926e-01  1.676368  11.820171  24.045985  15.218236  3.207631
+        -8.660254e-01  1.481047  11.484990  24.467384  15.486077  3.125740
+        -7.660444e-01  1.229145  10.983212  25.064040  15.865304  3.002058
+        -6.427876e-01  0.943762  10.284418  25.841231  16.359271  2.827893
+        -5.000000e-01  0.654927   9.354802  26.802921  16.970502  2.593117
+        -3.420201e-01  0.396321   8.165883  27.947781  17.698162  2.288181
+        -1.736482e-01  0.197802   6.711574  29.261084  18.532927  1.908320
+         6.123234e-17  0.074460   5.037252  30.698047  19.446408  1.461220
+         1.736482e-01  0.018204   3.279005  32.149110  20.369142  0.978394
+         3.420201e-01  0.002218   1.689235  33.366688  21.144134  0.525276
+         5.000000e-01  0.000081   0.578047  33.811182  21.429205  0.191556
+         6.427876e-01  0.000000   0.090865  32.347784  20.504689  0.033458
+         7.660444e-01  0.000000   0.002704  26.830185  17.009357  0.001208
+         8.660254e-01  0.000000   0.000001  14.853195   9.417400  0.000001
+         9.396926e-01  0.000000   0.000000   1.824966   1.157166  0.000000
+         9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
+
+        # Coercelle with SCT algorithm:
+        >>> DDxs.from_4PCF_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
+        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
+        mu
+        -9.848078e-01  1.812377  12.019189  23.754185  15.057238  3.271241
+        -9.396926e-01  1.688889  11.828546  24.004643  15.216676  3.224750
+        -8.660254e-01  1.492850  11.495045  24.425504  15.484593  3.142914
+        -7.660444e-01  1.239860  10.995579  25.021448  15.863968  3.019264
+        -6.427876e-01  0.952980  10.299636  25.797829  16.358208  2.845046
+        -5.000000e-01  0.662266   9.373197  26.758737  16.969917  2.610041
+        -3.420201e-01  0.401538   8.187375  27.903049  17.698392  2.304558
+        -1.736482e-01  0.200935   6.735377  29.216391  18.534514  1.923635
+         6.123234e-17  0.075917   5.061551  30.654575  19.450228  1.474719
+         1.736482e-01  0.018657   3.300818  32.109059  20.376606  0.989133
+         3.420201e-01  0.002291   1.705058  33.333987  21.157498  0.532397
+         5.000000e-01  0.000085   0.585913  33.792571  21.451959  0.194925
+         6.427876e-01  0.000000   0.092748  32.353783  20.541564  0.034273
+         7.660444e-01  0.000000   0.002796  26.872254  17.063492  0.001253
+         8.660254e-01  0.000000   0.000001  14.921401   9.475894  0.000001
+         9.396926e-01  0.000000   0.000000   1.849270   1.174466  0.000000
+         9.848078e-01  0.000000   0.000000   0.000006   0.000004  0.000000
+
+        # Coercelle with pdos model: (Example not very accurate, only for
+        # demonstration purposes)
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+        >>> theta = np.arange(10, 190, 10)
+        >>> ddxs_test = DDxs.from_4PCF_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data
+        >>> ddxs_test.set_axis(theta[::-1]).round(6)
+        Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
+        180   2.368692  9.777714  21.556849   22.522613  10.231717  2.251831  0.266523
+        170   1.065432  4.510560  10.153941   10.770182   4.935073  1.089313  0.128745
+        160   1.049539  4.618627  10.672548   11.426635   5.185495  1.114927  0.126765
+        150   1.134515  5.332886  12.883144   14.007421   6.245290  1.281919  0.136205
+        140   1.201536  6.223266  16.056316   17.858496   7.752670  1.484856  0.142710
+        130   1.119359  6.632177  18.768109   21.566705   9.024823  1.570539  0.131526
+        120   0.900970  6.394603  20.534025   24.703531   9.842909  1.506148  0.105078
+        110   0.624735  5.624970  21.423056   27.467395  10.251675  1.321948  0.072665
+        100   0.367234  4.506707  21.590946   30.234341  10.330029  1.060278  0.042802
+        90    0.176504  3.227634  21.069999   33.376565  10.092712  0.762439  0.020695
+        80    0.065519  1.986464  19.724574   37.263767   9.471872  0.472395  0.007749
+        70    0.017464  0.985112  17.292756   42.378768   8.336923  0.236360  0.002085
+        60    0.003115  0.359076  13.545275   49.689060   6.567504  0.087022  0.000375
+        50    0.000357  0.086780   8.691473   61.814614   4.246158  0.021197  0.000043
+        40    0.000026  0.013417   3.926490   83.120568   1.934495  0.003275  0.000003
+        30    0.000001  0.001396   0.986962  103.930777   0.488559  0.000339  0.000000
+        20    0.000000  0.000066   0.110359   82.221789   0.053960  0.000016  0.000000
+        10    0.000000  0.000001   0.008850   25.053692   0.004152  0.000000  0.000000
+        """
+        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,
+                                           *args, **kwargs)
+        xs = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, *args,
+                               **kwargs)
+        ddxs = scatfunction.convolve(xs.data)
+        return cls(Ein, T, M, "4PCF", ddxs)
+
     @property
     def angular(self) -> Dxs:
         """

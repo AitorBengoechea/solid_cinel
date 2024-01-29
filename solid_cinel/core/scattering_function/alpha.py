@@ -750,7 +750,11 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     if n_min > 0:
         return n_min
     else:
-        return order_max
+        # If the decimal precision is not reached, the difference between the
+        # cumulative sum of the alpha values will identify the order of the
+        # expansion.
+        return check_diff(alpha_cumsum, decimal, order_max)
+
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def check_diff(alpha_cumsum: np.ndarray, decimal: float, order_max: int) -> int:

@@ -1307,9 +1307,9 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     20  9.104252  9.097677  9.091022  9.084265  9.077388  9.070424  9.063407
     10  9.104449  9.097905  9.091258  9.084491  9.077583  9.070568  9.063477
     """
-    recoil_mat = get_recoil_mat(Ein_arno, T_arno, M)
     for i in range(start, len(T_arno)):
-        alpha = recoil_mat[i] / (kb * T_arno[i])
+        recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
+        alpha = recoil / (kb * T_arno[i])
         nphonon = get_expansion_order(alpha, DebyeWallerCoeff[i], decimal, order_max)
         tau_n = tau_n_functions(tau1[i], delta_beta[i], nphonon, threshold)
         # Generate the outgoing energy grid based on alpha value:
@@ -1317,7 +1317,7 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
         sab = Sab.from_tau(alpha, beta, tau_n, delta_beta[i], DebyeWallerCoeff[i]).full
         sab /= (kb * T_arno[i])
         update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values,
-                                      recoil_mat[i], Ein_arno[i], T_arno[i], xs_values,
+                                      recoil, Ein_arno[i], T_arno[i], xs_values,
                                       xs_E)
 
 

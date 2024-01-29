@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
-from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos
+from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
 from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order, get_gressier_recoil
 from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.material.vibration.tau import save_tau
@@ -645,7 +645,7 @@ def from_recoil(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                      Eout_num: int, pdos: Pdos) -> pd.Series:
     xs_db = {}
-    recoil = get_gressier_recoil(Ein_grid, M, T)
+    recoil = get_gressier_recoil(Ein_grid, T, M)
     alpha = recoil / (kb * T)
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     delta_beta = pdos.to_beta_grid(T).grid
@@ -654,13 +654,13 @@ def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     for i in range(len(Ein_grid)):
         Eout = np.linspace(Ein_grid[i] * 0.95, Ein_grid[i] * 1.05, Eout_num)
         beta = get_beta(Eout, Ein_grid[i], T)
-        scatfunc = ScatFunc.from_tau(alpha[i], beta,
-                                     tau_n, delta_beta, debye_waller_coeff).full
-        Eout_calc = Ein_grid[i] + scatfunc.columns.values * kb * T
+        scatfunc = Sab.from_tau(alpha[i], beta,
+                                tau_n, delta_beta, debye_waller_coeff).full
+        Eout_calc = Ein_grid[i] + scatfunc.index.values * kb * T
         # xs_0K interpolation
         xs_0K_interp = reshape_differential(xs_0K, Eout_calc + recoil[i])
         # XsMat
         dxs = scatfunc * xs_0K_interp
         dxs.index = pd.Index(Eout_calc, name="Eout")
-        xs_db[Ein_grid[i]] = integrate(dxs)
+        xs_db[Ein_grid[i]] = integrate(dxs) / (kb * T)
     return pd.Series(xs_db, name="xs")

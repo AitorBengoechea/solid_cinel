@@ -508,7 +508,7 @@ class Alpha:
                                    order_max)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alpha_from_Eout(Eout: np.ndarray, Ein: float, T: float, M: float,
                         mu: float) -> np.ndarray:
     """
@@ -570,7 +570,7 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     return np.unique(alpha.ravel())
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
                   mu: np.ndarray) -> np.ndarray:
     """
@@ -623,7 +623,7 @@ def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
         alpha_mat[i] += get_alpha_from_Eout(Eout, Ein, T, M, mu[i])
     return alpha_mat
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
                          order_max: int) -> np.ndarray:
     """
@@ -682,7 +682,7 @@ def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
     return alpha_mul.cumsum()
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
                         decimal: int, order_max: int) -> int:
     """
@@ -754,7 +754,7 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     return n_min if n_min > 0 else order_max
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_gressier_recoil(Ein: [int, float, np.ndarray] , T: float,
                         M: float) -> np.ndarray:
     """
@@ -784,7 +784,7 @@ def get_gressier_recoil(Ein: [int, float, np.ndarray] , T: float,
     """
     return m / (m + M) * (Ein - 3 / 2 * kb * T)
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_recoil_mat(Ein: np.ndarray, T: [float, np.ndarray],
                    M: float) -> np.ndarray:
     """

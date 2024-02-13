@@ -164,7 +164,8 @@ def tau_n_calculation_threads(exp_beta, delta_beta, tau1, Ntau1, tau_n_minus_1, 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
 def calculate_tau_n_functions_cpu(tau_n_func: np.ndarray, tau1: np.ndarray,
-                                  Ntau1: int, delta_beta: np.ndarray, nphonon: int, Ntaun: int,):
+                                  Ntau1: int, beta: np.ndarray,
+                                  delta_beta: np.ndarray, nphonon: int, Ntaun: int,):
     """
     Get the tau_{n}(-beta) function values for all n.
 
@@ -176,6 +177,8 @@ def calculate_tau_n_functions_cpu(tau_n_func: np.ndarray, tau1: np.ndarray,
         Tau(-beta) function values for n = 1 expansion.
     Ntau1: int
         Length of tau1.
+    beta: 'np.ndarray', (N,)
+        Beta array of tau1 function.
     delta_beta: np.ndarray
         Interval of beta for the PDOS.
     nphonon: 'int'
@@ -191,9 +194,11 @@ def calculate_tau_n_functions_cpu(tau_n_func: np.ndarray, tau1: np.ndarray,
         All Tau(-beta) function values for n expansion.
     """
     tau_n_minus_1 = tau1.copy()
+    exp_beta = np.exp(- beta)
     for n in range(1, nphonon):
         tau_n = np.zeros(Ntaun)
-        calculate_tau_n(delta_beta, tau1, Ntau1, tau_n_minus_1, tau_n, 0, Ntaun, 1)
+        calculate_tau_n(exp_beta, delta_beta, tau1, Ntau1, tau_n_minus_1, tau_n,
+                        0, Ntaun, 1)
         # Copy thet data into the array:
         tau_n_func[n, :Ntaun] += tau_n
         # If the last N values are zero, the next tau_n will have the same length

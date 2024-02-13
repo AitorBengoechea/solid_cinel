@@ -124,26 +124,6 @@ class Pdos:
 
         self.data = rho_ / integrate(rho_)
 
-    @property
-    def grid(self) -> [float, np.ndarray]:
-        """
-        Grid of the Phonon Density of States function
-
-        Returns
-        -------
-        "float" or "pd.Index"
-            Grid of the Phonon Density of States function
-
-        Examples
-        --------
-        Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> round(p.grid[0], 4)
-        0.0008
-        """
-        diff = np.ediff1d(self.rho.index)
-        return np.append(diff, diff[-1])
-
     @classmethod
     def from_dE(cls, rho: Iterable, interval_energy: float):
         """
@@ -469,8 +449,7 @@ class Pdos:
         9  0.416041  0.451569  0.457651  0.432693  0.381067
         """
         tau1 = self.get_tau_1(T)
-        delta_beta = self.to_beta_grid(T).grid
-        tau_n = tau_n_functions(tau1.values, delta_beta, nphonon, threshold)
+        tau_n = tau_n_functions(tau1.values, tau1.index.values, nphonon, threshold)
         if values:
             return tau_n
         else:

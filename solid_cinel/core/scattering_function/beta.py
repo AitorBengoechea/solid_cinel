@@ -259,6 +259,20 @@ class Beta:
             kind = "mix"
         return kind
 
+    @property
+    def grid(self):
+        """
+        Return the beta grid. The beta grid is the difference between the
+        elements of the beta grid.
+
+        Returns
+        -------
+        "np.ndarray"
+            Array with the beta grid data
+        """
+        diff = np.ediff1d(self.data)
+        return np.append(diff, diff[-1])
+
     @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,
                       thermal_threshold: float = 5., scale: bool = False,

@@ -5,9 +5,8 @@ from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
 from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order, get_gressier_recoil
 from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.scattering_function import get_scatfunc_pdos_row
-from solid_cinel.core.material.vibration.tau import save_tau, tau_n_functions
-from solid_cinel.core.xs.xs import ddxs_clm_0K, Ein_arno_row
-from solid_cinel.core.xs.xs_mat import update_xs_mat_pdos_recoil_row, default_abs_beta
+from solid_cinel.core.material.vibration.tau import save_tau, tau_n_functions, tau_n_beta
+from solid_cinel.core.xs.xs_mat import update_xs_mat_pdos_recoil_row, default_abs_beta, Ein_arno_row
 from solid_cinel.core.generic import reshape_differential, integrate
 import warnings
 
@@ -230,7 +229,7 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     # Calculate the tau_n functions:
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    delta_beta = pdos.to_beta_grid(T).grid
+    beta = pdos.to_beta_grid(T).data.index.values
     if nphonon:
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
@@ -240,7 +239,7 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
             debye_waller_coeff, decimal, order_max)
     tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
     save_tau(tau_n, nphonon, T, tau_to_file, binary)
-
+    tau_n_beta_grid = tau_n_beta(beta, tau_n.shape[1])
     # start the loop
     for Ein in Ein_grid:
         Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
@@ -252,7 +251,7 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
             debye_waller_coeff, decimal, order_max)
         # Scattering function:
         scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tau_n[:min_nphonon],
-                                     delta_beta, debye_waller_coeff)
+                                     tau_n_beta_grid, debye_waller_coeff)
         # DDxs
         ddxs = DDxs(Ein, T, M, "4PCF(CLM)", scatfunc.convolve(xs_mat.data))
         result = {"xs": ddxs.integral}
@@ -460,6 +459,92 @@ def from_recoil_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     return get_results(results, prob)
 
 
+def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
+                tau_n_scatt: np.ndarray, beta_tau_n_scatt: float, debye_waller_coeff_scatt: float,
+                xs_0K_values: np.ndarray, xs_0K_E: np.ndarray, prob: bool) -> list:
+    """
+    Compute the ddxs for 180 degree in clm model using
+
+    Parameters
+    ----------
+    Ein_grid : np.ndarray
+        Incoming energy grid.
+    num_Eout : int
+        Number of energy grid for outgoing energy grid.
+    M : float
+        Mass of the target in amu.
+    T : float
+        Temperature in kelvin.
+    tau_n_scatt : np.ndarray
+        Tau(-beta) function for n expansion for calculation of the scattering function.
+    delta_beta_scatt : float
+        Interval of beta for the scattering function.
+    debye_waller_coeff_scatt : float
+        Debye-Waller coefficient for the scattering function.
+    xs_0K_values : np.ndarray
+        Cross section values at 0K.
+    xs_0K_E : np.ndarray
+        Cross section energy grid.
+    prob : bool
+        If True, return probability of upscattering and downscattering.
+
+    Returns
+    -------
+    list
+        Cross section or cross section and probability of upscattering and
+        downscattering.
+
+    # 0K xs data for U238:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("db.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> os.chdir(wd)
+
+    # Generate DDXS test variables:
+    >>> T = 1000
+    >>> M = 238.05077040419212
+    >>> Ein_grid = np.array([2.0, 6.67, 36.6])
+    >>> num_Eout = 1000
+    >>> xs_0K_values, xs_0K_E = xs_0K.values, xs_0K.index.values
+    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+    >>> debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
+    >>> beta_scatt = pdos.to_beta_grid(T).data.index.values
+    >>> tau_n_scatt = pdos.get_tau(T, 10, 0.0, values=True)
+    >>> tau_n_beta_grid = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
+    >>> beta_tau_n_scatt = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
+    >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tau_n_scatt, beta_tau_n_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
+    >>> pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).round(6)
+        mu    Ein   xs  xs_up  xs_down
+    0 -1.0   2.00  0.0    0.0      0.0
+    1 -1.0   6.67  0.0    0.0      0.0
+    2 -1.0  36.60  0.0    0.0      0.0
+    """
+    result = []
+    for Ein in Ein_grid:
+        # Gen Eout grid:
+        Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
+        Ein_row = Ein_arno_row(Ein, Eout, -1.0, M)
+        scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, -1.0,
+                                              tau_n_scatt,
+                                              beta_tau_n_scatt,
+                                              debye_waller_coeff_scatt)
+        row_results = scattfunc_row * np.interp(Ein_row, xs_0K_E, xs_0K_values)
+        Ein_results = [-1.0, Ein, np.trapz(row_results, x=Eout)]
+
+        # Get probability of upscattering and downscattering:
+        if prob:
+            mask_up, mask_down = Eout > Ein, Eout < Ein
+            Ein_results.append(np.trapz(row_results[mask_up], x=Eout[mask_up]))
+            Ein_results.append(np.trapz(row_results[mask_down], x=Eout[mask_down]))
+
+        # Update results:
+        result.append(Ein_results)
+    return result
+
+
 def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                      theta_diff: float, Eout_num: int, prob: bool, pdos: Pdos,
                      nphonon: int = None, decimal: float = 1.0e-6,
@@ -515,7 +600,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     # Calculate the tau_n functions for scattering function:
     debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
-    delta_beta_scatt = pdos.to_beta_grid(T).grid
+    beta_scatt = pdos.to_beta_grid(T).data.index.values
     if nphonon:
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
@@ -525,14 +610,15 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         nphonon = get_expansion_order(alpha_max, debye_waller_coeff_scatt,
                                       decimal, order_max)
     tau_n_scatt = pdos.get_tau(T, nphonon, threshold, values=True)
+    tau_n_scatt_beta = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
 
     # Create xs_mat creation data:
-    tau1, DebyeWallerCoeff, delta_beta = XsMat.get_pdos_variables(pdos, T_arno)
+    tau1, DebyeWallerCoeff, beta_tau1 = XsMat.get_pdos_variables(pdos, T_arno)
 
     # Create a list to hold the results
     if mu[0] == np.cos(np.pi):
         result = ddxs_clm_0K(Ein_grid, Eout_num, M, T,
-                             tau_n_scatt, delta_beta_scatt,
+                             tau_n_scatt, tau_n_scatt_beta,
                              debye_waller_coeff_scatt,
                              xs_0K_values, xs_0K_E, prob)
         start = 1
@@ -546,8 +632,9 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                                         M, T_arno[i], mu.min())
         nphonon_row = get_expansion_order(alpha_max, DebyeWallerCoeff[i],
                                           decimal, order_max)
-        tau_n_angle = tau_n_functions(tau1[i], delta_beta[i], nphonon_row,
+        tau_n_angle = tau_n_functions(tau1[i], beta_tau1[i], nphonon_row,
                                       threshold)
+        beta_tau_n_angle = tau_n_beta(beta_tau1[i], tau_n_angle.shape[1])
         beta = default_abs_beta(T_arno[i])
         # Select the especific data for the next function:
         for Ein in Ein_grid:
@@ -556,14 +643,14 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
             # Scattering function for selected angle and Ein:
             scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu[i],
                                                   tau_n_scatt,
-                                                  delta_beta_scatt,
+                                                  tau_n_scatt_beta,
                                                   debye_waller_coeff_scatt)
 
             # xs_mat row for selected angle and Ein:
             Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
             recoil_row = get_gressier_recoil(Ein_row, T_arno[i], M)
             alpha_recoil = recoil_row / (kb * T_arno[i])
-            sab = Sab.from_tau(alpha_recoil, beta, tau_n_angle, delta_beta[i],
+            sab = Sab.from_tau(alpha_recoil, beta, tau_n_angle, beta_tau_n_angle,
                                DebyeWallerCoeff[i]).full
             sab /= (kb * T_arno[i])
             xs_mat_row = np.zeros(Eout_num)

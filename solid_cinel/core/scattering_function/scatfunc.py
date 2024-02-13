@@ -13,7 +13,7 @@ from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout, get_expansion_order
 from solid_cinel.core.scattering_function.sab import get_sab_sct, get_sab_sct_alpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import save_tau
+from solid_cinel.core.material.vibration.tau import save_tau, tau_n_beta
 from typing import Iterable
 from math import sqrt, pi
 from scipy.stats import entropy, wasserstein_distance
@@ -346,7 +346,6 @@ class ScatFuncSD:
         dtype: float64
         """
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        delta_beta = pdos.to_beta_grid(T).grid
         if nphonon:
             warnings.warn(
                 "Is posible that the expansion order is not enough to get the correct results")
@@ -354,9 +353,12 @@ class ScatFuncSD:
             nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu),
                                           debye_waller_coeff, decimal, order_max)
         tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
+        tau_1_beta = pdos.to_beta_grid(T).data.index.values
+        tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
         save_tau(tau_n, nphonon, T, tau_to_file, binary)
         mu = np.array(mu) if hasattr(mu, '__len__') else np.array([mu])
-        scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff)[0]
+        scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid,
+                                      debye_waller_coeff)[0]
         norm = np.trapz(scattfunc, x=Eout)
         return cls(Ein, T, M, scattfunc / norm, index=Eout)
 
@@ -771,7 +773,7 @@ class ScatFuncDD:
 
     @classmethod
     def from_pdos(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                  mu: np.ndarray, pdos, nphonon: int = None,
+                  mu: np.ndarray, pdos: Pdos, nphonon: int = None,
                   decimal: float = 1.0e-6,
                   order_max: int = 5000, threshold: float = 0.0,
                   tau_to_file: bool = False,
@@ -836,7 +838,6 @@ class ScatFuncDD:
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
         debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        delta_beta = pdos.to_beta_grid(T).grid
         if nphonon:
             warnings.warn(
                 "Is posible that the expansion order is not enough to get the correct results")
@@ -846,7 +847,9 @@ class ScatFuncDD:
                                           decimal, order_max)
         tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
         save_tau(tau_n, nphonon, T, tau_to_file, binary)
-        return cls.from_tau(Ein, M, T, Eout, mu, tau_n, delta_beta,
+        tau_1_beta = pdos.to_beta_grid(T).data.index.values
+        tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
+        return cls.from_tau(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid,
                             debye_waller_coeff)
 
     @classmethod
@@ -963,7 +966,7 @@ class ScatFuncDD:
 
     @classmethod
     def from_tau(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 mu: np.ndarray, tau_n: np.ndarray, delta_beta: float,
+                 mu: np.ndarray, tau_n: np.ndarray, tau_n_beta_grid: np.ndarray,
                  debye_waller_coeff: float):
         """
         Generate the double differential scattering function from tau_n function
@@ -984,8 +987,8 @@ class ScatFuncDD:
         tau_n: np.ndarray, (Z, T)
             Tau_n function. Z is the number of phonon expansion order and T is
             the number of beta grid points.
-        delta_beta: float
-            Beta grid spacing in tau_n function
+        tau_n_beta_grid: np.ndarray, (T,)
+            Beta grid for the tau_n function
         debye_waller_coeff: float
             Debye-Waller coefficient in LEAPR formalism
 
@@ -1006,10 +1009,11 @@ class ScatFuncDD:
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        >>> delta_beta = pdos.to_beta_grid(T).grid
         >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu.min()), debye_waller_coeff, 1.0e-6, 5000)
         >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-        >>> ScatFuncDD.from_tau(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff).data.loc[::, Eout_test].round(6)
+        >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
+        >>> tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
+        >>> ScatFuncDD.from_tau(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid, debye_waller_coeff).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -1018,7 +1022,7 @@ class ScatFuncDD:
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
         scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu,
-                                      tau_n, delta_beta,
+                                      tau_n, tau_n_beta_grid,
                                       debye_waller_coeff)
         return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
 
@@ -1512,10 +1516,10 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
     >>> alpha_mat = get_alpha_mat(beta * kb * T + Ein, Ein, T, M, mu)
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> delta_beta = pdos.to_beta_grid(T).grid
     >>> nphonon = get_expansion_order(alpha_mat, debye_waller_coeff, 1.0e-6, 5000)
     >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
+    >>> tau_n_beta = tau_n_beta(tau_1_beta, tau_n.shape[1])
     >>> sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, debye_waller_coeff)
     >>> pd.DataFrame(sab_values, index=[120], columns=beta).T.iloc[::100].round(6)
                    120
@@ -1610,10 +1614,10 @@ def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     >>> alpha_mat = get_alpha_from_Eout(beta * kb * T + Ein, Ein, T, M, mu)
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> delta_beta = pdos.to_beta_grid(T).grid
     >>> nphonon = get_expansion_order(alpha_mat, debye_waller_coeff, 1.0e-6, 5000)
     >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
+    >>> tau_n_beta = tau_n_beta(tau_1_beta, tau_n.shape[1])
     >>> sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, debye_waller_coeff)
     >>> Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_values, beta, Ein, T, M)
     >>> pd.Series(scatfunc_values, index=Eout_calc).iloc[::200].round(6)
@@ -1685,10 +1689,10 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> delta_beta = pdos.to_beta_grid(T).grid
     >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu), debye_waller_coeff, 1.0e-6, 5000)
     >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
+    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
+    >>> tau_n_beta = tau_n_beta(tau_1_beta, tau_n.shape[1])
     >>> beta = get_beta(Eout, Ein, T)
     >>> alpha_mat = get_alpha_mat(beta * kb * T + Ein, Ein, T, M, mu)
     >>> sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, debye_waller_coeff)
@@ -1724,7 +1728,7 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
-                      mu: np.ndarray, tau_n: np.ndarray, delta_beta: float,
+                      mu: np.ndarray, tau_n: np.ndarray, tau_n_beta: np.ndarray,
                       DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
@@ -1765,10 +1769,11 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> delta_beta = pdos.to_beta_grid(T).grid
     >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu), debye_waller_coeff, 1.0e-6, 5000)
     >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> sd_pdf = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff)
+    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
+    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
+    >>> sd_pdf = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid, debye_waller_coeff)
     >>> pd.Series(sd_pdf[0], index=Eout).loc[Eout_test].round(6)
     6.7554    0.034510
     6.9050    0.426488
@@ -1778,7 +1783,6 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     7.4480    0.042074
     dtype: float64
     """
-    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     beta = get_beta(Eout, Ein, T)
     alpha_mat = get_alpha_mat(beta * kb * T + Ein if len(beta) < len(Eout) else Eout,
                               Ein, T, M, mu)
@@ -1793,7 +1797,7 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
-                 mu: float, tau_n: np.ndarray, delta_beta: float,
+                 mu: float, tau_n: np.ndarray, tau_n_beta: np.ndarray,
                  DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
@@ -1834,10 +1838,11 @@ def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> mu = np.cos(np.deg2rad(120))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> delta_beta = pdos.to_beta_grid(T).grid
     >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu), debye_waller_coeff, 1.0e-6, 5000)
     >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> sd_pdf = get_scatfunc_pdos_row(Ein, M, T, Eout, mu, tau_n, delta_beta, debye_waller_coeff)
+    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
+    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
+    >>> sd_pdf = get_scatfunc_pdos_row(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid, debye_waller_coeff)
     >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
     6.7554    0.034510
     6.9050    0.426488
@@ -1847,7 +1852,6 @@ def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
     7.4480    0.042074
     dtype: float64
     """
-    tau_n_beta = np.arange(tau_n.shape[1]) * delta_beta
     beta = get_beta(Eout, Ein, T)
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
     alpha = get_alpha_from_Eout(Eout_, Ein, T, M, mu)

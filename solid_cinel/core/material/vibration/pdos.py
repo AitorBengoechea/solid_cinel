@@ -5,10 +5,9 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.tau import tau_n_functions
+from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
 import pandas as pd
 import numpy as np
-import scipy as sp
 from typing import Iterable, Union
 import matplotlib
 
@@ -139,10 +138,11 @@ class Pdos:
         --------
         Object initialization:
         >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> round(p.grid, 4)
+        >>> round(p.grid[0], 4)
         0.0008
         """
-        return np.ediff1d(self.rho.index)[0]
+        diff = np.ediff1d(self.rho.index)
+        return np.append(diff, diff[-1])
 
     @classmethod
     def from_dE(cls, rho: Iterable, interval_energy: float):
@@ -469,13 +469,13 @@ class Pdos:
         9  0.416041  0.451569  0.457651  0.432693  0.381067
         """
         tau1 = self.get_tau_1(T)
-        delta_beta = tau1.index.values[1] - tau1.index.values[0]
+        delta_beta = self.to_beta_grid(T).grid
         tau_n = tau_n_functions(tau1.values, delta_beta, nphonon, threshold)
         if values:
             return tau_n
         else:
-            tau_n = pd.DataFrame(tau_n)
-            tau_n.columns *= delta_beta
+            beta = tau_n_beta(tau1.index.values, tau_n.shape[1])
+            tau_n = pd.DataFrame(tau_n, columns=beta)
             tau_n.index += 1
             if check:
                 # tau1 is not included in the check:

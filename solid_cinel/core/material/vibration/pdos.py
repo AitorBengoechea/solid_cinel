@@ -626,14 +626,22 @@ class Tpdos():
         return self.instance.tau_n(self.T, nphonon, threshold, check, values)
 
 
-class Pdos(Epdos, Tpdos):
+class Npdos():
+    """
+    Object containing the method and properties of N phonon density of states
+    for N temperatures.
+    """
+    def __init__(self):
+        pass
+
+class Pdos(Epdos, Tpdos, Npdos):
     def __init__(self, *args, **kwargs):
         if isinstance(args[0], (Epdos, Tpdos)):
             self.instance = args[0]
         elif len(args[-1].shape) == 1:
             self.instance = Epdos(*args, **kwargs)
         else:
-            pass
+            self.instance = Npdos(*args, **kwargs)
 
     def __getattr__(self, name):
         # assume it is implemented by self.instance

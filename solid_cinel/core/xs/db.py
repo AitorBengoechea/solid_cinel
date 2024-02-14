@@ -229,7 +229,7 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     # Calculate the tau_n functions:
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    beta = pdos.to_beta_grid(T).data.index.values
+    beta = pdos.beta_grid(T).data.index.values
     if nphonon:
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
@@ -511,7 +511,7 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
-    >>> beta_scatt = pdos.to_beta_grid(T).data.index.values
+    >>> beta_scatt = pdos.beta_grid(T).data.index.values
     >>> tau_n_scatt = pdos.tau_n(T, 10, 0.0, values=True)
     >>> tau_n_beta_grid = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
     >>> beta_tau_n_scatt = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
@@ -600,7 +600,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     # Calculate the tau_n functions for scattering function:
     debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
-    beta_scatt = pdos.to_beta_grid(T).data.index.values
+    beta_scatt = pdos.beta_grid(T).data.index.values
     if nphonon:
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
@@ -797,7 +797,7 @@ def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     alpha = recoil / (kb * T)
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     nphonon = get_expansion_order(alpha, debye_waller_coeff, 1.0e-6, 5000)
-    tau1 = pdos.to_beta_grid(T).data.index.values
+    tau1 = pdos.beta_grid(T).data.index.values
     tau_n = pdos.get_tau(T, nphonon, 0.0, values=True)
     tau_n_beta_grid = tau_n_beta(tau1, tau_n.shape[1])
     for i in range(len(Ein_grid)):

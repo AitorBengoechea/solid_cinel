@@ -570,7 +570,7 @@ class XsMat:
             if T_arno[i] > 0.0:
                 tau1[i, :] += pdos.tau1(T_arno[i]).values
                 DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
-                tau_1_beta[i, :] += pdos.to_beta_grid(T_arno[i]).data.index.values
+                tau_1_beta[i, :] += pdos.beta_grid(T_arno[i]).data.index.values
 
         # Some values are nan, so we replace them with the next values:
         nan_indices = np.where(np.isnan(DebyeWallerCoeff))

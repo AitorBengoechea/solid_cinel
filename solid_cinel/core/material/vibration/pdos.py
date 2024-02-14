@@ -40,7 +40,7 @@ class Epdos:
     -------
     from_dE: Pdos
         Create a pdos object from a rho in energy
-    to_beta_grid: Pdos
+    beta_grid: Pdos
         Change the energy grid of rho for a beta grid
     plot: None
         Plot the pdos data
@@ -166,7 +166,7 @@ class Epdos:
         index.name = "E"
         return cls(rho_, index=index)
 
-    def to_beta_grid(self, T: float):
+    def beta_grid(self, T: float):
         """
         Change the energy grid of rho. Two options available:
             - Tranform energy grid in beta grid by introducing T
@@ -197,7 +197,7 @@ class Epdos:
 
         Test the results:
         >>> T = 300
-        >>> p.to_beta_grid(T).rho.iloc[0:5]
+        >>> p.beta_grid(T).rho.iloc[0:5]
         beta
         0.000000    0.000000
         0.030945    0.001064
@@ -206,7 +206,7 @@ class Epdos:
         0.123782    0.017008
         Name: rho, dtype: float64
 
-        >>> p.to_beta_grid(T).to_beta_grid(T).rho.iloc[0:5]
+        >>> p.beta_grid(T).beta_grid(T).rho.iloc[0:5]
         beta
         0.000000    0.000000
         0.030945    0.001064
@@ -266,7 +266,7 @@ class Epdos:
         0.154727    1.109309
         Name: P, dtype: float64
         """
-        beta_rho = self.to_beta_grid(T).rho
+        beta_rho = self.beta_grid(T).rho
         rho_in_beta, beta_values = beta_rho.values, beta_rho.index.values
         if abs(beta_values[0]) > threshold:
             raise ValueError("Initial point of input DOS is not zero")

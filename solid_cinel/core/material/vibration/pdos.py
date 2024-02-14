@@ -351,7 +351,7 @@ class Epdos:
         P *= 2 * np.cosh(0.5 * P.index.values)
         return integrate(P)
 
-    def get_tau_1(self, T: float) -> pd.Series:
+    def tau1(self, T: float) -> pd.Series:
         """
         Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
         .. math::
@@ -378,7 +378,7 @@ class Epdos:
         >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
-        >>> p.get_tau_1(20).iloc[:10]
+        >>> p.tau1(20).iloc[:10]
         beta
         0.000000    0.004250
         0.464181    0.005313
@@ -400,7 +400,7 @@ class Epdos:
         tau1.name = 1
         return tau1
 
-    def get_tau(self, T: float, nphonon, threshold, check: bool = True,
+    def tau_n(self, T: float, nphonon: int, threshold, check: bool = True,
                 values: bool = False) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism.
@@ -430,7 +430,7 @@ class Epdos:
         >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
         >>> T = 800
         >>> threshold = 0.0
-        >>> tau_n = p.get_tau(T, 5, threshold)
+        >>> tau_n = p.tau_n(T, 5, threshold)
         >>> tau_n.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
@@ -439,7 +439,7 @@ class Epdos:
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
 
-        >>> tau_n = p.get_tau(T, 10, threshold, check=False)
+        >>> tau_n = p.tau_n(T, 10, threshold, check=False)
         >>> tau_n.iloc[::2, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
@@ -448,7 +448,7 @@ class Epdos:
         7  0.479140  0.515558  0.508476  0.458931  0.378055
         9  0.416041  0.451569  0.457651  0.432693  0.381067
         """
-        tau1 = self.get_tau_1(T)
+        tau1 = self.tau1(T)
         tau_n = tau_n_functions(tau1.values, tau1.index.values, nphonon, threshold)
         if values:
             return tau_n

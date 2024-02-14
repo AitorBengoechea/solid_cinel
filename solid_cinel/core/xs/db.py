@@ -237,7 +237,7 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         nphonon = get_expansion_order(
             get_alpha_from_Eout(1.05 * Ein_grid[-1], Ein_grid[-1], M, T, mu.min()),
             debye_waller_coeff, decimal, order_max)
-    tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
+    tau_n = pdos.tau_n(T, nphonon, threshold, values=True)
     save_tau(tau_n, nphonon, T, tau_to_file, binary)
     tau_n_beta_grid = tau_n_beta(beta, tau_n.shape[1])
     # start the loop
@@ -512,7 +512,7 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
     >>> beta_scatt = pdos.to_beta_grid(T).data.index.values
-    >>> tau_n_scatt = pdos.get_tau(T, 10, 0.0, values=True)
+    >>> tau_n_scatt = pdos.tau_n(T, 10, 0.0, values=True)
     >>> tau_n_beta_grid = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
     >>> beta_tau_n_scatt = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
     >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tau_n_scatt, beta_tau_n_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
@@ -609,7 +609,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                                         M, T, mu.min())
         nphonon = get_expansion_order(alpha_max, debye_waller_coeff_scatt,
                                       decimal, order_max)
-    tau_n_scatt = pdos.get_tau(T, nphonon, threshold, values=True)
+    tau_n_scatt = pdos.tau_n(T, nphonon, threshold, values=True)
     tau_n_scatt_beta = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
 
     # Create xs_mat creation data:
@@ -796,14 +796,15 @@ def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     recoil = get_gressier_recoil(Ein_grid, T, M)
     alpha = recoil / (kb * T)
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    delta_beta = pdos.to_beta_grid(T).grid
     nphonon = get_expansion_order(alpha, debye_waller_coeff, 1.0e-6, 5000)
+    tau1 = pdos.to_beta_grid(T).data.index.values
     tau_n = pdos.get_tau(T, nphonon, 0.0, values=True)
+    tau_n_beta_grid = tau_n_beta(tau1, tau_n.shape[1])
     for i in range(len(Ein_grid)):
         Eout = np.linspace(Ein_grid[i] * 0.95, Ein_grid[i] * 1.05, Eout_num)
         beta = get_beta(Eout, Ein_grid[i], T)
         scatfunc = Sab.from_tau(alpha[i], beta,
-                                tau_n, delta_beta, debye_waller_coeff).full
+                                tau_n, tau_n_beta_grid, debye_waller_coeff).full
         Eout_calc = Ein_grid[i] + scatfunc.index.values * kb * T
         # xs_0K interpolation
         xs_0K_interp = reshape_differential(xs_0K, Eout_calc + recoil[i])

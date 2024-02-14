@@ -568,7 +568,7 @@ class XsMat:
         # Fill variables:
         for i in range(len(T_arno)):
             if T_arno[i] > 0.0:
-                tau1[i, :] += pdos.get_tau_1(T_arno[i]).values
+                tau1[i, :] += pdos.tau1(T_arno[i]).values
                 DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
                 tau_1_beta[i, :] += pdos.to_beta_grid(T_arno[i]).data.index.values
 

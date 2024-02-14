@@ -594,8 +594,8 @@ class Sab:
             nphonon = alpha_grid_.expansion_order(debye_waller_coeff, decimal, order_max)
 
         # Get the parameters for calculation:
-        tau_n = pdos.get_tau(T, nphonon, threshold=kwargs.get("threshold", 0.0),
-                             values=True)
+        tau_n = pdos.tau_n(T, nphonon, threshold=kwargs.get("threshold", 0.0),
+                           values=True)
         tau_1_beta = pdos.to_beta_grid(T).data.index.values
         tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
         save_tau(tau_n, nphonon, T, kwargs.get("tau_to_file", False),
@@ -773,7 +773,7 @@ class Sab:
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
-        >>> tau1 = pdos.get_tau_1(T).values
+        >>> tau1 = pdos.tau1(T).values
         >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
         >>> nphonon = alpha.expansion_order(DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tau_n = tau_n_functions(tau1, tau_1_beta, nphonon, 0.0)

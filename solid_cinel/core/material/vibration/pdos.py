@@ -465,9 +465,175 @@ class Epdos:
             return tau_n
 
 
-class Pdos(Epdos):
+class Tpdos():
+    """
+    Object containing the method and properties of the phonon density of states
+    for a certain temperature.
+    """
+    def __init__(self, T, *args, **kwargs):
+        """
+        Initialize of the pdos object.
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        args: 'variables'
+            variables for the creation of the pandas Series.
+        kwargs: 'dict'
+            Dictionary to create the pandas series of rho.
+        Returns
+        -------
+        'TPdos'
+            Object containing the method and properties of rho in beta.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = 20
+        >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> p.Teff.round(4)
+        149.1699
+
+        >>> p.DebyeWallerCoeff.round(6)
+        0.077454
+
+        >>> p.P.iloc[0:6].round(6)
+        beta
+        0.000000    0.000329
+        0.464181    0.000326
+        0.928361    0.000318
+        1.392542    0.000304
+        1.856723    0.000286
+        2.320904    0.000265
+        Name: P, dtype: float64
+
+        >>> p.tau1.iloc[:10]
+        beta
+        0.000000    0.004250
+        0.464181    0.005313
+        0.928361    0.006524
+        1.392542    0.007875
+        1.856723    0.009344
+        2.320904    0.010932
+        2.785084    0.012606
+        3.249265    0.014359
+        3.713446    0.016167
+        4.177627    0.018020
+        Name: 1, dtype: float64
+        """
+        self.T = T
+        intance = args[0] if isinstance(args[0], Epdos) else Epdos(*args, **kwargs)
+        self.instance = intance.beta_grid(T)
+
+    @property
+    def data(self) -> pd.Series:
+        """Pandas Series containing the rho values in beta (index)."""
+        return self.instance.rho
+
+    @property
+    def Teff(self) -> float:
+        """Effective temperature for certain pdos"""
+        return self.instance.Teff(self.T)
+
+    @property
+    def DebyeWallerCoeff(self) -> float:
+        """Debye Waller Coefficient"""
+        return self.instance.DebyeWallerCoeff(self.T)
+
+    @property
+    def P(self) -> pd.Series:
+        """P function for LEAPR formalism with PDOS"""
+        return self.instance.P(self.T)
+
+    @property
+    def tau1(self) -> pd.Series:
+        """Tau(-beta) function for the 1 phonon"""
+        return self.instance.tau1(self.T)
+
+    @classmethod
+    def from_dE(cls, T: float, rho: Iterable, interval_energy: float):
+        """
+        Extract rho in energy from the introduced data and create a pdos object
+        for a certain temperature.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        rho: '1D iterable'
+            rho values.
+        interval_energy: 'float'
+            Energy interval in eV.
+
+        Returns
+        -------
+        "TPdos"
+            Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Tpdos.from_dE(800, rho_in_energy, interv_in_energy)
+        >>> p.data.iloc[0:10]
+        beta
+        0.000000    0.000000
+        0.011605    0.002837
+        0.023209    0.011349
+        0.034814    0.025536
+        0.046418    0.045354
+        0.058023    0.070890
+        0.069627    0.102058
+        0.081232    0.138943
+        0.092836    0.181460
+        0.104441    0.229651
+        Name: rho, dtype: float64
+        """
+        return cls(T, Epdos.from_dE(rho, interval_energy))
+
+    def tau_n(self, nphonon: int, threshold, check: bool = True,
+              values: bool = False) -> [np.ndarray, pd.DataFrame]:
+        """
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
+        for a certain temperature.
+
+        Parameters
+        ----------
+        nphonon
+        threshold
+        check
+        values
+
+        Returns
+        -------
+        "pd.DataFrame", (len(rho) * nphonon, nphonon)
+            Tau(-beta) function for n phonon.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = 800
+        >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> threshold = 0.0
+        >>> tau_n = p.tau_n(5, threshold)
+        >>> tau_n.iloc[::, :100:20].round(6)
+           0.000000  0.232090  0.464181  0.696271  0.928361
+        1  0.862582  1.322890  0.341423  0.000000  0.000000
+        2  1.068786  0.835423  0.650492  0.397400  0.067640
+        3  0.721827  0.778009  0.645243  0.431710  0.257169
+        4  0.649349  0.669368  0.608380  0.476611  0.305529
+        5  0.572522  0.608795  0.572271  0.475181  0.348585
+        """
+        return self.instance.tau_n(self.T, nphonon, threshold, check, values)
+
+
+class Pdos(Epdos, Tpdos):
     def __init__(self, *args, **kwargs):
-        self.instance = Epdos(*args, **kwargs)
+        if isinstance(args[0], (Epdos, Tpdos)):
+            self.instance = args[0]
+        elif len(args[-1].shape) == 1:
+            self.instance = Epdos(*args, **kwargs)
+        else:
+            pass
 
     def __getattr__(self, name):
         # assume it is implemented by self.instance

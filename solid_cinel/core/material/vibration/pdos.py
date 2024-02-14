@@ -26,7 +26,7 @@ rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
 
 
-class Pdos:
+class Epdos:
     """
     Object containing the method and properties of the phonon density of states
     in energy.
@@ -106,7 +106,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> assert integrate(p.data) == 1.0
@@ -144,7 +144,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.rho.iloc[0:10]
@@ -185,7 +185,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
         >>> p.rho.iloc[0:5]
         E
         0.0000    0.000000
@@ -219,7 +219,7 @@ class Pdos:
             return self
         else:
             grid = self.rho.index.values
-            return Pdos(self.rho.values,
+            return Epdos(self.rho.values,
                         index=Beta.from_dE(grid, T).to_index)
 
     def plot(self) -> matplotlib:
@@ -252,7 +252,7 @@ class Pdos:
         Example
         -------
         Object initialization:
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> pdos = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> T = 300
@@ -300,7 +300,7 @@ class Pdos:
         Example
         -------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.Teff(T=20).round(4)
@@ -339,7 +339,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.DebyeWallerCoeff(T=20).round(6)
@@ -375,7 +375,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> p.get_tau_1(20).iloc[:10]
@@ -427,7 +427,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
         >>> T = 800
         >>> threshold = 0.0
         >>> tau_n = p.get_tau(T, 5, threshold)
@@ -463,3 +463,13 @@ class Pdos:
                     raise ValueError(
                         "Tau function doesnt satisfy the normalization condition")
             return tau_n
+
+
+class Pdos(Epdos):
+    def __init__(self, *args, **kwargs):
+        self.instance = Epdos(*args, **kwargs)
+
+    def __getattr__(self, name):
+        # assume it is implemented by self.instance
+        return self.instance.__getattribute__(name)
+

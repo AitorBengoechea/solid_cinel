@@ -395,6 +395,45 @@ class Tpdos:
                         "Tau function doesnt satisfy the normalization condition")
             return tau_n
 
+    @property
+    def to_dE(self):
+        """
+        Transform from a specific temperature phonon spectrum to a general
+        phonon spectrum in energy.
+
+        Returns
+        -------
+        "Epdos"
+            Rho in energy.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = 300
+        >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> p.data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.030945    0.001064
+        0.061891    0.004256
+        0.092836    0.009576
+        0.123782    0.017008
+        Name: rho, dtype: float64
+
+        Test the results:
+        >>> p.to_dE.data.iloc[0:5]
+        dE
+        0.0000    0.000000
+        0.0008    0.041157
+        0.0016    0.164629
+        0.0024    0.370415
+        0.0032    0.657892
+        Name: rho, dtype: float64
+        """
+        rho = self.data.copy()
+        dE_index = Beta(rho.index.values).get_dE(self.T)
+        return Epdos(rho.values, index=pd.Index(dE_index, name="dE"))
+
 
 class Epdos:
     """
@@ -751,25 +790,22 @@ class Npdos:
         self.type = object_type
     @property
     def data(self) -> pd.DataFrame:
-        """Dataframe with the S(alpha, -beta) matrix values."""
-        return self._data
-
-    @data.setter
-    def data(self, df: Iterable):
         """
-        Construct the S(alpha, -beta) matrix and check if the data achieve the
-        normalization and sum rule constrain.
+        Get the data of the pdos objects in a DataFrame format with the index
+        being the energy grid.
 
-        Parameters
-        ----------
-        df : 2D iterable, (N, M)
-            Iterable containing the S(alpha, -beta) matrix.
+        Returns
+        -------
+        "pd.DataFrame"
+            Data of the pdos objects in a DataFrame format.
         """
-        df_ = pd.DataFrame(df).sort_index(axis=0).sort_index(axis=1)
-        df_.index.name = "dE"
-        df_.columns.name = "T"
-        # DataFrame:
-        self._data = df_
+        if self.type == Epdos:
+            data = pd.DataFrame({key: pdos.data for key, pdos in self.instance.items()})
+        else:
+            data = pd.DataFrame({key: pdos.data.to_dE for key, pdos in self.instance.items()})
+        if np.any(data.isna()):
+            data = data.interpolate(method="linear", axis=0).fillna(0)
+        return data
 
     @classmethod
     def from_file(cls, file: [str, list], T: [float, list], header=None, index_col=None,

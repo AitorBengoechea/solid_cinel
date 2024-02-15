@@ -3,7 +3,7 @@ Python file for working with Phonon Density Of States.
 
 @author: AB272525
 """
-from solid_cinel.core.generic import integrate
+from solid_cinel.core.generic import integrate, read_file
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
 import pandas as pd
@@ -147,6 +147,36 @@ class Tpdos:
         rho_ = np.array(rho)
         grid = np.arange(len(rho_)) * interval_energy
         return cls(T, rho_, index=Beta.from_dE(grid, T).to_index)
+
+    @classmethod
+    def from_file(cls, file: str, T: float, header=None, index_col=None,
+                  usecols=None, engine="python"):
+        """
+        Extract rho in energy from the introduced file.
+
+        Parameters
+        ----------
+        file: 'str'
+            File path.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
+
+        Returns
+        -------
+        "Epdos"
+            Rho normalize object.
+        """
+        df = pd.read_csv(file, delim_whitespace=True, header=header,
+                         index_col=index_col,
+                         usecols=usecols, engine=engine).iloc[::, 0]
+        df.index.name = "dE"
+        return cls(T, df)
 
     @property
     def P(self, threshold=1.0e-6) -> pd.Series:
@@ -505,6 +535,36 @@ class Epdos:
         index = pd.Index(np.arange(len(rho_)) * interval_energy, name="dE")
         return cls(rho_, index=index)
 
+    @classmethod
+    def from_file(cls, file: str, header=None, index_col=None,
+                  usecols=None, engine="python"):
+        """
+        Extract rho in energy from the introduced file.
+
+        Parameters
+        ----------
+        file: 'str'
+            File path.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
+
+        Returns
+        -------
+        "Epdos"
+            Rho normalize object.
+        """
+        df = pd.read_csv(file, delim_whitespace=True, header=header,
+                         index_col=index_col,
+                         usecols=usecols, engine=engine).iloc[::, 0]
+        df.index.name = "dE"
+        return cls(df)
+
     def beta_grid(self, T: float):
         """
         Change the energy grid of rho. Two options available:
@@ -676,8 +736,19 @@ class Npdos:
     Object containing the method and properties of N phonon density of states
     for N temperatures.
     """
-    def __init__(self, *args, **kwargs):
-        self.data = pd.DataFrame(*args, **kwargs)
+    def __init__(self, pdos_dict: dict, object_type: [Epdos, Tpdos]):
+        """
+        Initialize of the pdos object containing the N temperatures.
+
+        Parameters
+        ----------
+        pdos_dict: 'dict' of Tpdos objects
+            Dictionary containing the pdos objects for N temperatures.
+        object_type: 'Epdos' or 'Tpdos'
+            Type of the data contain by the objects.
+        """
+        self.instance = pdos_dict
+        self.type = object_type
     @property
     def data(self) -> pd.DataFrame:
         """Dataframe with the S(alpha, -beta) matrix values."""
@@ -699,6 +770,36 @@ class Npdos:
         df_.columns.name = "T"
         # DataFrame:
         self._data = df_
+
+    @classmethod
+    def from_file(cls, file: [str, list], T: [float, list], header=None, index_col=None,
+                  usecols=None, engine="python", grid="dE"):
+        # Transform the file into a pdos object:
+        file_ = [file] if isinstance(file, str) else file
+        T_ = [T] if isinstance(T, (int, float)) else T
+        Npdos_dict = {}
+        object_type = Epdos if grid == "dE" else Tpdos
+        for file, T in zip(file_, T_):
+            if grid == "dE":
+                Npdos_dict[T] = Epdos.from_file(file, header, index_col, usecols,
+                                                engine)
+            else:
+                Npdos_dict[T] = Tpdos.from_file(file, T, header, index_col,
+                                                usecols, engine)
+        return cls(Npdos_dict, object_type)
+
+    def __getattr__(self, name):
+        if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:
+            if self.type == Epdos:
+                results = {key: getattr(pdos, name)(key)
+                           for key, pdos in self.instance.items()}
+            else:
+                results = {key: getattr(pdos, name)()
+                           for key, pdos in self.instance.items()}
+            return pd.Series(results, name=name)
+        else:
+            raise AttributeError(f"Attribute {name} not found in the {self.type} object")
+
 
 
 class Pdos:

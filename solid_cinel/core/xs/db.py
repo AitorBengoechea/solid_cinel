@@ -4,7 +4,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
 from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order, get_gressier_recoil
 from solid_cinel.core.scattering_function.beta import get_beta
-from solid_cinel.core.scattering_function import get_scatfunc_pdos_row
+from solid_cinel.core.scattering_function import getScatFuncClm
 from solid_cinel.core.material.vibration.tau import save_tau, tauN_func, tauN_beta
 from solid_cinel.core.xs.xs_mat import update_xs_mat_pdos_recoil_row, default_abs_beta, Ein_arno_row
 from solid_cinel.core.generic import reshape_differential, integrate
@@ -527,7 +527,7 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
         # Gen Eout grid:
         Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
         Ein_row = Ein_arno_row(Ein, Eout, -1.0, M)
-        scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, -1.0,
+        scattfunc_row = getScatFuncClm(Ein, M, T, Eout, -1.0,
                                               tauN_scatt,
                                               beta_tauN_scatt,
                                               debye_waller_coeff_scatt)
@@ -641,7 +641,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
             # Gen Eout grid:
             Eout = np.linspace(Ein * 0.9, Ein * 1.1, Eout_num)
             # Scattering function for selected angle and Ein:
-            scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu[i],
+            scattfunc_row = getScatFuncClm(Ein, M, T, Eout, mu[i],
                                                   tauN_scatt,
                                                   tauN_scatt_beta,
                                                   debye_waller_coeff_scatt)

@@ -416,7 +416,7 @@ class Sab:
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(
             alpha)
         if beta_.kind == "abs":
-            S_values = get_sab_sct(alpha_.data,
+            S_values = get_SabSct(alpha_.data,
                                    - beta_.data,
                                    1.0,
                                    wt)
@@ -484,7 +484,7 @@ class Sab:
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
         if beta_.kind == "abs":
-            S_values = get_sab_sct(alpha_.data,
+            S_values = get_SabSct(alpha_.data,
                                    - beta_.data,  # S(alpha, -beta)
                                    ratio,
                                    ws)
@@ -1459,8 +1459,8 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
-def get_sab_sct_alpha(alpha: float, beta: np.ndarray, Tratio: float,
-                      ws: float) -> np.ndarray:
+def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float,
+                    ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time for a single
     alpha value
@@ -1488,8 +1488,8 @@ def get_sab_sct_alpha(alpha: float, beta: np.ndarray, Tratio: float,
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
-def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
-                ws: float) -> np.ndarray:
+def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
+               ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time:
     .. math::
@@ -1513,5 +1513,5 @@ def get_sab_sct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     """
     Sab = np.zeros((len(alpha), len(beta)))
     for i in prange(len(alpha)):
-        Sab[i] += get_sab_sct_alpha(alpha[i], beta, Tratio, ws)
+        Sab[i] += get_SabSctAlpha(alpha[i], beta, Tratio, ws)
     return Sab

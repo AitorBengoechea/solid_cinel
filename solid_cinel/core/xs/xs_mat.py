@@ -9,11 +9,11 @@ import numba as nb
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
+from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, getScatFuncClm
 from solid_cinel.core.material.vibration.tau import tauN_func, tauN_beta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.scattering_function.alpha import get_gressier_recoil, get_expansion_order
-from solid_cinel.core.scattering_function.sab import Sab, get_sab_sct_alpha
+from solid_cinel.core.scattering_function.sab import Sab, get_SabSctAlpha
 from solid_cinel.core.xs.dxs import Dxs
 import os
 from math import pi
@@ -993,7 +993,7 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tauN: np.ndarray,
     """
     for j in prange(len(xs_mat)):
         Eout_db = default_Eout(Ein_row[j])
-        pdf = get_scatfunc_pdos_row(Ein_row[j], M, T,
+        pdf = getScatFuncClm(Ein_row[j], M, T,
                                     Eout_db, mu_fit, tauN, tauN_beta_grid,
                                     debyewallercoeff)
         xs_mat[j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
@@ -1136,7 +1136,7 @@ def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
             # Get the alpha value for the Ein value:
             alpha = recoil / (kb * Tarno[i])
             # Generate the pdf and get the xs 0K values:
-            pdf = get_sab_sct_alpha(alpha, beta, Tratio, 1.0)
+            pdf = get_SabSctAlpha(alpha, beta, Tratio, 1.0)
             pdf /= (kb * Tarno[i])
             xs_Eout = np.interp(Eout + recoil, xs_E, xs_values)
             # Calculate the cross section:

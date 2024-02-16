@@ -525,7 +525,7 @@ class Sab:
             the calculations. The default is 0.0.
         nphonon : 'int', optional
             Phonon expansion order. The default is calculated with the function
-            get_expansion_order.
+            get_expansionOrder.
         decimal : 'float', optional
             Decimal precision to calculate the expansion order. The default is
             1.0e-6.
@@ -579,7 +579,7 @@ class Sab:
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
             order_max = kwargs.get("order_max", 5000)
-            nphonon = alpha_.expansion_order(debye_waller_coeff, decimal, order_max)
+            nphonon = alpha_.expansionOrder(debye_waller_coeff, decimal, order_max)
 
         # Get the parameters for calculation:
         tauN = pdos.tauN(T, nphonon, threshold=kwargs.get("threshold", 0.0),
@@ -763,7 +763,7 @@ class Sab:
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         >>> tau1 = pdos.tau1(T).values
         >>> tau1beta = pdos.beta_grid(T).data.index.values
-        >>> nphonon = alpha.expansion_order(DebyeWallerCoeff, 1.0e-6, 5000)
+        >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tauN = tauN_func(tau1, tau1beta, nphonon, 0.0)
         >>> tauNbeta = tauN_beta(tau1beta, tauN.shape[1])
         >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)

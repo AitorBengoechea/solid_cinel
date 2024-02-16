@@ -12,7 +12,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, getScatFuncClm
 from solid_cinel.core.material.vibration.tau import tauN_func, tauN_beta
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.scattering_function.alpha import get_gressier_recoil, get_expansion_order
+from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
 from solid_cinel.core.scattering_function.sab import Sab, get_SabSctAlpha
 from solid_cinel.core.xs.dxs import Dxs
 import os
@@ -1132,7 +1132,7 @@ def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
             # Generate the outgoing energy grid based on beta grid:
             Eout = Ein_arno[i, j] + beta * kb * Tarno[i]
             # Calculate the recoil energy:
-            recoil = get_gressier_recoil(Ein_arno[i, j], Tarno[i], M)
+            recoil = get_gressierRecoil(Ein_arno[i, j], Tarno[i], M)
             # Get the alpha value for the Ein value:
             alpha = recoil / (kb * Tarno[i])
             # Generate the pdf and get the xs 0K values:
@@ -1206,7 +1206,7 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     >>> i = 0
     >>> tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
     >>> tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
-    >>> recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
+    >>> recoil = get_gressierRecoil(Ein_arno[i], T_arno[i], M)
     >>> alpha = recoil / (kb * T_arno[i])
     >>> beta = default_abs_beta(T_arno[i])
     >>> sab = Sab.from_tau(alpha, beta, tauN, tauN_beta_grid, DebyeWallerCoeff[i]).full
@@ -1311,9 +1311,9 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     10  9.104449  9.097905  9.091258  9.084491  9.077583  9.070568  9.063477
     """
     for i in range(start, len(T_arno)):
-        recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
+        recoil = get_gressierRecoil(Ein_arno[i], T_arno[i], M)
         alpha = recoil / (kb * T_arno[i])
-        nphonon = get_expansion_order(alpha, DebyeWallerCoeff[i], decimal, order_max)
+        nphonon = get_expansionOrder(alpha, DebyeWallerCoeff[i], decimal, order_max)
         tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
         tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
         # Generate the outgoing energy grid based on alpha value:

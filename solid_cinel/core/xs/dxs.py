@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import ScatFunc
-from solid_cinel.core.scattering_function.alpha import get_gressier_recoil
+from solid_cinel.core.scattering_function.alpha import get_gressierRecoil
 from solid_cinel.core.generic import integrate, reshift
 import os
 
@@ -266,7 +266,7 @@ class Dxs:
         dtype: float64
         """
         scatfunction = ScatFunc.from_recoil(Ein, M, T, Eout, *args, **kwargs)
-        Exs = Eout + get_gressier_recoil(Ein, T, M)
+        Exs = Eout + get_gressierRecoil(Ein, T, M)
         return cls(Ein, T, M, "dopush", scatfunction.convolve(xs_0K, Exs=Exs))
 
     @property

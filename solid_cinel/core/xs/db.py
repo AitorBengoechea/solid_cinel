@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
 from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
-from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order, get_gressier_recoil
+from solid_cinel.core.scattering_function.alpha import get_alphaFromEout, get_expansionOrder, get_gressierRecoil
 from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.scattering_function import getScatFuncClm
 from solid_cinel.core.material.vibration.tau import save_tau, tauN_func, tauN_beta
@@ -234,8 +234,8 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
     else:
-        nphonon = get_expansion_order(
-            get_alpha_from_Eout(1.05 * Ein_grid[-1], Ein_grid[-1], M, T, mu.min()),
+        nphonon = get_expansionOrder(
+            get_alphaFromEout(1.05 * Ein_grid[-1], Ein_grid[-1], M, T, mu.min()),
             debye_waller_coeff, decimal, order_max)
     tauN = pdos.tauN(T, nphonon, threshold, values=True)
     save_tau(tauN, nphonon, T, tau_to_file, binary)
@@ -246,8 +246,8 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         # XsMat
         xs_mat = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
         # Minimize the expansion order for each energy:
-        min_nphonon = get_expansion_order(
-            get_alpha_from_Eout(1.05 * Ein, Ein, M, T, mu.min()),
+        min_nphonon = get_expansionOrder(
+            get_alphaFromEout(1.05 * Ein, Ein, M, T, mu.min()),
             debye_waller_coeff, decimal, order_max)
         # Scattering function:
         scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tauN[:min_nphonon],
@@ -605,9 +605,9 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
     else:
-        alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1],
+        alpha_max = get_alphaFromEout(Ein_grid[-1] * 1.1, Ein_grid[-1],
                                         M, T, mu.min())
-        nphonon = get_expansion_order(alpha_max, debye_waller_coeff_scatt,
+        nphonon = get_expansionOrder(alpha_max, debye_waller_coeff_scatt,
                                       decimal, order_max)
     tauN_scatt = pdos.tauN(T, nphonon, threshold, values=True)
     tauN_scatt_beta = tauN_beta(beta_scatt, tauN_scatt.shape[1])
@@ -628,9 +628,9 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     for i in range(start, len(theta)):
         # Create angle tauN function:
-        alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1],
+        alpha_max = get_alphaFromEout(Ein_grid[-1] * 1.1, Ein_grid[-1],
                                         M, T_arno[i], mu.min())
-        nphonon_row = get_expansion_order(alpha_max, DebyeWallerCoeff[i],
+        nphonon_row = get_expansionOrder(alpha_max, DebyeWallerCoeff[i],
                                           decimal, order_max)
         tauN_angle = tauN_func(tau1[i], beta_tau1[i], nphonon_row,
                                       threshold)
@@ -648,7 +648,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
             # xs_mat row for selected angle and Ein:
             Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
-            recoil_row = get_gressier_recoil(Ein_row, T_arno[i], M)
+            recoil_row = get_gressierRecoil(Ein_row, T_arno[i], M)
             alpha_recoil = recoil_row / (kb * T_arno[i])
             sab = Sab.from_tau(alpha_recoil, beta, tauN_angle, beta_tauN_angle,
                                DebyeWallerCoeff[i]).full
@@ -793,10 +793,10 @@ def from_recoil(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                      Eout_num: int, pdos: Pdos) -> pd.Series:
     xs_db = {}
-    recoil = get_gressier_recoil(Ein_grid, T, M)
+    recoil = get_gressierRecoil(Ein_grid, T, M)
     alpha = recoil / (kb * T)
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    nphonon = get_expansion_order(alpha, debye_waller_coeff, 1.0e-6, 5000)
+    nphonon = get_expansionOrder(alpha, debye_waller_coeff, 1.0e-6, 5000)
     tau1 = pdos.beta_grid(T).data.index.values
     tauN = pdos.get_tau(T, nphonon, 0.0, values=True)
     tauN_beta_grid = tauN_beta(tau1, tauN.shape[1])

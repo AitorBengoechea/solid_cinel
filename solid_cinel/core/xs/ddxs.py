@@ -151,7 +151,7 @@ class DDxs:
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
         threshold : 'float', optional
-            Minimun value to take into account in the creation of tau_n
+            Minimun value to take into account in the creation of tauN
             functions. For T>200 is convenient to set into 1.0e-14 to speed up
             the calculations. The default is 0.0.
         nphonon : 'int', optional
@@ -263,7 +263,7 @@ class DDxs:
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object
         threshold : 'float', optional
-            Minimun value to take into account in the creation of tau_n functions. For T>200 is convenient to set into
+            Minimun value to take into account in the creation of tauN functions. For T>200 is convenient to set into
             1.0e-14 to speed up the calculations. The default is 0.0.
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
@@ -389,7 +389,7 @@ class DDxs:
         elif isinstance(args[0], Pdos):  # SCT or PDOS
             ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
                                        *args, **kwargs)
-        else:  # TAU_N Files
+        else:  # tauN Files
             raise ValueError('Not implemented yet')
         return cls(Ein, T, M, "4PCF", ddxs_values)
 
@@ -434,7 +434,7 @@ class DDxs:
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object
         threshold : 'float', optional
-            Minimun value to take into account in the creation of tau_n functions. For T>200 is convenient to set into
+            Minimun value to take into account in the creation of tauN functions. For T>200 is convenient to set into
             1.0e-14 to speed up the calculations. The default is 0.0.
         nphonon : 'int', optional
             Phonon expansion order. The default is 1000.
@@ -492,7 +492,7 @@ class DDxs:
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object
         threshold : 'float', optional
-            Minimun value to take into account in the creation of tau_n functions. For T>200 is convenient to set into
+            Minimun value to take into account in the creation of tauN functions. For T>200 is convenient to set into
             1.0e-14 to speed up the calculations. The default is 0.0.
         decimal: 'float'
             Decimal precision for the calculation of the expansion order.

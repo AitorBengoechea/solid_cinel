@@ -5,7 +5,7 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
+from solid_cinel.core.material.vibration.tau import tauN_func, tauN_beta
 from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 import numpy as np
@@ -398,7 +398,7 @@ class Tpdos:
         tau1.name = 1
         return tau1
 
-    def tau_n(self, nphonon: int, threshold: float, check: bool = True,
+    def tauN(self, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
@@ -422,8 +422,8 @@ class Tpdos:
         >>> T = 800
         >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
         >>> threshold = 0.0
-        >>> tau_n = p.tau_n(5, threshold)
-        >>> tau_n.iloc[::, :100:20].round(6)
+        >>> tauN = p.tauN(5, threshold)
+        >>> tauN.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
         2  1.068786  0.835423  0.650492  0.397400  0.067640
@@ -432,20 +432,20 @@ class Tpdos:
         5  0.572522  0.608795  0.572271  0.475181  0.348585
         """
         tau1 = self.tau1
-        tau_n = tau_n_functions(tau1.values, tau1.index.values, nphonon, threshold)
+        tauN = tauN_func(tau1.values, tau1.index.values, nphonon, threshold)
         if values:
-            return tau_n
+            return tauN
         else:
-            beta = tau_n_beta(tau1.index.values, tau_n.shape[1])
-            tau_n = pd.DataFrame(tau_n, columns=beta)
-            tau_n.index += 1
+            beta = tauN_beta(tau1.index.values, tauN.shape[1])
+            tauN = pd.DataFrame(tauN, columns=beta)
+            tauN.index += 1
             if check:
                 # tau1 is not included in the check:
-                integrals_value = tau_n.apply(integrate, axis=1).iloc[1::]
+                integrals_value = tauN.apply(integrate, axis=1).iloc[1::]
                 if (integrals_value < 1.e-5).any():
                     raise ValueError(
                         "Tau function doesnt satisfy the normalization condition")
-            return tau_n
+            return tauN
 
     @property
     def dE_grid(self):
@@ -512,7 +512,7 @@ class Epdos:
     DebyeWaller: float
         Calculate the Debye-Waller factor for LEAPR formalism with PDOS
     get_tau: pd.DataFrame
-        Calculate the tau_n functions
+        Calculate the tauN functions
     """
 
     def __init__(self, *args, **kwargs):
@@ -798,7 +798,7 @@ class Epdos:
         """
         return self.beta_grid(T).tau1
 
-    def tau_n(self, T: float, nphonon: int, threshold: float, check: bool = True,
+    def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
@@ -811,11 +811,11 @@ class Epdos:
         nphonon : 'int'
             Number of phonons.
         threshold : 'float'
-            Threshold to check the tau_n normalization.
+            Threshold to check the tauN normalization.
         check : 'bool', optional
-            Check the normalization of the tau_n functions. The default is True.
+            Check the normalization of the tauN functions. The default is True.
         values : 'bool', optional
-            Return the tau_n values. The default is False.
+            Return the tauN values. The default is False.
 
         Returns
         -------
@@ -828,8 +828,8 @@ class Epdos:
         >>> T = 800
         >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
         >>> threshold = 0.0
-        >>> tau_n = p.tau_n(T, 5, threshold)
-        >>> tau_n.iloc[::, :100:20].round(6)
+        >>> tauN = p.tauN(T, 5, threshold)
+        >>> tauN.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
         2  1.068786  0.835423  0.650492  0.397400  0.067640
@@ -837,7 +837,7 @@ class Epdos:
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
         """
-        return self.beta_grid(T).tau_n(nphonon, threshold, check, values)
+        return self.beta_grid(T).tauN(nphonon, threshold, check, values)
 
 
 class Npdos:
@@ -1000,12 +1000,12 @@ class Npdos:
         else:
             return intepolated_Tpdos[Tnew] if len(Tnew_) == 1 else intepolated_Tpdos
 
-    def tau_n(self, T: float, nphonon: int, threshold: float, check: bool = True,
+    def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
-        for a certain temperature. The tau_n function is computed by interpolating
-        the pdos data to the temperature T and then computing the tau_n function.
+        for a certain temperature. The tauN function is computed by interpolating
+        the pdos data to the temperature T and then computing the tauN function.
 
         Parameters
         ----------
@@ -1014,18 +1014,18 @@ class Npdos:
         nphonon: 'int'
             Number of phonons.
         threshold: 'float'
-            Threshold to check the tau_n normalization.
+            Threshold to check the tauN normalization.
         check: 'bool', optional
-            Check the normalization of the tau_n functions. The default is True.
+            Check the normalization of the tauN functions. The default is True.
         values: 'bool', optional
-            Return the tau_n values. The default is False.
+            Return the tauN values. The default is False.
 
         Returns
         -------
         "pd.DataFrame", (len(rho) * nphonon, nphonon)
             Tau(-beta) function for n phonon.
         """
-        return self.Tinterp(T).tau_n(nphonon, threshold, check, values)
+        return self.Tinterp(T).tauN(nphonon, threshold, check, values)
 
     def __getattr__(self, name):
         if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:

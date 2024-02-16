@@ -10,7 +10,7 @@ import re
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
-from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
+from solid_cinel.core.material.vibration.tau import tauN_func, tauN_beta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.scattering_function.alpha import get_gressier_recoil, get_expansion_order
 from solid_cinel.core.scattering_function.sab import Sab, get_sab_sct_alpha
@@ -142,7 +142,7 @@ class XsMat:
          pdos : 'solid_cinel.core.material.Pdos'
              Pdos object.
          threshold : 'float', optional
-             Minimun value to take into account in the creation of tau_n
+             Minimun value to take into account in the creation of tauN
              functions. For T>200 is convenient to set into 1.0e-14 to speed up
              the calculations. The default is 0.0.
          nphonon : 'int', optional
@@ -356,7 +356,7 @@ class XsMat:
          pdos : 'solid_cinel.core.material.Pdos'
              Pdos object.
          threshold : 'float', optional
-             Minimun value to take into account in the creation of tau_n
+             Minimun value to take into account in the creation of tauN
              functions. For T>200 is convenient to set into 1.0e-14 to speed up
              the calculations. The default is 0.0.
         decimal: 'float'
@@ -867,7 +867,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     tau_1_beta: np.ndarray, (M, T)
         beta grid for all the T_arno values
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
     DebyeWallerCoeff: np.ndarray, (M,)
         DebyeWallerCoeff values for all the T_arno values
     tau1: np.ndarray, (O, P)
@@ -876,7 +876,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     nphonon: int
         Phonon expansion order
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
 
     Returns
     -------
@@ -911,15 +911,15 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     10  9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
     for i in range(start, len(T_arno)):
-        tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-        tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
-        update_xs_mat_pdos_row(xs_mat[i], tau_n, tau_n_beta_grid, DebyeWallerCoeff[i],
+        tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
+        tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
+        update_xs_mat_pdos_row(xs_mat[i], tauN, tauN_beta_grid, DebyeWallerCoeff[i],
                                Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
 
 
 @nb.jit(nopython=True, nogil=False, parallel=True)
-def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
-                           tau_n_beta_grid: np.ndarray, debyewallercoeff: float,
+def update_xs_mat_pdos_row(xs_mat: np.ndarray, tauN: np.ndarray,
+                           tauN_beta_grid: np.ndarray, debyewallercoeff: float,
                            Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
                            xs_E: np.ndarray, mu_fit: float, M: float):
     """
@@ -930,8 +930,8 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     ----------
     xs_mat: np.ndarray, (1, N)
         Empty Cross section matrix in barns
-    tau_n: np.ndarray, (Z, T)
-        tau_n values for all the row T. Z is the number of the phonon expansion
+    tauN: np.ndarray, (Z, T)
+        tauN values for all the row T. Z is the number of the phonon expansion
         order and T is the number of the beta grid
     tau_1_beta: np.ndarray, (T,)
         beta grid for the row T
@@ -978,9 +978,9 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
     >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
     >>> i = 0
-    >>> tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
-    >>> update_xs_mat_pdos_row(xs_mat[i], tau_n, tau_n_beta_grid, DebyeWallerCoeff[i], Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
+    >>> tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
+    >>> tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
+    >>> update_xs_mat_pdos_row(xs_mat[i], tauN, tauN_beta_grid, DebyeWallerCoeff[i], Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
     >>> pd.Series(xs_mat[i], index=Eout).round(6)
     1.800000    9.105109
     1.866667    9.098356
@@ -994,7 +994,7 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     for j in prange(len(xs_mat)):
         Eout_db = default_Eout(Ein_row[j])
         pdf = get_scatfunc_pdos_row(Ein_row[j], M, T,
-                                    Eout_db, mu_fit, tau_n, tau_n_beta_grid,
+                                    Eout_db, mu_fit, tauN, tauN_beta_grid,
                                     debyewallercoeff)
         xs_mat[j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
 
@@ -1156,8 +1156,8 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     ----------
     xs_mat: np.ndarray, (1, N)
         Empty Cross section matrix in barns
-    tau_n: np.ndarray, (Z, T)
-        tau_n values for all the row T. Z is the number of the phonon expansion
+    tauN: np.ndarray, (Z, T)
+        tauN values for all the row T. Z is the number of the phonon expansion
         order and T is the number of the beta grid
     delta_beta: float
         delta_beta value for the row T
@@ -1204,12 +1204,12 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
     >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
     >>> i = 0
-    >>> tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
+    >>> tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
+    >>> tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
     >>> recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
     >>> alpha = recoil / (kb * T_arno[i])
     >>> beta = default_abs_beta(T_arno[i])
-    >>> sab = Sab.from_tau(alpha, beta, tau_n, tau_n_beta_grid, DebyeWallerCoeff[i]).full
+    >>> sab = Sab.from_tau(alpha, beta, tauN, tauN_beta_grid, DebyeWallerCoeff[i]).full
     >>> sab /= (kb * T_arno[i])
     >>> update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values, recoil, Ein_arno[i], T_arno[i], xs_values, xs_E)
     >>> pd.Series(xs_mat[i], index=Eout).round(6)
@@ -1265,18 +1265,18 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     tau_1_beta: np.ndarray, (M, T)
         beta grid for all the T_arno values
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
     DebyeWallerCoeff: np.ndarray, (M,)
         DebyeWallerCoeff values for all the T_arno values
     tau1: np.ndarray, (O, P)
         tau1 values for all the row T. O is the number of the phonon expansion
         order and P is the number of the beta grid
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
     decimal: float
-        Decimal precision to use in the obtention of the tau_n values
+        Decimal precision to use in the obtention of the tauN values
     order_max: int
-        Maximum order to use in the expansion of the tau_n values
+        Maximum order to use in the expansion of the tauN values
 
     Returns
     -------
@@ -1314,11 +1314,11 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
         recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
         alpha = recoil / (kb * T_arno[i])
         nphonon = get_expansion_order(alpha, DebyeWallerCoeff[i], decimal, order_max)
-        tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-        tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
+        tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
+        tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
         # Generate the outgoing energy grid based on alpha value:
         beta = default_abs_beta(T_arno[i])
-        sab = Sab.from_tau(alpha, beta, tau_n, tau_n_beta_grid, DebyeWallerCoeff[i]).full
+        sab = Sab.from_tau(alpha, beta, tauN, tauN_beta_grid, DebyeWallerCoeff[i]).full
         sab /= (kb * T_arno[i])
         update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values,
                                       recoil, Ein_arno[i], T_arno[i], xs_values,

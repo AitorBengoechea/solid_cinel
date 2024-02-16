@@ -5,7 +5,7 @@ from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
 from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order, get_gressier_recoil
 from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.scattering_function import get_scatfunc_pdos_row
-from solid_cinel.core.material.vibration.tau import save_tau, tau_n_functions, tau_n_beta
+from solid_cinel.core.material.vibration.tau import save_tau, tauN_func, tauN_beta
 from solid_cinel.core.xs.xs_mat import update_xs_mat_pdos_recoil_row, default_abs_beta, Ein_arno_row
 from solid_cinel.core.generic import reshape_differential, integrate
 import warnings
@@ -206,15 +206,15 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions
+        Precision of the tauN functions
     order_max: int
         Maximum expansion order
     threshold: float
-        Threshold to calculate the tau_n functions
+        Threshold to calculate the tauN functions
     tau_to_file: bool
-        If True, the tau_n functions are saved to a file
+        If True, the tauN functions are saved to a file
     binary: bool
-        If True, the tau_n functions are saved in binary format
+        If True, the tauN functions are saved in binary format
 
     Returns
     -------
@@ -227,7 +227,7 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     theta = np.arange(1, 180 + theta_diff, theta_diff)
     mu = np.cos(np.deg2rad(theta))
 
-    # Calculate the tau_n functions:
+    # Calculate the tauN functions:
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     beta = pdos.beta_grid(T).data.index.values
     if nphonon:
@@ -237,9 +237,9 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         nphonon = get_expansion_order(
             get_alpha_from_Eout(1.05 * Ein_grid[-1], Ein_grid[-1], M, T, mu.min()),
             debye_waller_coeff, decimal, order_max)
-    tau_n = pdos.tau_n(T, nphonon, threshold, values=True)
-    save_tau(tau_n, nphonon, T, tau_to_file, binary)
-    tau_n_beta_grid = tau_n_beta(beta, tau_n.shape[1])
+    tauN = pdos.tauN(T, nphonon, threshold, values=True)
+    save_tau(tauN, nphonon, T, tau_to_file, binary)
+    tauN_beta_grid = tauN_beta(beta, tauN.shape[1])
     # start the loop
     for Ein in Ein_grid:
         Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
@@ -250,8 +250,8 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
             get_alpha_from_Eout(1.05 * Ein, Ein, M, T, mu.min()),
             debye_waller_coeff, decimal, order_max)
         # Scattering function:
-        scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tau_n[:min_nphonon],
-                                     tau_n_beta_grid, debye_waller_coeff)
+        scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tauN[:min_nphonon],
+                                     tauN_beta_grid, debye_waller_coeff)
         # DDxs
         ddxs = DDxs(Ein, T, M, "4PCF(CLM)", scatfunc.convolve(xs_mat.data))
         result = {"xs": ddxs.integral}
@@ -299,15 +299,15 @@ def from_model(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions. Default: 1.0e-6
+        Precision of the tauN functions. Default: 1.0e-6
     n_order_max: int
         Maximum expansion order. Default: 5000
     threshold: float
-        Threshold to calculate the tau_n functions. Default: 0.0
+        Threshold to calculate the tauN functions. Default: 0.0
     tau_to_file: bool
-        If True, the tau_n functions are saved to a file. Default: False
+        If True, the tauN functions are saved to a file. Default: False
     binary: bool
-        If True, the tau_n functions are saved in binary format. Default: False
+        If True, the tauN functions are saved in binary format. Default: False
 
     Returns
     -------
@@ -460,7 +460,7 @@ def from_recoil_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
 
 def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
-                tau_n_scatt: np.ndarray, beta_tau_n_scatt: float, debye_waller_coeff_scatt: float,
+                tauN_scatt: np.ndarray, beta_tauN_scatt: float, debye_waller_coeff_scatt: float,
                 xs_0K_values: np.ndarray, xs_0K_E: np.ndarray, prob: bool) -> list:
     """
     Compute the ddxs for 180 degree in clm model using
@@ -475,7 +475,7 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
         Mass of the target in amu.
     T : float
         Temperature in kelvin.
-    tau_n_scatt : np.ndarray
+    tauN_scatt : np.ndarray
         Tau(-beta) function for n expansion for calculation of the scattering function.
     delta_beta_scatt : float
         Interval of beta for the scattering function.
@@ -512,10 +512,10 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
     >>> beta_scatt = pdos.beta_grid(T).data.index.values
-    >>> tau_n_scatt = pdos.tau_n(T, 10, 0.0, values=True)
-    >>> tau_n_beta_grid = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
-    >>> beta_tau_n_scatt = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
-    >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tau_n_scatt, beta_tau_n_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
+    >>> tauN_scatt = pdos.tauN(T, 10, 0.0, values=True)
+    >>> tauN_beta_grid = tauN_beta(beta_scatt, tauN_scatt.shape[1])
+    >>> beta_tauN_scatt = tauN_beta(beta_scatt, tauN_scatt.shape[1])
+    >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tauN_scatt, beta_tauN_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
     >>> pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).round(6)
         mu    Ein   xs  xs_up  xs_down
     0 -1.0   2.00  0.0    0.0      0.0
@@ -528,8 +528,8 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
         Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
         Ein_row = Ein_arno_row(Ein, Eout, -1.0, M)
         scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, -1.0,
-                                              tau_n_scatt,
-                                              beta_tau_n_scatt,
+                                              tauN_scatt,
+                                              beta_tauN_scatt,
                                               debye_waller_coeff_scatt)
         row_results = scattfunc_row * np.interp(Ein_row, xs_0K_E, xs_0K_values)
         Ein_results = [-1.0, Ein, np.trapz(row_results, x=Eout)]
@@ -575,15 +575,15 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions
+        Precision of the tauN functions
     n_order_max: int
         Maximum expansion order
     threshold: float
-        Threshold to calculate the tau_n functions
+        Threshold to calculate the tauN functions
     tau_to_file: bool
-        If True, the tau_n functions are saved to a file
+        If True, the tauN functions are saved to a file
     binary: bool
-        If True, the tau_n functions are saved in binary format
+        If True, the tauN functions are saved in binary format
 
     Returns
     -------
@@ -598,7 +598,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     mu = np.sort(np.cos(np.deg2rad(theta)))
     T_arno = T * (1 + mu) / 2
 
-    # Calculate the tau_n functions for scattering function:
+    # Calculate the tauN functions for scattering function:
     debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
     beta_scatt = pdos.beta_grid(T).data.index.values
     if nphonon:
@@ -609,8 +609,8 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                                         M, T, mu.min())
         nphonon = get_expansion_order(alpha_max, debye_waller_coeff_scatt,
                                       decimal, order_max)
-    tau_n_scatt = pdos.tau_n(T, nphonon, threshold, values=True)
-    tau_n_scatt_beta = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
+    tauN_scatt = pdos.tauN(T, nphonon, threshold, values=True)
+    tauN_scatt_beta = tauN_beta(beta_scatt, tauN_scatt.shape[1])
 
     # Create xs_mat creation data:
     tau1, DebyeWallerCoeff, beta_tau1 = XsMat.get_pdos_variables(pdos, T_arno)
@@ -618,7 +618,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     # Create a list to hold the results
     if mu[0] == np.cos(np.pi):
         result = ddxs_clm_0K(Ein_grid, Eout_num, M, T,
-                             tau_n_scatt, tau_n_scatt_beta,
+                             tauN_scatt, tauN_scatt_beta,
                              debye_waller_coeff_scatt,
                              xs_0K_values, xs_0K_E, prob)
         start = 1
@@ -627,14 +627,14 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         start = 0
 
     for i in range(start, len(theta)):
-        # Create angle tau_n function:
+        # Create angle tauN function:
         alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1],
                                         M, T_arno[i], mu.min())
         nphonon_row = get_expansion_order(alpha_max, DebyeWallerCoeff[i],
                                           decimal, order_max)
-        tau_n_angle = tau_n_functions(tau1[i], beta_tau1[i], nphonon_row,
+        tauN_angle = tauN_func(tau1[i], beta_tau1[i], nphonon_row,
                                       threshold)
-        beta_tau_n_angle = tau_n_beta(beta_tau1[i], tau_n_angle.shape[1])
+        beta_tauN_angle = tauN_beta(beta_tau1[i], tauN_angle.shape[1])
         beta = default_abs_beta(T_arno[i])
         # Select the especific data for the next function:
         for Ein in Ein_grid:
@@ -642,15 +642,15 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
             Eout = np.linspace(Ein * 0.9, Ein * 1.1, Eout_num)
             # Scattering function for selected angle and Ein:
             scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu[i],
-                                                  tau_n_scatt,
-                                                  tau_n_scatt_beta,
+                                                  tauN_scatt,
+                                                  tauN_scatt_beta,
                                                   debye_waller_coeff_scatt)
 
             # xs_mat row for selected angle and Ein:
             Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
             recoil_row = get_gressier_recoil(Ein_row, T_arno[i], M)
             alpha_recoil = recoil_row / (kb * T_arno[i])
-            sab = Sab.from_tau(alpha_recoil, beta, tau_n_angle, beta_tau_n_angle,
+            sab = Sab.from_tau(alpha_recoil, beta, tauN_angle, beta_tauN_angle,
                                DebyeWallerCoeff[i]).full
             sab /= (kb * T_arno[i])
             xs_mat_row = np.zeros(Eout_num)
@@ -731,15 +731,15 @@ def from_recoil(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions. Default: 1.0e-6
+        Precision of the tauN functions. Default: 1.0e-6
     n_order_max: int
         Maximum expansion order. Default: 5000
     threshold: float
-        Threshold to calculate the tau_n functions. Default: 0.0
+        Threshold to calculate the tauN functions. Default: 0.0
     tau_to_file: bool
-        If True, the tau_n functions are saved to a file. Default: False
+        If True, the tauN functions are saved to a file. Default: False
     binary: bool
-        If True, the tau_n functions are saved in binary format. Default: False
+        If True, the tauN functions are saved in binary format. Default: False
 
     Returns
     -------
@@ -798,13 +798,13 @@ def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     debye_waller_coeff = pdos.DebyeWallerCoeff(T)
     nphonon = get_expansion_order(alpha, debye_waller_coeff, 1.0e-6, 5000)
     tau1 = pdos.beta_grid(T).data.index.values
-    tau_n = pdos.get_tau(T, nphonon, 0.0, values=True)
-    tau_n_beta_grid = tau_n_beta(tau1, tau_n.shape[1])
+    tauN = pdos.get_tau(T, nphonon, 0.0, values=True)
+    tauN_beta_grid = tauN_beta(tau1, tauN.shape[1])
     for i in range(len(Ein_grid)):
         Eout = np.linspace(Ein_grid[i] * 0.95, Ein_grid[i] * 1.05, Eout_num)
         beta = get_beta(Eout, Ein_grid[i], T)
         scatfunc = Sab.from_tau(alpha[i], beta,
-                                tau_n, tau_n_beta_grid, debye_waller_coeff).full
+                                tauN, tauN_beta_grid, debye_waller_coeff).full
         Eout_calc = Ein_grid[i] + scatfunc.index.values * kb * T
         # xs_0K interpolation
         xs_0K_interp = reshape_differential(xs_0K, Eout_calc + recoil[i])

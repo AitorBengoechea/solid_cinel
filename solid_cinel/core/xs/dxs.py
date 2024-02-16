@@ -224,7 +224,7 @@ class Dxs:
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
         threshold : 'float', optional
-            Minimun value to take into account in the creation of tau_n
+            Minimun value to take into account in the creation of tauN
             functions. For T>200 is convenient to set into 1.0e-14 to speed up
             the calculations. The default is 0.0.
         decimal: 'float'

@@ -5,7 +5,7 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.tau import tauN_func, tauN_beta
+from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
 from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 import numpy as np
@@ -442,11 +442,11 @@ class Tpdos:
         5  0.572522  0.608795  0.572271  0.475181  0.348585
         """
         tau1Values, beta = self.tau1.values, self.beta.data
-        tauN = tauN_func(tau1Values, beta, nphonon, threshold)
+        tauN = get_tauNfunc(tau1Values, beta, nphonon, threshold)
         if values:
             return tauN
         else:
-            tauN = pd.DataFrame(tauN, columns=tauN_beta(beta, tauN.shape[1]))
+            tauN = pd.DataFrame(tauN, columns=get_tauNbeta(beta, tauN.shape[1]))
             tauN.index += 1
             if check:
                 # tau1 is not included in the check:

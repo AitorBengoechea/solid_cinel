@@ -5,7 +5,7 @@ from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
 from solid_cinel.core.scattering_function.alpha import get_alphaFromEout, get_expansionOrder, get_gressierRecoil
 from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.scattering_function import getScatFuncClm
-from solid_cinel.core.material.vibration.tau import save_tau, tauN_func, tauN_beta
+from solid_cinel.core.material.vibration.tau import save_tau, get_tauNfunc, get_tauNbeta
 from solid_cinel.core.xs.xs_mat import update_xs_mat_pdos_recoil_row, default_abs_beta, Ein_arno_row
 from solid_cinel.core.generic import reshape_differential, integrate
 import warnings
@@ -239,7 +239,7 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
             debye_waller_coeff, decimal, order_max)
     tauN = pdos.tauN(T, nphonon, threshold, values=True)
     save_tau(tauN, nphonon, T, tau_to_file, binary)
-    tauN_beta_grid = tauN_beta(beta, tauN.shape[1])
+    tauN_beta_grid = get_tauNbeta(beta, tauN.shape[1])
     # start the loop
     for Ein in Ein_grid:
         Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
@@ -513,8 +513,8 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     >>> debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
     >>> beta_scatt = pdos.beta_grid(T).data.index.values
     >>> tauN_scatt = pdos.tauN(T, 10, 0.0, values=True)
-    >>> tauN_beta_grid = tauN_beta(beta_scatt, tauN_scatt.shape[1])
-    >>> beta_tauN_scatt = tauN_beta(beta_scatt, tauN_scatt.shape[1])
+    >>> tauN_beta_grid = get_tauNbeta(beta_scatt, tauN_scatt.shape[1])
+    >>> beta_tauN_scatt = get_tauNbeta(beta_scatt, tauN_scatt.shape[1])
     >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tauN_scatt, beta_tauN_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
     >>> pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).round(6)
         mu    Ein   xs  xs_up  xs_down
@@ -610,7 +610,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         nphonon = get_expansionOrder(alpha_max, debye_waller_coeff_scatt,
                                       decimal, order_max)
     tauN_scatt = pdos.tauN(T, nphonon, threshold, values=True)
-    tauN_scatt_beta = tauN_beta(beta_scatt, tauN_scatt.shape[1])
+    tauN_scatt_beta = get_tauNbeta(beta_scatt, tauN_scatt.shape[1])
 
     # Create xs_mat creation data:
     tau1, DebyeWallerCoeff, beta_tau1 = XsMat.get_pdos_variables(pdos, T_arno)
@@ -632,9 +632,9 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                                         M, T_arno[i], mu.min())
         nphonon_row = get_expansionOrder(alpha_max, DebyeWallerCoeff[i],
                                           decimal, order_max)
-        tauN_angle = tauN_func(tau1[i], beta_tau1[i], nphonon_row,
+        tauN_angle = get_tauNfunc(tau1[i], beta_tau1[i], nphonon_row,
                                       threshold)
-        beta_tauN_angle = tauN_beta(beta_tau1[i], tauN_angle.shape[1])
+        beta_tauN_angle = get_tauNbeta(beta_tau1[i], tauN_angle.shape[1])
         beta = default_abs_beta(T_arno[i])
         # Select the especific data for the next function:
         for Ein in Ein_grid:
@@ -799,7 +799,7 @@ def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon = get_expansionOrder(alpha, debye_waller_coeff, 1.0e-6, 5000)
     tau1 = pdos.beta_grid(T).data.index.values
     tauN = pdos.get_tau(T, nphonon, 0.0, values=True)
-    tauN_beta_grid = tauN_beta(tau1, tauN.shape[1])
+    tauN_beta_grid = get_tauNbeta(tau1, tauN.shape[1])
     for i in range(len(Ein_grid)):
         Eout = np.linspace(Ein_grid[i] * 0.95, Ein_grid[i] * 1.05, Eout_num)
         beta = get_beta(Eout, Ein_grid[i], T)

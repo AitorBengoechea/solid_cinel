@@ -6,7 +6,7 @@ Python file for working with S(alpha, -beta) matrixs.
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import tauN_func, save_tau, gpu_available, tauN_beta
+from solid_cinel.core.material.vibration.tau import get_tauNfunc, save_tau, gpu_available, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.scattering_function.alpha import Alpha
 from typing import Iterable, Union
@@ -585,7 +585,7 @@ class Sab:
         tauN = pdos.tauN(T, nphonon, threshold=kwargs.get("threshold", 0.0),
                            values=True)
         tau1beta = pdos.beta_grid(T).data.index.values
-        tauNbeta = tauN_beta(tau1beta, tauN.shape[1])
+        tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
         save_tau(tauN, nphonon, T, kwargs.get("tau_to_file", False),
                  kwargs.get("binary", False))
         S_values = phonon_expansion(alpha_.data,
@@ -764,8 +764,8 @@ class Sab:
         >>> tau1 = pdos.tau1(T).values
         >>> tau1beta = pdos.beta_grid(T).data.index.values
         >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
-        >>> tauN = tauN_func(tau1, tau1beta, nphonon, 0.0)
-        >>> tauNbeta = tauN_beta(tau1beta, tauN.shape[1])
+        >>> tauN = get_tauNfunc(tau1, tau1beta, nphonon, 0.0)
+        >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
         >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699

@@ -10,7 +10,7 @@ import re
 from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import sigma1, get_ScatSctAngular, getScatFuncClm
-from solid_cinel.core.material.vibration.tau import tauN_func, tauN_beta
+from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
 from solid_cinel.core.scattering_function.sab import Sab, get_SabSctAlpha
@@ -911,8 +911,8 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     10  9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
     for i in range(start, len(T_arno)):
-        tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
-        tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
+        tauN = get_tauNfunc(tau1[i], tau_1_beta[i], nphonon, threshold)
+        tauN_beta_grid = get_tauNbeta(tau_1_beta[i], tauN.shape[1])
         update_xs_mat_pdos_row(xs_mat[i], tauN, tauN_beta_grid, DebyeWallerCoeff[i],
                                Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
 
@@ -978,8 +978,8 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tauN: np.ndarray,
     >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
     >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
     >>> i = 0
-    >>> tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
-    >>> tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
+    >>> tauN = get_tauNfunc(tau1[i], tau_1_beta[i], nphonon, threshold)
+    >>> tauN_beta_grid = get_tauNbeta(tau_1_beta[i], tauN.shape[1])
     >>> update_xs_mat_pdos_row(xs_mat[i], tauN, tauN_beta_grid, DebyeWallerCoeff[i], Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
     >>> pd.Series(xs_mat[i], index=Eout).round(6)
     1.800000    9.105109
@@ -1204,8 +1204,8 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
     >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
     >>> i = 0
-    >>> tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
-    >>> tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
+    >>> tauN = get_tauNfunc(tau1[i], tau_1_beta[i], nphonon, threshold)
+    >>> tauN_beta_grid = get_tauNbeta(tau_1_beta[i], tauN.shape[1])
     >>> recoil = get_gressierRecoil(Ein_arno[i], T_arno[i], M)
     >>> alpha = recoil / (kb * T_arno[i])
     >>> beta = default_abs_beta(T_arno[i])
@@ -1314,8 +1314,8 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
         recoil = get_gressierRecoil(Ein_arno[i], T_arno[i], M)
         alpha = recoil / (kb * T_arno[i])
         nphonon = get_expansionOrder(alpha, DebyeWallerCoeff[i], decimal, order_max)
-        tauN = tauN_func(tau1[i], tau_1_beta[i], nphonon, threshold)
-        tauN_beta_grid = tauN_beta(tau_1_beta[i], tauN.shape[1])
+        tauN = get_tauNfunc(tau1[i], tau_1_beta[i], nphonon, threshold)
+        tauN_beta_grid = get_tauNbeta(tau_1_beta[i], tauN.shape[1])
         # Generate the outgoing energy grid based on alpha value:
         beta = default_abs_beta(T_arno[i])
         sab = Sab.from_tau(alpha, beta, tauN, tauN_beta_grid, DebyeWallerCoeff[i]).full

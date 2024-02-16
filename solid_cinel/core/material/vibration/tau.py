@@ -270,7 +270,7 @@ def calc_tauN_func_gpu(tauN_func: np.ndarray, tau1: np.ndarray,
     return tauN_func[::, :NtauN]
 
 
-def tauN_func(tau1: np.ndarray, beta: np.ndarray,
+def get_tauNfunc(tau1: np.ndarray, beta: np.ndarray,
                     nphonon: int, threshold: float) -> np.ndarray:
     """
     Get the tau_{n}(-beta) function values for all n.
@@ -336,7 +336,7 @@ def save_tau(tauN: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
             f.create_dataset("tau", data=tauN)
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
-def tauN_beta(tau1_beta: np.ndarray, beta_length=int):
+def get_tauNbeta(tau1_beta: np.ndarray, beta_length=int):
     """
     Create the tauN_beta grid based on the tau1_beta grid. The tauN_beta grid
     for beta is the same as the tau1_beta grid for the first values and the rest

@@ -228,9 +228,9 @@ class Sab:
         Return the S(alpha, beta) matrix from the SCT model
     from_pdos -> Sab
         Return the S(alpha, beta) matrix from the PDOS model
-    sum_rule_check -> bool
+    SumRule_check -> bool
         Check if the sum rule is satisfied
-    normalization_check -> bool
+    NormCheck -> bool
         Check if the normalization is satisfied
     get_momentum -> Sab or pd.DataFrame
         Return the S(alpha, beta) matrix n momentum
@@ -299,8 +299,8 @@ class Sab:
         df_.index.name = "alpha"
         df_.columns.name = "beta"
         # Normalization constrains:
-        self.normalization_check(df_)
-        self.sum_rule_check(df_)
+        self.NormCheck(df_)
+        self.SumRule_check(df_)
         # DataFrame:
         self._data = df_
 
@@ -323,8 +323,8 @@ class Sab:
         Example:
         --------
         >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha_grid = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha_grid, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> alpha = Alpha.generate_grid(300, 26).data
+        >>> Sab.from_fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
@@ -338,13 +338,7 @@ class Sab:
         0.001382  7.584817  7.360149  6.725291  5.786534  4.688230
         0.001431  7.455701  7.242199  6.637682  5.740191  4.683821
         """
-        S_asym = self.data
-        if detail_balance:
-            beta = self.data.columns.values
-            S_sym = S_asym * np.exp(-beta / 2)
-        else:
-            S_sym = S_asym
-        return S_sym
+        return self.data * np.exp(- self.beta.data / 2) if detail_balance else self.data
 
     @property
     def full(self) -> pd.DataFrame:
@@ -359,13 +353,13 @@ class Sab:
         Example
         -------
         >>> beta_grid = Beta.generate_grid(300)
-        >>> alpha_grid = Alpha.generate_grid(300, 26)
-        >>> Sab_matrix = Sab.from_fgm(alpha_grid, beta_grid)
-        >>> Sab_matrix_norm = Sab_matrix.data.apply(_normalization, axis=1)
+        >>> alpha = Alpha.generate_grid(300, 26)
+        >>> Sab_matrix = Sab.from_fgm(alpha, beta_grid)
+        >>> Sab_matrix_norm = Sab_matrix.data.apply(_norm, axis=1)
         >>> Sab_matrix_full = Sab_matrix.full
         >>> assert (Sab_matrix_full.apply(integrate, axis=1).round(6) == Sab_matrix_norm.round(6)).all()
 
-        >>> Sab_matrix_sum = Sab_matrix.data.apply(_sum_rule, axis=1)
+        >>> Sab_matrix_sum = Sab_matrix.data.apply(_SumRule, axis=1)
         >>> assert (Sab_matrix_full.apply(lambda x: - integrate(x * x.index), axis=1).round(6) == Sab_matrix_sum.round(6)).all()
         """
         beta = self.beta.to_index
@@ -376,9 +370,8 @@ class Sab:
         return Sab_complete if len(Sab_complete.index) > 1 else Sab_complete.iloc[0]
 
     @classmethod
-    def from_fgm(cls, alpha_grid: Union[Alpha, Iterable],
-                 beta_grid: Union[Beta, Iterable], T: float = None,
-                 wt: float = 1):
+    def from_fgm(cls, alpha: Union[Alpha, Iterable],
+                 beta: Union[Beta, Iterable], T: float = None, wt: float = 1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
         .. math::
@@ -386,7 +379,7 @@ class Sab:
 
         Parameters
         ----------
-        alpha_grid : 1D iterable or "Alpha", (N,)
+        alpha : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             Absolute beta grid.
@@ -403,9 +396,9 @@ class Sab:
         Example
         -------
         FGM:
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha_grid = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha_grid, beta_grid).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> beta = Beta.generate_grid(300).data
+        >>> alpha = Alpha.generate_grid(300, 26).data
+        >>> Sab.from_fgm(alpha, beta).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
         0.001050	  8.701463	8.417992 7.524148	6.213536	    4.740815
@@ -419,23 +412,22 @@ class Sab:
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
-            beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
-            alpha_grid)
-        if beta_grid_.kind == "abs":
-            S_values = get_sab_sct(alpha_grid_.data,
-                                   - beta_grid_.data,
+        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
+        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(
+            alpha)
+        if beta_.kind == "abs":
+            S_values = get_sab_sct(alpha_.data,
+                                   - beta_.data,
                                    1.0,
                                    wt)
         else:
             raise ValueError(
                 "The beta grid contains negative values and the input is the absolute beta grid")
-        return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
+        return cls(S_values, index=alpha_.data, columns=beta_.data)
 
     @classmethod
-    def from_sct(cls, alpha_grid: Union[Alpha, Iterable[int]],
-                 beta_grid: Union[Beta, Iterable[int]], T: float, pdos: Pdos,
+    def from_sct(cls, alpha: Union[Alpha, Iterable[int]],
+                 beta: Union[Beta, Iterable[int]], T: float, pdos: Pdos,
                  ws: float = 1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
@@ -444,7 +436,7 @@ class Sab:
 
         Parameters
         ----------
-        alpha_grid : 1D iterable or "Alpha", (N,)
+        alpha : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
@@ -466,9 +458,9 @@ class Sab:
         Dont fit the normalization and sum rule with the correct precision
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> beta_grid = Beta.generate_grid(T)
-        >>> alpha_grid = Alpha.generate_grid(T, 26)
-        >>> S = Sab.from_sct(alpha_grid, beta_grid, T, pdos)
+        >>> beta = Beta.generate_grid(T)
+        >>> alpha = Alpha.generate_grid(T, 26)
+        >>> S = Sab.from_sct(alpha, beta, T, pdos)
         >>> S.data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -489,24 +481,22 @@ class Sab:
         # Start the calculation:
         ratio = pdos.Teff(T) / T
 
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
-            beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
-            alpha_grid)
-        if beta_grid_.kind == "abs":
-            S_values = get_sab_sct(alpha_grid_.data,
-                                   - beta_grid_.data,  # S(alpha, -beta)
+        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
+        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
+        if beta_.kind == "abs":
+            S_values = get_sab_sct(alpha_.data,
+                                   - beta_.data,  # S(alpha, -beta)
                                    ratio,
                                    ws)
         else:
             raise ValueError(
                 "The beta grid contains negative values and the input is the absolute beta grid")
 
-        return cls(S_values, index=alpha_grid_.data, columns=beta_grid_.data)
+        return cls(S_values, index=alpha_.data, columns=beta_.data)
 
     @classmethod
-    def from_pdos(cls, alpha_grid: Union[Alpha, Iterable],
-                  beta_grid: Union[Beta, Iterable], T: float, pdos: Pdos,
+    def from_pdos(cls, alpha: Union[Alpha, Iterable],
+                  beta: Union[Beta, Iterable], T: float, pdos: Pdos,
                   nphonon: int = None, **kwargs):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
@@ -521,9 +511,9 @@ class Sab:
 
         Parameters
         ----------
-        alpha_grid : 1D iterable or "Alpha", (N,)
+        alpha : 1D iterable or "Alpha", (N,)
             Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
+        beta : 1D iterable or "Beta", (M,)
             beta grid.
         T : 'float'
             Temperature in K.
@@ -572,10 +562,8 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
-            beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
-            alpha_grid)
+        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
+        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
@@ -591,22 +579,22 @@ class Sab:
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
             order_max = kwargs.get("order_max", 5000)
-            nphonon = alpha_grid_.expansion_order(debye_waller_coeff, decimal, order_max)
+            nphonon = alpha_.expansion_order(debye_waller_coeff, decimal, order_max)
 
         # Get the parameters for calculation:
         tauN = pdos.tauN(T, nphonon, threshold=kwargs.get("threshold", 0.0),
                            values=True)
-        tau_1_beta = pdos.beta_grid(T).data.index.values
-        tauN_beta_grid = tauN_beta(tau_1_beta, tauN.shape[1])
+        tau1beta = pdos.beta_grid(T).data.index.values
+        tauNbeta = tauN_beta(tau1beta, tauN.shape[1])
         save_tau(tauN, nphonon, T, kwargs.get("tau_to_file", False),
                  kwargs.get("binary", False))
-        S_values = phonon_expansion(alpha_grid_.data,
-                                    beta_grid_.data,
+        S_values = phonon_expansion(alpha_.data,
+                                    beta_.data,
                                     nphonon,
                                     tauN,
-                                    tauN_beta_grid,
+                                    tauNbeta,
                                     debye_waller_coeff)
-        return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
+        return cls(S_values, columns=beta_.data, index=alpha_.data)
 
     @classmethod
     def from_model(cls, *args, model: str = "pdos", **kwargs):
@@ -627,7 +615,7 @@ class Sab:
 
         Parameters for FGM model:
         -------------------------
-        alpha_grid : 1D iterable or "Alpha", (N,)
+        alpha : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             Absolute beta grid.
@@ -638,7 +626,7 @@ class Sab:
 
         Parameters for SCT model:
         -------------------------
-        alpha_grid : 1D iterable or "Alpha", (N,)
+        alpha : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
@@ -655,7 +643,7 @@ class Sab:
             Pdos object.
         T : 'float'
             Temperature in K.
-        alpha_grid : 1D iterable or "Alpha", (N,)
+        alpha : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
@@ -675,9 +663,9 @@ class Sab:
         --------
         FGM:
         >>> T = 300
-        >>> beta_grid = Beta.generate_grid(T).data
-        >>> alpha_grid = Alpha.generate_grid(T, 26).data
-        >>> Sab.from_model(alpha_grid, beta_grid, model="fgm").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> beta = Beta.generate_grid(T).data
+        >>> alpha = Alpha.generate_grid(T, 26).data
+        >>> Sab.from_model(alpha, beta, model="fgm").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
         0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
@@ -693,7 +681,7 @@ class Sab:
 
         SCT:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="sct").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> Sab.from_model(alpha, beta, T, pdos, model="sct").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
@@ -709,9 +697,9 @@ class Sab:
 
         Phonon Expansion:
         >>> T = 800
-        >>> beta_grid = Beta(beta0_).scale(T).data
-        >>> alpha_grid = Alpha(alpha0_).scale(T).data
-        >>> Sab.from_model(alpha_grid, beta_grid, T, pdos, model="pdos", nphonon=700).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> beta = Beta(beta0_).scale(T).data
+        >>> alpha = Alpha(alpha0_).scale(T).data
+        >>> Sab.from_model(alpha, beta, T, pdos, model="pdos", nphonon=700).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
         0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
@@ -733,9 +721,9 @@ class Sab:
             return cls.from_pdos(*args, **kwargs)
 
     @classmethod
-    def from_tau(cls, alpha_grid: Union[Alpha, Iterable],
-                 beta_grid: Union[Beta, Iterable], tauN: np.ndarray,
-                 tauN_beta_grid: np.ndarray, DebyeWallerCoeff: float):
+    def from_tau(cls, alpha: Union[Alpha, Iterable],
+                 beta: Union[Beta, Iterable], tauN: np.ndarray,
+                 tauNbeta: np.ndarray, DebyeWallerCoeff: float):
         """
         Generate S(alpha, -beta) matrix using tauN functions.
         .. math::
@@ -749,7 +737,7 @@ class Sab:
 
         Parameters
         ----------
-        alpha_grid : 1D iterable or "Alpha", (N,)
+        alpha : 1D iterable or "Alpha", (N,)
             Alpha grid.
         beta_grid : 1D iterable or "Beta", (M,)
             beta grid.
@@ -774,11 +762,11 @@ class Sab:
         >>> beta = Beta(beta0_).scale(T)
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         >>> tau1 = pdos.tau1(T).values
-        >>> tau_1_beta = pdos.beta_grid(T).data.index.values
+        >>> tau1beta = pdos.beta_grid(T).data.index.values
         >>> nphonon = alpha.expansion_order(DebyeWallerCoeff, 1.0e-6, 5000)
-        >>> tauN = tauN_func(tau1, tau_1_beta, nphonon, 0.0)
-        >>> tauN_beta_grid = tauN_beta(tau_1_beta, tauN.shape[1])
-        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauN_beta_grid, DebyeWallerCoeff)
+        >>> tauN = tauN_func(tau1, tau1beta, nphonon, 0.0)
+        >>> tauNbeta = tauN_beta(tau1beta, tauN.shape[1])
+        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -793,26 +781,24 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        beta_grid_ = beta_grid if isinstance(beta_grid, Beta) else Beta(
-            beta_grid)
-        alpha_grid_ = alpha_grid if isinstance(alpha_grid, Alpha) else Alpha(
-            alpha_grid)
+        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
+        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
         cls.DebyeWallerCoeff = DebyeWallerCoeff
 
-        S_values = phonon_expansion(alpha_grid_.data,
-                                    beta_grid_.data,
+        S_values = phonon_expansion(alpha_.data,
+                                    beta_.data,
                                     tauN.shape[0],
                                     tauN,
-                                    tauN_beta_grid,
+                                    tauNbeta,
                                     DebyeWallerCoeff)
-        return cls(S_values, columns=beta_grid_.data, index=alpha_grid_.data)
+        return cls(S_values, columns=beta_.data, index=alpha_.data)
 
     @classmethod
     def from_recoil(cls, Ein: [int, float, np.ndarray], T: float, M: float,
-                    beta_grid: Union[Beta, Iterable], *args,
+                    beta: Union[Beta, Iterable], *args,
                     model: str = "pdos", **kwargs):
         """
         Generate S(alpha, -beta) matrix using gressier recoil energy alpha grid.
@@ -825,7 +811,7 @@ class Sab:
             Temperature in K.
         M: 'float'
             Mass of the target in amu.
-        beta_grid: 'Beta' or 'Iterable'
+        beta: 'Beta' or 'Iterable'
             Beta grid.
         model: 'str'
             Model to calculate the S(alpha, -beta) matrix.
@@ -859,10 +845,10 @@ class Sab:
         Example
         -------
         >>> T = 300
-        >>> beta_grid = Beta.generate_grid(T).data
+        >>> beta = Beta.generate_grid(T).data
         >>> Ein = np.array([6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0])
         >>> M = 26
-        >>> Sab.from_recoil(Ein, T, M, beta_grid, model="fgm").data.iloc[::, :5].round(6)
+        >>> Sab.from_recoil(Ein, T, M, beta, model="fgm").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         9.045004   0.009776  0.009839  0.009902  0.009966  0.010030
@@ -876,7 +862,7 @@ class Sab:
 
         SCT:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Sab.from_recoil(Ein, T, M, beta_grid, pdos, model="sct").data.iloc[::, :5].round(6)
+        >>> Sab.from_recoil(Ein, T, M, beta, pdos, model="sct").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         9.045004   0.011253  0.011320  0.011387  0.011455  0.011522
@@ -889,7 +875,7 @@ class Sab:
         10.056229  0.008460  0.008510  0.008560  0.008611  0.008662
 
         Phonon Expansion:
-        >>> Sab.from_recoil(Ein, T, M, beta_grid, pdos, model="pdos").data.iloc[::, :5].round(6)
+        >>> Sab.from_recoil(Ein, T, M, beta, pdos, model="pdos").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         9.045004   0.010582  0.010650  0.010719  0.010788  0.010857
@@ -902,11 +888,11 @@ class Sab:
         10.056229  0.007830  0.007881  0.007932  0.007983  0.008034
         """
         alpha = Alpha.from_recoil(Ein, T, M)
-        return cls.from_model(alpha, beta_grid, T, *args, model=model,
+        return cls.from_model(alpha, beta, T, *args, model=model,
                               **kwargs)
 
     @staticmethod
-    def sum_rule_check(S: pd.DataFrame) -> None:
+    def SumRule_check(S: pd.DataFrame) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the sum rule constrain.
         .. math::
@@ -934,16 +920,16 @@ class Sab:
             The sum rule constrain is not satified.
 
         """
-        sum_rule = S.apply(_sum_rule, axis="columns")
-        sum_rule /= S.index.values
-        if (abs(1 - abs(sum_rule)) > 0.6).any():
+        SumRule = S.apply(_SumRule, axis="columns")
+        SumRule /= S.index.values
+        if (abs(1 - abs(SumRule)) > 0.6).any():
             raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
-        if (abs(1 - abs(sum_rule)) > 1.0e-3).any():
+        if (abs(1 - abs(SumRule)) > 1.0e-3).any():
             warnings.warn(
                 "Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
 
-    def normalization_check(self, S: pd.DataFrame) -> None:
+    def NormCheck(self, S: pd.DataFrame) -> None:
         """
         Check if the S(alpha, beta) matrix satifies the normalization constrain.
         .. math::
@@ -971,11 +957,11 @@ class Sab:
             The normalization constrain is not satified.
 
         """
-        normalization = S.apply(_normalization, axis="columns")
+        norm = S.apply(_norm, axis="columns")
         if hasattr(self, "DebyeWallerCoeff"):
-            normalization /= (
+            norm /= (
                         1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
-        if (abs(normalization - 1.0) > 1.0e-2).any():
+        if (abs(norm - 1.0) > 1.0e-2).any():
             warnings.warn(
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
@@ -1087,8 +1073,8 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alpha_new = 0.00013
         >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta     0.000000  0.025237  0.050474  0.075712  0.100949
@@ -1146,8 +1132,8 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alpha_new = 0.00013
         >>> alpha_vector = S_mat._get_single_alpha(alpha_new)
         >>> alpha_vector.iloc[0:10]  #doctest: +NORMALIZE_WHITESPACE
@@ -1172,20 +1158,20 @@ class Sab:
         >>> round(integrate(alpha_vector.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
         0.000131
         """
-        alpha_grid = self.alpha.data
-        if alpha_new > alpha_grid.max():
+        alpha = self.alpha.data
+        if alpha_new > alpha.max():
             raise SyntaxError("alpha out of range(alpha_max = "
-                              + str(alpha_grid.max()) + ")")
-        elif alpha_new < alpha_grid.min():
+                              + str(alpha.max()) + ")")
+        elif alpha_new < alpha.min():
             raise SyntaxError("alpha out of range (alpha_min = "
-                              + str(alpha_grid.min()) + ")")
-        elif alpha_new in alpha_grid:
+                              + str(alpha.min()) + ")")
+        elif alpha_new in alpha:
             return self.data.loc[alpha_new]
 
         beta = self.beta.data
-        upper_bound = alpha_grid.searchsorted(alpha_new, side="right")
-        alpha_0 = alpha_grid[upper_bound - 1]
-        alpha_2 = alpha_grid[upper_bound]
+        upper_bound = alpha.searchsorted(alpha_new, side="right")
+        alpha_0 = alpha[upper_bound - 1]
+        alpha_2 = alpha[upper_bound]
         prob = self.data.loc[[alpha_0, alpha_2]].T
 
         if hasattr(self, "DebyeWallerCoeff"):
@@ -1233,8 +1219,8 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha_grid = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha_grid, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alpha_new = [1.25e-4, 1.35e-4]
         >>> beta_new = [0.01, 0.03, -0.01, -0.03]
         >>> S_mat.get_Alpha_Beta(alpha_new, beta_new) #doctest: +NORMALIZE_WHITESPACE
@@ -1253,7 +1239,7 @@ class Sab:
         return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
 
 
-def _sum_rule(x: pd.Series, n: int = 1) -> float:
+def _SumRule(x: pd.Series, n: int = 1) -> float:
     """
     Calculate the "n" sum rule value for a fix alpha value.
     .. math::
@@ -1263,7 +1249,7 @@ def _sum_rule(x: pd.Series, n: int = 1) -> float:
     x : 'pd.Series', (N)
         S(alpha, beta) matrix values for fix alpha.
     n: 'int', optional
-        The number of the sum_rule
+        The number of the SumRule
 
     Returns
     -------
@@ -1273,16 +1259,16 @@ def _sum_rule(x: pd.Series, n: int = 1) -> float:
     Example
     -------
     >>> beta_grid = Beta.generate_grid(300)
-    >>> alpha_grid = Alpha.generate_grid(300, 26)
-    >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
-    >>> _sum_rule(s.iloc[1, ::]).round(6)
+    >>> alpha = Alpha.generate_grid(300, 26)
+    >>> s = Sab.from_fgm(alpha, beta_grid).data
+    >>> _SumRule(s.iloc[1, ::]).round(6)
     0.001087
     """
     beta = x.index.values
-    return integrate(beta * x * (1 - np.exp(-beta)))
+    return integrate(beta * x * (1 - np.exp(- beta)))
 
 
-def _normalization(x: pd.Series) -> float:
+def _norm(x: pd.Series) -> float:
     """
     Normalization rule value for a fix alpha value of the S(alpha, beta) matrix.
 
@@ -1299,17 +1285,17 @@ def _normalization(x: pd.Series) -> float:
     Example
     -------
     >>> beta_grid = Beta.generate_grid(300)
-    >>> alpha_grid = Alpha.generate_grid(300, 26)
-    >>> s = Sab.from_fgm(alpha_grid, beta_grid).data
-    >>> _normalization(s.iloc[0, ::]).round(6)
+    >>> alpha = Alpha.generate_grid(300, 26)
+    >>> s = Sab.from_fgm(alpha, beta_grid).data
+    >>> _norm(s.iloc[0, ::]).round(6)
     1.0
     """
     beta = x.index.values
-    return integrate((1 + np.exp(-beta)) * x)
+    return integrate((1 + np.exp(- beta)) * x)
 
 
 def proportionality_factor(alpha: float, alpha_i: float,
-                           alpha_i_plus_one: float,
+                           alpha_i_plus1: float,
                            mode: str = "linlog") -> float:
     """
     Get the proportionality factor for unit-base interpolation.
@@ -1320,7 +1306,7 @@ def proportionality_factor(alpha: float, alpha_i: float,
         Alpha value to be interpolated.
     alpha_i : "float"
         lower alpha bound.
-    alpha_i_plus_one : "float"
+    alpha_i_plus1 : "float"
         upper alpha bound.
     mode : "str", optional
         Is define by how the probability table is interpolated. The default is
@@ -1332,16 +1318,16 @@ def proportionality_factor(alpha: float, alpha_i: float,
         Proportionality factor for unit-base interpolation
     """
     if mode == "linlog":
-        q = np.log(alpha / alpha_i) / np.log(alpha_i_plus_one / alpha_i)
+        q = np.log(alpha / alpha_i) / np.log(alpha_i_plus1 / alpha_i)
     elif mode == "linlin":
-        q = (alpha - alpha_i) / (alpha_i_plus_one - alpha_i)
+        q = (alpha - alpha_i) / (alpha_i_plus1 - alpha_i)
     elif mode == "const":
         q = 1
     return q
 
 
 def _phonon_expansion_gpu(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
-                          tauN: xp.ndarray, tauN_beta_grid: np.ndarray,
+                          tauN: xp.ndarray, tauNbeta: np.ndarray,
                           DebyeWallerCoeff: float) -> xp.ndarray:
     """
     Generate S(alpha, -beta) matrix using tauN functions:
@@ -1360,7 +1346,7 @@ def _phonon_expansion_gpu(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
         tauN functions. The first dimension is the number of the expansion
         and the second dimension is the number of the beta grid. In the cpu as
         numpy array or in the gpu as cupy array.
-    tauN_beta_grid: 'np.ndarray', (T,)
+    tauNbeta: 'np.ndarray', (T,)
         Beta values of the tauN functions.
     DebyeWallerCoeff: 'float'
         Debye Waller coefficient.
@@ -1371,22 +1357,22 @@ def _phonon_expansion_gpu(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
         S(alpha, -beta) matrix values.
     """
     # Zero phonon expansion:
-    iter_sum = xp.log(alpha * DebyeWallerCoeff)
-    alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    sab_values = xp.outer(alpha_mul, xp.interp(beta, tauN_beta_grid, tauN[0]))
+    IterSum = xp.log(alpha * DebyeWallerCoeff)
+    alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
+    sab_values = xp.outer(alpha_mul, xp.interp(beta, tauNbeta, tauN[0]))
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
-        iter_sum += xp.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        sab_values += xp.outer(alpha_mul, xp.interp(beta, tauN_beta_grid, tauN[n]))
+        IterSum += xp.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
+        sab_values += xp.outer(alpha_mul, xp.interp(beta, tauNbeta, tauN[n]))
     return sab_values
 
 
 @nb.jit(nopython=True, cache=True, nogil=True)
 def _phonon_expansion_cpu(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
-                          tauN: np.ndarray, tauN_beta_grid: np.ndarray,
+                          tauN: np.ndarray, tauNbeta: np.ndarray,
                           DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using tauN functions:
@@ -1405,7 +1391,7 @@ def _phonon_expansion_cpu(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
         tauN functions. The first dimension is the number of the expansion
         and the second dimension is the number of the beta grid. In the cpu as
         numpy array or in the gpu as cupy array.
-    tauN_beta_grid: 'np.ndarray', (T,)
+    tauNbeta: 'np.ndarray', (T,)
         Beta values of the tauN functions.
     DebyeWallerCoeff: 'float'
         Debye Waller coefficient.
@@ -1416,21 +1402,21 @@ def _phonon_expansion_cpu(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
         S(alpha, -beta) matrix values.
     """
     # Zero phonon expansion:
-    iter_sum = np.log(alpha * DebyeWallerCoeff)
-    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    sab_values = np.outer(alpha_mul, np.interp(beta, tauN_beta_grid, tauN[0]))
+    IterSum = np.log(alpha * DebyeWallerCoeff)
+    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+    sab_values = np.outer(alpha_mul, np.interp(beta, tauNbeta, tauN[0]))
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
-        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        sab_values += np.outer(alpha_mul, np.interp(beta, tauN_beta_grid, tauN[n]))
+        IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+        sab_values += np.outer(alpha_mul, np.interp(beta, tauNbeta, tauN[n]))
     return sab_values
 
 
 def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
-                     tauN: np.ndarray, tauN_beta_grid: np.ndarray,
+                     tauN: np.ndarray, tauNbeta: np.ndarray,
                      DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using tauN functions:
@@ -1464,17 +1450,17 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
                                          xp.asarray(beta),
                                          nphonon,
                                          xp.asarray(tauN),
-                                         xp.asarray(tauN_beta_grid),
+                                         xp.asarray(tauNbeta),
                                          DebyeWallerCoeff).get()
         except xp.cuda.memory.OutOfMemoryError:
             pass
-    return _phonon_expansion_cpu(alpha, beta, nphonon, tauN, tauN_beta_grid,
+    return _phonon_expansion_cpu(alpha, beta, nphonon, tauN, tauNbeta,
                                  DebyeWallerCoeff)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True)
 def get_sab_sct_alpha(alpha: float, beta: np.ndarray, Tratio: float,
-                      ws:float) -> np.ndarray:
+                      ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time for a single
     alpha value

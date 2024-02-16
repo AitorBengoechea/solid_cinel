@@ -209,8 +209,13 @@ class Tpdos:
         Examples
         --------
         Object initialization:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> os.chdir("../../../data/pdos/")
+
         >>> T = 300
-        >>> file = f"../../../data/pdos/interp.{T}"
+        >>> file = "interp.300"
         >>> Tpdos.from_dE_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
         beta
         0.000000    0.000000
@@ -219,6 +224,8 @@ class Tpdos:
         0.046418    0.005459
         0.061891    0.008876
         Name: rho, dtype: float64
+
+        >>> os.chdir(wd)
         """
         return Epdos.from_file(file, header, index_col, usecols, engine).beta_grid(T)
 
@@ -645,7 +652,11 @@ class Epdos:
         Examples
         --------
         Object initialization:
-        >>> file = "../../../data/pdos/interp.300"
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> os.chdir("../../../data/pdos/")
+        >>> file = "interp.300"
         >>> Epdos.from_file(file, usecols=[0, 1], index_col=0).data.iloc[0:5]
         dE
         0.0000    0.000000
@@ -654,6 +665,7 @@ class Epdos:
         0.0012    0.211161
         0.0016    0.343320
         Name: rho, dtype: float64
+        >>> os.chdir(wd)
         """
         df = pd.read_csv(file, delim_whitespace=True, header=header,
                          index_col=index_col,
@@ -892,7 +904,11 @@ class Npdos:
         Examples
         --------
         Object initialization:
-        >>> file = "../../../data/pdos/interp.300"
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> os.chdir("../../../data/pdos/")
+        >>> file = "interp.300"
         >>> T = 300
         >>> Npdos.from_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
                      300
@@ -902,6 +918,7 @@ class Npdos:
         0.0008  0.088790
         0.0012  0.211161
         0.0016  0.343320
+        >>> os.chdir(wd)
         """
         # Transform file and T to list if they are not
         file_ = [file] if isinstance(file, str) else file

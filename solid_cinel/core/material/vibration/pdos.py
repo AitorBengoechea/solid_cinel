@@ -149,13 +149,15 @@ class Tpdos:
         return cls(T, rho_, index=Beta.from_dE(grid, T).to_index)
 
     @classmethod
-    def from_file(cls, file: str, T: float, header=None, index_col=None,
+    def from_file(cls, T: float, file: str, header=None, index_col=None,
                   usecols=None, engine="python"):
         """
         Extract rho in energy from the introduced file.
 
         Parameters
         ----------
+        T: 'float'
+            Temperature in K.
         file: 'str'
             File path.
         header: 'int', optional
@@ -177,6 +179,48 @@ class Tpdos:
                          usecols=usecols, engine=engine).iloc[::, 0]
         df.index.name = "dE"
         return cls(T, df)
+
+    def from_dE_file(T: float, file: str, header=None, index_col=None,
+                     usecols=None, engine="python"):
+        """
+        Extract rho in energy from the introduced file and create a Tpdos object
+        based on the temperature.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        file: 'str'
+            File path.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
+
+        Returns
+        -------
+        "Tpdos"
+            Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = 300
+        >>> file = f"../../../data/pdos/interp.{T}"
+        >>> Tpdos.from_dE_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.015473    0.001083
+        0.030945    0.002295
+        0.046418    0.005459
+        0.061891    0.008876
+        Name: rho, dtype: float64
+        """
+        return Epdos.from_file(file, header, index_col, usecols, engine).beta_grid(T)
 
     @property
     def P(self, threshold=1.0e-6) -> pd.Series:
@@ -597,6 +641,19 @@ class Epdos:
         -------
         "Epdos"
             Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> file = "../../../data/pdos/interp.300"
+        >>> Epdos.from_file(file, usecols=[0, 1], index_col=0).data.iloc[0:5]
+        dE
+        0.0000    0.000000
+        0.0004    0.041879
+        0.0008    0.088790
+        0.0012    0.211161
+        0.0016    0.343320
+        Name: rho, dtype: float64
         """
         df = pd.read_csv(file, delim_whitespace=True, header=header,
                          index_col=index_col,
@@ -775,7 +832,7 @@ class Npdos:
     Object containing the method and properties of N phonon density of states
     for N temperatures.
     """
-    def __init__(self, pdos_dict: dict, object_type: [Epdos, Tpdos]):
+    def __init__(self, pdos_dict: dict):
         """
         Initialize of the pdos object containing the N temperatures.
 
@@ -797,28 +854,89 @@ class Npdos:
         "pd.DataFrame"
             Data of the pdos objects in a DataFrame format.
         """
-        data = pd.DataFrame({key: pdos.data.dE_grid
+        data = pd.DataFrame({key: pdos.dE_grid.data
                              for key, pdos in self.instance.items()})
         if np.any(data.isna()):
-            data = data.interpolate(method="linear", axis=0).fillna(0)
+            data.interpolate(method="linear", axis=0).fillna(0, inplace=True)
         return data
 
     @classmethod
-    def from_file(cls, file: [str, list], T: [float, list], header=None, index_col=None,
-                  usecols=None, engine="python", grid="dE"):
-        # Transform the file into a pdos object:
+    def from_file(cls, T: [float, list], file: [str, list], header=None,
+                  index_col=None, usecols=None, engine="python", grid="dE"):
+        """
+        Extract rho in energy from the introduced file and create a Tpdos object
+        for each temperature.
+
+        Parameters
+        ----------
+        file: 'str' or 'list'
+            File path or list of file paths.
+        T: 'float' or 'list'
+            Temperature in K or list of temperatures.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
+        grid: 'str', optional
+            Grid of the file. The default is "dE". Options are "dE" or "beta".
+
+        Returns
+        -------
+        "Npdos"
+            Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> file = "../../../data/pdos/interp.300"
+        >>> T = 300
+        >>> Npdos.from_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
+                     300
+        dE
+        0.0000  0.000000
+        0.0004  0.041879
+        0.0008  0.088790
+        0.0012  0.211161
+        0.0016  0.343320
+        """
+        # Transform file and T to list if they are not
         file_ = [file] if isinstance(file, str) else file
         T_ = [T] if isinstance(T, (int, float)) else T
-        Npdos_dict = {}
-        object_type = Epdos if grid == "dE" else Tpdos
-        for file, T in zip(file_, T_):
-            if grid == "dE":
-                Npdos_dict[T] = Epdos.from_file(file, header, index_col, usecols,
-                                                engine).beta_grid(T)
-            else:
-                Npdos_dict[T] = Tpdos.from_file(file, T, header, index_col,
-                                                usecols, engine)
-        return cls(Npdos_dict, object_type)
+        if len(file_) != len(T_):
+            raise ValueError("The number of files and temperatures must be the same")
+
+        # Prepare arguments for from_file function
+        args = (header, index_col, usecols, engine)
+
+        # Create Tpdos objects based on the grid type
+        method = Tpdos.from_dE_file if grid == "dE" else Tpdos.from_file
+        return cls({T: method(T, file, *args) for file, T in zip(file_, T_)})
+
+    @classmethod
+    def from_dE(cls, T: list, rho: [list, np.ndarray], interval_energy: list):
+        """
+        Create a Npdos object from a list of Tpdos objects.
+
+        Parameters
+        ----------
+        T: list of 'float'
+            List of temperatures in K.
+        rho: list of '1D iterable'
+            rho function values store in each row.
+        interval_energy: list of 'float'
+            List of energy interval in eV.
+
+        Returns
+        -------
+        "Npdos"
+            Rho normalize object.
+        """
+        return cls({T[i]: Tpdos.from_dE(T[i], rho[i], interval_energy[i])
+                    for i in range(len(T))})
 
     def __getattr__(self, name):
         if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:
@@ -826,7 +944,7 @@ class Npdos:
                        for key, pdos in self.instance.items()}
             return pd.Series(results, name=name)
         else:
-            raise AttributeError(f"Attribute {name} not found in the {self.type} object")
+            raise AttributeError(f"Attribute {name} not found in the Npdos object")
 
 
 class Pdos:
@@ -844,6 +962,8 @@ class Pdos:
     def from_dE(cls, *args, **kwargs):
         if isinstance(args[0], (int, float)):
             return cls(Tpdos.from_dE(*args, **kwargs))
+        elif isinstance(args[-1], (list, np.ndarray)):
+            return cls(Npdos.from_dE(*args, **kwargs))
         else:
             return cls(Epdos.from_dE(*args, **kwargs))
 

@@ -6,6 +6,7 @@ Python file for working with Phonon Density Of States.
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
+from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 import numpy as np
 from typing import Iterable, Union
@@ -854,6 +855,7 @@ class Npdos:
             Dictionary containing the pdos objects for N temperatures.
         """
         self.instance = pdos_dict
+        self.interp_spline = None
 
     @property
     def data(self) -> pd.DataFrame:
@@ -954,6 +956,41 @@ class Npdos:
         """
         return cls({T[i]: Tpdos.from_dE(T[i], rho[i], interval_energy[i])
                     for i in range(len(T))})
+
+    def compute_spline(self):
+        """
+        Compute the spline interpolation of the pdos data if it is not computed
+        """
+        data = self.data.copy()
+        dE, T = data.index.values, data.columns.values
+        ky = 3 if len(T) > 3 else len(T) - 1
+        self.interp_spline = RectBivariateSpline(dE, T, data.values, ky=ky)
+
+    def Tinterp(self, Tnew: [float, np.ndarray]) -> pd.DataFrame:
+        """
+        Interpolate the pdos data to a new temperature grid. If the new
+        temperature is out of the bound of the original temperature grid, the
+        previous or next temperature will be used.
+
+        Parameters
+        ----------
+        Tnew: 'float' or 'np.ndarray'
+            New temperature grid.
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Interpolated pdos data.
+        """
+        if self.interp_spline is None:
+            self.compute_spline()
+
+        if not Tnew:
+            raise ValueError("Tnew cannot be empty")
+
+        dE = self.data.index.values
+        return pd.DataFrame(self.interp_spline(dE, Tnew),
+                            index=dE, columns=pd.Index(Tnew))
 
     def __getattr__(self, name):
         if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:

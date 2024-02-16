@@ -354,13 +354,34 @@ def tau_n_beta(tau1_beta: np.ndarray, beta_length=int):
     -------
     tau_n_beta_grid: np.ndarray
         Tau(-beta) function values for n expansion.
+
+    Examples
+    --------
+    >>> tau1_beta = np.array([0.0, 0.05, 0.1, 0.2, 0.4])
+    >>> tau_n_beta(tau1_beta, 8).round(2)
+    array([0.  , 0.05, 0.1 , 0.2 , 0.4 , 0.6 , 0.8 , 1.  ])
     """
+    # Get the length of tau1_beta
     N = len(tau1_beta)
+
+    # If the length of tau1_beta is equal to beta_length, return tau1_beta as is
     if N == beta_length:
         return tau1_beta
     else:
-        delta_beta = tau1_beta[-1] - tau1_beta[-2]
-        tau_n_beta_grid = np.arange(beta_length) * delta_beta
+        # Initialize an array of zeros with length beta_length
+        tau_n_beta_grid = np.empty(beta_length)
+
+        # Add the values of tau1_beta to the beginning of tau_n_beta_grid
         tau_n_beta_grid[:N] = tau1_beta
+
+        # Add the last value of tau1_beta to the rest of tau_n_beta_grid
+        tau_n_beta_grid[N:] = tau1_beta[-1]
+
+        # Calculate the difference between the last two values of tau1_beta
+        delta_beta = tau1_beta[-1] - tau1_beta[-2]
+
+        # Add a sequence of multiples of delta_beta to the rest of tau_n_beta_grid
+        tau_n_beta_grid[N:] += np.arange(1, beta_length + 1 - N) * delta_beta
+
         return tau_n_beta_grid
 

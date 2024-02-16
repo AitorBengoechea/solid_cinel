@@ -412,7 +412,7 @@ class ScatFuncSD:
         dtype: float64
         """
         Teff = pdos.Teff(T)
-        scatfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, Teff, ws)
         norm = np.trapz(scatfunc, x=Eout)
         return cls(Ein, T, M, scatfunc / norm, index=Eout)
 
@@ -462,7 +462,7 @@ class ScatFuncSD:
         7.4480    0.003848
         dtype: float64
         """
-        scatfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, T, ws)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, T, ws)
         norm = np.trapz(scatfunc, x=Eout)
         return cls(Ein, T, M, scatfunc / norm, index=Eout)
 
@@ -907,7 +907,7 @@ class ScatFuncDD:
          9.659258e-01  0.000000  0.000000  0.000000  10.545191  0.000000  0.000000
         """
         Teff = pdos.Teff(T)
-        scatfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, Teff, ws)
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
     @classmethod
@@ -961,7 +961,7 @@ class ScatFuncDD:
          8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
          9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
         """
-        scatfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, T, ws)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, T, ws)
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
     @classmethod
@@ -1111,7 +1111,7 @@ class ScatFuncDD:
         else:
             sigma1_pdf = ScatFuncSD.from_sigma1(self.Ein, self.M, self.T,
                                         scatfunc.columns.values).data
-            return mu_fit_calc(scatfunc, sigma1_pdf, self.Ein).mode()[0]
+            return mu_fitCalc(scatfunc, sigma1_pdf, self.Ein).mode()[0]
 
     @property
     def cdf(self) -> pd.DataFrame:
@@ -1431,8 +1431,8 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
 
 
 @nb.jit(nopython=True, cache=True, nogil=False)
-def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
-                         M: float, Teff: float, ws: float) -> np.array:
+def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
+                        M: float, Teff: float, ws: float) -> np.array:
     """
     Calculate the scattering function from the Short Collision Time model using
     a single angle.
@@ -1470,7 +1470,7 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     else:
         alpha = get_alphaMat(Eout, Ein, T, M, mu)
         sabValues = get_SabSct(alpha, beta, Tratio, ws)
-    return sabValues * normalization_factor(Eout, Ein, T, M)
+    return sabValues * normFactor(Eout, Ein, T, M)
 
 
 @nb.jit(nopython=True, cache=True, nogil=False)
@@ -1534,21 +1534,21 @@ def get_SabClm(alpha: np.ndarray, beta: np.ndarray,
     5.135233  0.006799
     """
     # Zero phonon expansion:
-    iter_sum = np.log(alpha * DebyeWallerCoeff)
-    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    S_diag = alpha_mul * np.interp(beta, tauN_beta, tauN[0])
+    IterSum = np.log(alpha * DebyeWallerCoeff)
+    alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+    S_diag = alphaMul * np.interp(beta, tauN_beta, tauN[0])
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, tauN.shape[0]):
         # Compute S(alpha, -beta) for tauN reshape
-        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        S_diag += alpha_mul * np.interp(beta, tauN_beta, tauN[n])
+        IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+        S_diag += alphaMul * np.interp(beta, tauN_beta, tauN[n])
     return S_diag
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def normalization_factor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
+def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the scattering function calculation.
 
@@ -1575,7 +1575,7 @@ def normalization_factor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def scatfuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
+def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
                            T: float, M: float) -> (np.ndarray, np.ndarray):
     """
     Generate the scattering function values from a S(alpha, -beta) table based on
@@ -1617,8 +1617,8 @@ def scatfuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     >>> tau1beta = pdos.beta_grid(T).data.index.values
     >>> tauN_beta = tauN_beta(tau1beta, tauN.shape[1])
     >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauN_beta, DebyeWallerCoeff)
-    >>> EoutCalc, scatfunc_values = scatfuncValuesAlphaVec(sabValues, beta, Ein, T, M)
-    >>> pd.Series(scatfunc_values, index=EoutCalc).iloc[::200].round(6)
+    >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
+    >>> pd.Series(scatFuncValues, index=EoutCalc).iloc[::200].round(6)
     6.755400    0.036933
     6.894059    0.381006
     6.991813    1.027908
@@ -1633,7 +1633,7 @@ def scatfuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     dtype: float64
     """
     # Scattering function values calculation:
-    ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::] * np.exp(-beta[1:])))
+    scatFuncValues = np.concatenate((Sab_mat[::-1], Sab_mat[1::] * np.exp(-beta[1:])))
 
     # Eout calculation
     EoutCalc = Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T
@@ -1643,12 +1643,12 @@ def scatfuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     EoutCalc = EoutCalc[positiveMask]
 
     # Normalization constant
-    norm = normalization_factor(EoutCalc, Ein, T, M)
+    norm = normFactor(EoutCalc, Ein, T, M)
 
-    return EoutCalc, ScatFunc_values[positiveMask] * norm
+    return EoutCalc, scatFuncValues[positiveMask] * norm
 
 @nb.jit(nopython=True, cache=True, nogil=False)
-def scatfuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
+def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
                            T: float, M: float) -> (np.ndarray, np.ndarray):
     """
     Generate the scattering function from a S(alpha, -beta) table based on
@@ -1673,7 +1673,7 @@ def scatfuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     -------
     EoutCalc: 'np.ndarray', (N,)
         Outgoing energy grid in eV.
-    ScatFunc_values: 'np.ndarray', (Z, N)
+    scatFuncValues: 'np.ndarray', (Z, N)
         Scattering function values for all the angles and Eout calculation.
 
     Examples
@@ -1694,8 +1694,8 @@ def scatfuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     >>> beta = get_beta(Eout, Ein, T)
     >>> alpha_mat = get_alphaMat(beta * kb * T + Ein, Ein, T, M, mu)
     >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauN_beta, DebyeWallerCoeff)
-    >>> EoutCalc, scatfunc_values = scatfuncValuesAlphaMat(sabValues, beta, Ein, T, M)
-    >>> pd.DataFrame(scatfunc_values, index=[120], columns=EoutCalc).T.iloc[::200].round(6)
+    >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
+    >>> pd.DataFrame(scatFuncValues, index=[120], columns=EoutCalc).T.iloc[::200].round(6)
                    120
     6.755400  0.036933
     6.894059  0.381006
@@ -1709,7 +1709,7 @@ def scatfuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     7.501782  0.012632
     7.640440  0.000258
     """
-    ScatFunc_values = np.concatenate(
+    scatFuncValues = np.concatenate(
         (sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)
     # Eout calculation
     EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
@@ -1719,9 +1719,9 @@ def scatfuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     EoutCalc = EoutCalc[positiveMask]
 
     # Normalization constant
-    norm = normalization_factor(EoutCalc, Ein, T, M)
+    norm = normFactor(EoutCalc, Ein, T, M)
 
-    return EoutCalc, ScatFunc_values[::, positiveMask] * norm
+    return EoutCalc, scatFuncValues[::, positiveMask] * norm
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -1785,11 +1785,11 @@ def getScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     alpha_mat = get_alphaMat(beta * kb * T + Ein if len(beta) < len(Eout) else Eout,
                               Ein, T, M, mu)
     sabValues = get_SabClm(alpha_mat, beta, tauN, tauN_beta, DebyeWallerCoeff)
-    EoutCalc, scatfunc_values = scatfuncValuesAlphaMat(sabValues, beta, Ein, T, M)
+    EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
     select_scarfunc = np.zeros((len(mu), len(Eout)))
     for i in range(len(mu)):
-        select_scarfunc[i] += np.interp(Eout, EoutCalc, scatfunc_values[i])
+        select_scarfunc[i] += np.interp(Eout, EoutCalc, scatFuncValues[i])
     return select_scarfunc
 
 
@@ -1854,12 +1854,12 @@ def getScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
     alpha = get_alphaFromEout(Eout_, Ein, T, M, mu)
     sabValues = get_SabClm(alpha, beta, tauN, tauN_beta, DebyeWallerCoeff)
-    EoutCalc, scatfunc_values = scatfuncValuesAlphaVec(sabValues, beta, Ein, T, M)
+    EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
-    return np.interp(Eout, EoutCalc, scatfunc_values)
+    return np.interp(Eout, EoutCalc, scatFuncValues)
 
 
-def total_variation_distance(p: np.ndarray, q: np.ndarray) -> float:
+def totalVariationDistance(p: np.ndarray, q: np.ndarray) -> float:
     """
     Total Variation Distance between two probability distributions.
 
@@ -1878,7 +1878,7 @@ def total_variation_distance(p: np.ndarray, q: np.ndarray) -> float:
     return 0.5 * np.sum(np.abs(p - q))
 
 
-def hellinger_distance(p: np.ndarray, q: np.ndarray) -> float:
+def hellingerDistance(p: np.ndarray, q: np.ndarray) -> float:
     """
     Hellinger Distance between two probability distributions.
 
@@ -1897,7 +1897,7 @@ def hellinger_distance(p: np.ndarray, q: np.ndarray) -> float:
     return euclidean(np.sqrt(p), np.sqrt(q)) / np.sqrt(2)
 
 
-def bhattacharyya_distance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> float:
+def bhattacharyyaDistance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> float:
     """
     Bhattacharyya Distance between two probability distributions.
 
@@ -1919,7 +1919,7 @@ def bhattacharyya_distance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> fl
     return -np.log(BC)
 
 
-def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd.DataFrame:
+def mu_fitCalc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd.DataFrame:
     """
     Calculate the angle from the scattering function that best fits the
     sigma1_pdf. The distributions from the scattering function are shifted
@@ -1956,7 +1956,7 @@ def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd
     >>> sigma1 = ScatFunc.from_sigma1(Ein, M, T, Eout).data
     >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
     >>> ddScatFunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta).data
-    >>> mu_fit_calc(ddScatFunc, sigma1, Ein).round(2)
+    >>> mu_fitCalc(ddScatFunc, sigma1, Ein).round(2)
     KL               0.5
     JS               0.5
     EMD              0.5
@@ -1976,9 +1976,9 @@ def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd
             "KL": entropy(scatfunc_shift, sigma1_pdf),
             "JS": distance.jensenshannon(scatfunc_shift, sigma1_pdf),
             "EMD": wasserstein_distance(scatfunc_shift, sigma1_pdf),
-            "TVD": total_variation_distance(scatfunc_shift, sigma1_pdf),
-            "Hellinger": hellinger_distance(scatfunc_shift, sigma1_pdf),
-            "Bhattacharyya": bhattacharyya_distance(scatfunc_shift,
+            "TVD": totalVariationDistance(scatfunc_shift, sigma1_pdf),
+            "Hellinger": hellingerDistance(scatfunc_shift, sigma1_pdf),
+            "Bhattacharyya": bhattacharyyaDistance(scatfunc_shift,
                                                     sigma1_pdf, Eout),
             "max_pos": abs(scatfunc_shift.max() - sigma1_pdf.max()),
         })

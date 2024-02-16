@@ -9,7 +9,7 @@ import numba as nb
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, getScatFuncClm
+from solid_cinel.core.scattering_function import sigma1, get_ScatSctAngular, getScatFuncClm
 from solid_cinel.core.material.vibration.tau import tauN_func, tauN_beta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
@@ -1081,7 +1081,7 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     for i in range(start, Ein_arno.shape[0], 1):
         for j in prange(Ein_arno.shape[1]):
             Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_scat_sct_angular(Eout_db, mu_fit_, Ein_arno[i, j],
+            pdf = get_ScatSctAngular(Eout_db, mu_fit_, Ein_arno[i, j],
                                        Tarno[i], M, Tarno_eff[i], 1.0)[0]
             xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
 

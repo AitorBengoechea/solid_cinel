@@ -130,7 +130,7 @@ class Dxs:
 
 
     @classmethod
-    def from_sigma1(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray):
+    def from_sigma1(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray):
         """
         Generate the Differential xs for elastic scattering from sigma1
         ..math::
@@ -138,7 +138,7 @@ class Dxs:
 
         Parameters
         ----------
-        xs_0K : pd.Series, (Z,)
+        xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
         The incident energy of the neutron in eV
@@ -160,7 +160,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -170,7 +170,7 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # SIGMA1 algorithm:
-        >>> Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).data.iloc[::100]
+        >>> Dxs.from_sigma1(xs0K, Ein, M, T, Eout).data.iloc[::100]
         Eout
         1.80000     0.000049
         1.84004     0.009909
@@ -185,10 +185,10 @@ class Dxs:
         dtype: float64
         """
         scatfunction = ScatFunc.from_sigma1(Ein, M, T, Eout)
-        return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs_0K))
+        return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs0K))
 
     @classmethod
-    def from_recoil(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
+    def from_recoil(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
                     Eout: np.ndarray, *args, **kwargs):
         """
         Generate the Differential xs for elastic scattering from the most similar distribution of the S(alpha, -beta)
@@ -198,7 +198,7 @@ class Dxs:
 
         Parameters for fgm, sct and pdos models
         ----------------------------------------
-        xs_0K : pd.Series, (Z,)
+        xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
         The incident energy of the neutron in eV
@@ -241,7 +241,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -251,7 +251,7 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # DOPUSH algorithm:
-        >>> Dxs.from_recoil(xs_0K, Ein, M, T, Eout, model="fgm").data.iloc[::100]
+        >>> Dxs.from_recoil(xs0K, Ein, M, T, Eout, model="fgm").data.iloc[::100]
         Eout
         1.80000     0.000127
         1.84004     0.020078
@@ -267,7 +267,7 @@ class Dxs:
         """
         scatfunction = ScatFunc.from_recoil(Ein, M, T, Eout, *args, **kwargs)
         Exs = Eout + get_gressierRecoil(Ein, T, M)
-        return cls(Ein, T, M, "dopush", scatfunction.convolve(xs_0K, Exs=Exs))
+        return cls(Ein, T, M, "dopush", scatfunction.convolve(xs0K, Exs=Exs))
 
     @property
     def integral(self) -> float:
@@ -285,7 +285,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -295,12 +295,12 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # SIGMA1 algorithm:
-        >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
+        >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
         9.09
 
         # DOPUSH algorithm:
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> round(Dxs.from_recoil(xs_0K, Ein, M, T, Eout, model="fgm").integral, 2)
+        >>> round(Dxs.from_recoil(xs0K, Ein, M, T, Eout, model="fgm").integral, 2)
         9.09
         """
         return integrate(self.data)
@@ -321,7 +321,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -329,7 +329,7 @@ class Dxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> dxs = Dxs.from_sigma1(xs_0K, Ein, M, T, Eout)
+        >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
         >>> round(dxs.prob["upscattering"], 6)
         0.505184
         >>> round(dxs.prob["downscattering"], 6)
@@ -359,7 +359,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -367,7 +367,7 @@ class Dxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> dxs = Dxs.from_sigma1(xs_0K, Ein, M, T, Eout)
+        >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
 
         # SIGMA1 algorithm:
         >>> dxs.pdf.iloc[::100]
@@ -409,7 +409,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -417,7 +417,7 @@ class Dxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> dxs = Dxs.from_sigma1(xs_0K, Ein, M, T, Eout)
+        >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
         >>> dxs.data.iloc[::200].round(6)
         Eout
         1.80000     0.000049

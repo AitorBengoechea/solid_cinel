@@ -69,8 +69,8 @@ class XsMat:
     """
     Xs matrix class
     """
-    def __init__(self, xs_0K, Ein, M, T, *args, **kwargs):
-        self.xs_0K = xs_0K
+    def __init__(self, xs0K, Ein, M, T, *args, **kwargs):
+        self.xs0K = xs0K
         self.Ein = Ein
         self.M = M
         self.T = T
@@ -119,7 +119,7 @@ class XsMat:
 
          Parameters for fgm, sct and pdos models
          ---------------------------------------
-         xs_0K : pd.Series
+         xs0K : pd.Series
              Cross section at 0K in barns
          Ein : float
              The incident energy of the neutron in eV
@@ -159,7 +159,7 @@ class XsMat:
          >>> wd = os.getcwd()
          >>> os.chdir(__file__.replace("xs_mat.py", ""))
          >>> os.chdir("../../data/xs/U238/")
-         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
          >>> os.chdir(wd)
 
          >>> T = 1000
@@ -170,7 +170,7 @@ class XsMat:
          >>> mu_fit = np.cos(np.deg2rad(60))
 
          # sigma1 model:
-         >>> xsValues = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
          >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000	1.866667	1.933333	2.000000	2.066667	2.133333	2.200000
          180 9.102355	9.095532	9.088710	9.081758	9.074679	9.067600	9.060521
@@ -193,7 +193,7 @@ class XsMat:
          10	 9.105489	9.098775	9.091979	9.085087	9.078074	9.070973	9.063803
 
          # fgm model:
-         >>> xsValues = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, model="fgm")
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, model="fgm")
          >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000	1.866667	1.933333	2.000000	2.066667	2.133333	2.200000
          180 9.102355	9.095532	9.088710	9.081758	9.074679	9.067600	9.060521
@@ -217,7 +217,7 @@ class XsMat:
 
          # sct model:
          >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-         >>> xsValues = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
          >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
               1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
          180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -242,7 +242,7 @@ class XsMat:
          # pdos model:
          >>> nphonon = 100
          >>> threshold = 1.0e-14
-         >>> xsValues = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
          >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
               1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
          180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -270,7 +270,7 @@ class XsMat:
          >>> T = 300
          >>> theta = np.arange(1, 11, 1)
          >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:6]
-         >>> xsValues = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
          >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              33.012000  34.234667  35.457333    36.680000   37.902667  39.125333
          10   0.781011   0.212474  18.943993  7832.112249  116.900933  48.371957
@@ -287,14 +287,14 @@ class XsMat:
          """
         # Common arguments:
         if len(args) == 6:
-            xs_0K, Ein, M, T, Eout, theta = args
+            xs0K, Ein, M, T, Eout, theta = args
         elif len(args) == 7:
-            xs_0K, Ein, M, T, Eout, theta, mu_fit = args
+            xs0K, Ein, M, T, Eout, theta, mu_fit = args
         else:
-            xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
+            xs0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
 
         # Common variables:
-        xsValues, xsE, EinArno, mu, Tarno = cls.common_variables(xs_0K, Ein, M, T, Eout, theta)
+        xsValues, xsE, EinArno, mu, Tarno = cls.common_variables(xs0K, Ein, M, T, Eout, theta)
         # Calculate the cross-section matrix:
         model = kwargs.get("model", "sigma1")
         xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
@@ -314,7 +314,7 @@ class XsMat:
                             threshold)
         else:
             raise ValueError("Model not implemented")
-        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
+        return cls(xs0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @classmethod
     def from_recoil(cls, *args, **kwargs):
@@ -328,7 +328,7 @@ class XsMat:
 
          Parameters for fgm, sct and pdos models
          ---------------------------------------
-         xs_0K : pd.Series
+         xs0K : pd.Series
              Cross section at 0K in barns
          Ein : float
              The incident energy of the neutron in eV
@@ -371,7 +371,7 @@ class XsMat:
          >>> wd = os.getcwd()
          >>> os.chdir(__file__.replace("xs_mat.py", ""))
          >>> os.chdir("../../data/xs/U238/")
-         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
          >>> os.chdir(wd)
 
          >>> T = 1000
@@ -381,7 +381,7 @@ class XsMat:
          >>> theta = np.arange(10, 190, 10)
 
          # fgm model:
-         >>> xsValues = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta)
+         >>> xsValues = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta)
          >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
               1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
          180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -405,7 +405,7 @@ class XsMat:
 
         # sct model:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> xsValues = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct")
+        >>> xsValues = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
         180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -431,7 +431,7 @@ class XsMat:
         >>> decimal = 1.0e-6
         >>> orderMax = 100
         >>> threshold = 1.0e-14
-        >>> xsValues = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="pdos", decimal=decimal, orderMax=orderMax, threshold=threshold)
+        >>> xsValues = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos", decimal=decimal, orderMax=orderMax, threshold=threshold)
         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
         180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
@@ -456,12 +456,12 @@ class XsMat:
 
         # Common arguments:
         if len(args) == 6:
-            xs_0K, Ein, M, T, Eout, theta = args
+            xs0K, Ein, M, T, Eout, theta = args
         else:
-            xs_0K, Ein, M, T, Eout, theta, pdos = args
+            xs0K, Ein, M, T, Eout, theta, pdos = args
 
         # Common variables:
-        xsValues, xsE, EinArno, mu, Tarno = cls.common_variables(xs_0K, Ein, M, T, Eout, theta)
+        xsValues, xsE, EinArno, mu, Tarno = cls.common_variables(xs0K, Ein, M, T, Eout, theta)
         # Calculate the cross-section matrix:
         model = kwargs.get("model", "fgm")
         xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
@@ -482,10 +482,10 @@ class XsMat:
                                   threshold, decimal, orderMax)
         else:
             raise ValueError("Model not implemented")
-        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
+        return cls(xs0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @staticmethod
-    def common_variables(xs_0K: pd.Series, Ein: float, M: float, T: float,
+    def common_variables(xs0K: pd.Series, Ein: float, M: float, T: float,
                          Eout: np.ndarray, theta: np.ndarray) -> (np.ndarray,
                                                                   np.ndarray,
                                                                   np.ndarray,
@@ -496,7 +496,7 @@ class XsMat:
 
         Parameters
         ----------
-        xs_0K: pd.Series
+        xs0K: pd.Series
             Cross section at 0K in barns
         Ein: float
             The incident energy of the neutron in eV
@@ -525,7 +525,7 @@ class XsMat:
         mu = np.sort(np.cos(np.deg2rad(theta)))
         Tarno = T * (1 + mu) / 2
         EinArno = get_EinArno(Ein, Eout, mu, M)
-        xsValues, xsE = xs_0K.values, xs_0K.index.values
+        xsValues, xsE = xs0K.values, xs0K.index.values
         return xsValues, xsE, EinArno, mu, Tarno
 
     @staticmethod
@@ -624,7 +624,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     # Generate Broadening test results:
@@ -632,7 +632,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> Ein = 2.0
     >>> Eout = default_Eout(Ein)
     >>> M = 238.05077040419212
-    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
+    >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
     9.09
     """
     Eout_small = np.linspace(0,
@@ -879,7 +879,7 @@ def update_XsMatClm(xs_mat: np.ndarray, EinArno: np.ndarray, start: int,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -891,7 +891,7 @@ def update_XsMatClm(xs_mat: np.ndarray, EinArno: np.ndarray, start: int,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
     >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
     >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
     >>> update_XsMatClm(xs_mat, EinArno, start, xsValues, xsE, M, Tarno, mu_fit, tau1beta, DebyeWallerCoeff, tau1, nphonon, threshold)
@@ -952,7 +952,7 @@ def update_XsMatClmRow(xs_mat: np.ndarray, tauN: np.ndarray,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -964,7 +964,7 @@ def update_XsMatClmRow(xs_mat: np.ndarray, tauN: np.ndarray,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
     >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
     >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
     >>> i = 0
@@ -1175,7 +1175,7 @@ def update_XsMatClmRecoilRow(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -1187,7 +1187,7 @@ def update_XsMatClmRecoilRow(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
     >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
     >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
     >>> i = 0
@@ -1276,7 +1276,7 @@ def update_XsMatClmRecoil(xs_mat: np.ndarray, EinArno: np.ndarray,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -1288,7 +1288,7 @@ def update_XsMatClmRecoil(xs_mat: np.ndarray, EinArno: np.ndarray,
     >>> decimal = 1.0e-6
     >>> orderMax = 100
     >>> threshold = 1.0e-14
-    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
     >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
     >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
     >>> update_XsMatClmRecoil(xs_mat, EinArno, start, xsValues, xsE, M, Tarno, tau1beta, DebyeWallerCoeff, tau1, threshold, decimal, orderMax)

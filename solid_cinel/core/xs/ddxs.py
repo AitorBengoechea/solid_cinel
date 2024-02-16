@@ -119,7 +119,7 @@ class DDxs:
         self._data = dd_pdf_
 
     @classmethod
-    def from_Sab(cls, xs_0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
+    def from_Sab(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
                  **kwargs):
         """
         Generate the Double Differential XS for elastic scattering from S(alpha, -beta) tables
@@ -128,7 +128,7 @@ class DDxs:
 
         Common Parameters for fgm, sct and pdos models
         ----------------------------------------------
-        xs_0K : pd.Series, (Z,)
+        xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
         The incident energy of the neutron in eV
@@ -168,7 +168,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -181,7 +181,7 @@ class DDxs:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # S(alpha, -beta) algorithm for FGM:
-        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::18, ::200].round(6)
+        >>> DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::18, ::200].round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -0.999848  1.845717  12.094245  23.732354  15.005372  3.265822
@@ -196,7 +196,7 @@ class DDxs:
          0.956305  0.000000   0.000000   0.381820   0.241879  0.000000
 
         # S(alpha, -beta) algorithm for SCT:
-        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::18, ::200].round(6)
+        >>> DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::18, ::200].round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -0.999848  1.858801  12.101285  23.691478  15.003768  3.282861
@@ -212,7 +212,7 @@ class DDxs:
 
         # S(alpha, -beta) algorithm for PDOS:
         >>> theta = np.array([40, 80, 120, 160])
-        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.iloc[::, ::200].round(6)
+        >>> DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.iloc[::, ::200].round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -0.939693  2.283483  12.162232  23.939609  15.274144  3.160730
@@ -221,10 +221,10 @@ class DDxs:
          0.766044  0.000029   0.051432  24.534948  15.423312  0.012977
         """
         scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs)
-        return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs_0K))
+        return cls(Ein, T, M, "S(alpha, -beta)", scatfunction.convolve(xs0K))
 
     @classmethod
-    def from_4PCF(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
+    def from_4PCF(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
                   Eout: np.ndarray, theta: np.ndarray, *args, **kwargs):
         """
         Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
@@ -240,7 +240,7 @@ class DDxs:
 
         Common parameters
         -----------------
-        xs_0K : pd.Series, (Z,)
+        xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
         The incident energy of the neutron in eV
@@ -279,7 +279,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -292,7 +292,7 @@ class DDxs:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # Coercelle with sigma1 algorithm:
-        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta).data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta).data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.799454  12.011826  23.795201  15.058832  3.254168
@@ -314,7 +314,7 @@ class DDxs:
          9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
 
         # Coercelle with fgm model:
-        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.799454  12.011827  23.795202  15.058833  3.254168
@@ -336,7 +336,7 @@ class DDxs:
          9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
 
         # Coercelle with sct model:
-        >>> DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.812376  12.019176  23.754160  15.057222  3.271238
@@ -361,7 +361,7 @@ class DDxs:
         # demonstration purposes)
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
         >>> theta = np.arange(10, 190, 10)
-        >>> ddxs_test = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=100, model="pdos").data
+        >>> ddxs_test = DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=100, model="pdos").data
         >>> ddxs_test.set_axis(theta[::-1]).round(6)
         Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
         180   2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
@@ -384,19 +384,18 @@ class DDxs:
         10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
         """
         if len(args) == 0:  # SIGMA1 or FGM
-            ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
+            ddxs_values = cls.gen_4PCF(xs0K, Ein, M, T, Eout, theta,
                                        *args, **kwargs)
         elif isinstance(args[0], Pdos):  # SCT or PDOS
-            ddxs_values = cls.gen_4PCF(xs_0K, Ein, M, T, Eout, theta,
+            ddxs_values = cls.gen_4PCF(xs0K, Ein, M, T, Eout, theta,
                                        *args, **kwargs)
         else:  # tauN Files
             raise ValueError('Not implemented yet')
         return cls(Ein, T, M, "4PCF", ddxs_values)
 
     @staticmethod
-    def gen_4PCF(xs_0K: pd.Series, Ein: float, M: float, T: float,
-                 Eout: np.ndarray, theta: np.ndarray,
-                 *args, **kwargs) -> pd.DataFrame:
+    def gen_4PCF(xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
+                 theta: np.ndarray, *args, **kwargs) -> pd.DataFrame:
         """
         Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
         correlation function modified
@@ -411,7 +410,7 @@ class DDxs:
 
         Common parameters
         -----------------
-        xs_0K : pd.Series, (Z,)
+        xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
         The incident energy of the neutron in eV
@@ -448,16 +447,15 @@ class DDxs:
                                            *args, **kwargs)
         if kwargs.get("model"):
             mu_fit = scatfunction.get_angle
-            xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta,
-                           mu_fit, *args, **kwargs)
+            xs = XsMat.from_model(xs0K, Ein, M, T, Eout, theta,
+                                  mu_fit, *args, **kwargs)
         else:
-            xs = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
+            xs = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
         return scatfunction.convolve(xs.data)
 
     @classmethod
-    def from_4PCF_recoil(cls, xs_0K: pd.Series, Ein: float, M: float, T: float,
-                        Eout: np.ndarray, theta: np.ndarray, *args,
-                        **kwargs) -> pd.DataFrame:
+    def from_4PCF_recoil(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
+                         Eout: np.ndarray, theta: np.ndarray, *args, **kwargs) -> pd.DataFrame:
         """
         Generate the Double Differential XS for elastic scattering from Fourier
         double-Laplace transform of a 4-point correlation function modified
@@ -469,7 +467,7 @@ class DDxs:
 
         Common parameters
         -----------------
-        xs_0K : pd.Series, (Z,)
+        xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
         The incident energy of the neutron in eV
@@ -511,7 +509,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -524,7 +522,7 @@ class DDxs:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # Coercelle with FGM algorithm:
-        >>> DDxs.from_4PCF_recoil(xs_0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF_recoil(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.799454  12.011827  23.795201  15.058833  3.254168
@@ -546,7 +544,7 @@ class DDxs:
          9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
 
         # Coercelle with SCT algorithm:
-        >>> DDxs.from_4PCF_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
+        >>> DDxs.from_4PCF_recoil(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
         -9.848078e-01  1.812377  12.019189  23.754185  15.057238  3.271241
@@ -571,7 +569,7 @@ class DDxs:
         # demonstration purposes)
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
         >>> theta = np.arange(10, 190, 10)
-        >>> ddxs_test = DDxs.from_4PCF_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data
+        >>> ddxs_test = DDxs.from_4PCF_recoil(xs0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data
         >>> ddxs_test.set_axis(theta[::-1]).round(6)
         Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
         180   2.368692  9.777714  21.556849   22.522613  10.231717  2.251831  0.266523
@@ -595,7 +593,7 @@ class DDxs:
         """
         scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,
                                            *args, **kwargs)
-        xs = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, *args,
+        xs = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta, *args,
                                **kwargs)
         ddxs = scatfunction.convolve(xs.data)
         return cls(Ein, T, M, "4PCF", ddxs)
@@ -616,7 +614,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -627,7 +625,7 @@ class DDxs:
         >>> theta = np.arange(0, 180, 1)[1::]
 
         # Angular distribution:
-        >>> DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, model="fgm").angular.data.iloc[::200].round(6)
+        >>> DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta, model="fgm").angular.data.iloc[::200].round(6)
         Eout
         1.80000     0.768794
         1.88008    10.451361
@@ -653,7 +651,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -666,13 +664,13 @@ class DDxs:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # S(alpha, -beta) algorithm for FGM:
-        >>> round(DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta, model="fgm").integral, 2)
+        >>> round(DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2)
         9.07
         """
         return self.angular.integral
 
     @property
-    def E_prob(self) -> dict:
+    def Eprob(self) -> dict:
         """
         Get the upscattering and downscattering probalities
 
@@ -687,7 +685,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -696,8 +694,8 @@ class DDxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta)
-        >>> probabilities = ddxs.E_prob
+        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
+        >>> probabilities = ddxs.Eprob
         >>> round(probabilities["upscattering"], 6)
         0.389484
         >>> round(probabilities["downscattering"], 6)
@@ -708,7 +706,7 @@ class DDxs:
         return self.angular.prob
 
     @property
-    def Angle_prob(self) -> pd.Series:
+    def AngleProb(self) -> pd.Series:
         """
         Get angular probability distribution of the Double Differential XS
 
@@ -723,7 +721,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -732,8 +730,8 @@ class DDxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta)
-        >>> angular_prob = ddxs.Angle_prob
+        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
+        >>> angular_prob = ddxs.AngleProb
         >>> angular_prob.round(6)
         mu
         -9.659258e-01    0.508586
@@ -768,7 +766,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -777,7 +775,7 @@ class DDxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta)
+        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
         >>> ddxs.pdf.iloc[::, ::200].round(6)
         Eout            1.80000   1.88008   1.96016   2.04024   2.12032
         mu
@@ -818,7 +816,7 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -827,7 +825,7 @@ class DDxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs_0K, Ein, M, T, Eout, theta)
+        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
         >>> ddxs.data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu

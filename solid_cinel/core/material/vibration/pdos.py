@@ -3,7 +3,7 @@ Python file for working with Phonon Density Of States.
 
 @author: AB272525
 """
-from solid_cinel.core.generic import integrate, read_file
+from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
 import pandas as pd
@@ -396,7 +396,7 @@ class Tpdos:
             return tau_n
 
     @property
-    def to_dE(self):
+    def dE_grid(self):
         """
         Transform from a specific temperature phonon spectrum to a general
         phonon spectrum in energy.
@@ -421,7 +421,7 @@ class Tpdos:
         Name: rho, dtype: float64
 
         Test the results:
-        >>> p.to_dE.data.iloc[0:5]
+        >>> p.dE_grid.data.iloc[0:5]
         dE
         0.0000    0.000000
         0.0008    0.041157
@@ -783,11 +783,9 @@ class Npdos:
         ----------
         pdos_dict: 'dict' of Tpdos objects
             Dictionary containing the pdos objects for N temperatures.
-        object_type: 'Epdos' or 'Tpdos'
-            Type of the data contain by the objects.
         """
         self.instance = pdos_dict
-        self.type = object_type
+
     @property
     def data(self) -> pd.DataFrame:
         """
@@ -799,10 +797,8 @@ class Npdos:
         "pd.DataFrame"
             Data of the pdos objects in a DataFrame format.
         """
-        if self.type == Epdos:
-            data = pd.DataFrame({key: pdos.data for key, pdos in self.instance.items()})
-        else:
-            data = pd.DataFrame({key: pdos.data.to_dE for key, pdos in self.instance.items()})
+        data = pd.DataFrame({key: pdos.data.dE_grid
+                             for key, pdos in self.instance.items()})
         if np.any(data.isna()):
             data = data.interpolate(method="linear", axis=0).fillna(0)
         return data
@@ -818,7 +814,7 @@ class Npdos:
         for file, T in zip(file_, T_):
             if grid == "dE":
                 Npdos_dict[T] = Epdos.from_file(file, header, index_col, usecols,
-                                                engine)
+                                                engine).beta_grid(T)
             else:
                 Npdos_dict[T] = Tpdos.from_file(file, T, header, index_col,
                                                 usecols, engine)
@@ -826,16 +822,11 @@ class Npdos:
 
     def __getattr__(self, name):
         if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:
-            if self.type == Epdos:
-                results = {key: getattr(pdos, name)(key)
-                           for key, pdos in self.instance.items()}
-            else:
-                results = {key: getattr(pdos, name)()
-                           for key, pdos in self.instance.items()}
+            results = {key: getattr(pdos, name)()
+                       for key, pdos in self.instance.items()}
             return pd.Series(results, name=name)
         else:
             raise AttributeError(f"Attribute {name} not found in the {self.type} object")
-
 
 
 class Pdos:

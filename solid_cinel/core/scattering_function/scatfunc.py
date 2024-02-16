@@ -1726,8 +1726,8 @@ def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def getScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
-                      mu: np.ndarray, tauN: np.ndarray, tauN_beta: np.ndarray,
-                      DebyeWallerCoeff: float) -> np.ndarray:
+                   mu: np.ndarray, tauN: np.ndarray, tauN_beta: np.ndarray,
+                   DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model.

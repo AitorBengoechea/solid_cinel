@@ -6,7 +6,7 @@ from solid_cinel.core.scattering_function.alpha import get_alphaFromEout, get_ex
 from solid_cinel.core.scattering_function.beta import get_beta
 from solid_cinel.core.scattering_function import getScatFuncClm
 from solid_cinel.core.material.vibration.tau import save_tau, get_tauNfunc, get_tauNbeta
-from solid_cinel.core.xs.xs_mat import update_xs_mat_pdos_recoil_row, default_abs_beta, Ein_arno_row
+from solid_cinel.core.xs.xs_mat import update_XsMatClmRecoilRow, default_absBeta, EinArnoRow
 from solid_cinel.core.generic import reshape_differential, integrate
 import warnings
 
@@ -526,7 +526,7 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     for Ein in Ein_grid:
         # Gen Eout grid:
         Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
-        Ein_row = Ein_arno_row(Ein, Eout, -1.0, M)
+        Ein_row = EinArnoRow(Ein, Eout, -1.0, M)
         scattfunc_row = getScatFuncClm(Ein, M, T, Eout, -1.0,
                                               tauN_scatt,
                                               beta_tauN_scatt,
@@ -635,7 +635,7 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         tauN_angle = get_tauNfunc(tau1[i], beta_tau1[i], nphonon_row,
                                       threshold)
         beta_tauN_angle = get_tauNbeta(beta_tau1[i], tauN_angle.shape[1])
-        beta = default_abs_beta(T_arno[i])
+        beta = default_absBeta(T_arno[i])
         # Select the especific data for the next function:
         for Ein in Ein_grid:
             # Gen Eout grid:
@@ -647,14 +647,14 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
                                                   debye_waller_coeff_scatt)
 
             # xs_mat row for selected angle and Ein:
-            Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
+            Ein_row = EinArnoRow(Ein, Eout, mu[i], M)
             recoil_row = get_gressierRecoil(Ein_row, T_arno[i], M)
             alpha_recoil = recoil_row / (kb * T_arno[i])
             sab = Sab.from_tau(alpha_recoil, beta, tauN_angle, beta_tauN_angle,
                                DebyeWallerCoeff[i]).full
             sab /= (kb * T_arno[i])
             xs_mat_row = np.zeros(Eout_num)
-            update_xs_mat_pdos_recoil_row(xs_mat_row, sab.values,
+            update_XsMatClmRecoilRow(xs_mat_row, sab.values,
                                           sab.columns.values, recoil_row,
                                           Ein_row, T_arno[i], xs_0K_values,
                                           xs_0K_E)

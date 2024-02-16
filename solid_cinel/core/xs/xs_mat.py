@@ -561,9 +561,9 @@ class XsMat:
             beta grid for all the T_arno values
         """
         # Create variables:
-        tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
+        tau1 = np.zeros((len(T_arno), len(pdos.data.values)))
         DebyeWallerCoeff = np.zeros(len(T_arno))
-        tau_1_beta = np.zeros((len(T_arno), len(pdos.rho.values)))
+        tau_1_beta = np.zeros((len(T_arno), len(pdos.data.values)))
 
         # Fill variables:
         for i in range(len(T_arno)):

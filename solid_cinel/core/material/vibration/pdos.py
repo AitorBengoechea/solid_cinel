@@ -966,7 +966,8 @@ class Npdos:
         ky = 3 if len(T) > 3 else len(T) - 1
         self.interp_spline = RectBivariateSpline(dE, T, data.values, ky=ky)
 
-    def Tinterp(self, Tnew: [float, np.ndarray]) -> pd.DataFrame:
+    def Tinterp(self, Tnew: [float, np.ndarray],
+                inplace: bool = False) -> [None, dict, Tpdos]:
         """
         Interpolate the pdos data to a new temperature grid. If the new
         temperature is out of the bound of the original temperature grid, the
@@ -982,15 +983,49 @@ class Npdos:
         "pd.DataFrame"
             Interpolated pdos data.
         """
+        Tnew_ = Tnew if hasattr(Tnew, "__len__") else [Tnew]
         if self.interp_spline is None:
             self.compute_spline()
-
-        if not Tnew:
-            raise ValueError("Tnew cannot be empty")
-
+        # Get the index values from the data
         dE = self.data.index.values
-        return pd.DataFrame(self.interp_spline(dE, Tnew),
-                            index=dE, columns=pd.Index(Tnew))
+
+        # Use the previously computed spline function to interpolate the data
+        interpolated_T = self.interp_spline(dE, Tnew_)
+
+        # Compute the Tpdos object for the Tnew temperature
+        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i]).beta_grid(T)
+                             for i, T in enumerate(Tnew_)}
+        if inplace:
+            self.instance.update(intepolated_Tpdos)
+        else:
+            return intepolated_Tpdos[Tnew] if len(Tnew_) == 1 else intepolated_Tpdos
+
+    def tau_n(self, T: float, nphonon: int, threshold: float, check: bool = True,
+              values: bool = False) -> [np.ndarray, pd.DataFrame]:
+        """
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
+        for a certain temperature. The tau_n function is computed by interpolating
+        the pdos data to the temperature T and then computing the tau_n function.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        nphonon: 'int'
+            Number of phonons.
+        threshold: 'float'
+            Threshold to check the tau_n normalization.
+        check: 'bool', optional
+            Check the normalization of the tau_n functions. The default is True.
+        values: 'bool', optional
+            Return the tau_n values. The default is False.
+
+        Returns
+        -------
+        "pd.DataFrame", (len(rho) * nphonon, nphonon)
+            Tau(-beta) function for n phonon.
+        """
+        return self.Tinterp(T).tau_n(nphonon, threshold, check, values)
 
     def __getattr__(self, name):
         if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:

@@ -107,6 +107,14 @@ class Tpdos:
 
         self._data = data_ / integrate(data_)
 
+    @property
+    def beta(self) -> Beta:
+        """
+        Initialize the Beta class with the information of S(alpha, -beta).
+        matrix
+        """
+        return Beta(self.data.index.values)
+
     @classmethod
     def from_dE(cls, T: float, rho: Iterable, interval_energy: float):
         """
@@ -269,18 +277,17 @@ class Tpdos:
         0.154727    1.109309
         Name: P, dtype: float64
         """
-        beta_rho = self.data
-        rho_in_beta, beta_values = beta_rho.values, beta_rho.index.values
-        if abs(beta_values[0]) > threshold:
+        rhoValues, rhoBeta = self.data.values, self.data.index
+        if abs(rhoBeta[0]) > threshold:
             raise ValueError("Initial point of input DOS is not zero")
-        P_values = np.zeros(len(rho_in_beta))
+        P_values = np.zeros(len(rhoValues))
 
         # rho_in_beta is assumed to vary as beta^2 in the nearby of 0
-        P_values[0] = rho_in_beta[1] / beta_values[1] ** 2
+        P_values[0] += rhoValues[1] / rhoBeta[1] ** 2
 
         # Rest of P values calculation:
-        P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
-        return pd.Series(P_values, index=beta_rho.index, name="P")
+        P_values[1:] = 0.5 * rhoValues[1:] / rhoBeta[1:] / np.sinh(0.5 * rhoBeta[1:])
+        return pd.Series(P_values, index=rhoBeta, name="P")
 
     @property
     def Teff(self) -> float:
@@ -310,8 +317,7 @@ class Tpdos:
         159.1632
         """
         P = self.P
-        beta = P.index.values
-        P *= beta ** 2 * np.cosh(0.5 * beta)
+        P *= self.beta.data ** 2 * np.cosh(0.5 * self.beta.data)
         return integrate(P) * self.T
 
     @property
@@ -348,7 +354,7 @@ class Tpdos:
         0.379937
         """
         P = self.P
-        P *= 2 * np.cosh(0.5 * P.index.values)
+        P *= 2 * np.cosh(0.5 * self.beta.data)
         return integrate(P)
 
     @property
@@ -390,26 +396,30 @@ class Tpdos:
         4.177627    0.018020
         Name: 1, dtype: float64
         """
-        P = self.P
-        beta = P.index.values
+        P, beta = self.P, self.beta.data
         tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff
         if integrate(tau1 * (1 + np.exp(-beta))) < 1.e-5:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
         tau1.name = 1
+        tau1.index.name = "beta"
         return tau1
 
     def tauN(self, nphonon: int, threshold: float, check: bool = True,
-              values: bool = False) -> [np.ndarray, pd.DataFrame]:
+             values: bool = False) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
         for a certain temperature.
 
         Parameters
         ----------
-        nphonon
-        threshold
-        check
-        values
+        nphonon: 'int'
+            Number of phonons.
+        threshold: 'float'
+            Threshold to check the tauN normalization.
+        check: 'bool', optional
+            Check the normalization of the tauN functions. The default is True.
+        values: 'bool', optional
+            Return the tauN values. The default is False.
 
         Returns
         -------
@@ -431,13 +441,12 @@ class Tpdos:
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
         """
-        tau1 = self.tau1
-        tauN = tauN_func(tau1.values, tau1.index.values, nphonon, threshold)
+        tau1Values, beta = self.tau1.values, self.beta.data
+        tauN = tauN_func(tau1Values, beta, nphonon, threshold)
         if values:
             return tauN
         else:
-            beta = tauN_beta(tau1.index.values, tauN.shape[1])
-            tauN = pd.DataFrame(tauN, columns=beta)
+            tauN = pd.DataFrame(tauN, columns=tauN_beta(beta, tauN.shape[1]))
             tauN.index += 1
             if check:
                 # tau1 is not included in the check:
@@ -482,9 +491,8 @@ class Tpdos:
         0.0032    0.657892
         Name: rho, dtype: float64
         """
-        rho = self.data.copy()
-        dE_index = Beta(rho.index.values).get_dE(self.T)
-        return Epdos(rho.values, index=pd.Index(dE_index, name="dE"))
+        dE_index = pd.Index(self.beta.get_dE(self.T), name="dE")
+        return Epdos(self.data.values.copy(), index=dE_index)
 
 
 class Epdos:

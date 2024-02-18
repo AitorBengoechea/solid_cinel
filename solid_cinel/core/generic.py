@@ -7,6 +7,9 @@ Python file for generic function.
 import scipy as sp
 import numpy as np
 import pandas as pd
+import re
+import os
+import tempfile
 from typing import Iterable
 from scipy.stats import qmc
 
@@ -49,8 +52,9 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
     return y_norm
 
 
-def reshape_differential(data, xnew: Iterable,
-                         kind: str = "slinear", bounds_error: bool = False):
+def reshape_differential(data: pd.Series, xnew: Iterable,
+                         kind: str = "slinear",
+                         bounds_error: bool = False) -> np.ndarray:
     """
     Linearly interpolate array over new energy grid structure.
     Extrapolated values are replaced by zeros.
@@ -111,6 +115,42 @@ def reshape_differential(data, xnew: Iterable,
                                   )
     return foo(xnew)
 
+
+def interpolation(data: pd.Series, xnew: Iterable, values=False) -> [np.ndarray, pd.Series]:
+    """
+    Interpolate the data over new energy grid structure.
+
+    Parameters
+    ----------
+    data: pd.Series
+        Original data
+    xnew: 1d array-like object with at least two entries
+        new energy grid
+
+    Returns
+    -------
+    pd.Series
+        interpolated array
+
+    Examples
+    --------
+    Vector interpolation:
+    >>> x = np.array([1, 2, 3, 4, 5])
+    >>> y = np.array([1, 2, 3, 4, 5])
+    >>> data = pd.Series(y, index=x)
+    >>> xnew = np.array([1.5, 2.5, 3.5, 4.5])
+    >>> interpolation(data, xnew)
+    1.5    1.5
+    2.5    2.5
+    3.5    3.5
+    4.5    4.5
+    dtype: float64
+    """
+    data_interp = reshape_differential(data, xnew)
+    if values:
+        return data_interp
+    else:
+        return pd.Series(data_interp, index=xnew)
 
 def reshift(data: pd.Series, dx: [float, np.ndarray]) -> pd.Series:
     """

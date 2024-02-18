@@ -9,11 +9,11 @@ import numba as nb
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import sigma1, get_scat_sct_angular, get_scatfunc_pdos_row
-from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
+from solid_cinel.core.scattering_function import sigma1, get_ScatSctAngular, get_ScatFuncClmRow
+from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.scattering_function.alpha import get_gressier_recoil, get_expansion_order
-from solid_cinel.core.scattering_function.sab import Sab, get_sab_sct_alpha
+from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
+from solid_cinel.core.scattering_function.sab import Sab, get_SabSctAlpha
 from solid_cinel.core.xs.dxs import Dxs
 import os
 from math import pi
@@ -69,8 +69,8 @@ class XsMat:
     """
     Xs matrix class
     """
-    def __init__(self, xs_0K, Ein, M, T, *args, **kwargs):
-        self.xs_0K = xs_0K
+    def __init__(self, xs0K, Ein, M, T, *args, **kwargs):
+        self.xs0K = xs0K
         self.Ein = Ein
         self.M = M
         self.T = T
@@ -119,7 +119,7 @@ class XsMat:
 
          Parameters for fgm, sct and pdos models
          ---------------------------------------
-         xs_0K : pd.Series
+         xs0K : pd.Series
              Cross section at 0K in barns
          Ein : float
              The incident energy of the neutron in eV
@@ -142,7 +142,7 @@ class XsMat:
          pdos : 'solid_cinel.core.material.Pdos'
              Pdos object.
          threshold : 'float', optional
-             Minimun value to take into account in the creation of tau_n
+             Minimun value to take into account in the creation of tauN
              functions. For T>200 is convenient to set into 1.0e-14 to speed up
              the calculations. The default is 0.0.
          nphonon : 'int', optional
@@ -159,7 +159,7 @@ class XsMat:
          >>> wd = os.getcwd()
          >>> os.chdir(__file__.replace("xs_mat.py", ""))
          >>> os.chdir("../../data/xs/U238/")
-         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
          >>> os.chdir(wd)
 
          >>> T = 1000
@@ -170,8 +170,8 @@ class XsMat:
          >>> mu_fit = np.cos(np.deg2rad(60))
 
          # sigma1 model:
-         >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
-         >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
+         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000	1.866667	1.933333	2.000000	2.066667	2.133333	2.200000
          180 9.102355	9.095532	9.088710	9.081758	9.074679	9.067600	9.060521
          170 9.102381	9.095558	9.088736	9.081785	9.074706	9.067627	9.060548
@@ -193,8 +193,8 @@ class XsMat:
          10	 9.105489	9.098775	9.091979	9.085087	9.078074	9.070973	9.063803
 
          # fgm model:
-         >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, model="fgm")
-         >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, model="fgm")
+         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000	1.866667	1.933333	2.000000	2.066667	2.133333	2.200000
          180 9.102355	9.095532	9.088710	9.081758	9.074679	9.067600	9.060521
          170 9.102381	9.095559	9.088737	9.081785	9.074706	9.067627	9.060549
@@ -217,8 +217,8 @@ class XsMat:
 
          # sct model:
          >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-         >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
-         >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
+         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
               1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
          180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
          170  9.102371  9.095549  9.088724  9.081772  9.074696  9.067617  9.060539
@@ -242,8 +242,8 @@ class XsMat:
          # pdos model:
          >>> nphonon = 100
          >>> threshold = 1.0e-14
-         >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
-         >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, pdos, nphonon=nphonon, threshold=threshold, model="pdos")
+         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
               1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
          180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
          170  9.103715  9.096910  9.090104  9.083212  9.076165  9.069103  9.062042
@@ -270,8 +270,8 @@ class XsMat:
          >>> T = 300
          >>> theta = np.arange(1, 11, 1)
          >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)[:6]
-         >>> xs_values = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
-         >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+         >>> xsValues = XsMat.from_model(xs0K, Ein, M, T, Eout, theta, mu_fit, pdos, model="sct")
+         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              33.012000  34.234667  35.457333    36.680000   37.902667  39.125333
          10   0.781011   0.212474  18.943993  7832.112249  116.900933  48.371957
          9    0.774634   0.214952  18.935478  7827.100451  116.942587  48.337172
@@ -287,39 +287,34 @@ class XsMat:
          """
         # Common arguments:
         if len(args) == 6:
-            xs_0K, Ein, M, T, Eout, theta = args
+            xs0K, Ein, M, T, Eout, theta = args
         elif len(args) == 7:
-            xs_0K, Ein, M, T, Eout, theta, mu_fit = args
+            xs0K, Ein, M, T, Eout, theta, mu_fit = args
         else:
-            xs_0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
+            xs0K, Ein, M, T, Eout, theta, mu_fit, pdos = args
 
         # Common variables:
-        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
-                                                                     M, T, Eout,
-                                                                     theta)
+        xsValues, xsE, EinArno, mu, Tarno = cls.common_variables(xs0K, Ein, M, T, Eout, theta)
         # Calculate the cross-section matrix:
         model = kwargs.get("model", "sigma1")
-        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+        xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
         if model == "sigma1":
-            update_xs_mat_sigma1(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                                 T_arno)
+            update_XsMatSigma1(xs_mat, EinArno, start, xsValues, xsE, M, Tarno)
         elif model == "fgm":
-            update_xs_mat_sct(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                              T_arno, mu_fit, T_arno)
+            update_XsMatSct(xs_mat, EinArno, start, xsValues, xsE, M, Tarno, mu_fit, Tarno)
         elif model == "sct":
-            Teff = cls.get_Teff(pdos, T_arno)
-            update_xs_mat_sct(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                              T_arno, mu_fit, Teff)
+            Teff = cls.get_Teff(pdos, Tarno)
+            update_XsMatSct(xs_mat, EinArno, start, xsValues, xsE, M, Tarno, mu_fit, Teff)
         elif model == "pdos":
-            tau1, DebyeWallerCoeff, tau_1_beta = cls.get_pdos_variables(pdos, T_arno)
+            tau1, DebyeWallerCoeff, tau1beta = cls.get_pdos_variables(pdos, Tarno)
             threshold = kwargs.get("threshold", 0.0)
             nphonon = kwargs.get("nphonon", 1000)
-            update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                               T_arno, mu_fit, tau_1_beta, DebyeWallerCoeff,
-                               tau1, nphonon, threshold)
+            update_XsMatClm(xs_mat, EinArno, start, xsValues, xsE, M, Tarno,
+                            mu_fit, tau1beta, DebyeWallerCoeff, tau1, nphonon,
+                            threshold)
         else:
             raise ValueError("Model not implemented")
-        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
+        return cls(xs0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @classmethod
     def from_recoil(cls, *args, **kwargs):
@@ -333,7 +328,7 @@ class XsMat:
 
          Parameters for fgm, sct and pdos models
          ---------------------------------------
-         xs_0K : pd.Series
+         xs0K : pd.Series
              Cross section at 0K in barns
          Ein : float
              The incident energy of the neutron in eV
@@ -356,13 +351,13 @@ class XsMat:
          pdos : 'solid_cinel.core.material.Pdos'
              Pdos object.
          threshold : 'float', optional
-             Minimun value to take into account in the creation of tau_n
+             Minimun value to take into account in the creation of tauN
              functions. For T>200 is convenient to set into 1.0e-14 to speed up
              the calculations. The default is 0.0.
         decimal: 'float'
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
-        order_max: 'int'
+        orderMax: 'int'
             Maximun expansion order. The default is 5000.
 
          Returns
@@ -376,7 +371,7 @@ class XsMat:
          >>> wd = os.getcwd()
          >>> os.chdir(__file__.replace("xs_mat.py", ""))
          >>> os.chdir("../../data/xs/U238/")
-         >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
          >>> os.chdir(wd)
 
          >>> T = 1000
@@ -386,8 +381,8 @@ class XsMat:
          >>> theta = np.arange(10, 190, 10)
 
          # fgm model:
-         >>> xs_values = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta)
-         >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+         >>> xsValues = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta)
+         >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
               1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
          180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
          170  9.102381  9.095558  9.088736  9.081785  9.074706  9.067627  9.060548
@@ -410,8 +405,8 @@ class XsMat:
 
         # sct model:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> xs_values = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="sct")
-        >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+        >>> xsValues = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
+        >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
         180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
         170  9.102381  9.095558  9.088733  9.081782  9.074706  9.067627  9.060548
@@ -434,10 +429,10 @@ class XsMat:
 
         # pdos model:
         >>> decimal = 1.0e-6
-        >>> order_max = 100
+        >>> orderMax = 100
         >>> threshold = 1.0e-14
-        >>> xs_values = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, pdos, model="pdos", decimal=decimal, order_max=order_max, threshold=threshold)
-        >>> pd.DataFrame(xs_values.data.values, index=theta[::-1], columns=Eout).round(6)
+        >>> xsValues = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos", decimal=decimal, orderMax=orderMax, threshold=threshold)
+        >>> pd.DataFrame(xsValues.data.values, index=theta[::-1], columns=Eout).round(6)
              1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
         180  9.102355  9.095532  9.088710  9.081758  9.074679  9.067600  9.060521
         170  4.176742  4.226157  4.274931  4.323037  4.370432  4.417199  4.463351
@@ -461,38 +456,36 @@ class XsMat:
 
         # Common arguments:
         if len(args) == 6:
-            xs_0K, Ein, M, T, Eout, theta = args
+            xs0K, Ein, M, T, Eout, theta = args
         else:
-            xs_0K, Ein, M, T, Eout, theta, pdos = args
+            xs0K, Ein, M, T, Eout, theta, pdos = args
 
         # Common variables:
-        xs_values, xs_E, Ein_arno, mu, T_arno = cls.common_variables(xs_0K, Ein,
-                                                                     M, T, Eout,
-                                                                     theta)
+        xsValues, xsE, EinArno, mu, Tarno = cls.common_variables(xs0K, Ein, M, T, Eout, theta)
         # Calculate the cross-section matrix:
         model = kwargs.get("model", "fgm")
-        xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+        xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
         if model == "fgm":
-            update_xs_mat_sct_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                                     T_arno, T_arno)
+            update_XsMatSctRecoil(xs_mat, EinArno, start, xsValues, xsE, M,
+                                  Tarno, Tarno)
         elif model == "sct":
-            Teff = cls.get_Teff(pdos, T_arno)
-            update_xs_mat_sct_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                                     T_arno, Teff)
+            Teff = cls.get_Teff(pdos, Tarno)
+            update_XsMatSctRecoil(xs_mat, EinArno, start, xsValues, xsE, M,
+                                  Tarno, Teff)
         elif model == "pdos":
-            tau1, DebyeWallerCoeff, tau_1_beta = cls.get_pdos_variables(pdos, T_arno)
+            tau1, DebyeWallerCoeff, tau1beta = cls.get_pdos_variables(pdos, Tarno)
             threshold = kwargs.get("threshold", 0.0)
             decimal = kwargs.get("decimal", 1.0e-6)
-            order_max = kwargs.get("order_max", 5000)
-            update_xs_mat_pdos_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M,
-                                      T_arno, tau_1_beta, DebyeWallerCoeff,
-                                      tau1, threshold, decimal, order_max)
+            orderMax = kwargs.get("orderMax", 5000)
+            update_XsMatClmRecoil(xs_mat, EinArno, start, xsValues, xsE, M,
+                                  Tarno, tau1beta, DebyeWallerCoeff, tau1,
+                                  threshold, decimal, orderMax)
         else:
             raise ValueError("Model not implemented")
-        return cls(xs_0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
+        return cls(xs0K, Ein, M, T, xs_mat, index=mu, columns=Eout)
 
     @staticmethod
-    def common_variables(xs_0K: pd.Series, Ein: float, M: float, T: float,
+    def common_variables(xs0K: pd.Series, Ein: float, M: float, T: float,
                          Eout: np.ndarray, theta: np.ndarray) -> (np.ndarray,
                                                                   np.ndarray,
                                                                   np.ndarray,
@@ -503,7 +496,7 @@ class XsMat:
 
         Parameters
         ----------
-        xs_0K: pd.Series
+        xs0K: pd.Series
             Cross section at 0K in barns
         Ein: float
             The incident energy of the neutron in eV
@@ -518,25 +511,25 @@ class XsMat:
 
         Returns
         -------
-        xs_values: np.ndarray, (Z)
+        xsValues: np.ndarray, (Z)
             Cross section values
-        xs_E: np.ndarray, (Z)
+        xsE: np.ndarray, (Z)
             Cross section energy grid
-        Ein_arno: np.ndarray, (M, N)
+        EinArno: np.ndarray, (M, N)
             Arno incident energies
         mu: np.ndarray, (M,)
             Cosine of the outgoing angle grid
-        T_arno: np.ndarray, (M,)
+        Tarno: np.ndarray, (M,)
             Arno temperatures for the rows of the cross section matrix
         """
         mu = np.sort(np.cos(np.deg2rad(theta)))
-        T_arno = T * (1 + mu) / 2
-        Ein_arno = get_Ein_arno(Ein, Eout, mu, M)
-        xs_values, xs_E = xs_0K.values, xs_0K.index.values
-        return xs_values, xs_E, Ein_arno, mu, T_arno
+        Tarno = T * (1 + mu) / 2
+        EinArno = get_EinArno(Ein, Eout, mu, M)
+        xsValues, xsE = xs0K.values, xs0K.index.values
+        return xsValues, xsE, EinArno, mu, Tarno
 
     @staticmethod
-    def get_pdos_variables(pdos: Pdos, T_arno: np.ndarray) -> (np.ndarray,
+    def get_pdos_variables(pdos: Pdos, Tarno: np.ndarray) -> (np.ndarray,
                                                                np.ndarray,
                                                                np.ndarray):
         """
@@ -548,41 +541,41 @@ class XsMat:
         ----------
         pdos: 'solid_cinel.core.material.Pdos'
             Pdos object.
-        T_arno: np.ndarray, (M,)
+        Tarno: np.ndarray, (M,)
             Target arno temperature grid in K
 
         Returns
         -------
         tau1: np.ndarray, (M, T)
-            tau1 values for all the T_arno values
+            tau1 values for all the Tarno values
         DebyeWallerCoeff: np.ndarray, (M,)
-            DebyeWallerCoeff values for all the T_arno values
-        tau_1_beta: np.ndarray, (M, T)
-            beta grid for all the T_arno values
+            DebyeWallerCoeff values for all the Tarno values
+        tau1beta: np.ndarray, (M, T)
+            beta grid for all the Tarno values
         """
         # Create variables:
-        tau1 = np.zeros((len(T_arno), len(pdos.rho.values)))
-        DebyeWallerCoeff = np.zeros(len(T_arno))
-        tau_1_beta = np.zeros((len(T_arno), len(pdos.rho.values)))
+        tau1 = np.zeros((len(Tarno), len(pdos.data.values)))
+        DebyeWallerCoeff = np.zeros(len(Tarno))
+        tau1beta = np.zeros((len(Tarno), len(pdos.data.values)))
 
         # Fill variables:
-        for i in range(len(T_arno)):
-            if T_arno[i] > 0.0:
-                tau1[i, :] += pdos.get_tau_1(T_arno[i]).values
-                DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(T_arno[i])
-                tau_1_beta[i, :] += pdos.to_beta_grid(T_arno[i]).data.index.values
+        for i in range(len(Tarno)):
+            if Tarno[i] > 0.0:
+                tau1[i, :] += pdos.tau1(Tarno[i]).values
+                DebyeWallerCoeff[i] += pdos.DebyeWallerCoeff(Tarno[i])
+                tau1beta[i, :] += pdos.beta_grid(Tarno[i]).data.index.values
 
         # Some values are nan, so we replace them with the next values:
         nan_indices = np.where(np.isnan(DebyeWallerCoeff))
         if nan_indices[0].size > 0:
-            new_value_index = nan_indices[0].max() + 1
-            tau_1_beta[nan_indices] = tau_1_beta[new_value_index]
-            DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
-            tau1[nan_indices] = tau1[new_value_index]
-        return tau1, DebyeWallerCoeff, tau_1_beta
+            newValueIndex = nan_indices[0].max() + 1
+            tau1beta[nan_indices] = tau1beta[newValueIndex]
+            DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[newValueIndex]
+            tau1[nan_indices] = tau1[newValueIndex]
+        return tau1, DebyeWallerCoeff, tau1beta
 
     @staticmethod
-    def get_Teff(pdos: Pdos, T_arno):
+    def get_Teff(pdos: Pdos, Tarno: np.ndarray) -> np.ndarray:
         """
         Get the effective temperature for the sct model. If Teff can't be calculated,
         the values are nan, so we replace them with the next values.
@@ -591,18 +584,16 @@ class XsMat:
         ----------
         pdos: 'solid_cinel.core.material.Pdos'
             Pdos object.
-        T_arno: np.ndarray, (M,)
+        Tarno: np.ndarray, (M,)
             Target arno temperature grid in K
 
         Returns
         -------
         Teff: np.ndarray, (M,)
-            Effective temperature values for all the T_arno values
+            Effective temperature values for all the Tarno values
         """
-        Teff = np.array(
-            [pdos.Teff(T_aprox) if T_aprox > 0.0 else 0 for T_aprox in
-             T_arno]
-        )
+        Teff = np.array([pdos.Teff(T_aprox) if T_aprox > 0.0 else 0
+                         for T_aprox in Tarno])
         # Aproximation: if Teff is nan, take the next value of Teff
         nan_indices = np.where(np.isnan(Teff))
         if nan_indices[0].size > 0:
@@ -633,7 +624,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     # Generate Broadening test results:
@@ -641,28 +632,28 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> Ein = 2.0
     >>> Eout = default_Eout(Ein)
     >>> M = 238.05077040419212
-    >>> round(Dxs.from_sigma1(xs_0K, Ein, M, T, Eout).integral, 2)
+    >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
     9.09
     """
-    Eout_small = np.linspace(0,
+    EoutSmall = np.linspace(0,
                              0.99 * Ein,
                              2000)
-    Eout_middle = np.linspace(0.99 * Ein,
+    EoutMid = np.linspace(0.99 * Ein,
                               Ein * 1.01,
                               3000)
     if Ein * 2 < 5.0:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(5.0),
                                  2000)
     else:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(2 * Ein),
                                  2000)
-    return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+    return np.sort(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def default_abs_beta(T: float) -> np.ndarray:
+def default_absBeta(T: float) -> np.ndarray:
     """
     Generate the default beta grid for a certain temperature
 
@@ -676,11 +667,11 @@ def default_abs_beta(T: float) -> np.ndarray:
     beta: np.ndarray
         Beta grid
     """
-    beta_mid = 0.08 / (kb * T)
-    beta_max = 5.0 / (kb * T)
-    beta_small = np.linspace(0, beta_mid,2000)
-    beta_great = np.logspace(np.log10(beta_mid), np.log10(beta_max), 1000)
-    return np.concatenate((beta_small, beta_great[1::]))
+    betaMid = 0.08 / (kb * T)
+    betaMax = 5.0 / (kb * T)
+    betaSmall = np.linspace(0, betaMid,2000)
+    beta_great = np.logspace(np.log10(betaMid), np.log10(betaMax), 1000)
+    return np.concatenate((betaSmall, beta_great[1::]))
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -698,13 +689,13 @@ def default_beta(T: float) -> np.ndarray:
     beta: np.ndarray
         Beta grid
     """
-    beta_abs = default_abs_beta(T)
-    return np.concatenate((-beta_abs[::-1], beta_abs[1::]))
+    absBeta = default_absBeta(T)
+    return np.concatenate((-absBeta[::-1], absBeta[1::]))
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
-                 M: float) -> np.ndarray:
+def EinArnoRow(Ein: float, Eout: np.ndarray, mu: float,
+               M: float) -> np.ndarray:
     """
     Get the incident energy row for the arno model.
 
@@ -721,18 +712,18 @@ def Ein_arno_row(Ein: float, Eout: np.ndarray, mu: float,
 
     Returns
     -------
-    Ein_arno_row: np.ndarray, (Z,)
+    EinArnoRow: np.ndarray, (Z,)
         Incident energy row for the arno model
     """
     alpha = (Ein + Eout - 2 * mu * np.sqrt(Ein * Eout)) * m / M
-    mu_Ein_arno = (Eout + Ein) / 2 - Ein * mu * m / M
-    mu_Ein_arno += 0.5 * alpha / (1 - mu)
-    return mu_Ein_arno
+    muEinArno = (Eout + Ein) / 2 - Ein * mu * m / M
+    muEinArno += 0.5 * alpha / (1 - mu)
+    return muEinArno
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                 M: float) -> np.ndarray:
+def get_EinArno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                M: float) -> np.ndarray:
     """
     Get the incident energy matrix for the arno model.
 
@@ -749,28 +740,28 @@ def get_Ein_arno(Ein: float, Eout: np.ndarray, mu: np.ndarray,
 
     Returns
     -------
-    Ein_arno: np.ndarray, (M, Z)
+    EinArno: np.ndarray, (M, Z)
         Incident energy matrix for the arno model
     """
-    Ein_arno = np.empty((len(mu), len(Eout)))
+    EinArno = np.empty((len(mu), len(Eout)))
     for i in range(len(mu)):
-        Ein_arno[i, :] = Ein_arno_row(Ein, Eout, mu[i], M)
-    return Ein_arno
+        EinArno[i, :] = EinArnoRow(Ein, Eout, mu[i], M)
+    return EinArno
 
 
 @nb.jit(nopython=True, nogil=False)
-def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
-                   Ein_arno: np.ndarray, mu_min: float) -> (np.ndarray, int):
+def get_inputData(xsValues: np.ndarray, xsE: np.ndarray,
+                  EinArno: np.ndarray, mu_min: float) -> (np.ndarray, int):
     """
     Get the input data for the convolution for the xs matrix calculation.
 
     Parameters
     ----------
-    xs_values: np.ndarray, (N,)
+    xsValues: np.ndarray, (N,)
         Cross section values in barns at 0K
-    xs_E: np.ndarray, (N,)
+    xsE: np.ndarray, (N,)
         Cross section energy grid in eV
-    Ein_arno: np.ndarray, (M, N)
+    EinArno: np.ndarray, (M, N)
         Incident energy matrix for the arno model
     mu_min: float
         The minimum cosine. If mu_min == -1.0, the first row of the matrix is
@@ -784,9 +775,9 @@ def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
         Start index for the loop in theta. If mu_min == -1.0, start = 1, else
         start = 0
     """
-    xs_mat = np.zeros(Ein_arno.shape)
+    xs_mat = np.zeros(EinArno.shape)
     if mu_min == np.cos(pi):
-        xs_mat[0, :] += np.interp(Ein_arno[0, :], xs_E, xs_values)
+        xs_mat[0, :] += np.interp(EinArno[0, :], xsE, xsValues)
         start = 1
     else:
         start = 0
@@ -794,16 +785,16 @@ def get_input_data(xs_values: np.ndarray, xs_E: np.ndarray,
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def Db(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, Eout: np.ndarray,
+def Db(xsValues: np.ndarray, xsE: np.ndarray, Ein: float, Eout: np.ndarray,
        pdf: np.ndarray) -> float:
     """
     Calculate the doppler broadening of a cross section for a pdf
 
     Parameters
     ----------
-    xs_values: np.ndarray, (N,)
+    xsValues: np.ndarray, (N,)
         Cross section values in barns
-    xs_E: np.ndarray, (N,)
+    xsE: np.ndarray, (N,)
         Cross section energy grid in eV
     Ein: float
         The incident energy of the neutron in eV
@@ -819,23 +810,22 @@ def Db(xs_values: np.ndarray, xs_E: np.ndarray, Ein: float, Eout: np.ndarray,
     """
     max_pos = np.argmax(pdf)
     if pdf[max_pos] > 1.0e308:  # Overflow found in pdf_val
-        Db_xs = np.interp(Eout[max_pos], xs_E, xs_values)
+        Db_xs = np.interp(Eout[max_pos], xsE, xsValues)
     else:
         norm = np.trapz(pdf, x=Eout)
         # Recoil:
         recoil = Ein - Eout[max_pos]
         # xs:
-        xs_Eout_arno = np.interp(Eout + recoil, xs_E, xs_values)
-        Db_xs = np.trapz(xs_Eout_arno * pdf, x=Eout) / norm
+        xsEouTarno = np.interp(Eout + recoil, xsE, xsValues)
+        Db_xs = np.trapz(xsEouTarno * pdf, x=Eout) / norm
     return Db_xs
 
 
-def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
-                       xs_values: np.ndarray, xs_E: np.ndarray,
-                       M: float, T_arno: np.ndarray,
-                       mu_fit: float, tau_1_beta: np.ndarray,
-                       DebyeWallerCoeff: np.ndarray, tau1: np.ndarray, nphonon: int,
-                       threshold: float):
+def update_XsMatClm(xs_mat: np.ndarray, EinArno: np.ndarray, start: int,
+                    xsValues: np.ndarray, xsE: np.ndarray, M: float,
+                    Tarno: np.ndarray, mu_fit: float, tau1beta: np.ndarray,
+                    DebyeWallerCoeff: np.ndarray, tau1: np.ndarray, nphonon: int,
+                    threshold: float):
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -843,15 +833,15 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
 
     Parameters
     ----------
-    xs_values: np.ndarray, (N,)
+    xsValues: np.ndarray, (N,)
         Cross section values in barns
-    xs_E: np.ndarray, (N,)
+    xsE: np.ndarray, (N,)
         Cross section energy grid in eV
     Ein: float
         The incident energy of the neutron in eV
     M: float
         Mass of the material in amu
-    T_arno: np.ndarray, (M,)
+    Tarno: np.ndarray, (M,)
         Target temperature grid in K
     Eout: np.ndarray, (Z,)
         The neutron outgoing energy grid in eV
@@ -863,20 +853,20 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     nphonon: int
         Phonon expansion order
     tau1: np.ndarray, (M, T)
-        tau1 values for all the T_arno values
-    tau_1_beta: np.ndarray, (M, T)
-        beta grid for all the T_arno values
+        tau1 values for all the Tarno values
+    tau1beta: np.ndarray, (M, T)
+        beta grid for all the Tarno values
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
     DebyeWallerCoeff: np.ndarray, (M,)
-        DebyeWallerCoeff values for all the T_arno values
+        DebyeWallerCoeff values for all the Tarno values
     tau1: np.ndarray, (O, P)
         tau1 values for all the row T. O is the number of the phonon expansion
         order and P is the number of the beta grid
     nphonon: int
         Phonon expansion order
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
 
     Returns
     -------
@@ -889,7 +879,7 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -901,39 +891,39 @@ def update_xs_mat_pdos(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
-    >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
-    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-    >>> update_xs_mat_pdos(xs_mat, Ein_arno, start, xs_values, xs_E, M, T_arno, mu_fit, tau_1_beta, DebyeWallerCoeff, tau1, nphonon, threshold)
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
+    >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
+    >>> update_XsMatClm(xs_mat, EinArno, start, xsValues, xsE, M, Tarno, mu_fit, tau1beta, DebyeWallerCoeff, tau1, nphonon, threshold)
     >>> pd.DataFrame(xs_mat, index=theta[::-1], columns=Eout).round(6)
         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     20  9.105109  9.098356  9.091553  9.084671  9.077696  9.070658  9.063578
     10  9.105072  9.098383  9.091617  9.084748  9.077762  9.070689  9.063551
     """
-    for i in range(start, len(T_arno)):
-        tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-        tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
-        update_xs_mat_pdos_row(xs_mat[i], tau_n, tau_n_beta_grid, DebyeWallerCoeff[i],
-                               Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
+    for i in range(start, len(Tarno)):
+        tauN = get_tauNfunc(tau1[i], tau1beta[i], nphonon, threshold)
+        tauNbeta = get_tauNbeta(tau1beta[i], tauN.shape[1])
+        update_XsMatClmRow(xs_mat[i], tauN, tauNbeta, DebyeWallerCoeff[i],
+                           EinArno[i], Tarno[i], xsValues, xsE, mu_fit, M)
 
 
 @nb.jit(nopython=True, nogil=False, parallel=True)
-def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
-                           tau_n_beta_grid: np.ndarray, debyewallercoeff: float,
-                           Ein_row: np.ndarray, T: float, xs_values: np.ndarray,
-                           xs_E: np.ndarray, mu_fit: float, M: float):
+def update_XsMatClmRow(xs_mat: np.ndarray, tauN: np.ndarray,
+                       tauNbeta: np.ndarray, debyewallercoeff: float,
+                       Ein_row: np.ndarray, T: float, xsValues: np.ndarray,
+                       xsE: np.ndarray, mu_fit: float, M: float):
     """
     Calculate the cross section matrix for a outgoing incident energy using arno
-    model with different tau functions according to the T_arno value.
+    model with different tau functions according to the Tarno value.
 
     Parameters
     ----------
     xs_mat: np.ndarray, (1, N)
         Empty Cross section matrix in barns
-    tau_n: np.ndarray, (Z, T)
-        tau_n values for all the row T. Z is the number of the phonon expansion
+    tauN: np.ndarray, (Z, T)
+        tauN values for all the row T. Z is the number of the phonon expansion
         order and T is the number of the beta grid
-    tau_1_beta: np.ndarray, (T,)
+    tau1beta: np.ndarray, (T,)
         beta grid for the row T
     debyewallercoeff: float
         DebyeWallerCoeff value for the row T
@@ -941,9 +931,9 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
         Incident energy row for the arno model
     T: float
         Target temperature value for the row T
-    xs_values: np.ndarray, (K,)
+    xsValues: np.ndarray, (K,)
         0K Cross section values in barns
-    xs_E: np.ndarray, (K,)
+    xsE: np.ndarray, (K,)
         0K Cross section energy grid in eV
     mu_fit: float
         The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
@@ -962,7 +952,7 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -974,13 +964,13 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
-    >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
-    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
+    >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
     >>> i = 0
-    >>> tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
-    >>> update_xs_mat_pdos_row(xs_mat[i], tau_n, tau_n_beta_grid, DebyeWallerCoeff[i], Ein_arno[i], T_arno[i], xs_values, xs_E, mu_fit, M)
+    >>> tauN = get_tauNfunc(tau1[i], tau1beta[i], nphonon, threshold)
+    >>> tauNbeta = get_tauNbeta(tau1beta[i], tauN.shape[1])
+    >>> update_XsMatClmRow(xs_mat[i], tauN, tauNbeta, DebyeWallerCoeff[i], EinArno[i], Tarno[i], xsValues, xsE, mu_fit, M)
     >>> pd.Series(xs_mat[i], index=Eout).round(6)
     1.800000    9.105109
     1.866667    9.098356
@@ -993,16 +983,15 @@ def update_xs_mat_pdos_row(xs_mat: np.ndarray, tau_n: np.ndarray,
     """
     for j in prange(len(xs_mat)):
         Eout_db = default_Eout(Ein_row[j])
-        pdf = get_scatfunc_pdos_row(Ein_row[j], M, T,
-                                    Eout_db, mu_fit, tau_n, tau_n_beta_grid,
-                                    debyewallercoeff)
-        xs_mat[j] += Db(xs_values, xs_E, Ein_row[j], Eout_db, pdf)
+        pdf = get_ScatFuncClmRow(Ein_row[j], M, T, Eout_db, mu_fit, tauN, tauNbeta,
+                                 debyewallercoeff)
+        xs_mat[j] += Db(xsValues, xsE, Ein_row[j], Eout_db, pdf)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
-                         xs_values: np.ndarray, xs_E: np.ndarray,
-                         M: float, T_arno: np.ndarray) -> np.ndarray:
+def update_XsMatSigma1(xs_mat: np.ndarray, EinArno: np.ndarray, start: int,
+                       xsValues: np.ndarray, xsE: np.ndarray, M: float,
+                       Tarno: np.ndarray) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1012,18 +1001,18 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     ----------
     xs_mat: np.ndarray, (M, N)
         Cross section matrix in barns
-    Ein_arno: np.ndarray, (M, N)
+    EinArno: np.ndarray, (M, N)
         Incident energy matrix for the arno model
     start: int
         Start index for the loop in theta. If mu_min == -1.0, start = 1, else
         start = 0
-    xs_values: np.ndarray, (N,)
+    xsValues: np.ndarray, (N,)
         Cross section values in barns at 0K
-    xs_E: np.ndarray, (N,)
+    xsE: np.ndarray, (N,)
         Cross section energy grid in eV
     M: float
         Mass of the material in amu
-    T_arno: np.ndarray, (M,)
+    Tarno: np.ndarray, (M,)
         Target temperature grid in K
 
     Returns
@@ -1031,19 +1020,18 @@ def update_xs_mat_sigma1(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     np.ndarray, (M, N)
         Cross section matrix in barns with the row i updated
     """
-    for i in range(start, Ein_arno.shape[0], 1):
-        for j in prange(Ein_arno.shape[1]):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = sigma1(Eout_db, Ein_arno[i, j], T_arno[i], M)
-            xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db,
-                                pdf)
+    for i in range(start, EinArno.shape[0], 1):
+        for j in prange(EinArno.shape[1]):
+            Eout_db = default_Eout(EinArno[i, j])
+            pdf = sigma1(Eout_db, EinArno[i, j], Tarno[i], M)
+            xs_mat[i, j] += Db(xsValues, xsE, EinArno[i, j], Eout_db, pdf)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
-                      xs_values: np.ndarray, xs_E: np.ndarray,
-                      M: float, Tarno: np.ndarray, mu_fit: float,
-                      Tarno_eff: np.ndarray) -> np.ndarray:
+def update_XsMatSct(xs_mat: np.ndarray, EinArno: np.ndarray, start: int,
+                    xsValues: np.ndarray, xsE: np.ndarray,
+                    M: float, Tarno: np.ndarray, mu_fit: float,
+                    TarnoEff: np.ndarray) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1053,23 +1041,23 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
     ----------
     xs_mat: np.ndarray, (M, N)
         Cross section matrix in barns
-    Ein_arno: np.ndarray, (M, N)
+    EinArno: np.ndarray, (M, N)
         Incident energy matrix for the arno model
     start: int
         Start index for the loop in theta. If mu_min == -1.0, start = 1, else
         start = 0
-    xs_values: np.ndarray, (N,)
+    xsValues: np.ndarray, (N,)
         Cross section values in barns at 0K
-    xs_E: np.ndarray, (N,)
+    xsE: np.ndarray, (N,)
         Cross section energy grid in eV
     M: float
         Mass of the material in amu
-    T_arno: np.ndarray, (M,)
+    Tarno: np.ndarray, (M,)
         Target temperature grid in K
     mu_fit: float
         The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
         with SIGMA1 algoritm
-    Tarno_eff: np.ndarray, (M,)
+    TarnoEff: np.ndarray, (M,)
         Effective temperature grid in K
 
     Returns
@@ -1078,20 +1066,18 @@ def update_xs_mat_sct(xs_mat: np.ndarray, Ein_arno: np.ndarray, start: int,
         Cross section matrix in barns with the row i updated
     """
     mu_fit_ = np.array([mu_fit])
-    for i in range(start, Ein_arno.shape[0], 1):
-        for j in prange(Ein_arno.shape[1]):
-            Eout_db = default_Eout(Ein_arno[i, j])
-            pdf = get_scat_sct_angular(Eout_db, mu_fit_, Ein_arno[i, j],
-                                       Tarno[i], M, Tarno_eff[i], 1.0)[0]
-            xs_mat[i, j] += Db(xs_values, xs_E, Ein_arno[i, j], Eout_db, pdf)
+    for i in range(start, EinArno.shape[0], 1):
+        for j in prange(EinArno.shape[1]):
+            Eout_db = default_Eout(EinArno[i, j])
+            pdf = get_ScatSctAngular(Eout_db, mu_fit_, EinArno[i, j],
+                                       Tarno[i], M, TarnoEff[i], 1.0)[0]
+            xs_mat[i, j] += Db(xsValues, xsE, EinArno[i, j], Eout_db, pdf)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
-                             start: int, xs_values: np.ndarray,
-                             xs_E: np.ndarray,
-                             M: float, Tarno: np.ndarray,
-                             Tarno_eff: np.ndarray) -> np.ndarray:
+def update_XsMatSctRecoil(xs_mat: np.ndarray, EinArno: np.ndarray,
+                          start: int, xsValues: np.ndarray, xsE: np.ndarray,
+                          M: float, Tarno: np.ndarray, TarnoEff: np.ndarray) -> np.ndarray:
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1101,23 +1087,23 @@ def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     ----------
     xs_mat: np.ndarray, (M, N)
         Cross section matrix in barns
-    Ein_arno: np.ndarray, (M, N)
+    EinArno: np.ndarray, (M, N)
         Incident energy matrix for the arno model
     start: int
         Start index for the loop in theta. If mu_min == -1.0, start = 1, else
         start = 0
-    xs_values: np.ndarray, (N,)
+    xsValues: np.ndarray, (N,)
         Cross section values in barns at 0K
-    xs_E: np.ndarray, (N,)
+    xsE: np.ndarray, (N,)
         Cross section energy grid in eV
     M: float
         Mass of the material in amu
-    T_arno: np.ndarray, (M,)
+    Tarno: np.ndarray, (M,)
         Target temperature grid in K
     mu_fit: float
         The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
         with SIGMA1 algoritm
-    Tarno_eff: np.ndarray, (M,)
+    TarnoEff: np.ndarray, (M,)
         Effective temperature grid in K
 
     Returns
@@ -1125,39 +1111,39 @@ def update_xs_mat_sct_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     np.ndarray, (M, N)
         Cross section matrix in barns
     """
-    for i in range(start, Ein_arno.shape[0], 1):
+    for i in range(start, EinArno.shape[0], 1):
         beta = default_beta(Tarno[i])
-        Tratio = Tarno_eff[i] / Tarno[i]
-        for j in prange(Ein_arno.shape[1]):
+        Tratio = TarnoEff[i] / Tarno[i]
+        for j in prange(EinArno.shape[1]):
             # Generate the outgoing energy grid based on beta grid:
-            Eout = Ein_arno[i, j] + beta * kb * Tarno[i]
+            Eout = EinArno[i, j] + beta * kb * Tarno[i]
             # Calculate the recoil energy:
-            recoil = get_gressier_recoil(Ein_arno[i, j], Tarno[i], M)
+            recoil = get_gressierRecoil(EinArno[i, j], Tarno[i], M)
             # Get the alpha value for the Ein value:
             alpha = recoil / (kb * Tarno[i])
             # Generate the pdf and get the xs 0K values:
-            pdf = get_sab_sct_alpha(alpha, beta, Tratio, 1.0)
+            pdf = get_SabSctAlpha(alpha, beta, Tratio, 1.0)
             pdf /= (kb * Tarno[i])
-            xs_Eout = np.interp(Eout + recoil, xs_E, xs_values)
+            xsEout = np.interp(Eout + recoil, xsE, xsValues)
             # Calculate the cross section:
-            xs_mat[i, j] += np.trapz(xs_Eout * pdf, x=Eout)
+            xs_mat[i, j] += np.trapz(xsEout * pdf, x=Eout)
 
 
 @nb.jit(nopython=True, nogil=False, parallel=True)
-def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
-                                  beta: np.ndarray, recoil: np.ndarray,
-                                  Ein_row: np.ndarray, T: float,
-                                  xs_values: np.ndarray, xs_E: np.ndarray):
+def update_XsMatClmRecoilRow(xs_mat: np.ndarray, pdf_mat: np.ndarray,
+                             beta: np.ndarray, recoil: np.ndarray,
+                             Ein_row: np.ndarray, T: float,
+                             xsValues: np.ndarray, xsE: np.ndarray):
     """
     Calculate the cross section matrix for a outgoing incident energy using arno
-    model with different tau functions according to the T_arno value.
+    model with different tau functions according to the Tarno value.
 
     Parameters
     ----------
     xs_mat: np.ndarray, (1, N)
         Empty Cross section matrix in barns
-    tau_n: np.ndarray, (Z, T)
-        tau_n values for all the row T. Z is the number of the phonon expansion
+    tauN: np.ndarray, (Z, T)
+        tauN values for all the row T. Z is the number of the phonon expansion
         order and T is the number of the beta grid
     delta_beta: float
         delta_beta value for the row T
@@ -1167,9 +1153,9 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
         Incident energy row for the arno model
     T: float
         Target temperature value for the row T
-    xs_values: np.ndarray, (K,)
+    xsValues: np.ndarray, (K,)
         0K Cross section values in barns
-    xs_E: np.ndarray, (K,)
+    xsE: np.ndarray, (K,)
         0K Cross section energy grid in eV
     mu_fit: float
         The cosine of the outgoing angle to fit the S(alpha, -beta) distribution
@@ -1188,7 +1174,7 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -1200,18 +1186,18 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> nphonon = 100
     >>> threshold = 1.0e-14
-    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
-    >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
-    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
+    >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
     >>> i = 0
-    >>> tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
-    >>> recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
-    >>> alpha = recoil / (kb * T_arno[i])
-    >>> beta = default_abs_beta(T_arno[i])
-    >>> sab = Sab.from_tau(alpha, beta, tau_n, tau_n_beta_grid, DebyeWallerCoeff[i]).full
-    >>> sab /= (kb * T_arno[i])
-    >>> update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values, recoil, Ein_arno[i], T_arno[i], xs_values, xs_E)
+    >>> tauN = get_tauNfunc(tau1[i], tau1beta[i], nphonon, threshold)
+    >>> tauNbeta = get_tauNbeta(tau1beta[i], tauN.shape[1])
+    >>> recoil = get_gressierRecoil(EinArno[i], Tarno[i], M)
+    >>> alpha = recoil / (kb * Tarno[i])
+    >>> beta = default_absBeta(Tarno[i])
+    >>> sab = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff[i]).full
+    >>> sab /= (kb * Tarno[i])
+    >>> update_XsMatClmRecoilRow(xs_mat[i], sab.values, sab.columns.values, recoil, EinArno[i], Tarno[i], xsValues, xsE)
     >>> pd.Series(xs_mat[i], index=Eout).round(6)
     1.800000    9.104252
     1.866667    9.097677
@@ -1224,16 +1210,16 @@ def update_xs_mat_pdos_recoil_row(xs_mat: np.ndarray, pdf_mat: np.ndarray,
     """
     for j in prange(len(xs_mat)):
         Eout = Ein_row[j] + beta * kb * T
-        xs_Eout = np.interp(Eout + recoil[j], xs_E, xs_values)
-        xs_mat[j] += np.trapz(xs_Eout * pdf_mat[j], x=Eout)
+        xsEout = np.interp(Eout + recoil[j], xsE, xsValues)
+        xs_mat[j] += np.trapz(xsEout * pdf_mat[j], x=Eout)
 
 
-def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
-                              start: int, xs_values: np.ndarray,
-                              xs_E: np.ndarray, M: float, T_arno: np.ndarray,
-                              tau_1_beta: np.ndarray,
-                              DebyeWallerCoeff: np.ndarray, tau1: np.ndarray,
-                              threshold: float, decimal: float, order_max: int):
+def update_XsMatClmRecoil(xs_mat: np.ndarray, EinArno: np.ndarray,
+                          start: int, xsValues: np.ndarray,
+                          xsE: np.ndarray, M: float, Tarno: np.ndarray,
+                          tau1beta: np.ndarray, DebyeWallerCoeff: np.ndarray,
+                          tau1: np.ndarray, threshold: float, decimal: float,
+                          orderMax: int):
     """
     Calculate the cross section matrix for a given incident energy, target mass,
     target temperature, outgoing energy grid and outgoing angle grid using arno
@@ -1241,15 +1227,15 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
 
     Parameters
     ----------
-    xs_values: np.ndarray, (N,)
+    xsValues: np.ndarray, (N,)
         Cross section values in barns
-    xs_E: np.ndarray, (N,)
+    xsE: np.ndarray, (N,)
         Cross section energy grid in eV
     Ein: float
         The incident energy of the neutron in eV
     M: float
         Mass of the material in amu
-    T_arno: np.ndarray, (M,)
+    Tarno: np.ndarray, (M,)
         Target temperature grid in K
     Eout: np.ndarray, (Z,)
         The neutron outgoing energy grid in eV
@@ -1261,22 +1247,22 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     nphonon: int
         Phonon expansion order
     tau1: np.ndarray, (M, T)
-        tau1 values for all the T_arno values
-    tau_1_beta: np.ndarray, (M, T)
-        beta grid for all the T_arno values
+        tau1 values for all the Tarno values
+    tau1beta: np.ndarray, (M, T)
+        beta grid for all the Tarno values
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
     DebyeWallerCoeff: np.ndarray, (M,)
-        DebyeWallerCoeff values for all the T_arno values
+        DebyeWallerCoeff values for all the Tarno values
     tau1: np.ndarray, (O, P)
         tau1 values for all the row T. O is the number of the phonon expansion
         order and P is the number of the beta grid
     threshold: float
-        Minimun value to take into account in the creation of tau_n
+        Minimun value to take into account in the creation of tauN
     decimal: float
-        Decimal precision to use in the obtention of the tau_n values
-    order_max: int
-        Maximum order to use in the expansion of the tau_n values
+        Decimal precision to use in the obtention of the tauN values
+    orderMax: int
+        Maximum order to use in the expansion of the tauN values
 
     Returns
     -------
@@ -1289,7 +1275,7 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs_mat.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     >>> T = 1000
@@ -1299,30 +1285,29 @@ def update_xs_mat_pdos_recoil(xs_mat: np.ndarray, Ein_arno: np.ndarray,
     >>> theta = np.arange(10, 30, 10)
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
     >>> decimal = 1.0e-6
-    >>> order_max = 100
+    >>> orderMax = 100
     >>> threshold = 1.0e-14
-    >>> xs_values, xs_E, Ein_arno, mu, T_arno = XsMat.common_variables(xs_0K, Ein, M, T, Eout, theta)
-    >>> tau1, DebyeWallerCoeff, tau_1_beta = XsMat.get_pdos_variables(pdos, T_arno)
-    >>> xs_mat, start = get_input_data(xs_values, xs_E, Ein_arno, mu[0])
-    >>> update_xs_mat_pdos_recoil(xs_mat, Ein_arno, start, xs_values, xs_E, M, T_arno, tau_1_beta, DebyeWallerCoeff, tau1, threshold, decimal, order_max)
+    >>> xsValues, xsE, EinArno, mu, Tarno = XsMat.common_variables(xs0K, Ein, M, T, Eout, theta)
+    >>> tau1, DebyeWallerCoeff, tau1beta = XsMat.get_pdos_variables(pdos, Tarno)
+    >>> xs_mat, start = get_inputData(xsValues, xsE, EinArno, mu[0])
+    >>> update_XsMatClmRecoil(xs_mat, EinArno, start, xsValues, xsE, M, Tarno, tau1beta, DebyeWallerCoeff, tau1, threshold, decimal, orderMax)
     >>> pd.DataFrame(xs_mat, index=theta[::-1], columns=Eout).round(6)
         1.800000  1.866667  1.933333  2.000000  2.066667  2.133333  2.200000
     20  9.104252  9.097677  9.091022  9.084265  9.077388  9.070424  9.063407
     10  9.104449  9.097905  9.091258  9.084491  9.077583  9.070568  9.063477
     """
-    for i in range(start, len(T_arno)):
-        recoil = get_gressier_recoil(Ein_arno[i], T_arno[i], M)
-        alpha = recoil / (kb * T_arno[i])
-        nphonon = get_expansion_order(alpha, DebyeWallerCoeff[i], decimal, order_max)
-        tau_n = tau_n_functions(tau1[i], tau_1_beta[i], nphonon, threshold)
-        tau_n_beta_grid = tau_n_beta(tau_1_beta[i], tau_n.shape[1])
+    for i in range(start, len(Tarno)):
+        recoil = get_gressierRecoil(EinArno[i], Tarno[i], M)
+        alpha = recoil / (kb * Tarno[i])
+        nphonon = get_expansionOrder(alpha, DebyeWallerCoeff[i], decimal, orderMax)
+        tauN = get_tauNfunc(tau1[i], tau1beta[i], nphonon, threshold)
+        tauNbeta = get_tauNbeta(tau1beta[i], tauN.shape[1])
         # Generate the outgoing energy grid based on alpha value:
-        beta = default_abs_beta(T_arno[i])
-        sab = Sab.from_tau(alpha, beta, tau_n, tau_n_beta_grid, DebyeWallerCoeff[i]).full
-        sab /= (kb * T_arno[i])
-        update_xs_mat_pdos_recoil_row(xs_mat[i], sab.values, sab.columns.values,
-                                      recoil, Ein_arno[i], T_arno[i], xs_values,
-                                      xs_E)
+        beta = default_absBeta(Tarno[i])
+        sab = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff[i]).full
+        sab /= (kb * Tarno[i])
+        update_XsMatClmRecoilRow(xs_mat[i], sab.values, sab.columns.values,
+                                 recoil, EinArno[i], Tarno[i], xsValues, xsE)
 
 
 def extract_number(s) -> float:

@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
 from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
-from solid_cinel.core.scattering_function.alpha import get_alpha_from_Eout, get_expansion_order, get_gressier_recoil
+from solid_cinel.core.scattering_function.alpha import get_alphaFromEout, get_expansionOrder, get_gressierRecoil
 from solid_cinel.core.scattering_function.beta import get_beta
-from solid_cinel.core.scattering_function import get_scatfunc_pdos_row
-from solid_cinel.core.material.vibration.tau import save_tau, tau_n_functions, tau_n_beta
-from solid_cinel.core.xs.xs_mat import update_xs_mat_pdos_recoil_row, default_abs_beta, Ein_arno_row
+from solid_cinel.core.scattering_function import get_ScatFuncClmRow
+from solid_cinel.core.material.vibration.tau import save_tau, get_tauNfunc, get_tauNbeta
+from solid_cinel.core.xs.xs_mat import update_XsMatClmRecoilRow, default_absBeta, EinArnoRow
 from solid_cinel.core.generic import reshape_differential, integrate
 import warnings
 
@@ -66,35 +66,34 @@ def get_results(results: dict, prob: bool) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
     """
-    xs_db = pd.DataFrame(results).T.sort_index()
-    xs_db.index.name = "Ein"
-    columns_order = ["xs", "downscattering", "upscattering", "Ein=Eout"]
-    return xs_db[columns_order] if prob else xs_db
+    xsDb = pd.DataFrame(results).T.sort_index()
+    xsDb.index.name = "Ein"
+    columnsOrder = ["xs", "downscattering", "upscattering", "Ein=Eout"]
+    return xsDb[columnsOrder] if prob else xsDb
 
-def from_fgm(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-             theta_diff: float, Eout_num: int,
-             prob: bool) -> pd.DataFrame:
+def from_fgm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+             thetaDiff: float, EoutNum: int, prob: bool) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
     broadened XsMat and scattering function based on FGM.
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     prob: bool
         If True, apart from the cross section, the probability of each energy
@@ -103,47 +102,46 @@ def from_fgm(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
     """
     results = {}
-    theta = np.arange(1, 180 + theta_diff, theta_diff)
-    for Ein in Ein_grid:
-        Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
+    theta = np.arange(1, 180 + thetaDiff, thetaDiff)
+    for Ein in EinGrid:
+        Eout = np.linspace(Ein * 0.95, Ein * 1.05, EoutNum)
         # XsMat
-        xs_mat = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
+        xs_mat = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
         # Scattering function:
         scatfunc = ScatFunc.from_model(Ein, M, T, Eout, theta, model="fgm")
         # DDxs
         ddxs = DDxs(Ein, T, M, "4PCF(FGM)", scatfunc.convolve(xs_mat.data))
         result = {"xs": ddxs.integral}
         if prob:
-            result.update(ddxs.E_prob)
+            result.update(ddxs.Eprob)
         results[Ein] = result
     return get_results(results, prob)
 
 
-def from_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-             theta_diff: float, Eout_num: int, prob: bool,
-             pdos: Pdos) -> pd.DataFrame:
+def from_sct(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+             thetaDiff: float, EoutNum: int, prob: bool, pdos: Pdos) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
     broadened XsMat and scattering function based on SCT.
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     pdos: Pdos
         Phonon density of states of the target
@@ -154,49 +152,49 @@ def from_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
     """
     results = {}
-    theta = np.arange(1, 180 + theta_diff, theta_diff)
-    for Ein in Ein_grid:
-        Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
+    theta = np.arange(1, 180 + thetaDiff, thetaDiff)
+    for Ein in EinGrid:
+        Eout = np.linspace(Ein * 0.95, Ein * 1.05, EoutNum)
         # XsMat
-        xs_mat = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
+        xs_mat = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
         # Scattering function:
         scatfunc = ScatFunc.from_model(Ein, M, T, Eout, theta, pdos, model="sct")
         # DDxs
         ddxs = DDxs(Ein, T, M, "4PCF(SCT)", scatfunc.convolve(xs_mat.data))
         result = {"xs": ddxs.integral}
         if prob:
-            result.update(ddxs.E_prob)
+            result.update(ddxs.Eprob)
         results[Ein] = result
     return get_results(results, prob)
 
 
-def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-              theta_diff: float, Eout_num: int, prob: bool, pdos: Pdos,
+def from_pdos(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+              thetaDiff: float, EoutNum: int, prob: bool, pdos: Pdos,
               nphonon: int = None, decimal: float = 1.0e-6,
-              order_max: int = 5000, threshold: float = 0.0,
-              tau_to_file: bool = False, binary: bool = False) -> pd.DataFrame:
+              orderMax: int = 5000, threshold: float = 0.0,
+              tauToFile: bool = False, binary: bool = False) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
     broadened XsMat and scattering function based on Phonon Expansion.
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     pdos: Pdos
         Phonon density of states of the target
@@ -206,63 +204,62 @@ def from_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions
-    order_max: int
+        Precision of the tauN functions
+    orderMax: int
         Maximum expansion order
     threshold: float
-        Threshold to calculate the tau_n functions
-    tau_to_file: bool
-        If True, the tau_n functions are saved to a file
+        Threshold to calculate the tauN functions
+    tauToFile: bool
+        If True, the tauN functions are saved to a file
     binary: bool
-        If True, the tau_n functions are saved in binary format
+        If True, the tauN functions are saved in binary format
 
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
     """
     results = {}
-    theta = np.arange(1, 180 + theta_diff, theta_diff)
+    theta = np.arange(1, 180 + thetaDiff, thetaDiff)
     mu = np.cos(np.deg2rad(theta))
+    muMin = mu.min()
 
-    # Calculate the tau_n functions:
-    debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    beta = pdos.to_beta_grid(T).data.index.values
+    # Calculate the tauN functions:
+    DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+    beta = pdos.beta_grid(T).data.index.values
     if nphonon:
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
     else:
-        nphonon = get_expansion_order(
-            get_alpha_from_Eout(1.05 * Ein_grid[-1], Ein_grid[-1], M, T, mu.min()),
-            debye_waller_coeff, decimal, order_max)
-    tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
-    save_tau(tau_n, nphonon, T, tau_to_file, binary)
-    tau_n_beta_grid = tau_n_beta(beta, tau_n.shape[1])
+        alphaMax = get_alphaFromEout(1.05 * EinGrid[-1], EinGrid[-1], M, T, muMin)
+        nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, orderMax)
+    tauN = pdos.tauN(T, nphonon, threshold, values=True)
+    save_tau(tauN, nphonon, T, tauToFile, binary)
+    tauNbeta = get_tauNbeta(beta, tauN.shape[1])
     # start the loop
-    for Ein in Ein_grid:
-        Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
+    for Ein in EinGrid:
+        Eout = np.linspace(Ein * 0.95, Ein * 1.05, EoutNum)
         # XsMat
-        xs_mat = XsMat.from_model(xs_0K, Ein, M, T, Eout, theta)
+        xs_mat = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
         # Minimize the expansion order for each energy:
-        min_nphonon = get_expansion_order(
-            get_alpha_from_Eout(1.05 * Ein, Ein, M, T, mu.min()),
-            debye_waller_coeff, decimal, order_max)
+        alphaMax = get_alphaFromEout(1.05 * Ein, Ein, M, T, muMin)
+        minNphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, orderMax)
         # Scattering function:
-        scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tau_n[:min_nphonon],
-                                     tau_n_beta_grid, debye_waller_coeff)
+        scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tauN[:minNphonon],
+                                     tauNbeta, DebyeWallerCoeff)
         # DDxs
         ddxs = DDxs(Ein, T, M, "4PCF(CLM)", scatfunc.convolve(xs_mat.data))
         result = {"xs": ddxs.integral}
         if prob:
-            result.update(ddxs.E_prob)
+            result.update(ddxs.Eprob)
         results[Ein] = result
     return get_results(results, prob)
 
 
-def from_model(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-               *args, theta_diff: float = 1.0, Eout_num: int = 3000,
+def from_model(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+               *args, thetaDiff: float = 1.0, EoutNum: int = 3000,
                model: str = "fgm", prob: bool = True, **kwargs) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
@@ -270,17 +267,17 @@ def from_model(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     model: str
         Model to calculate the scattering function. Options: "fgm", "sct" and
@@ -299,20 +296,20 @@ def from_model(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions. Default: 1.0e-6
-    n_order_max: int
+        Precision of the tauN functions. Default: 1.0e-6
+    n_orderMax: int
         Maximum expansion order. Default: 5000
     threshold: float
-        Threshold to calculate the tau_n functions. Default: 0.0
-    tau_to_file: bool
-        If True, the tau_n functions are saved to a file. Default: False
+        Threshold to calculate the tauN functions. Default: 0.0
+    tauToFile: bool
+        If True, the tauN functions are saved to a file. Default: False
     binary: bool
-        If True, the tau_n functions are saved in binary format. Default: False
+        If True, the tauN functions are saved in binary format. Default: False
 
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
 
@@ -323,42 +320,42 @@ def from_model(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("db.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     # Generate DDXS test variables:
     >>> T = 300
     >>> M = 238.05077040419212
     >>> Ein = np.array([6.67])
-    >>> from_model(xs_0K, Ein, M, T, model="fgm", Eout_num=1000)
+    >>> from_model(xs0K, Ein, M, T, model="fgm", EoutNum=1000)
                   xs  downscattering  upscattering  Ein=Eout
     Ein
     6.67  456.375935        0.846605      0.148305   0.00509
 
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> from_model(xs_0K, Ein, M, T, pdos, model="sct", Eout_num=1000)
+    >>> from_model(xs0K, Ein, M, T, pdos, model="sct", EoutNum=1000)
                   xs  downscattering  upscattering  Ein=Eout
     Ein
     6.67  453.228141        0.843325      0.151599  0.005077
 
-    >>> from_model(xs_0K, Ein, M, T, pdos, model="pdos", Eout_num=1000)
+    >>> from_model(xs0K, Ein, M, T, pdos, model="pdos", EoutNum=1000)
                   xs  downscattering  upscattering  Ein=Eout
     Ein
     6.67  444.117576        0.852297      0.143335  0.004368
     """
     model = model.lower()
     if model == "pdos":
-        return from_pdos(xs_0K, Ein_grid, M, T, theta_diff, Eout_num, prob,
+        return from_pdos(xs0K, EinGrid, M, T, thetaDiff, EoutNum, prob,
                          *args, **kwargs)
     elif model == "sct":
-        return from_sct(xs_0K, Ein_grid, M, T, theta_diff, Eout_num, prob,
+        return from_sct(xs0K, EinGrid, M, T, thetaDiff, EoutNum, prob,
                         *args)
     else:
-        return from_fgm(xs_0K, Ein_grid, M, T, theta_diff, Eout_num, prob)
+        return from_fgm(xs0K, EinGrid, M, T, thetaDiff, EoutNum, prob)
 
 
-def from_recoil_fgm(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-                    theta_diff: float, Eout_num: int,
+def from_recoilFgm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+                    thetaDiff: float, EoutNum: int,
                     prob: bool) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
@@ -366,17 +363,17 @@ def from_recoil_fgm(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     prob: bool
         If True, apart from the cross section, the probability of each energy
@@ -385,29 +382,29 @@ def from_recoil_fgm(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
     """
     results = {}
-    theta = np.arange(1, 180 + theta_diff, theta_diff)
-    for Ein in Ein_grid:
-        Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
+    theta = np.arange(1, 180 + thetaDiff, thetaDiff)
+    for Ein in EinGrid:
+        Eout = np.linspace(Ein * 0.95, Ein * 1.05, EoutNum)
         # XsMat
-        xs_mat = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta)
+        xs_mat = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta)
         # Scattering function:
         scatfunc = ScatFunc.from_model(Ein, M, T, Eout, theta, model="fgm")
         # DDxs
         ddxs = DDxs(Ein, T, M, "4PCF(FGM)", scatfunc.convolve(xs_mat.data))
         result = {"xs": ddxs.integral}
         if prob:
-            result.update(ddxs.E_prob)
+            result.update(ddxs.Eprob)
         results[Ein] = result
     return get_results(results, prob)
 
 
-def from_recoil_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-                    theta_diff: float, Eout_num: int, prob: bool,
+def from_recoilSct(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+                    thetaDiff: float, EoutNum: int, prob: bool,
                     pdos: Pdos) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
@@ -415,17 +412,17 @@ def from_recoil_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     pdos: Pdos
         Phonon density of states of the target
@@ -436,16 +433,16 @@ def from_recoil_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
     """
     results = {}
-    theta = np.arange(1, 180 + theta_diff, theta_diff)
-    for Ein in Ein_grid:
-        Eout = np.linspace(Ein * 0.95, Ein * 1.05, Eout_num)
+    theta = np.arange(1, 180 + thetaDiff, thetaDiff)
+    for Ein in EinGrid:
+        Eout = np.linspace(Ein * 0.95, Ein * 1.05, EoutNum)
         # XsMat
-        xs_mat = XsMat.from_recoil(xs_0K, Ein, M, T, Eout, theta, pdos,
+        xs_mat = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta, pdos,
                                    model="sct")
         # Scattering function:
         scatfunc = ScatFunc.from_model(Ein, M, T, Eout, theta, pdos,
@@ -454,20 +451,20 @@ def from_recoil_sct(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
         ddxs = DDxs(Ein, T, M, "4PCF(SCT)", scatfunc.convolve(xs_mat.data))
         result = {"xs": ddxs.integral}
         if prob:
-            result.update(ddxs.E_prob)
+            result.update(ddxs.Eprob)
         results[Ein] = result
     return get_results(results, prob)
 
 
-def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
-                tau_n_scatt: np.ndarray, beta_tau_n_scatt: float, debye_waller_coeff_scatt: float,
-                xs_0K_values: np.ndarray, xs_0K_E: np.ndarray, prob: bool) -> list:
+def ddxsClm0K(EinGrid: np.ndarray, num_Eout: int, M: float, T: float,
+              tauNscatt: np.ndarray, tauNscattBeta: float, DebyeWallerCoeffScatt: float,
+              xs0KValues: np.ndarray, xs0KE: np.ndarray, prob: bool) -> list:
     """
     Compute the ddxs for 180 degree in clm model using
 
     Parameters
     ----------
-    Ein_grid : np.ndarray
+    EinGrid : np.ndarray
         Incoming energy grid.
     num_Eout : int
         Number of energy grid for outgoing energy grid.
@@ -475,15 +472,15 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
         Mass of the target in amu.
     T : float
         Temperature in kelvin.
-    tau_n_scatt : np.ndarray
+    tauNscatt : np.ndarray
         Tau(-beta) function for n expansion for calculation of the scattering function.
-    delta_beta_scatt : float
+    delta_betaScatt : float
         Interval of beta for the scattering function.
-    debye_waller_coeff_scatt : float
+    DebyeWallerCoeffScatt : float
         Debye-Waller coefficient for the scattering function.
-    xs_0K_values : np.ndarray
+    xs0KValues : np.ndarray
         Cross section values at 0K.
-    xs_0K_E : np.ndarray
+    xs0KE : np.ndarray
         Cross section energy grid.
     prob : bool
         If True, return probability of upscattering and downscattering.
@@ -499,23 +496,23 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("db.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     # Generate DDXS test variables:
     >>> T = 1000
     >>> M = 238.05077040419212
-    >>> Ein_grid = np.array([2.0, 6.67, 36.6])
+    >>> EinGrid = np.array([2.0, 6.67, 36.6])
     >>> num_Eout = 1000
-    >>> xs_0K_values, xs_0K_E = xs_0K.values, xs_0K.index.values
+    >>> xs0KValues, xs0KE = xs0K.values, xs0K.index.values
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
-    >>> beta_scatt = pdos.to_beta_grid(T).data.index.values
-    >>> tau_n_scatt = pdos.get_tau(T, 10, 0.0, values=True)
-    >>> tau_n_beta_grid = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
-    >>> beta_tau_n_scatt = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
-    >>> result = ddxs_clm_0K(Ein_grid, num_Eout, M, T, tau_n_scatt, beta_tau_n_scatt, debye_waller_coeff_scatt, xs_0K_values, xs_0K_E, True)
+    >>> DebyeWallerCoeffScatt = pdos.DebyeWallerCoeff(T)
+    >>> betaScatt = pdos.beta_grid(T).data.index.values
+    >>> tauNscatt = pdos.tauN(T, 10, 0.0, values=True)
+    >>> tauNbeta = get_tauNbeta(betaScatt, tauNscatt.shape[1])
+    >>> tauNscattBeta = get_tauNbeta(betaScatt, tauNscatt.shape[1])
+    >>> result = ddxsClm0K(EinGrid, num_Eout, M, T, tauNscatt, tauNscattBeta, DebyeWallerCoeffScatt, xs0KValues, xs0KE, True)
     >>> pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).round(6)
         mu    Ein   xs  xs_up  xs_down
     0 -1.0   2.00  0.0    0.0      0.0
@@ -523,49 +520,47 @@ def ddxs_clm_0K(Ein_grid: np.ndarray, num_Eout: int, M: float, T: float,
     2 -1.0  36.60  0.0    0.0      0.0
     """
     result = []
-    for Ein in Ein_grid:
+    for Ein in EinGrid:
         # Gen Eout grid:
         Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
-        Ein_row = Ein_arno_row(Ein, Eout, -1.0, M)
-        scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, -1.0,
-                                              tau_n_scatt,
-                                              beta_tau_n_scatt,
-                                              debye_waller_coeff_scatt)
-        row_results = scattfunc_row * np.interp(Ein_row, xs_0K_E, xs_0K_values)
-        Ein_results = [-1.0, Ein, np.trapz(row_results, x=Eout)]
+        EinRow = EinArnoRow(Ein, Eout, -1.0, M)
+        scattFuncRow = get_ScatFuncClmRow(Ein, M, T, Eout, -1.0, tauNscatt,
+                                          tauNscattBeta, DebyeWallerCoeffScatt)
+        rowResults = scattFuncRow * np.interp(EinRow, xs0KE, xs0KValues)
+        EinResults = [-1.0, Ein, np.trapz(rowResults, x=Eout)]
 
         # Get probability of upscattering and downscattering:
         if prob:
             mask_up, mask_down = Eout > Ein, Eout < Ein
-            Ein_results.append(np.trapz(row_results[mask_up], x=Eout[mask_up]))
-            Ein_results.append(np.trapz(row_results[mask_down], x=Eout[mask_down]))
+            EinResults.append(np.trapz(rowResults[mask_up], x=Eout[mask_up]))
+            EinResults.append(np.trapz(rowResults[mask_down], x=Eout[mask_down]))
 
         # Update results:
-        result.append(Ein_results)
+        result.append(EinResults)
     return result
 
 
-def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-                     theta_diff: float, Eout_num: int, prob: bool, pdos: Pdos,
+def from_recoilClm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+                     thetaDiff: float, EoutNum: int, prob: bool, pdos: Pdos,
                      nphonon: int = None, decimal: float = 1.0e-6,
-                     order_max: int = 5000, threshold: float = 0.0) -> pd.DataFrame:
+                     orderMax: int = 5000, threshold: float = 0.0) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
     broadened XsMat and scattering function based on Phonon Expansion.
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     pdos: Pdos
         Phonon density of states of the target
@@ -575,126 +570,113 @@ def from_recoil_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions
-    n_order_max: int
+        Precision of the tauN functions
+    n_orderMax: int
         Maximum expansion order
     threshold: float
-        Threshold to calculate the tau_n functions
-    tau_to_file: bool
-        If True, the tau_n functions are saved to a file
+        Threshold to calculate the tauN functions
+    tauToFile: bool
+        If True, the tauN functions are saved to a file
     binary: bool
-        If True, the tau_n functions are saved in binary format
+        If True, the tauN functions are saved in binary format
 
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
     """
     # Get common variables:
-    xs_0K_values, xs_0K_E = xs_0K.values, xs_0K.index.values
-    theta = np.arange(1, 180 + theta_diff, theta_diff)
+    xs0KValues, xs0KE = xs0K.values, xs0K.index.values
+    theta = np.arange(1, 180 + thetaDiff, thetaDiff)
     mu = np.sort(np.cos(np.deg2rad(theta)))
-    T_arno = T * (1 + mu) / 2
+    muMin = mu.min()
+    Tarno = T * (1 + mu) / 2
 
-    # Calculate the tau_n functions for scattering function:
-    debye_waller_coeff_scatt = pdos.DebyeWallerCoeff(T)
-    beta_scatt = pdos.to_beta_grid(T).data.index.values
+    # Calculate the tauN functions for scattering function:
+    DebyeWallerCoeffScatt = pdos.DebyeWallerCoeff(T)
+    betaScatt = pdos.beta_grid(T).data.index.values
     if nphonon:
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
     else:
-        alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1],
-                                        M, T, mu.min())
-        nphonon = get_expansion_order(alpha_max, debye_waller_coeff_scatt,
-                                      decimal, order_max)
-    tau_n_scatt = pdos.get_tau(T, nphonon, threshold, values=True)
-    tau_n_scatt_beta = tau_n_beta(beta_scatt, tau_n_scatt.shape[1])
+        alphaMax = get_alphaFromEout(EinGrid[-1] * 1.1, EinGrid[-1], M, T, muMin)
+        nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeffScatt, decimal, orderMax)
+    tauNscatt = pdos.tauN(T, nphonon, threshold, values=True)
+    tauNscattBeta = get_tauNbeta(betaScatt, tauNscatt.shape[1])
 
     # Create xs_mat creation data:
-    tau1, DebyeWallerCoeff, beta_tau1 = XsMat.get_pdos_variables(pdos, T_arno)
+    tau1, DebyeWallerCoeff, beta_tau1 = XsMat.get_pdos_variables(pdos, Tarno)
 
     # Create a list to hold the results
     if mu[0] == np.cos(np.pi):
-        result = ddxs_clm_0K(Ein_grid, Eout_num, M, T,
-                             tau_n_scatt, tau_n_scatt_beta,
-                             debye_waller_coeff_scatt,
-                             xs_0K_values, xs_0K_E, prob)
+        result = ddxsClm0K(EinGrid, EoutNum, M, T, tauNscatt, tauNscattBeta,
+                           DebyeWallerCoeffScatt, xs0KValues, xs0KE, prob)
         start = 1
     else:
         result = []
         start = 0
 
     for i in range(start, len(theta)):
-        # Create angle tau_n function:
-        alpha_max = get_alpha_from_Eout(Ein_grid[-1] * 1.1, Ein_grid[-1],
-                                        M, T_arno[i], mu.min())
-        nphonon_row = get_expansion_order(alpha_max, DebyeWallerCoeff[i],
-                                          decimal, order_max)
-        tau_n_angle = tau_n_functions(tau1[i], beta_tau1[i], nphonon_row,
-                                      threshold)
-        beta_tau_n_angle = tau_n_beta(beta_tau1[i], tau_n_angle.shape[1])
-        beta = default_abs_beta(T_arno[i])
+        # Create angle tauN function:
+        alphaMax = get_alphaFromEout(EinGrid[-1] * 1.1, EinGrid[-1], M,
+                                     Tarno[i], muMin)
+        minNphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff[i], decimal,
+                                         orderMax)
+        tauNangle = get_tauNfunc(tau1[i], beta_tau1[i], minNphonon, threshold)
+        beta_tauNangle = get_tauNbeta(beta_tau1[i], tauNangle.shape[1])
+        beta = default_absBeta(Tarno[i])
         # Select the especific data for the next function:
-        for Ein in Ein_grid:
+        for Ein in EinGrid:
             # Gen Eout grid:
-            Eout = np.linspace(Ein * 0.9, Ein * 1.1, Eout_num)
+            Eout = np.linspace(Ein * 0.9, Ein * 1.1, EoutNum)
             # Scattering function for selected angle and Ein:
-            scattfunc_row = get_scatfunc_pdos_row(Ein, M, T, Eout, mu[i],
-                                                  tau_n_scatt,
-                                                  tau_n_scatt_beta,
-                                                  debye_waller_coeff_scatt)
+            scattFuncRow = get_ScatFuncClmRow(Ein, M, T, Eout, mu[i], tauNscatt,
+                                              tauNscattBeta, DebyeWallerCoeffScatt)
 
             # xs_mat row for selected angle and Ein:
-            Ein_row = Ein_arno_row(Ein, Eout, mu[i], M)
-            recoil_row = get_gressier_recoil(Ein_row, T_arno[i], M)
-            alpha_recoil = recoil_row / (kb * T_arno[i])
-            sab = Sab.from_tau(alpha_recoil, beta, tau_n_angle, beta_tau_n_angle,
+            EinRow = EinArnoRow(Ein, Eout, mu[i], M)
+            recoilRow = get_gressierRecoil(EinRow, Tarno[i], M)
+            alphaRecoil = recoilRow / (kb * Tarno[i])
+            sab = Sab.from_tau(alphaRecoil, beta, tauNangle, beta_tauNangle,
                                DebyeWallerCoeff[i]).full
-            sab /= (kb * T_arno[i])
-            xs_mat_row = np.zeros(Eout_num)
-            update_xs_mat_pdos_recoil_row(xs_mat_row, sab.values,
-                                          sab.columns.values, recoil_row,
-                                          Ein_row, T_arno[i], xs_0K_values,
-                                          xs_0K_E)
-            ddxs_angle = xs_mat_row * scattfunc_row
-            Ein_results = [mu[i], Ein, np.trapz(ddxs_angle, x=Eout)]
+            sab /= (kb * Tarno[i])
+            xsMatRow = np.zeros(EoutNum)
+            update_XsMatClmRecoilRow(xsMatRow, sab.values, sab.columns.values,
+                                     recoilRow, EinRow, Tarno[i], xs0KValues, xs0KE)
+            ddxsAngle = xsMatRow * scattFuncRow
+            EinResults = [mu[i], Ein, np.trapz(ddxsAngle, x=Eout)]
 
             # Get probability of upscattering and downscattering:
             if prob:
                 mask_up, mask_down = Eout > Ein, Eout < Ein
-                Ein_results.append(
-                    np.trapz(ddxs_angle[mask_up], x=Eout[mask_up]))
-                Ein_results.append(
-                    np.trapz(ddxs_angle[mask_down], x=Eout[mask_down]))
+                EinResults.append(
+                    np.trapz(ddxsAngle[mask_up], x=Eout[mask_up]))
+                EinResults.append(
+                    np.trapz(ddxsAngle[mask_down], x=Eout[mask_down]))
 
             # Update results:
-            result.append(Ein_results)
+            result.append(EinResults)
     if prob:
-        df = pd.DataFrame(result,
-                          columns=["mu", "Ein", "xs", "xs_up", "xs_down"])
-        df_grouped = df.groupby("Ein")
-        xs_db = df_grouped.apply(lambda group: pd.Series({
+        dfGrouped = pd.DataFrame(result, columns=["mu", "Ein", "xs", "xs_up", "xs_down"]).groupby("Ein")
+        xsDb = dfGrouped.apply(lambda group: pd.Series({
             'xs': np.trapz(group['xs'], x=group['mu']),
             'upscattering': np.trapz(group['xs_up'], x=group['mu']),
             'downscattering': np.trapz(group['xs_down'], x=group['mu'])
         }))
-        xs_db['upscattering'] /= xs_db['xs']
-        xs_db['downscattering'] /= xs_db['xs']
-        xs_db['Ein=Eout'] = 1.0 - xs_db['upscattering'] - xs_db[
-            'downscattering']
-        xs_db = xs_db[["xs", "downscattering", "upscattering", "Ein=Eout"]]
+        xsDb['upscattering'] /= xsDb['xs']
+        xsDb['downscattering'] /= xsDb['xs']
+        xsDb['Ein=Eout'] = 1.0 - xsDb['upscattering'] - xsDb['downscattering']
+        xsDb = xsDb[["xs", "downscattering", "upscattering", "Ein=Eout"]]
     else:
-        df = pd.DataFrame(result, columns=["mu", "Ein", "xs"])
-        df_grouped = df.groupby("Ein")
-        xs_db = df_grouped.apply(lambda group: pd.Series({
-            'xs': np.trapz(group['xs'], x=group['mu'])}))
-    return xs_db
+        dfGrouped = pd.DataFrame(result, columns=["mu", "Ein", "xs"]).groupby("Ein")
+        xsDb = dfGrouped.apply(lambda group: pd.Series({'xs': np.trapz(group['xs'], x=group['mu'])}))
+    return xsDb
 
 
-def from_recoil(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-                *args, theta_diff: float = 1.0, Eout_num: int = 3000,
+def from_recoil(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+                *args, thetaDiff: float = 1.0, EoutNum: int = 3000,
                 model: str = "fgm", prob: bool = True, **kwargs) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
@@ -702,17 +684,17 @@ def from_recoil(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
 
     Parameters
     ----------
-    xs_0K: pd.Series
+    xs0K: pd.Series
         Cross section at 0K
-    Ein_grid: np.ndarray
+    EinGrid: np.ndarray
         Energies to calculate the cross section in eV
     M: float
         Mass of the target in amu
     T: float
         Temperature in K
-    theta_diff: float
+    thetaDiff: float
         Angle step in degrees
-    Eout_num: int
+    EoutNum: int
         Number of energies to calculate the cross section
     model: str
         Model to calculate the scattering function. Options: "fgm", "sct" and
@@ -731,20 +713,20 @@ def from_recoil(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     nphonon: int
         Expansion order. If None, the order is calculated automatically.
     decimal: float
-        Precision of the tau_n functions. Default: 1.0e-6
-    n_order_max: int
+        Precision of the tauN functions. Default: 1.0e-6
+    n_orderMax: int
         Maximum expansion order. Default: 5000
     threshold: float
-        Threshold to calculate the tau_n functions. Default: 0.0
-    tau_to_file: bool
-        If True, the tau_n functions are saved to a file. Default: False
+        Threshold to calculate the tauN functions. Default: 0.0
+    tauToFile: bool
+        If True, the tauN functions are saved to a file. Default: False
     binary: bool
-        If True, the tau_n functions are saved in binary format. Default: False
+        If True, the tauN functions are saved in binary format. Default: False
 
     Returns
     -------
     pd.DataFrame
-        Cross section at each energy in Ein_grid for the selected temperature
+        Cross section at each energy in EinGrid for the selected temperature
         and the downscattering, upscattering and Ein=Eout probabilities if prob
         is True.
 
@@ -755,60 +737,59 @@ def from_recoil(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("db.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
     >>> os.chdir(wd)
 
     # Generate DDXS test variables:
     >>> T = 300
     >>> M = 238.05077040419212
     >>> Ein = np.array([6.67])
-    >>> from_recoil(xs_0K, Ein, M, T, model="fgm", Eout_num=1000)
+    >>> from_recoil(xs0K, Ein, M, T, model="fgm", EoutNum=1000)
                   xs  downscattering  upscattering  Ein=Eout
     Ein
     6.67  457.003682        0.846442      0.148459  0.005098
 
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> from_recoil(xs_0K, Ein, M, T, pdos, model="sct", Eout_num=1000)
+    >>> from_recoil(xs0K, Ein, M, T, pdos, model="sct", EoutNum=1000)
                   xs  downscattering  upscattering  Ein=Eout
     Ein
     6.67  438.888555        0.837399      0.157379  0.005222
 
-    #>>> from_recoil(xs_0K, Ein, M, T, pdos, model="pdos", Eout_num=1000)
+    #>>> from_recoil(xs0K, Ein, M, T, pdos, model="pdos", EoutNum=1000)
     #              xs  downscattering  upscattering  Ein=Eout
     #Ein
     #6.67  425.113084        0.845742      0.145287  0.008971
     """
     model = model.lower()
     if model == "pdos":
-        return from_recoil_pdos(xs_0K, Ein_grid, M, T, theta_diff, Eout_num,
-                                prob, *args, **kwargs)
+        return from_recoilClm(xs0K, EinGrid, M, T, thetaDiff, EoutNum, prob,
+                              *args, **kwargs)
     elif model == "sct":
-        return from_recoil_sct(xs_0K, Ein_grid, M, T, theta_diff, Eout_num,
-                               prob, *args)
+        return from_recoilSct(xs0K, EinGrid, M, T, thetaDiff, EoutNum, prob,
+                              *args)
     else:
-        return from_recoil_fgm(xs_0K, Ein_grid, M, T, theta_diff, Eout_num,
-                               prob)
+        return from_recoilFgm(xs0K, EinGrid, M, T, thetaDiff, EoutNum, prob)
 
 
-def from_alpha0_pdos(xs_0K: pd.Series, Ein_grid: np.ndarray, M: float, T: float,
-                     Eout_num: int, pdos: Pdos) -> pd.Series:
-    xs_db = {}
-    recoil = get_gressier_recoil(Ein_grid, T, M)
+def from_alpha0Clm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
+                   EoutNum: int, pdos: Pdos) -> pd.Series:
+    xsDb = {}
+    recoil = get_gressierRecoil(EinGrid, T, M)
     alpha = recoil / (kb * T)
-    debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    delta_beta = pdos.to_beta_grid(T).grid
-    nphonon = get_expansion_order(alpha, debye_waller_coeff, 1.0e-6, 5000)
-    tau_n = pdos.get_tau(T, nphonon, 0.0, values=True)
-    for i in range(len(Ein_grid)):
-        Eout = np.linspace(Ein_grid[i] * 0.95, Ein_grid[i] * 1.05, Eout_num)
-        beta = get_beta(Eout, Ein_grid[i], T)
-        scatfunc = Sab.from_tau(alpha[i], beta,
-                                tau_n, delta_beta, debye_waller_coeff).full
-        Eout_calc = Ein_grid[i] + scatfunc.index.values * kb * T
-        # xs_0K interpolation
-        xs_0K_interp = reshape_differential(xs_0K, Eout_calc + recoil[i])
+    DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+    nphonon = get_expansionOrder(alpha, DebyeWallerCoeff, 1.0e-6, 5000)
+    tau1 = pdos.beta_grid(T).data.index.values
+    tauN = pdos.get_tau(T, nphonon, 0.0, values=True)
+    tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
+    for i in range(len(EinGrid)):
+        Eout = np.linspace(EinGrid[i] * 0.95, EinGrid[i] * 1.05, EoutNum)
+        beta = get_beta(Eout, EinGrid[i], T)
+        scatfunc = Sab.from_tau(alpha[i], beta, tauN, tauNbeta, DebyeWallerCoeff).full
+        EoutCalc = EinGrid[i] + scatfunc.index.values * kb * T
+        # xs0K interpolation
+        xs0Kinterp = reshape_differential(xs0K, EoutCalc + recoil[i])
         # XsMat
-        dxs = scatfunc * xs_0K_interp
-        dxs.index = pd.Index(Eout_calc, name="Eout")
-        xs_db[Ein_grid[i]] = integrate(dxs) / (kb * T)
-    return pd.Series(xs_db, name="xs")
+        dxs = scatfunc * xs0Kinterp
+        dxs.index = pd.Index(EoutCalc, name="Eout")
+        xsDb[EinGrid[i]] = integrate(dxs) / (kb * T)
+    return pd.Series(xsDb, name="xs")

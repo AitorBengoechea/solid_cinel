@@ -361,7 +361,7 @@ class Alpha:
         >>> Alpha.from_recoil(Ein, T, M).data.round(6)
         array([0.118447, 0.155038, 0.36413 , 0.730042, 1.164525])
         """
-        return cls(get_gressier_recoil(Ein, T, M) / (kb * T))
+        return cls(get_gressierRecoil(Ein, T, M) / (kb * T))
 
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:
@@ -470,8 +470,8 @@ class Alpha:
         """
         return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
-    def expansion_order(self, DebyeWallerCoeff: float, decimal: float,
-                        order_max: int) -> int:
+    def expansionOrder(self, DebyeWallerCoeff: float, decimal: float,
+                        orderMax: int) -> int:
         """
         Get the expansion order for the phonon expansion method using the maximun
         alpha value and the decimal precision.
@@ -486,7 +486,7 @@ class Alpha:
             Debye Waller coefficient.
         decimal: 'float'
             Decimal precision
-        order_max: 'int'
+        orderMax: 'int'
             Maximun order for the expansion.
 
         Returns
@@ -501,15 +501,15 @@ class Alpha:
         >>> from solid_cinel.core.material.vibration.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> debye_waller = pdos.DebyeWallerCoeff(T)
-        >>> alpha_grid.expansion_order(debye_waller, 1.0e-6, 5000)
+        >>> alpha_grid.expansionOrder(debye_waller, 1.0e-6, 5000)
         798
         """
-        return get_expansion_order(self.data.max(), DebyeWallerCoeff, decimal,
-                                   order_max)
+        return get_expansionOrder(self.data.max(), DebyeWallerCoeff, decimal,
+                                   orderMax)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_alpha_from_Eout(Eout: np.ndarray, Ein: float, T: float, M: float,
+def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
                         mu: float) -> np.ndarray:
     """
     Get the alpha value from the parameters of the function:
@@ -566,13 +566,13 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     for i in prange(len(T)):
         for j in prange(len(Ein)):
             for ll in prange(len(mu)):
-                    alpha[i, j, ll, :] += get_alpha_from_Eout(Eout, Ein[j], T[i], M, mu[ll])
+                    alpha[i, j, ll, :] += get_alphaFromEout(Eout, Ein[j], T[i], M, mu[ll])
     return np.unique(alpha.ravel())
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
-                  mu: np.ndarray) -> np.ndarray:
+def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
+                 mu: np.ndarray) -> np.ndarray:
     """
     Get all the posible alpha values from the parameters of the function:
     .. math::
@@ -604,7 +604,7 @@ def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
     >>> M = 26.98153433356103
     >>> theta = np.array([45, 90, 135, 180])
     >>> mu = np.cos(np.deg2rad(theta))
-    >>> pd.DataFrame(get_alpha_mat(Eout, Ein, T, M, mu).round(6), index=theta, columns=Eout)
+    >>> pd.DataFrame(get_alphaMat(Eout, Ein, T, M, mu).round(6), index=theta, columns=Eout)
          0.331180  0.331812  0.332445  0.333077  0.333710
     45   0.105201  0.105302  0.105403  0.105504  0.105605
     90   0.359179  0.359522  0.359865  0.360208  0.360551
@@ -613,19 +613,19 @@ def get_alpha_mat(Eout: np.ndarray, Ein: float, T: float, M: float,
 
     >>> theta = np.array([90])
     >>> mu = np.cos(np.deg2rad(theta))
-    >>> pd.DataFrame(get_alpha_mat(Eout, Ein, T, M, mu).round(6), index=theta, columns=Eout)
+    >>> pd.DataFrame(get_alphaMat(Eout, Ein, T, M, mu).round(6), index=theta, columns=Eout)
         0.331180  0.331812  0.332445  0.333077  0.333710
     90  0.359179  0.359522  0.359865  0.360208  0.360551
     """
     n = len(mu)
-    alpha_mat = np.zeros((n, len(Eout)))
+    alphaMat = np.zeros((n, len(Eout)))
     for i in range(n):
-        alpha_mat[i] += get_alpha_from_Eout(Eout, Ein, T, M, mu[i])
-    return alpha_mat
+        alphaMat[i] += get_alphaFromEout(Eout, Ein, T, M, mu[i])
+    return alphaMat
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
-                         order_max: int) -> np.ndarray:
+def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float,
+                       orderMax: int) -> np.ndarray:
     """
     Get the alpha multiplication for the phonon expansion cumulative sum for
     the given alpha value and Debye Waller coefficient and the maximun order
@@ -636,7 +636,7 @@ def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
         alpha grid values.
     DebyeWallerCoeff: 'float'
         Debye Waller coefficient.
-    order_max: 'int'
+    orderMax: 'int'
         Maximun order for the expansion.
 
     Returns
@@ -646,7 +646,7 @@ def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
 
     Example
     -------
-    >>> order_max = 10
+    >>> orderMax = 10
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
@@ -654,9 +654,9 @@ def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
     >>> T = 300
     >>> debye_waller = pdos.DebyeWallerCoeff(T)
     >>> Ein = 6.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> alpha_cumsum = get_alpha_mul_cumsum(alpha_mat[-1, -1], debye_waller, order_max)
-    >>> pd.Series(alpha_cumsum, index=np.arange(1, order_max + 1)).round(6)
+    >>> alphaMat = get_alphaMat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> alphaCumsum = get_alphaMulCumsum(alphaMat[-1, -1], debye_waller, orderMax)
+    >>> pd.Series(alphaCumsum, index=np.arange(1, orderMax + 1)).round(6)
     1     0.000001
     2     0.000011
     3     0.000065
@@ -669,22 +669,22 @@ def get_alpha_mul_cumsum(alpha: float, DebyeWallerCoeff: float,
     10    0.063864
     dtype: float64
     """
-    alpha_mul = np.zeros(order_max)
+    alphaMul = np.zeros(orderMax)
 
     # Zero phonon expansion:
-    iter_sum = np.log(alpha * DebyeWallerCoeff)
-    alpha_mul[0] += np.exp(- alpha * DebyeWallerCoeff + iter_sum)
+    iterSum = np.log(alpha * DebyeWallerCoeff)
+    alphaMul[0] += np.exp(- alpha * DebyeWallerCoeff + iterSum)
 
     # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, order_max):
-        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul[n] += np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    return alpha_mul.cumsum()
+    for n in range(1, orderMax):
+        iterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alphaMul[n] += np.exp(- alpha * DebyeWallerCoeff + iterSum)
+    return alphaMul.cumsum()
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
-                        decimal: int, order_max: int) -> int:
+def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
+                        decimal: int, orderMax: int) -> int:
     """
     Get the expansion order for the phonon expansion method using the maximun
     alpha value and the decimal precision.
@@ -699,7 +699,7 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
         Debye Waller coefficient.
     decimal: 'float'
         Decimal precision
-    order_max: 'int'
+    orderMax: 'int'
         Maximun order for the expansion.
 
     Returns
@@ -710,7 +710,7 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     Example
     -------
     >>> decimal = 1.0e-6
-    >>> order_max = 5000
+    >>> orderMax = 5000
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
     >>> from solid_cinel.core.material.vibration.pdos import Pdos
@@ -718,46 +718,46 @@ def get_expansion_order(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     >>> T = 300
     >>> debye_waller = pdos.DebyeWallerCoeff(T)
     >>> Ein = 6.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
+    >>> alphaMat = get_alphaMat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansionOrder(alphaMat, debye_waller, decimal, orderMax)
     38
 
     >>> Ein =  36.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
+    >>> alphaMat = get_alphaMat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansionOrder(alphaMat, debye_waller, decimal, orderMax)
     138
 
     >>> T = 1474
     >>> debye_waller = pdos.DebyeWallerCoeff(T)
     >>> Ein = 6.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
+    >>> alphaMat = get_alphaMat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansionOrder(alphaMat, debye_waller, decimal, orderMax)
     121
 
     >>> Ein = 36.68
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
+    >>> alphaMat = get_alphaMat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansionOrder(alphaMat, debye_waller, decimal, orderMax)
     524
 
     >>> Ein = 100
-    >>> alpha_mat = get_alpha_mat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
-    >>> get_expansion_order(alpha_mat, debye_waller, decimal, order_max)
+    >>> alphaMat = get_alphaMat(np.linspace(Ein * 0.9 , Ein * 1.1, 5000), Ein, T, M, mu)
+    >>> get_expansionOrder(alphaMat, debye_waller, decimal, orderMax)
     1320
     """
     alpha_max = alpha if isinstance(alpha, (int, float)) else alpha.max()
-    alpha_cumsum = get_alpha_mul_cumsum(alpha_max, DebyeWallerCoeff, order_max)
-    n_min = np.argmax((1 - alpha_cumsum) <= decimal)
+    alphaCumsum = get_alphaMulCumsum(alpha_max, DebyeWallerCoeff, orderMax)
+    n_min = np.argmax((1 - alphaCumsum) <= decimal)
     if n_min > 0:
         return n_min
     else:
         # If the decimal precision is not reached, the difference between the
         # cumulative sum of the alpha values will identify the order of the
         # expansion.
-        return check_diff(alpha_cumsum, decimal, order_max)
+        return checkDiff(alphaCumsum, decimal, orderMax)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def check_diff(alpha_cumsum: np.ndarray, decimal: float, order_max: int) -> int:
+def checkDiff(alphaCumsum: np.ndarray, decimal: float, orderMax: int) -> int:
     """
     Check the difference between the cumulative sum of the alpha values because
     the cumulative sum can not reach the unity, so the difference between the
@@ -765,11 +765,11 @@ def check_diff(alpha_cumsum: np.ndarray, decimal: float, order_max: int) -> int:
 
     Parameters
     ----------
-    alpha_cumsum: 'np.ndarray', (N,)
+    alphaCumsum: 'np.ndarray', (N,)
         alpha cumulative sum.
     decimal: 'float'
         Decimal precision
-    order_max: 'int'
+    orderMax: 'int'
         Maximun order for the expansion.
 
     Returns
@@ -777,17 +777,17 @@ def check_diff(alpha_cumsum: np.ndarray, decimal: float, order_max: int) -> int:
     n: 'int'
         Expansion order.
     """
-    alpha_cumsum_diff = np.diff(alpha_cumsum)
-    n = alpha_cumsum_diff == 0.0
+    alphaCumsum_diff = np.diff(alphaCumsum)
+    n = alphaCumsum_diff == 0.0
     if n.any():
         return np.argmax(n)
     else:
-        n = alpha_cumsum_diff <= decimal
-        return np.argmax(n) if n.any() else order_max
+        n = alphaCumsum_diff <= decimal
+        return np.argmax(n) if n.any() else orderMax
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_gressier_recoil(Ein: [int, float, np.ndarray] , T: float,
+def get_gressierRecoil(Ein: [int, float, np.ndarray] , T: float,
                         M: float) -> np.ndarray:
     """
     Get the recoil energy for a given incident energy, temperature and mass.
@@ -811,13 +811,13 @@ def get_gressier_recoil(Ein: [int, float, np.ndarray] , T: float,
     >>> T = 800
     >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
     >>> M = 26.98153433356103
-    >>> get_gressier_recoil(Ein, T, M).round(6)
+    >>> get_gressierRecoil(Ein, T, M).round(6)
     array([0.008166, 0.010688, 0.025103, 0.050328, 0.080281])
     """
     return m / (m + M) * (Ein - 3 / 2 * kb * T)
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_recoil_mat(Ein: np.ndarray, T: [float, np.ndarray],
+def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray],
                    M: float) -> np.ndarray:
     """
     Get the recoil energy for a given incident energy, temperature and mass.
@@ -841,13 +841,13 @@ def get_recoil_mat(Ein: np.ndarray, T: [float, np.ndarray],
     >>> T = 800
     >>> Ein = np.array([[0.33, 0.4, 0.8, 1.5, 2.33118], [0.4, 0.5, 0.9, 1.6, 2.43118]])
     >>> M = 26.98153433356103
-    >>> pd.DataFrame(get_recoil_mat(Ein, T, M)).round(6)
+    >>> pd.DataFrame(get_recoilMat(Ein, T, M)).round(6)
               0         1         2         3         4
     0  0.008166  0.010688  0.025103  0.050328  0.080281
     1  0.010688  0.014292  0.028706  0.053932  0.083884
 
     >>> T = np.array([300, 800])
-    >>> pd.DataFrame(get_recoil_mat(Ein, T, M)).round(6)
+    >>> pd.DataFrame(get_recoilMat(Ein, T, M)).round(6)
               0         1         2         3         4
     0  0.010495  0.013017  0.027432  0.052657  0.082610
     1  0.010688  0.014292  0.028706  0.053932  0.083884
@@ -855,8 +855,8 @@ def get_recoil_mat(Ein: np.ndarray, T: [float, np.ndarray],
     recoil_mat = np.zeros(Ein.shape)
     if isinstance(T, (int, float)):
         for i in range(Ein.shape[0]):
-            recoil_mat[i] += get_gressier_recoil(Ein[i], T, M)
+            recoil_mat[i] += get_gressierRecoil(Ein[i], T, M)
     else:
         for i in range(Ein.shape[0]):
-            recoil_mat[i] += get_gressier_recoil(Ein[i], T[i], M)
+            recoil_mat[i] += get_gressierRecoil(Ein[i], T[i], M)
     return recoil_mat

@@ -420,7 +420,7 @@ class Beta:
         """
         return cls(get_beta(Ein, Eout, T))
 
-    def get_dE(self, T: float) -> pd.Series:
+    def get_dE(self, T: float) -> np.ndarray:
         """
         Get the dE from a beta grid:
         .. math::
@@ -440,16 +440,15 @@ class Beta:
         -------
         >>> T = 800
         >>> beta_grid = Beta(beta0_).scale(T)
-        >>> beta_grid.get_dE(T).iloc[0:5]
-        beta
+        >>> pd.Series(beta_grid.get_dE(T), index=beta_grid.data).iloc[0:5]
         0.000000    0.000000
         0.009175    0.000633
         0.018350    0.001265
         0.027524    0.001898
         0.036699    0.002530
-        Name: dE, dtype: float64
+        dtype: float64
         """
-        return pd.Series(self.data * kb * T, index=self.to_index, name="dE")
+        return self.data * kb * T
 
     def get_Eout(self, T: float, Ein: Union[Iterable, float],
                  side: str = "upscattering") -> pd.Series:
@@ -513,7 +512,8 @@ class Beta:
          0.036699    0.333710
         Name: Eout, dtype: float64
         """
-        dE = self.get_dE(T).rename("Eout")
+        dE = pd.Series(self.get_dE(T), index=pd.Index(self.data, name="beta"))
+        dE.name = "Eout"
 
         Eout_positive = Ein + dE
         if side == "upscattering":

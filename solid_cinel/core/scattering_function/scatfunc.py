@@ -10,10 +10,10 @@ import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.scattering_function.beta import get_beta
-from solid_cinel.core.scattering_function.alpha import get_alpha_mat, get_alpha_from_Eout, get_expansion_order
-from solid_cinel.core.scattering_function.sab import get_sab_sct, get_sab_sct_alpha, Sab
+from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder
+from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import save_tau, tau_n_beta
+from solid_cinel.core.material.vibration.tau import save_tau, get_tauNbeta
 from typing import Iterable
 from math import sqrt, pi
 from scipy.stats import entropy, wasserstein_distance
@@ -118,10 +118,10 @@ class ScatFuncSD:
 
         """
         pdf_ = pd.Series(pdf).sort_index()
-        normalization = integrate(pdf_)
-        if abs(normalization - 1) >= 0.1 and self.Ein >= 0.005:
-            raise ValueError(f"The scattering function is not normalized ({normalization} < 0.9)")
-        elif abs(normalization - 1) >= 0.01:
+        norm = integrate(pdf_)
+        if abs(norm - 1) >= 0.1 and self.Ein >= 0.005:
+            raise ValueError(f"The scattering function is not normalized ({norm} < 0.9)")
+        elif abs(norm - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
         self._data = pdf_
 
@@ -219,7 +219,7 @@ class ScatFuncSD:
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
         threshold : 'float', optional
-            Minimun value to take into account in the creation of tau_n
+            Minimun value to take into account in the creation of tauN
             functions. For T>200 is convenient to set into 1.0e-14 to speed up
             the calculations. The default is 0.0.
         nphonon : 'int', optional
@@ -284,7 +284,7 @@ class ScatFuncSD:
                   mu: float, pdos, nphonon: int = None,
                   decimal: float = 1.0e-6,
                   order_max: int = 5000, threshold: float = 0.0,
-                  tau_to_file: bool = False,
+                  tauToFile: bool = False,
                   binary: bool = False):
         """
         Generate the single differential scattering function from a selected
@@ -306,19 +306,19 @@ class ScatFuncSD:
             Pdos object.
         nphonon: 'int', optional
             Phonon expansion order. The default is None and the order is
-            calculated using the get_expansion_order function.
+            calculated using the get_expansionOrder function.
         decimal: 'float', optional
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
         order_max: 'int', optional
             Maximun expansion order. The default is 5000.
         threshold: 'float', optional
-            Minimun value to take into account in the creation of tau_n
+            Minimun value to take into account in the creation of tauN
             functions
-        tau_to_file: 'bool', optional
-            Save tau_n functions to file. The default is False.
+        tauToFile: 'bool', optional
+            Save tauN functions to file. The default is False.
         binary: 'bool', optional
-            Save tau_n functions to binary file. The default is False.
+            Save tauN functions to binary file. The default is False.
 
         Returns
         -------
@@ -345,26 +345,25 @@ class ScatFuncSD:
         7.4480    0.004105
         dtype: float64
         """
-        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         if nphonon:
             warnings.warn(
                 "Is posible that the expansion order is not enough to get the correct results")
         else:
-            nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu),
-                                          debye_waller_coeff, decimal, order_max)
-        tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
-        tau_1_beta = pdos.to_beta_grid(T).data.index.values
-        tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
-        save_tau(tau_n, nphonon, T, tau_to_file, binary)
+            alphaVec = get_alphaFromEout(Eout, Ein, M, T, mu)
+            nphonon = get_expansionOrder(alphaVec, DebyeWallerCoeff, decimal, order_max)
+        tauN = pdos.tauN(T, nphonon, threshold, values=True)
+        tau1beta = pdos.beta_grid(T).data.index.values
+        tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+        save_tau(tauN, nphonon, T, tauToFile, binary)
         mu = np.array(mu) if hasattr(mu, '__len__') else np.array([mu])
-        scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid,
-                                      debye_waller_coeff)[0]
-        norm = np.trapz(scattfunc, x=Eout)
-        return cls(Ein, T, M, scattfunc / norm, index=Eout)
+        scatfunc = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)[0]
+        norm = np.trapz(scatfunc, x=Eout)
+        return cls(Ein, T, M, scatfunc / norm, index=Eout)
 
     @classmethod
     def from_sct(cls, Ein: float, M: float, T: float, Eout: np.array,
-                    mu: float, pdos, ws: float = 1.0):
+                 mu: float, pdos, ws: float = 1.0):
         """
         Generate the single differential scattering function from a selected
         angle using S(alpha, -beta) table based on Short Collision Time model.
@@ -412,9 +411,9 @@ class ScatFuncSD:
         dtype: float64
         """
         Teff = pdos.Teff(T)
-        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
-        norm = np.trapz(scattfunc, x=Eout)
-        return cls(Ein, T, M, scattfunc / norm, index=Eout)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, Teff, ws)
+        norm = np.trapz(scatfunc, x=Eout)
+        return cls(Ein, T, M, scatfunc / norm, index=Eout)
 
     @classmethod
     def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.array,
@@ -462,9 +461,9 @@ class ScatFuncSD:
         7.4480    0.003848
         dtype: float64
         """
-        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, T, ws)
-        norm = np.trapz(scattfunc, x=Eout)
-        return cls(Ein, T, M, scattfunc / norm, index=Eout)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, T, ws)
+        norm = np.trapz(scatfunc, x=Eout)
+        return cls(Ein, T, M, scatfunc / norm, index=Eout)
 
     @classmethod
     def from_recoil(cls, Ein: float, M: float, T: float, Eout: np.array,
@@ -504,7 +503,7 @@ class ScatFuncSD:
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
         threshold : 'float', optional
-            Minimun value to take into account in the creation of tau_n
+            Minimun value to take into account in the creation of tauN
             functions. For T>200 is convenient to set into 1.0e-14 to speed up
             the calculations. The default is 0.0.
         decimal: 'float'
@@ -558,8 +557,8 @@ class ScatFuncSD:
         beta = get_beta(Eout, Ein, T)
         sab = Sab.from_recoil(Ein, T, M, beta,*args, model=model,
                               **kwargs).full
-        Eout_calc = Ein + sab.index.values * kb * T
-        scatfunc = np.interp(Eout, Eout_calc, sab.values)
+        EoutCalc = Ein + sab.index.values * kb * T
+        scatfunc = np.interp(Eout, EoutCalc, sab.values)
         scatfunc /= kb * T
         return cls(Ein, T, M, scatfunc, index=Eout)
 
@@ -635,16 +634,16 @@ class ScatFuncDD:
         dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
         dd_pdf_.index.name = "mu"
         dd_pdf_.columns.name = "Eout"
-        normalization = integrate(dd_pdf_.apply(integrate))
-        if abs(normalization - 1) >= 0.1 and self.Ein <= 0.005:
-            raise ValueError(f"The scattering function is not normalized ({normalization} < 0.9)")
-        elif abs(normalization - 1) >= 0.01:
+        norm = integrate(dd_pdf_.apply(integrate))
+        if abs(norm - 1) >= 0.1 and self.Ein <= 0.005:
+            raise ValueError(f"The scattering function is not normalized ({norm} < 0.9)")
+        elif abs(norm - 1) >= 0.01:
             warnings.warn("Normalizaton not satisfied with 1% accuracy")
         self._data = dd_pdf_
 
     @classmethod
     def from_model(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 theta: np.ndarray, *args, model: str = "fgm", **kwargs):
+                   theta: np.ndarray, *args, model: str = "fgm", **kwargs):
         """
         Generate the double differential scattering function from a
          S(alpha, -beta) table.
@@ -685,19 +684,19 @@ class ScatFuncDD:
             Pdos object.
         nphonon: 'int', optional
             Phonon expansion order. The default is None and the order is
-            calculated using the get_expansion_order function.
+            calculated using the get_expansionOrder function.
         decimal: 'float', optional
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
         order_max: 'int', optional
             Maximun expansion order. The default is 5000.
         threshold: 'float', optional
-            Minimun value to take into account in the creation of tau_n
+            Minimun value to take into account in the creation of tauN
             functions
-        tau_to_file: 'bool', optional
-            Save tau_n functions to file. The default is False.
+        tauToFile: 'bool', optional
+            Save tauN functions to file. The default is False.
         binary: 'bool', optional
-            Save tau_n functions to binary file. The default is False.
+            Save tauN functions to binary file. The default is False.
 
         Returns
         -------
@@ -776,7 +775,7 @@ class ScatFuncDD:
                   mu: np.ndarray, pdos: Pdos, nphonon: int = None,
                   decimal: float = 1.0e-6,
                   order_max: int = 5000, threshold: float = 0.0,
-                  tau_to_file: bool = False,
+                  tauToFile: bool = False,
                   binary: bool = False):
         """
         Generate the double differential scattering function from a
@@ -798,19 +797,19 @@ class ScatFuncDD:
             Pdos object.
         nphonon: 'int', optional
             Phonon expansion order. The default is None and the order is
-            calculated using the get_expansion_order function.
+            calculated using the get_expansionOrder function.
         decimal: 'float', optional
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
         order_max: 'int', optional
             Maximun expansion order. The default is 5000.
         threshold: 'float', optional
-            Minimun value to take into account in the creation of tau_n
+            Minimun value to take into account in the creation of tauN
             functions
-        tau_to_file: 'bool', optional
-            Save tau_n functions to file. The default is False.
+        tauToFile: 'bool', optional
+            Save tauN functions to file. The default is False.
         binary: 'bool', optional
-            Save tau_n functions to binary file. The default is False.
+            Save tauN functions to binary file. The default is False.
 
         Returns
         -------
@@ -837,20 +836,19 @@ class ScatFuncDD:
          0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
-        debye_waller_coeff = pdos.DebyeWallerCoeff(T)
+        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         if nphonon:
             warnings.warn(
                 "Is posible that the expansion order is not enough to get the correct results")
         else:
-            alpha_max = get_alpha_from_Eout(Eout, Ein, M, T, mu.min())
-            nphonon = get_expansion_order(alpha_max, debye_waller_coeff,
-                                          decimal, order_max)
-        tau_n = pdos.get_tau(T, nphonon, threshold, values=True)
-        save_tau(tau_n, nphonon, T, tau_to_file, binary)
-        tau_1_beta = pdos.to_beta_grid(T).data.index.values
-        tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
-        return cls.from_tau(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid,
-                            debye_waller_coeff)
+            alphaMax = get_alphaFromEout(Eout, Ein, M, T, mu.min())
+            nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, order_max)
+        tauN = pdos.tauN(T, nphonon, threshold, values=True)
+        save_tau(tauN, nphonon, T, tauToFile, binary)
+        tau1beta = pdos.beta_grid(T).data.index.values
+        tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+        return cls.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta,
+                            DebyeWallerCoeff)
 
     @classmethod
     def from_sct(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -907,8 +905,8 @@ class ScatFuncDD:
          9.659258e-01  0.000000  0.000000  0.000000  10.545191  0.000000  0.000000
         """
         Teff = pdos.Teff(T)
-        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, Teff, ws)
-        return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, Teff, ws)
+        return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
     @classmethod
     def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -961,15 +959,15 @@ class ScatFuncDD:
          8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
          9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
         """
-        scattfunc = get_scat_sct_angular(Eout, mu, Ein, T, M, T, ws)
-        return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
+        scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, T, ws)
+        return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
     @classmethod
     def from_tau(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 mu: np.ndarray, tau_n: np.ndarray, tau_n_beta_grid: np.ndarray,
-                 debye_waller_coeff: float):
+                 mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
+                 DebyeWallerCoeff: float):
         """
-        Generate the double differential scattering function from tau_n function
+        Generate the double differential scattering function from tauN function
         using the phonon expansion model.
 
         Parameters
@@ -984,12 +982,12 @@ class ScatFuncDD:
             The neutron outgoing energy grid in eV
         theta : np.ndarray, (N,)
             Grid of angle of the scattering angle
-        tau_n: np.ndarray, (Z, T)
-            Tau_n function. Z is the number of phonon expansion order and T is
+        tauN: np.ndarray, (Z, T)
+            tauN function. Z is the number of phonon expansion order and T is
             the number of beta grid points.
-        tau_n_beta_grid: np.ndarray, (T,)
-            Beta grid for the tau_n function
-        debye_waller_coeff: float
+        tauNbeta: np.ndarray, (T,)
+            Beta grid for the tauN function
+        DebyeWallerCoeff: float
             Debye-Waller coefficient in LEAPR formalism
 
         Returns
@@ -1008,12 +1006,12 @@ class ScatFuncDD:
         >>> theta = np.array([40, 80, 120, 160])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-        >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu.min()), debye_waller_coeff, 1.0e-6, 5000)
-        >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-        >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
-        >>> tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
-        >>> ScatFuncDD.from_tau(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid, debye_waller_coeff).data.loc[::, Eout_test].round(6)
+        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+        >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu.min()), DebyeWallerCoeff, 1.0e-6, 5000)
+        >>> tauN = pdos.tauN(T, nphonon, 1.0e-14, values=True)
+        >>> tau1beta = pdos.beta_grid(T).data.index.values
+        >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+        >>> ScatFuncDD.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -1021,10 +1019,9 @@ class ScatFuncDD:
          0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
-        scattfunc = get_scatfunc_pdos(Ein, M, T, Eout, mu,
-                                      tau_n, tau_n_beta_grid,
-                                      debye_waller_coeff)
-        return cls(Ein, T, M, scattfunc, index=mu, columns=Eout)
+        scatfunc = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta,
+                                   DebyeWallerCoeff)
+        return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
     def to_sd(self, theta: float = None) -> ScatFuncSD:
         """
@@ -1072,10 +1069,10 @@ class ScatFuncDD:
         7.4480    0.004026
         Name: 0.5000000000000001, dtype: float64
         """
-        filt_angle = np.cos(np.deg2rad(theta)) if theta else self.get_angle
-        scattfunc = self.data.loc[filt_angle]
-        scattfunc /= integrate(self.data.loc[filt_angle])
-        return ScatFunc(self.Ein, self.T, self.M, scattfunc)
+        filtAngle = np.cos(np.deg2rad(theta)) if theta else self.get_angle
+        scatfunc = self.data.loc[filtAngle]
+        scatfunc /= integrate(self.data.loc[filtAngle])
+        return ScatFunc(self.Ein, self.T, self.M, scatfunc)
 
 
     @property
@@ -1105,15 +1102,14 @@ class ScatFuncDD:
         if (scatfunc.iloc[::, [0, -1]] >= 1.0e-6).any().any():
             warnings.warn("The distribution tails are not longer enough. Mu fit"
                           " will only take into account the max value.")
-            angular_max = scatfunc.max(axis=1) / scatfunc.apply(integrate,
-                                                                axis=1)
+            angularMax = scatfunc.max(axis=1) / scatfunc.apply(integrate, axis=1)
             MD = sigma1(np.array([self.Ein]), self.Ein, self.T, self.M)[0]
-            mu_fit_max = abs(angular_max - MD).idxmin()
-            return mu_fit_max
+            muFitMax = abs(angularMax - MD).idxmin()
+            return muFitMax
         else:
             sigma1_pdf = ScatFuncSD.from_sigma1(self.Ein, self.M, self.T,
                                         scatfunc.columns.values).data
-            return mu_fit_calc(scatfunc, sigma1_pdf, self.Ein).mode()[0]
+            return mu_fitCalc(scatfunc, sigma1_pdf, self.Ein).mode()[0]
 
     @property
     def cdf(self) -> pd.DataFrame:
@@ -1374,15 +1370,15 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             raise ValueError("xs must be 1D or 2D")
 
         # Convolve the scattering function with the cross section values matrix:
-        scattfunc_conv = self.data * xs_reshaped
+        scatfuncConvol = self.data * xs_reshaped
 
         # Return the data in the chosen format:
         if integral and self.data.index.name == "mu":
-            return integrate(scattfunc_conv.apply(integrate))
+            return integrate(scatfuncConvol.apply(integrate))
         elif integral:
-            return integrate(scattfunc_conv)
+            return integrate(scatfuncConvol)
         else:
-            return scattfunc_conv
+            return scatfuncConvol
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -1405,7 +1401,7 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
 
     Returns
     -------
-    scattfunc : np.array
+    scatfunc : np.array
         Scattering function based on sigma1 model
 
     Examples
@@ -1423,18 +1419,18 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     7.4480    0.017808
     dtype: float64
     """
-    exp_negative = np.exp(
+    expNegative = np.exp(
         - M / (m * kb * T) * (sqrt(Ein) - np.sqrt(Eout)) ** 2)
-    exp_positive = np.exp(
+    expPositive = np.exp(
         - M / (m * kb * T) * (sqrt(Ein) + np.sqrt(Eout)) ** 2)
-    scattfunc = 0.5 * (exp_negative - exp_positive) * np.sqrt(Eout) / Ein
-    scattfunc *= sqrt(M / (pi * m * kb * T))
-    return scattfunc
+    scatfunc = 0.5 * (expNegative - expPositive) * np.sqrt(Eout) / Ein
+    scatfunc *= sqrt(M / (pi * m * kb * T))
+    return scatfunc
 
 
 @nb.jit(nopython=True, cache=True, nogil=False)
-def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
-                         M: float, Teff: float, ws: float) -> np.array:
+def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
+                        M: float, Teff: float, ws: float) -> np.array:
     """
     Calculate the scattering function from the Short Collision Time model using
     a single angle.
@@ -1467,18 +1463,18 @@ def get_scat_sct_angular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     beta = (Eout - Ein) / (kb * T)
     Tratio = Teff / T
     if isinstance(mu, (int, float)):
-        alpha = get_alpha_from_Eout(Eout, Ein, T, M, mu)
-        sab_values = get_sab_sct_alpha(alpha, beta, Tratio, ws)
+        alpha = get_alphaFromEout(Eout, Ein, T, M, mu)
+        sabValues = get_SabSctAlpha(alpha, beta, Tratio, ws)
     else:
-        alpha = get_alpha_mat(Eout, Ein, T, M, mu)
-        sab_values = get_sab_sct(alpha, beta, Tratio, ws)
-    return sab_values * normalization_factor(Eout, Ein, T, M)
+        alpha = get_alphaMat(Eout, Ein, T, M, mu)
+        sabValues = get_SabSct(alpha, beta, Tratio, ws)
+    return sabValues * normFactor(Eout, Ein, T, M)
 
 
 @nb.jit(nopython=True, cache=True, nogil=False)
-def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
-                 tau_n: np.ndarray, tau_n_beta: np.ndarray,
-                 DebyeWallerCoeff: float) -> np.ndarray:
+def get_SabClm(alpha: np.ndarray, beta: np.ndarray,
+               tauN: np.ndarray, tauNbeta: np.ndarray,
+               DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model using a single angle.
@@ -1491,9 +1487,9 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
         beta grid values.
     nphonon : 'int', optional
         Phonon expansion order.
-    tau_n : 'np.ndarray', (M, T)
+    tauN : 'np.ndarray', (M, T)
         all tau n functions in one array.
-    tau_n_beta : 'np.ndarray', (M,)
+    tauNbeta : 'np.ndarray', (M,)
         Space between beta grid points of tau n functions.
     DebyeWallerCoeff : 'float'
         Debye Waller Coefficient in LEAPR formalism.
@@ -1513,15 +1509,15 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad([120]))
     >>> beta = get_beta(Eout, Ein, T)
-    >>> alpha_mat = get_alpha_mat(beta * kb * T + Ein, Ein, T, M, mu)
+    >>> alpha_mat = get_alphaMat(beta * kb * T + Ein, Ein, T, M, mu)
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> nphonon = get_expansion_order(alpha_mat, debye_waller_coeff, 1.0e-6, 5000)
-    >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
-    >>> tau_n_beta = tau_n_beta(tau_1_beta, tau_n.shape[1])
-    >>> sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, debye_waller_coeff)
-    >>> pd.DataFrame(sab_values, index=[120], columns=beta).T.iloc[::100].round(6)
+    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+    >>> nphonon = get_expansionOrder(alpha_mat, DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> tauN = pdos.tauN(T, nphonon, 1.0e-14, values=True)
+    >>> tau1beta = pdos.beta_grid(T).data.index.values
+    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+    >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> pd.DataFrame(sabValues, index=[120], columns=beta).T.iloc[::100].round(6)
                    120
     0.000000  0.210641
     0.399957  0.247226
@@ -1536,21 +1532,21 @@ def get_sab_pdos(alpha: np.ndarray, beta: np.ndarray,
     5.135233  0.006799
     """
     # Zero phonon expansion:
-    iter_sum = np.log(alpha * DebyeWallerCoeff)
-    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-    S_diag = alpha_mul * np.interp(beta, tau_n_beta, tau_n[0])
+    IterSum = np.log(alpha * DebyeWallerCoeff)
+    alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+    S_diag = alphaMul * np.interp(beta, tauNbeta, tauN[0])
 
     # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, tau_n.shape[0]):
-        # Compute S(alpha, -beta) for tau_n reshape
-        iter_sum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + iter_sum)
-        S_diag += alpha_mul * np.interp(beta, tau_n_beta, tau_n[n])
+    for n in range(1, tauN.shape[0]):
+        # Compute S(alpha, -beta) for tauN reshape
+        IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
+        alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+        S_diag += alphaMul * np.interp(beta, tauNbeta, tauN[n])
     return S_diag
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def normalization_factor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
+def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the scattering function calculation.
 
@@ -1577,8 +1573,8 @@ def normalization_factor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
-                        T: float, M: float) -> (np.ndarray, np.ndarray):
+def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
+                           T: float, M: float) -> (np.ndarray, np.ndarray):
     """
     Generate the scattering function values from a S(alpha, -beta) table based on
     the phonon expansion model for a single angle
@@ -1599,7 +1595,7 @@ def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     Returns
     -------
     'np.ndarray', (N, 2)
-        Scattering function values for a single angle for tau_n expansion.
+        Scattering function values for a single angle for tauN expansion.
 
     Examples
     --------
@@ -1611,16 +1607,16 @@ def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad([120]))
     >>> beta = get_beta(Eout, Ein, T)
-    >>> alpha_mat = get_alpha_from_Eout(beta * kb * T + Ein, Ein, T, M, mu)
+    >>> alpha_mat = get_alphaFromEout(beta * kb * T + Ein, Ein, T, M, mu)
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> nphonon = get_expansion_order(alpha_mat, debye_waller_coeff, 1.0e-6, 5000)
-    >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
-    >>> tau_n_beta = tau_n_beta(tau_1_beta, tau_n.shape[1])
-    >>> sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, debye_waller_coeff)
-    >>> Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_values, beta, Ein, T, M)
-    >>> pd.Series(scatfunc_values, index=Eout_calc).iloc[::200].round(6)
+    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+    >>> nphonon = get_expansionOrder(alpha_mat, DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> tauN = pdos.tauN(T, nphonon, 1.0e-14, values=True)
+    >>> tau1beta = pdos.beta_grid(T).data.index.values
+    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+    >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
+    >>> pd.Series(scatFuncValues, index=EoutCalc).iloc[::200].round(6)
     6.755400    0.036933
     6.894059    0.381006
     6.991813    1.027908
@@ -1635,23 +1631,23 @@ def scatfunc_values_alpha_vec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     dtype: float64
     """
     # Scattering function values calculation:
-    ScatFunc_values = np.concatenate((Sab_mat[::-1], Sab_mat[1::] * np.exp(-beta[1:])))
+    scatFuncValues = np.concatenate((Sab_mat[::-1], Sab_mat[1::] * np.exp(-beta[1:])))
 
     # Eout calculation
-    Eout_calc = Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T
+    EoutCalc = Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T
 
     # Ensure the Eout values are positive:
-    positive_mask = Eout_calc > 0
-    Eout_calc = Eout_calc[positive_mask]
+    positiveMask = EoutCalc > 0
+    EoutCalc = EoutCalc[positiveMask]
 
     # Normalization constant
-    norm = normalization_factor(Eout_calc, Ein, T, M)
+    norm = normFactor(EoutCalc, Ein, T, M)
 
-    return Eout_calc, ScatFunc_values[positive_mask] * norm
+    return EoutCalc, scatFuncValues[positiveMask] * norm
 
 @nb.jit(nopython=True, cache=True, nogil=False)
-def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: float,
-                              T: float, M: float) -> (np.ndarray, np.ndarray):
+def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
+                           T: float, M: float) -> (np.ndarray, np.ndarray):
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model. The scattering function is calculated for all
@@ -1660,7 +1656,7 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
 
     Parameters
     ----------
-    Sab_values: 'np.ndarray', (Z, N)
+    sabValues: 'np.ndarray', (Z, N)
         S(alpha, -beta) for the selected alpha and beta.
     beta: 'np.ndarray', (N,)
         beta grid values.
@@ -1673,9 +1669,9 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
 
     Returns
     -------
-    Eout_calc: 'np.ndarray', (N,)
+    EoutCalc: 'np.ndarray', (N,)
         Outgoing energy grid in eV.
-    ScatFunc_values: 'np.ndarray', (Z, N)
+    scatFuncValues: 'np.ndarray', (Z, N)
         Scattering function values for all the angles and Eout calculation.
 
     Examples
@@ -1688,16 +1684,16 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu), debye_waller_coeff, 1.0e-6, 5000)
-    >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
-    >>> tau_n_beta = tau_n_beta(tau_1_beta, tau_n.shape[1])
+    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+    >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu), DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> tauN = pdos.tauN(T, nphonon, 1.0e-14, values=True)
+    >>> tau1beta = pdos.beta_grid(T).data.index.values
+    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
     >>> beta = get_beta(Eout, Ein, T)
-    >>> alpha_mat = get_alpha_mat(beta * kb * T + Ein, Ein, T, M, mu)
-    >>> sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, debye_waller_coeff)
-    >>> Eout_calc, scatfunc_values = scatfunc_values_alpha_mat(sab_values, beta, Ein, T, M)
-    >>> pd.DataFrame(scatfunc_values, index=[120], columns=Eout_calc).T.iloc[::200].round(6)
+    >>> alpha_mat = get_alphaMat(beta * kb * T + Ein, Ein, T, M, mu)
+    >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
+    >>> pd.DataFrame(scatFuncValues, index=[120], columns=EoutCalc).T.iloc[::200].round(6)
                    120
     6.755400  0.036933
     6.894059  0.381006
@@ -1711,25 +1707,25 @@ def scatfunc_values_alpha_mat(Sab_values: np.ndarray, beta: np.ndarray, Ein: flo
     7.501782  0.012632
     7.640440  0.000258
     """
-    ScatFunc_values = np.concatenate(
-        (Sab_values[::, ::-1], Sab_values[::, 1:] * np.exp(-beta[1:])), axis=1)
+    scatFuncValues = np.concatenate(
+        (sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)
     # Eout calculation
-    Eout_calc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
+    EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
 
     # Ensure the Eout values are positive:
-    positive_mask = Eout_calc > 0
-    Eout_calc = Eout_calc[positive_mask]
+    positiveMask = EoutCalc > 0
+    EoutCalc = EoutCalc[positiveMask]
 
     # Normalization constant
-    norm = normalization_factor(Eout_calc, Ein, T, M)
+    norm = normFactor(EoutCalc, Ein, T, M)
 
-    return Eout_calc, ScatFunc_values[::, positive_mask] * norm
+    return EoutCalc, scatFuncValues[::, positiveMask] * norm
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
-                      mu: np.ndarray, tau_n: np.ndarray, tau_n_beta: np.ndarray,
-                      DebyeWallerCoeff: float) -> np.ndarray:
+def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
+                    mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
+                    DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -1746,9 +1742,9 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
         The neutron outgoing energy grid in eV
     mu : float
         Cosine of the scattering angle
-    tau_n : 'np.ndarray', (M, T)
+    tauN : 'np.ndarray', (M, T)
         all tau n functions in one array.
-    tau_n_beta : 'np.ndarray', (M,)
+    tauNbeta : 'np.ndarray', (M,)
         Space between beta grid points of tau n functions.
     DebyeWallerCoeff : float
         Debye Waller coefficient
@@ -1768,12 +1764,12 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu), debye_waller_coeff, 1.0e-6, 5000)
-    >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
-    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
-    >>> sd_pdf = get_scatfunc_pdos(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid, debye_waller_coeff)
+    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+    >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu), DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> tauN = pdos.tauN(T, nphonon, 1.0e-14, values=True)
+    >>> tau1beta = pdos.beta_grid(T).data.index.values
+    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+    >>> sd_pdf = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
     >>> pd.Series(sd_pdf[0], index=Eout).loc[Eout_test].round(6)
     6.7554    0.034510
     6.9050    0.426488
@@ -1784,21 +1780,21 @@ def get_scatfunc_pdos(Ein: float, M: float, T: float, Eout: np.ndarray,
     dtype: float64
     """
     beta = get_beta(Eout, Ein, T)
-    alpha_mat = get_alpha_mat(beta * kb * T + Ein if len(beta) < len(Eout) else Eout,
+    alpha_mat = get_alphaMat(beta * kb * T + Ein if len(beta) < len(Eout) else Eout,
                               Ein, T, M, mu)
-    sab_values = get_sab_pdos(alpha_mat, beta, tau_n, tau_n_beta, DebyeWallerCoeff)
-    Eout_calc, scatfunc_values = scatfunc_values_alpha_mat(sab_values, beta, Ein, T, M)
+    sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
     select_scarfunc = np.zeros((len(mu), len(Eout)))
     for i in range(len(mu)):
-        select_scarfunc[i] += np.interp(Eout, Eout_calc, scatfunc_values[i])
+        select_scarfunc[i] += np.interp(Eout, EoutCalc, scatFuncValues[i])
     return select_scarfunc
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
-                 mu: float, tau_n: np.ndarray, tau_n_beta: np.ndarray,
-                 DebyeWallerCoeff: float) -> np.ndarray:
+def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
+                      mu: float, tauN: np.ndarray, tauNbeta: np.ndarray,
+                      DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -1815,9 +1811,9 @@ def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
         The neutron outgoing energy grid in eV
     mu : float
         Cosine of the scattering angle
-    tau_n : 'np.ndarray', (M, T)
+    tauN : 'np.ndarray', (M, T)
         all tau n functions in one array.
-    tau_n_beta : 'np.ndarray', (M,)
+    tauNbeta : 'np.ndarray', (M,)
         Space between beta grid points of tau n functions.
     DebyeWallerCoeff : float
         Debye Waller coefficient
@@ -1837,12 +1833,12 @@ def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad(120))
     >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-    >>> debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-    >>> nphonon = get_expansion_order(get_alpha_from_Eout(Eout, Ein, M, T, mu), debye_waller_coeff, 1.0e-6, 5000)
-    >>> tau_n = pdos.get_tau(T, nphonon, 1.0e-14, values=True)
-    >>> tau_1_beta = pdos.to_beta_grid(T).data.index.values
-    >>> tau_n_beta_grid = tau_n_beta(tau_1_beta, tau_n.shape[1])
-    >>> sd_pdf = get_scatfunc_pdos_row(Ein, M, T, Eout, mu, tau_n, tau_n_beta_grid, debye_waller_coeff)
+    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+    >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu), DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> tauN = pdos.tauN(T, nphonon, 1.0e-14, values=True)
+    >>> tau1beta = pdos.beta_grid(T).data.index.values
+    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+    >>> sd_pdf = get_ScatFuncClmRow(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
     >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
     6.7554    0.034510
     6.9050    0.426488
@@ -1854,14 +1850,14 @@ def get_scatfunc_pdos_row(Ein: float, M: float, T: float, Eout: np.ndarray,
     """
     beta = get_beta(Eout, Ein, T)
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
-    alpha = get_alpha_from_Eout(Eout_, Ein, T, M, mu)
-    sab_values = get_sab_pdos(alpha, beta, tau_n, tau_n_beta, DebyeWallerCoeff)
-    Eout_calc, scatfunc_values = scatfunc_values_alpha_vec(sab_values, beta, Ein, T, M)
+    alpha = get_alphaFromEout(Eout_, Ein, T, M, mu)
+    sabValues = get_SabClm(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
-    return np.interp(Eout, Eout_calc, scatfunc_values)
+    return np.interp(Eout, EoutCalc, scatFuncValues)
 
 
-def total_variation_distance(p: np.ndarray, q: np.ndarray) -> float:
+def totalVariationDistance(p: np.ndarray, q: np.ndarray) -> float:
     """
     Total Variation Distance between two probability distributions.
 
@@ -1880,7 +1876,7 @@ def total_variation_distance(p: np.ndarray, q: np.ndarray) -> float:
     return 0.5 * np.sum(np.abs(p - q))
 
 
-def hellinger_distance(p: np.ndarray, q: np.ndarray) -> float:
+def hellingerDistance(p: np.ndarray, q: np.ndarray) -> float:
     """
     Hellinger Distance between two probability distributions.
 
@@ -1899,7 +1895,7 @@ def hellinger_distance(p: np.ndarray, q: np.ndarray) -> float:
     return euclidean(np.sqrt(p), np.sqrt(q)) / np.sqrt(2)
 
 
-def bhattacharyya_distance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> float:
+def bhattacharyyaDistance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> float:
     """
     Bhattacharyya Distance between two probability distributions.
 
@@ -1921,7 +1917,7 @@ def bhattacharyya_distance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> fl
     return -np.log(BC)
 
 
-def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd.DataFrame:
+def mu_fitCalc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd.DataFrame:
     """
     Calculate the angle from the scattering function that best fits the
     sigma1_pdf. The distributions from the scattering function are shifted
@@ -1958,7 +1954,7 @@ def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd
     >>> sigma1 = ScatFunc.from_sigma1(Ein, M, T, Eout).data
     >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
     >>> ddScatFunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta).data
-    >>> mu_fit_calc(ddScatFunc, sigma1, Ein).round(2)
+    >>> mu_fitCalc(ddScatFunc, sigma1, Ein).round(2)
     KL               0.5
     JS               0.5
     EMD              0.5
@@ -1978,9 +1974,9 @@ def mu_fit_calc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd
             "KL": entropy(scatfunc_shift, sigma1_pdf),
             "JS": distance.jensenshannon(scatfunc_shift, sigma1_pdf),
             "EMD": wasserstein_distance(scatfunc_shift, sigma1_pdf),
-            "TVD": total_variation_distance(scatfunc_shift, sigma1_pdf),
-            "Hellinger": hellinger_distance(scatfunc_shift, sigma1_pdf),
-            "Bhattacharyya": bhattacharyya_distance(scatfunc_shift,
+            "TVD": totalVariationDistance(scatfunc_shift, sigma1_pdf),
+            "Hellinger": hellingerDistance(scatfunc_shift, sigma1_pdf),
+            "Bhattacharyya": bhattacharyyaDistance(scatfunc_shift,
                                                     sigma1_pdf, Eout),
             "max_pos": abs(scatfunc_shift.max() - sigma1_pdf.max()),
         })

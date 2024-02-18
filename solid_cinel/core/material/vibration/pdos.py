@@ -5,11 +5,11 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.tau import tau_n_functions, tau_n_beta
+from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
+from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 import numpy as np
 from typing import Iterable, Union
-import matplotlib
 
 
 # Examples variables:
@@ -26,60 +26,43 @@ rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
 
 
-class Pdos:
+class Tpdos:
     """
     Object containing the method and properties of the phonon density of states
-    in energy.
-
-    Properties
-    ----------
-    rho : 'pd.Series'
-        Pandas Series containing the rho values in energy (index).
-
-    Methods
-    -------
-    from_dE: Pdos
-        Create a pdos object from a rho in energy
-    to_beta_grid: Pdos
-        Change the energy grid of rho for a beta grid
-    plot: None
-        Plot the pdos data
-    P: pd.Series
-        Calculate P function for LEAPR formalism with PDOS
-    Teff: float
-        Calculate the effective temperature
-    DebyeWaller: float
-        Calculate the Debye-Waller factor for LEAPR formalism with PDOS
-    get_tau: pd.DataFrame
-        Calculate the tau_n functions
+    for a certain temperature.
     """
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, T, *args, **kwargs):
         """
         Initialize of the pdos object.
-
         Parameters
         ----------
-        *args : variables
+        T: 'float'
+            Temperature in K.
+        args: 'variables'
             variables for the creation of the pandas Series.
-        **kwargs : 'dict'
+        kwargs: 'dict'
             Dictionary to create the pandas series of rho.
-
         Returns
         -------
-        'Pdos'
-            Object containing the method and properties of rho in energy.
+        'TPdos'
+            Object containing the method and properties of rho in beta.
 
+        Examples
+        --------
+        Object initialization:
+        >>> T = 20
+        >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
         """
-        self.rho = pd.Series(*args, **kwargs)
+        self.T = T
+        self.data = pd.Series(*args, **kwargs)
 
     @property
-    def rho(self) -> pd.Series:
+    def data(self) -> pd.Series:
         """Pandas Series containing the rho values in energy (index)."""
-        return self.data
+        return self._data
 
-    @rho.setter
-    def rho(self, rho_data: Union[pd.Series, Iterable]) -> pd.Series:
+    @data.setter
+    def data(self, rhoData: Union[pd.Series, Iterable]) -> pd.Series:
         """
         Data setter for rho to ensure the following properties of the data:
             - Shape of the data: 1 dimension
@@ -106,127 +89,157 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> assert integrate(p.data) == 1.0
         """
-        rho_ = pd.Series(rho_data, name="rho")
+        data_ = pd.Series(rhoData, name="rho")
 
-        if rho_.index.name != "beta" and rho_.index.name != "E":
-            raise SyntaxError("Energy index must be E or beta")
+        if data_.index.name != "beta":
+            raise SyntaxError("Energy index must be beta")
 
-        if not len(rho_.shape) == 1:
+        if not len(data_.shape) == 1:
             raise TypeError("Rho must have one dimension")
 
-        if not rho_.index.is_monotonic_increasing:
-            raise SyntaxError("energy grid is not monotonically increasing")
+        if not data_.index.is_monotonic_increasing:
+            raise SyntaxError("beta grid is not monotonically increasing")
 
-        self.data = rho_ / integrate(rho_)
+        self._data = data_ / integrate(data_)
+
+    @property
+    def beta(self) -> Beta:
+        """
+        Initialize the Beta class with the information of S(alpha, -beta).
+        matrix
+        """
+        return Beta(self.data.index.values)
 
     @classmethod
-    def from_dE(cls, rho: Iterable, interval_energy: float):
+    def from_dE(cls, T: float, rho: Iterable, intervalE: float):
         """
-        Extract rho in energy from the introduced data.
+        Extract rho in energy from the introduced data and create a pdos object
+        for a certain temperature.
 
         Parameters
         ----------
-        rho : 1D iterable
+        T: 'float'
+            Temperature in K.
+        rho: '1D iterable'
             rho values.
-        interval_energy : 'float'
+        intervalE: 'float'
             Energy interval in eV.
 
         Returns
         -------
-        "Pdos"
+        "TPdos"
             Rho normalize object.
 
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-
-        Test the results:
-        >>> p.rho.iloc[0:10]
-        E
-        0.0000    0.000000
-        0.0008    0.041157
-        0.0016    0.164629
-        0.0024    0.370415
-        0.0032    0.657892
-        0.0040    1.028308
-        0.0048    1.480414
-        0.0056    2.015458
-        0.0064    2.632193
-        0.0072    3.331243
+        >>> p = Tpdos.from_dE(800, rho_in_energy, interv_in_energy)
+        >>> p.data.iloc[0:10]
+        beta
+        0.000000    0.000000
+        0.011605    0.002837
+        0.023209    0.011349
+        0.034814    0.025536
+        0.046418    0.045354
+        0.058023    0.070890
+        0.069627    0.102058
+        0.081232    0.138943
+        0.092836    0.181460
+        0.104441    0.229651
         Name: rho, dtype: float64
         """
         rho_ = np.array(rho)
-        index = pd.Index(np.arange(len(rho_)) * interval_energy)
-        index.name = "E"
-        return cls(rho_, index=index)
+        grid = np.arange(len(rho_)) * intervalE
+        return cls(T, rho_, index=Beta.from_dE(grid, T).to_index)
 
-    def to_beta_grid(self, T: float):
+    @classmethod
+    def from_file(cls, T: float, file: str, header=None, index_col=None,
+                  usecols=None, engine="python"):
         """
-        Change the energy grid of rho. Two options available:
-            - Tranform energy grid in beta grid by introducing T
+        Extract rho in energy from the introduced file.
 
         Parameters
         ----------
-        T : 'float'
-            Temperature to change energy grid to beta grid. The default is
-            None.
+        T: 'float'
+            Temperature in K.
+        file: 'str'
+            File path.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
 
         Returns
         -------
-        "Pdos"
-            pdos object with the new grid.
+        "Epdos"
+            Rho normalize object.
+        """
+        df = pd.read_csv(file, delim_whitespace=True, header=header,
+                         index_col=index_col,
+                         usecols=usecols, engine=engine).iloc[::, 0]
+        df.index.name = "dE"
+        return cls(T, df)
+
+    def from_dE_file(T: float, file: str, header=None, index_col=None,
+                     usecols=None, engine="python"):
+        """
+        Extract rho in energy from the introduced file and create a Tpdos object
+        based on the temperature.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        file: 'str'
+            File path.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
+
+        Returns
+        -------
+        "Tpdos"
+            Rho normalize object.
 
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> p.rho.iloc[0:5]
-        E
-        0.0000    0.000000
-        0.0008    0.041157
-        0.0016    0.164629
-        0.0024    0.370415
-        0.0032    0.657892
-        Name: rho, dtype: float64
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> os.chdir("../../../data/pdos/")
 
-        Test the results:
         >>> T = 300
-        >>> p.to_beta_grid(T).rho.iloc[0:5]
+        >>> file = "interp.300"
+        >>> Tpdos.from_dE_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
         beta
         0.000000    0.000000
-        0.030945    0.001064
-        0.061891    0.004256
-        0.092836    0.009576
-        0.123782    0.017008
+        0.015473    0.001083
+        0.030945    0.002295
+        0.046418    0.005459
+        0.061891    0.008876
         Name: rho, dtype: float64
 
-        >>> p.to_beta_grid(T).to_beta_grid(T).rho.iloc[0:5]
-        beta
-        0.000000    0.000000
-        0.030945    0.001064
-        0.061891    0.004256
-        0.092836    0.009576
-        0.123782    0.017008
-        Name: rho, dtype: float64
+        >>> os.chdir(wd)
         """
-        if self.rho.index.name == "beta":
-            return self
-        else:
-            grid = self.rho.index.values
-            return Pdos(self.rho.values,
-                        index=Beta.from_dE(grid, T).to_index)
+        return Epdos.from_file(file, header, index_col, usecols, engine).beta_grid(T)
 
-    def plot(self) -> matplotlib:
-        """Plot rho (y) vs grid (x)."""
-        return self.data.plot(title='PDOS')
-
-    def P(self, T: float, threshold: float = 1.e-6) -> pd.Series:
+    @property
+    def P(self, threshold=1.0e-6) -> pd.Series:
         """
         Calculate P function for LEAPR formalism with PDOS.
         .. math::
@@ -252,11 +265,9 @@ class Pdos:
         Example
         -------
         Object initialization:
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-
-        Test the results:
         >>> T = 300
-        >>> pdos.P(T).iloc[0:6].round(6)
+        >>> pdos = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> pdos.P.iloc[0:6].round(6)
         beta
         0.000000    1.111089
         0.030945    1.111045
@@ -266,20 +277,20 @@ class Pdos:
         0.154727    1.109309
         Name: P, dtype: float64
         """
-        beta_rho = self.to_beta_grid(T).rho
-        rho_in_beta, beta_values = beta_rho.values, beta_rho.index.values
-        if abs(beta_values[0]) > threshold:
+        rhoValues, rhoBeta = self.data.values, self.data.index
+        if abs(rhoBeta[0]) > threshold:
             raise ValueError("Initial point of input DOS is not zero")
-        P_values = np.zeros(len(rho_in_beta))
+        P_values = np.zeros(len(rhoValues))
 
         # rho_in_beta is assumed to vary as beta^2 in the nearby of 0
-        P_values[0] = rho_in_beta[1] / beta_values[1] ** 2
+        P_values[0] += rhoValues[1] / rhoBeta[1] ** 2
 
         # Rest of P values calculation:
-        P_values[1:] = 0.5 * rho_in_beta[1:] / beta_values[1:] / np.sinh(0.5 * beta_values[1:])
-        return pd.Series(P_values, index=beta_rho.index, name="P")
+        P_values[1:] = 0.5 * rhoValues[1:] / rhoBeta[1:] / np.sinh(0.5 * rhoBeta[1:])
+        return pd.Series(P_values, index=rhoBeta, name="P")
 
-    def Teff(self, T: float, twt: float = 0.0) -> float:
+    @property
+    def Teff(self) -> float:
         """
         Calculate the effective temperature for a certain pdos information.
         .. math::
@@ -300,20 +311,17 @@ class Pdos:
         Example
         -------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-
-        Test the results:
-        >>> p.Teff(T=20).round(4)
+        >>> Tpdos.from_dE(20, rho_in_energy, interv_in_energy).Teff.round(4)
         149.1699
-        >>> p.Teff(T=80).round(4)
+        >>> Tpdos.from_dE(80, rho_in_energy, interv_in_energy).Teff.round(4)
         159.1632
         """
-        P = self.P(T)
-        beta = P.index.values
-        P *= beta ** 2 * np.cosh(0.5 * beta)
-        return (integrate(P) + twt) * T
+        P = self.P
+        P *= self.beta.data ** 2 * np.cosh(0.5 * self.beta.data)
+        return integrate(P) * self.T
 
-    def DebyeWallerCoeff(self, T: float) -> float:
+    @property
+    def DebyeWallerCoeff(self) -> float:
         """
         Calculate Debye Waller Coefficient in LEAPR formalism for a certain
         pdos information
@@ -339,19 +347,18 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-
-        Test the results:
-        >>> p.DebyeWallerCoeff(T=20).round(6)
+        >>> Tpdos.from_dE(20, rho_in_energy, interv_in_energy).DebyeWallerCoeff.round(6)
         0.077454
-        >>> p.DebyeWallerCoeff(T=80).round(6)
+
+        >>> Tpdos.from_dE(80, rho_in_energy, interv_in_energy).DebyeWallerCoeff.round(6)
         0.379937
         """
-        P = self.P(T)
-        P *= 2 * np.cosh(0.5 * P.index.values)
+        P = self.P
+        P *= 2 * np.cosh(0.5 * self.beta.data)
         return integrate(P)
 
-    def get_tau_1(self, T: float) -> pd.Series:
+    @property
+    def tau1(self) -> pd.Series:
         """
         Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
         .. math::
@@ -375,10 +382,7 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
-
-        Test the results:
-        >>> p.get_tau_1(20).iloc[:10]
+        >>> Tpdos.from_dE(20, rho_in_energy, interv_in_energy).tau1.iloc[:10]
         beta
         0.000000    0.004250
         0.464181    0.005313
@@ -392,32 +396,30 @@ class Pdos:
         4.177627    0.018020
         Name: 1, dtype: float64
         """
-        P = self.P(T)
-        beta = P.index.values
-        tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff(T)
+        P, beta = self.P, self.beta.data
+        tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff
         if integrate(tau1 * (1 + np.exp(-beta))) < 1.e-5:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
         tau1.name = 1
+        tau1.index.name = "beta"
         return tau1
 
-    def get_tau(self, T: float, nphonon, threshold, check: bool = True,
-                values: bool = False) -> [np.ndarray, pd.DataFrame]:
+    def tauN(self, nphonon: int, threshold: float, check: bool = True,
+             values: bool = False) -> [np.ndarray, pd.DataFrame]:
         """
-        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism.
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
+        for a certain temperature.
 
         Parameters
         ----------
-        T: 'float'
-            Temperature in K.
         nphonon: 'int'
-            Number of phonon to calculate the tau functions.
+            Number of phonons.
         threshold: 'float'
-            Minimun value to take into account.
+            Threshold to check the tauN normalization.
         check: 'bool', optional
-            Check the normalization condition. The default is True and is only
-            check if df is True.
-        df: 'bool', optional
-            Return a pandas dataframe. The default is True.
+            Check the normalization of the tauN functions. The default is True.
+        values: 'bool', optional
+            Return the tauN values. The default is False.
 
         Returns
         -------
@@ -427,39 +429,642 @@ class Pdos:
         Examples
         --------
         Object initialization:
-        >>> p = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> T = 800
+        >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
         >>> threshold = 0.0
-        >>> tau_n = p.get_tau(T, 5, threshold)
-        >>> tau_n.iloc[::, :100:20].round(6)
+        >>> tauN = p.tauN(5, threshold)
+        >>> tauN.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
         2  1.068786  0.835423  0.650492  0.397400  0.067640
         3  0.721827  0.778009  0.645243  0.431710  0.257169
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
-
-        >>> tau_n = p.get_tau(T, 10, threshold, check=False)
-        >>> tau_n.iloc[::2, :100:20].round(6)
-           0.000000  0.232090  0.464181  0.696271  0.928361
-        1  0.862582  1.322890  0.341423  0.000000  0.000000
-        3  0.721827  0.778009  0.645243  0.431710  0.257169
-        5  0.572522  0.608795  0.572271  0.475181  0.348585
-        7  0.479140  0.515558  0.508476  0.458931  0.378055
-        9  0.416041  0.451569  0.457651  0.432693  0.381067
         """
-        tau1 = self.get_tau_1(T)
-        tau_n = tau_n_functions(tau1.values, tau1.index.values, nphonon, threshold)
+        tau1Values, beta = self.tau1.values, self.beta.data
+        tauN = get_tauNfunc(tau1Values, beta, nphonon, threshold)
         if values:
-            return tau_n
+            return tauN
         else:
-            beta = tau_n_beta(tau1.index.values, tau_n.shape[1])
-            tau_n = pd.DataFrame(tau_n, columns=beta)
-            tau_n.index += 1
+            tauN = pd.DataFrame(tauN, columns=get_tauNbeta(beta, tauN.shape[1]))
+            tauN.index += 1
             if check:
                 # tau1 is not included in the check:
-                integrals_value = tau_n.apply(integrate, axis=1).iloc[1::]
+                integrals_value = tauN.apply(integrate, axis=1).iloc[1::]
                 if (integrals_value < 1.e-5).any():
                     raise ValueError(
                         "Tau function doesnt satisfy the normalization condition")
-            return tau_n
+            return tauN
+
+    @property
+    def dE_grid(self):
+        """
+        Transform from a specific temperature phonon spectrum to a general
+        phonon spectrum in energy.
+
+        Returns
+        -------
+        "Epdos"
+            Rho in energy.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = 300
+        >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> p.data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.030945    0.001064
+        0.061891    0.004256
+        0.092836    0.009576
+        0.123782    0.017008
+        Name: rho, dtype: float64
+
+        Test the results:
+        >>> p.dE_grid.data.iloc[0:5]
+        dE
+        0.0000    0.000000
+        0.0008    0.041157
+        0.0016    0.164629
+        0.0024    0.370415
+        0.0032    0.657892
+        Name: rho, dtype: float64
+        """
+        dE_index = pd.Index(self.beta.get_dE(self.T), name="dE")
+        return Epdos(self.data.values.copy(), index=dE_index)
+
+
+class Epdos:
+    """
+    Object containing the method and properties of the phonon density of states
+    in energy.
+
+    Properties
+    ----------
+    rho : 'pd.Series'
+        Pandas Series containing the rho values in energy (index).
+
+    Methods
+    -------
+    from_dE: Pdos
+        Create a pdos object from a rho in energy
+    beta_grid: Pdos
+        Change the energy grid of rho for a beta grid
+    plot: None
+        Plot the pdos data
+    P: pd.Series
+        Calculate P function for LEAPR formalism with PDOS
+    Teff: float
+        Calculate the effective temperature
+    DebyeWaller: float
+        Calculate the Debye-Waller factor for LEAPR formalism with PDOS
+    get_tau: pd.DataFrame
+        Calculate the tauN functions
+    """
+
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize of the pdos object.
+
+        Parameters
+        ----------
+        *args : variables
+            variables for the creation of the pandas Series.
+        **kwargs : 'dict'
+            Dictionary to create the pandas series of rho.
+
+        Returns
+        -------
+        'Pdos'
+            Object containing the method and properties of rho in energy.
+
+        """
+        self.data = pd.Series(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.Series:
+        """Pandas Series containing the rho values in energy (index)."""
+        return self._data
+
+    @data.setter
+    def data(self, rhoData: Union[pd.Series, Iterable]) -> pd.Series:
+        """
+        Data setter for rho to ensure the following properties of the data:
+            - Shape of the data: 1 dimension
+            - Energy index monotoally increasing
+            - Rho values normalization
+
+        Parameters
+        ----------
+        rho : pd.Series
+            rho values in energy.
+
+        Returns
+        -------
+        "pd.Series"
+            Rho normalize.
+
+        Raises
+        ------
+        TypeError
+            Rho is not 1 dimension pd.Series
+        SyntaxError
+            Energy grid is not monotonically increasing.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
+
+        Test the results:
+        >>> assert integrate(p.data) == 1.0
+        """
+        data_ = pd.Series(rhoData, name="rho")
+
+        if data_.index.name != "dE" and data_.index.name != "E":
+            raise SyntaxError("Energy index must be dE")
+
+        if not len(data_.shape) == 1:
+            raise TypeError("Rho must have one dimension")
+
+        if not data_.index.is_monotonic_increasing:
+            raise SyntaxError("dE grid is not monotonically increasing")
+
+        self._data = data_ / integrate(data_)
+
+    @classmethod
+    def from_dE(cls, rho: Iterable, intervalE: float):
+        """
+        Extract rho in energy from the introduced data.
+
+        Parameters
+        ----------
+        rho : 1D iterable
+            rho values.
+        intervalE : 'float'
+            Energy interval in eV.
+
+        Returns
+        -------
+        "Pdos"
+            Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
+
+        Test the results:
+        >>> p.data.iloc[0:10]
+        dE
+        0.0000    0.000000
+        0.0008    0.041157
+        0.0016    0.164629
+        0.0024    0.370415
+        0.0032    0.657892
+        0.0040    1.028308
+        0.0048    1.480414
+        0.0056    2.015458
+        0.0064    2.632193
+        0.0072    3.331243
+        Name: rho, dtype: float64
+        """
+        rho_ = np.array(rho)
+        index = pd.Index(np.arange(len(rho_)) * intervalE, name="dE")
+        return cls(rho_, index=index)
+
+    @classmethod
+    def from_file(cls, file: str, header=None, index_col=None,
+                  usecols=None, engine="python"):
+        """
+        Extract rho in energy from the introduced file.
+
+        Parameters
+        ----------
+        file: 'str'
+            File path.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
+
+        Returns
+        -------
+        "Epdos"
+            Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> os.chdir("../../../data/pdos/")
+        >>> file = "interp.300"
+        >>> Epdos.from_file(file, usecols=[0, 1], index_col=0).data.iloc[0:5]
+        dE
+        0.0000    0.000000
+        0.0004    0.041879
+        0.0008    0.088790
+        0.0012    0.211161
+        0.0016    0.343320
+        Name: rho, dtype: float64
+        >>> os.chdir(wd)
+        """
+        df = pd.read_csv(file, delim_whitespace=True, header=header,
+                         index_col=index_col,
+                         usecols=usecols, engine=engine).iloc[::, 0]
+        df.index.name = "dE"
+        return cls(df)
+
+    def beta_grid(self, T: float):
+        """
+        Change the energy grid of rho. Two options available:
+            - Tranform energy grid in beta grid by introducing T
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature to change energy grid to beta grid. The default is
+            None.
+
+        Returns
+        -------
+        "Tpdos"
+            pdos object with the new grid.
+
+        Examples
+        --------
+        Object initialization:
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> p.data.iloc[0:5]
+        dE
+        0.0000    0.000000
+        0.0008    0.041157
+        0.0016    0.164629
+        0.0024    0.370415
+        0.0032    0.657892
+        Name: rho, dtype: float64
+
+        Test the results:
+        >>> T = 300
+        >>> p.beta_grid(T).data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.030945    0.001064
+        0.061891    0.004256
+        0.092836    0.009576
+        0.123782    0.017008
+        Name: rho, dtype: float64
+        """
+        rho = self.data.copy()
+        rho.index = Beta.from_dE(rho.index.values, T).to_index
+        return Tpdos(T, rho)
+
+    def Teff(self, T: float) -> float:
+        """
+        Calculate the effective temperature for a certain pdos information.
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        "float"
+            Effective temperature for certain pdos.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = 20
+        >>> pdos = Epdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> pdos.Teff(T).round(4)
+        149.1699
+        """
+        return self.beta_grid(T).Teff
+
+    def DebyeWallerCoeff(self, T: float) -> float:
+        """
+        Calculate Debye Waller Coefficient in LEAPR formalism for a certain
+        pdos information.
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        "float"
+            Debye Waller Coefficient.
+
+        Examples
+        --------
+        Object initialization:
+        >>> Epdos.from_dE(rho_in_energy, interv_in_energy).DebyeWallerCoeff(20).round(6)
+        0.077454
+        """
+        return self.beta_grid(T).DebyeWallerCoeff
+
+    def tau1(self, T: float) -> pd.Series:
+        """
+        Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        "pd.Series"
+            Tau(-beta) function for the 1 phonon.
+
+        Examples
+        --------
+        Object initialization:
+        >>> Epdos.from_dE(rho_in_energy, interv_in_energy).tau1(20).iloc[:10]
+        beta
+        0.000000    0.004250
+        0.464181    0.005313
+        0.928361    0.006524
+        1.392542    0.007875
+        1.856723    0.009344
+        2.320904    0.010932
+        2.785084    0.012606
+        3.249265    0.014359
+        3.713446    0.016167
+        4.177627    0.018020
+        Name: 1, dtype: float64
+        """
+        return self.beta_grid(T).tau1
+
+    def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
+              values: bool = False) -> [np.ndarray, pd.DataFrame]:
+        """
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
+        for a certain temperature.
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+        nphonon : 'int'
+            Number of phonons.
+        threshold : 'float'
+            Threshold to check the tauN normalization.
+        check : 'bool', optional
+            Check the normalization of the tauN functions. The default is True.
+        values : 'bool', optional
+            Return the tauN values. The default is False.
+
+        Returns
+        -------
+        "pd.DataFrame", (len(rho) * nphonon, nphonon)
+            Tau(-beta) function for n phonon.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = 800
+        >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> threshold = 0.0
+        >>> tauN = p.tauN(T, 5, threshold)
+        >>> tauN.iloc[::, :100:20].round(6)
+           0.000000  0.232090  0.464181  0.696271  0.928361
+        1  0.862582  1.322890  0.341423  0.000000  0.000000
+        2  1.068786  0.835423  0.650492  0.397400  0.067640
+        3  0.721827  0.778009  0.645243  0.431710  0.257169
+        4  0.649349  0.669368  0.608380  0.476611  0.305529
+        5  0.572522  0.608795  0.572271  0.475181  0.348585
+        """
+        return self.beta_grid(T).tauN(nphonon, threshold, check, values)
+
+
+class Npdos:
+    """
+    Object containing the method and properties of N phonon density of states
+    for N temperatures.
+    """
+    def __init__(self, pdos_dict: dict):
+        """
+        Initialize of the pdos object containing the N temperatures.
+
+        Parameters
+        ----------
+        pdos_dict: 'dict' of Tpdos objects
+            Dictionary containing the pdos objects for N temperatures.
+        """
+        self.instance = pdos_dict
+        self.interp_spline = None
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        Get the data of the pdos objects in a DataFrame format with the index
+        being the energy grid.
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Data of the pdos objects in a DataFrame format.
+        """
+        data = pd.DataFrame({key: pdos.dE_grid.data
+                             for key, pdos in self.instance.items()})
+        if np.any(data.isna()):
+            data.interpolate(method="linear", axis=0).fillna(0, inplace=True)
+        return data
+
+    @classmethod
+    def from_file(cls, T: [float, list], file: [str, list], header=None,
+                  index_col=None, usecols=None, engine="python", grid="dE"):
+        """
+        Extract rho in energy from the introduced file and create a Tpdos object
+        for each temperature.
+
+        Parameters
+        ----------
+        file: 'str' or 'list'
+            File path or list of file paths.
+        T: 'float' or 'list'
+            Temperature in K or list of temperatures.
+        header: 'int', optional
+            Header of the file. The default is None.
+        index_col: 'int', optional
+            Index column of the file. The default is None.
+        usecols: 'list', optional
+            Columns to use. The default is None.
+        engine: 'str', optional
+            Engine to read the file. The default is "python".
+        grid: 'str', optional
+            Grid of the file. The default is "dE". Options are "dE" or "beta".
+
+        Returns
+        -------
+        "Npdos"
+            Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> os.chdir("../../../data/pdos/")
+        >>> file = "interp.300"
+        >>> T = 300
+        >>> Npdos.from_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
+                     300
+        dE
+        0.0000  0.000000
+        0.0004  0.041879
+        0.0008  0.088790
+        0.0012  0.211161
+        0.0016  0.343320
+        >>> os.chdir(wd)
+        """
+        # Transform file and T to list if they are not
+        file_ = [file] if isinstance(file, str) else file
+        T_ = [T] if isinstance(T, (int, float)) else T
+        if len(file_) != len(T_):
+            raise ValueError("The number of files and temperatures must be the same")
+
+        # Prepare arguments for from_file function
+        args = (header, index_col, usecols, engine)
+
+        # Create Tpdos objects based on the grid type
+        method = Tpdos.from_dE_file if grid == "dE" else Tpdos.from_file
+        return cls({T: method(T, file, *args) for file, T in zip(file_, T_)})
+
+    @classmethod
+    def from_dE(cls, T: list, rho: [list, np.ndarray], intervalE: list):
+        """
+        Create a Npdos object from a list of Tpdos objects.
+
+        Parameters
+        ----------
+        T: list of 'float'
+            List of temperatures in K.
+        rho: list of '1D iterable'
+            rho function values store in each row.
+        intervalE: list of 'float'
+            List of energy interval in eV.
+
+        Returns
+        -------
+        "Npdos"
+            Rho normalize object.
+        """
+        return cls({T[i]: Tpdos.from_dE(T[i], rho[i], intervalE[i])
+                    for i in range(len(T))})
+
+    def compute_spline(self):
+        """
+        Compute the spline interpolation of the pdos data if it is not computed
+        """
+        data = self.data.copy()
+        dE, T = data.index.values, data.columns.values
+        ky = 3 if len(T) > 3 else len(T) - 1
+        self.interp_spline = RectBivariateSpline(dE, T, data.values, ky=ky)
+
+    def Tinterp(self, Tnew: [float, np.ndarray],
+                inplace: bool = False) -> [None, dict, Tpdos]:
+        """
+        Interpolate the pdos data to a new temperature grid. If the new
+        temperature is out of the bound of the original temperature grid, the
+        previous or next temperature will be used.
+
+        Parameters
+        ----------
+        Tnew: 'float' or 'np.ndarray'
+            New temperature grid.
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Interpolated pdos data.
+        """
+        Tnew_ = Tnew if hasattr(Tnew, "__len__") else [Tnew]
+        if self.interp_spline is None:
+            self.compute_spline()
+        # Get the index values from the data
+        dE = self.data.index.values
+
+        # Use the previously computed spline function to interpolate the data
+        interpolated_T = self.interp_spline(dE, Tnew_)
+
+        # Compute the Tpdos object for the Tnew temperature
+        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i]).beta_grid(T)
+                             for i, T in enumerate(Tnew_)}
+        if inplace:
+            self.instance.update(intepolated_Tpdos)
+        else:
+            return intepolated_Tpdos[Tnew] if len(Tnew_) == 1 else intepolated_Tpdos
+
+    def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
+              values: bool = False) -> [np.ndarray, pd.DataFrame]:
+        """
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
+        for a certain temperature. The tauN function is computed by interpolating
+        the pdos data to the temperature T and then computing the tauN function.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+        nphonon: 'int'
+            Number of phonons.
+        threshold: 'float'
+            Threshold to check the tauN normalization.
+        check: 'bool', optional
+            Check the normalization of the tauN functions. The default is True.
+        values: 'bool', optional
+            Return the tauN values. The default is False.
+
+        Returns
+        -------
+        "pd.DataFrame", (len(rho) * nphonon, nphonon)
+            Tau(-beta) function for n phonon.
+        """
+        return self.Tinterp(T).tauN(nphonon, threshold, check, values)
+
+    def __getattr__(self, name):
+        if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:
+            results = {key: getattr(pdos, name)()
+                       for key, pdos in self.instance.items()}
+            return pd.Series(results, name=name)
+        else:
+            raise AttributeError(f"Attribute {name} not found in the Npdos object")
+
+
+class Pdos:
+    def __init__(self, *args, **kwargs):
+        if isinstance(args[0], (Epdos, Tpdos, Npdos)):
+            self.instance = args[0]
+        elif isinstance(args[0], (int, float)):
+            self.instance = Tpdos(*args, **kwargs)
+        elif len(args[-1].shape) == 1:
+            self.instance = Epdos(*args, **kwargs)
+        else:
+            self.instance = Npdos(*args, **kwargs)
+
+    @classmethod
+    def from_dE(cls, *args, **kwargs):
+        if isinstance(args[0], (int, float)):
+            return cls(Tpdos.from_dE(*args, **kwargs))
+        elif isinstance(args[-1], (list, np.ndarray)):
+            return cls(Npdos.from_dE(*args, **kwargs))
+        else:
+            return cls(Epdos.from_dE(*args, **kwargs))
+
+    def __getattr__(self, name):
+        # assume it is implemented by self.instance
+        return getattr(self.instance, name)
+

@@ -37,16 +37,16 @@ def optional_jit(func):
 
 
 @optional_jit
-def tauN_convol(exp_beta: np.ndarray, delta_beta: np.ndarray, tau1: np.ndarray,
-                Ntau1: int, tauNminus1: np.ndarray, NtauNm1: int, i: int):
+def tauNconvol(expBeta: np.ndarray, deltaBeta: np.ndarray, tau1: np.ndarray,
+               Ntau1: int, tauNminus1: np.ndarray, NtauNminus1: int, i: int):
     """
     Calculate the convolution in the tauN[i] between  tau1 and tauNminus1.
 
     Parameters
     ----------
-    exp_beta: np.ndarray, (N,)
+    expBeta: np.ndarray, (N,)
         Minus beta exponential.
-    delta_beta: np.ndarray, (N,)
+    deltaBeta: np.ndarray, (N,)
         beta interval between two consecutive values.
     tau1: np.ndarray, (N,)
         Tau(-beta) function values for n = 1 expansion.
@@ -54,7 +54,7 @@ def tauN_convol(exp_beta: np.ndarray, delta_beta: np.ndarray, tau1: np.ndarray,
         Length of tau1.
     tauNminus1: np.ndarray, (M,)
         Tau(-beta) function values for n-1 expansion.
-    NtauNm1: int
+    NtauNminus1: int
         Length of tauNminus1.
     i: int
         Index of the tauN[i] value to calculate.
@@ -70,37 +70,37 @@ def tauN_convol(exp_beta: np.ndarray, delta_beta: np.ndarray, tau1: np.ndarray,
         convol_j = 0.
 
         k = i - j  # tauNminus1(-(beta-beta^prime))
-        if abs(k) < NtauNm1:
+        if abs(k) < NtauNminus1:
             if k >= 0:
                 convol_j += tauNminus1[k]
             else:
-                convol_j += tauNminus1[-k] * exp_beta[-k]
+                convol_j += tauNminus1[-k] * expBeta[-k]
 
         l = i + j  # tauNminus1(-(beta+beta^prime))
-        if l < NtauNm1:
-            convol_j += tauNminus1[l] * exp_beta[j]
+        if l < NtauNminus1:
+            convol_j += tauNminus1[l] * expBeta[j]
 
         if j == trapz_limit:
             convol_j *= 0.5  # trapz integrate
 
-        convol += tau1[j] * delta_beta[j] * convol_j
+        convol += tau1[j] * deltaBeta[j] * convol_j
     return convol
     
 
 
 @optional_jit
-def calc_tauN(exp_beta: np.ndarray, delta_beta: np.ndarray, tau1: np.ndarray,
-                    Ntau1: int, tauNminus1: np.ndarray, tauN: np.ndarray,
-                    start: int, NtauN: int, stride: int):
+def calc_tauN(expBeta: np.ndarray, deltaBeta: np.ndarray, tau1: np.ndarray,
+              Ntau1: int, tauNminus1: np.ndarray, tauN: np.ndarray,
+              start: int, NtauN: int, stride: int):
     """
     Calculate the tauN(-beta) function values for all n. The values are
     calculated until the last value of tauN is zero.
 
     Parameters
     ----------
-    exp_beta: np.ndarray, (N,)
+    expBeta: np.ndarray, (N,)
         Minus beta exponential.
-    delta_beta: np.ndarray, (N,)
+    deltaBeta: np.ndarray, (N,)
         beta interval between two consecutive values.
     tau1: np.ndarray, (N,)
         Tau(-beta) function values for n = 1 expansion.
@@ -120,58 +120,58 @@ def calc_tauN(exp_beta: np.ndarray, delta_beta: np.ndarray, tau1: np.ndarray,
     tauN: np.ndarray, (M,)
         Tau(-beta) function values for n expansion.
     """
-    NtauNm1 = NtauN - Ntau1 + 1
+    NtauNminus1 = NtauN - Ntau1 + 1
     # tauN(-beta) loop:
     for i in range(start, NtauN, stride):
         # 1 iteration: j = 0
-        tauN[i] += tau1[0] * delta_beta[0] * tauNminus1[i] if i < NtauNm1 else 0.
+        tauN[i] += tau1[0] * deltaBeta[0] * tauNminus1[i] if i < NtauNminus1 else 0.
         # rest of iterations:
-        tauN[i] += tauN_convol(exp_beta, delta_beta, tau1, Ntau1, tauNminus1, NtauNm1,  i)
+        tauN[i] += tauNconvol(expBeta, deltaBeta, tau1, Ntau1, tauNminus1, NtauNminus1,  i)
 
 
 @cuda.jit
-def tauN_calculation_threads(exp_beta, delta_beta, tau1, Ntau1, tauNminus1, tauN_device,
-                              NtauN):
+def tauN_calculation_threads(expBeta, deltaBeta, tau1, Ntau1, tauNminus1, tauNdevice,
+                             NtauN):
     """
     Calculate the tauN(-beta) function values for all n. The values are
     calculated until the last value of tauN is zero.
 
     Parameters
     ----------
-    exp_beta: np.ndarray
+    expBeta: np.ndarray
         Minus exponential of beta grid.
-    delta_beta: np.ndarray
+    deltaBeta: np.ndarray
         beta interval between two consecutive values.
     tau1: np.ndarray, (N,)
         Tau(-beta) function values for n = 1 expansion.
     tauNminus1: np.ndarray, (M,)
         Tau(-beta) function values for n-1 expansion.
-    tauN_device: np.ndarray, (M,)
+    tauNdevice: np.ndarray, (M,)
         Tau(-beta) function values for n expansion.
     final: int
         position to end the calculation
 
     Returns
     -------
-    tauN_device: np.ndarray, (M,)
+    tauNdevice: np.ndarray, (M,)
         Tau(-beta) function values for n expansion.
     """
     start = cuda.grid(1)
     stride = cuda.gridsize(1)
-    calc_tauN(exp_beta, delta_beta, tau1, Ntau1, tauNminus1, tauN_device,
-                    start, NtauN, stride)
+    calc_tauN(expBeta, deltaBeta, tau1, Ntau1, tauNminus1, tauNdevice,
+              start, NtauN, stride)
 
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
-def calc_tauN_func_cpu(tauN_func: np.ndarray, tau1: np.ndarray,
-                                  Ntau1: int, beta: np.ndarray,
-                                  delta_beta: np.ndarray, nphonon: int, NtauN: int,):
+def calc_tauNfunc_cpu(tauNfunc: np.ndarray, tau1: np.ndarray,
+                      Ntau1: int, beta: np.ndarray,
+                      deltaBeta: np.ndarray, nphonon: int, NtauN: int,):
     """
     Get the tau_{n}(-beta) function values for all n.
 
     Parameters
     ----------
-    tauN_func: 'np.ndarray', (nphonon, N * nphonon)
+    tauNfunc: 'np.ndarray', (nphonon, N * nphonon)
         All Tau(-beta) function values for n = 1 expansion.
     tau1: 'np.ndarray', (N,)
         Tau(-beta) function values for n = 1 expansion.
@@ -179,7 +179,7 @@ def calc_tauN_func_cpu(tauN_func: np.ndarray, tau1: np.ndarray,
         Length of tau1.
     beta: 'np.ndarray', (N,)
         Beta array of tau1 function.
-    delta_beta: np.ndarray
+    deltaBeta: np.ndarray
         Interval of beta for the PDOS.
     nphonon: 'int'
         Number of phonon to calculate the tau functions.
@@ -190,17 +190,17 @@ def calc_tauN_func_cpu(tauN_func: np.ndarray, tau1: np.ndarray,
 
     Returns
     -------
-    tauN_func: 'np.ndarray', (N * nphonon, nphonon)
+    tauNfunc: 'np.ndarray', (N * nphonon, nphonon)
         All Tau(-beta) function values for n expansion.
     """
     tauNminus1 = tau1.copy()
-    exp_beta = np.exp(- beta)
+    expBeta = np.exp(- beta)
     for n in range(1, nphonon):
         tauN = np.zeros(NtauN)
-        calc_tauN(exp_beta, delta_beta, tau1, Ntau1, tauNminus1, tauN,
-                        0, NtauN, 1)
+        calc_tauN(expBeta, deltaBeta, tau1, Ntau1, tauNminus1, tauN,
+                  0, NtauN, 1)
         # Copy thet data into the array:
-        tauN_func[n, :NtauN] += tauN
+        tauNfunc[n, :NtauN] += tauN
         # If the last N values are zero, the next tauN will have the same length
         # because the convolution will be zero for the following values
         NtauN = NtauN if np.all(tauN[-Ntau1:] == 0.0) else NtauN + Ntau1 - 1
@@ -208,20 +208,20 @@ def calc_tauN_func_cpu(tauN_func: np.ndarray, tau1: np.ndarray,
         tauNminus1 = tauN
 
     # Erase the zeros in the last part of the array
-    return tauN_func[::, :NtauN]
+    return tauNfunc[::, :NtauN]
 
 
-def calc_tauN_func_gpu(tauN_func: np.ndarray, tau1: np.ndarray,
-                                  Ntau1: int, beta: np.ndarray,
-                                  delta_beta: np.ndarray, nphonon: int, NtauN: int,
-                                  threadsperblock: int = 128) -> np.ndarray:
+def calc_tauNfunc_gpu(tauNfunc: np.ndarray, tau1: np.ndarray,
+                      Ntau1: int, beta: np.ndarray,
+                      deltaBeta: np.ndarray, nphonon: int, NtauN: int,
+                      threadsperblock: int = 128) -> np.ndarray:
 
     """
     Get the tau_{n}(-beta) function values for all n.
 
     Parameters
     ----------
-    tauN_func: 'np.ndarray', (nphonon, N * nphonon)
+    tauNfunc: 'np.ndarray', (nphonon, N * nphonon)
         All Tau(-beta) function values for n = 1 expansion.
     tau1: 'np.ndarray', (N,)
         Tau(-beta) function values for n = 1 expansion.
@@ -229,7 +229,7 @@ def calc_tauN_func_gpu(tauN_func: np.ndarray, tau1: np.ndarray,
         Length of tau1.
     beta: 'np.ndarray', (N,)
         Beta array of tau1 function.
-    delta_beta: np.ndarray
+    deltaBeta: np.ndarray
         Interval of beta for the PDOS.
     nphonon: 'int'
         Number of phonon to calculate the tau functions.
@@ -243,35 +243,35 @@ def calc_tauN_func_gpu(tauN_func: np.ndarray, tau1: np.ndarray,
 
     Returns
     -------
-    tauN_func: 'np.ndarray', (N * nphonon, nphonon)
+    tauNfunc: 'np.ndarray', (N * nphonon, nphonon)
         All Tau(-beta) function values for n expansion.
     """
     # Copy the data to the device
     tau1 = cuda.to_device(tau1)
     tauNminus1 = cuda.to_device(tau1)
-    exp_beta = cuda.to_device(np.exp(- beta))
-    delta_beta = cuda.to_device(delta_beta)
+    expBeta = cuda.to_device(np.exp(- beta))
+    deltaBeta = cuda.to_device(deltaBeta)
     for n in range(1, nphonon):
         # Perform the calculation on the device:
         tauN = cuda.to_device(np.zeros(NtauN))
         blockspergrid = NtauN + threadsperblock - 1
         blockspergrid //= threadsperblock
-        tauN_calculation_threads[blockspergrid, threadsperblock](exp_beta, delta_beta, tau1, Ntau1, tauNminus1,
-                                                                  tauN, NtauN)
+        tauN_calculation_threads[blockspergrid, threadsperblock](expBeta, deltaBeta, tau1, Ntau1, tauNminus1,
+                                                                 tauN, NtauN)
 
         # Copy the data back to the host
-        tauN_func[n, :NtauN] += tauN.copy_to_host()
+        tauNfunc[n, :NtauN] += tauN.copy_to_host()
 
         # If the last N values are zero, the next tauN will have the same length
         # because the convolution will be zero for the following values
         NtauN = NtauN if np.all(tauN[-Ntau1:] == 0.0) else NtauN + Ntau1 - 1
         # Next tauN:
         tauNminus1 = tauN
-    return tauN_func[::, :NtauN]
+    return tauNfunc[::, :NtauN]
 
 
 def get_tauNfunc(tau1: np.ndarray, beta: np.ndarray,
-                    nphonon: int, threshold: float) -> np.ndarray:
+                 nphonon: int, threshold: float) -> np.ndarray:
     """
     Get the tau_{n}(-beta) function values for all n.
 
@@ -288,25 +288,25 @@ def get_tauNfunc(tau1: np.ndarray, beta: np.ndarray,
 
     Returns
     -------
-    tauN_func: 'np.ndarray', (nphonon, N * nphonon)
+    tauNfunc: 'np.ndarray', (nphonon, N * nphonon)
         All Tau(-beta) function values for n expansion.
     """
     Ntau1 = len(tau1)
     column_max = Ntau1 * nphonon
-    tauN_func = np.zeros((nphonon, column_max))
-    tauN_func[0, :Ntau1] += tau1
-    calc_tauN_func = calc_tauN_func_gpu if gpu_available else calc_tauN_func_cpu
-    delta_beta = Beta(beta).grid
-    tauN_func = calc_tauN_func(tauN_func, tau1, Ntau1, beta,
-                                    delta_beta, nphonon, 2 * Ntau1 - 1)
+    tauNfunc = np.zeros((nphonon, column_max))
+    tauNfunc[0, :Ntau1] += tau1
+    calc_tauNfunc = calc_tauNfunc_gpu if gpu_available else calc_tauNfunc_cpu
+    deltaBeta = Beta(beta).grid
+    tauNfunc = calc_tauNfunc(tauNfunc, tau1, Ntau1, beta,
+                                    deltaBeta, nphonon, 2 * Ntau1 - 1)
     # Erase the zeros in the last part of the array
     if threshold > 0.0:
-        column_max = first_all_zero_column(tauN_func, threshold)
-    return tauN_func[::, :column_max]
+        column_max = first_all_zero_column(tauNfunc, threshold)
+    return tauNfunc[::, :column_max]
 
 
-def save_tau(tauN: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
-              binary: bool) -> None:
+def save_tau(tauN: np.ndarray, nphonon: int, T: float, tauToFile: bool,
+             binary: bool) -> None:
     """
     Save the tauN values in a file or in a binary file.
 
@@ -319,7 +319,7 @@ def save_tau(tauN: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
         Phonon expansion order
     T: float
         Target temperature value for the caculation of tauN
-    tau_to_file: bool
+    tauToFile: bool
         If True, save the tauN values in a file. If False, don't save the tauN
         values in a file. Default is False
     binary: bool
@@ -327,7 +327,7 @@ def save_tau(tauN: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
         values in a txt file. Default is False.
     """
     name = f"tau_{nphonon}_{T}"
-    if tau_to_file:
+    if tauToFile:
         os.makedirs("tau", exist_ok=True)
         np.savetxt(f"tau/{name}.txt", tauN, delimiter="\t", fmt="%.14f")
     if binary:
@@ -336,52 +336,52 @@ def save_tau(tauN: np.ndarray, nphonon: int, T: float, tau_to_file: bool,
             f.create_dataset("tau", data=tauN)
 
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
-def get_tauNbeta(tau1_beta: np.ndarray, beta_length=int):
+def get_tauNbeta(tau1beta: np.ndarray, Nbeta=int):
     """
-    Create the tauN_beta grid based on the tau1_beta grid. The tauN_beta grid
-    for beta is the same as the tau1_beta grid for the first values and the rest
-    of the values are the same as the tau1_beta grid but with a step of the last
-    value of the tau1_beta grid.
+    Create the tauN_beta grid based on the tau1beta grid. The tauN_beta grid
+    for beta is the same as the tau1beta grid for the first values and the rest
+    of the values are the same as the tau1beta grid but with a step of the last
+    value of the tau1beta grid.
 
     Parameters
     ----------
-    tau1_beta: np.ndarray
+    tau1beta: np.ndarray
         Tau(-beta) function values for n = 1 expansion.
-    beta_length: int
+    Nbeta: int
         Length of the beta grid.
 
     Returns
     -------
-    tauN_beta_grid: np.ndarray
+    tauNbetaGrid: np.ndarray
         Tau(-beta) function values for n expansion.
 
     Examples
     --------
-    >>> tau1_beta = np.array([0.0, 0.05, 0.1, 0.2, 0.4])
-    >>> get_tauNbeta(tau1_beta, 8).round(2)
+    >>> tau1beta = np.array([0.0, 0.05, 0.1, 0.2, 0.4])
+    >>> get_tauNbeta(tau1beta, 8).round(2)
     array([0.  , 0.05, 0.1 , 0.2 , 0.4 , 0.6 , 0.8 , 1.  ])
     """
-    # Get the length of tau1_beta
-    N = len(tau1_beta)
+    # Get the length of tau1beta
+    N = len(tau1beta)
 
-    # If the length of tau1_beta is equal to beta_length, return tau1_beta as is
-    if N == beta_length:
-        return tau1_beta
+    # If the length of tau1 beta is equal to Nbeta, return tau1beta as is
+    if N == Nbeta:
+        return tau1beta
     else:
-        # Initialize an array of zeros with length beta_length
-        tauN_beta_grid = np.empty(beta_length)
+        # Initialize an array of zeros with length Nbeta
+        tauNbetaGrid = np.empty(Nbeta)
 
-        # Add the values of tau1_beta to the beginning of tauN_beta_grid
-        tauN_beta_grid[:N] = tau1_beta
+        # Add the values of tau1beta to the beginning of tauNbetaGrid
+        tauNbetaGrid[:N] = tau1beta
 
-        # Add the last value of tau1_beta to the rest of tauN_beta_grid
-        tauN_beta_grid[N:] = tau1_beta[-1]
+        # Add the last value of tau1beta to the rest of tauNbetaGrid
+        tauNbetaGrid[N:] = tau1beta[-1]
 
-        # Calculate the difference between the last two values of tau1_beta
-        delta_beta = tau1_beta[-1] - tau1_beta[-2]
+        # Calculate the difference between the last two values of tau1beta
+        deltaBeta = tau1beta[-1] - tau1beta[-2]
 
-        # Add a sequence of multiples of delta_beta to the rest of tauN_beta_grid
-        tauN_beta_grid[N:] += np.arange(1, beta_length + 1 - N) * delta_beta
+        # Add a sequence of multiples of deltaBeta to the rest of tauNbetaGrid
+        tauNbetaGrid[N:] += np.arange(1, Nbeta + 1 - N) * deltaBeta
 
-        return tauN_beta_grid
+        return tauNbetaGrid
 

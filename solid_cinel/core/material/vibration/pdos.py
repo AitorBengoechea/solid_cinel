@@ -62,7 +62,7 @@ class Tpdos:
         return self._data
 
     @data.setter
-    def data(self, rho_data: Union[pd.Series, Iterable]) -> pd.Series:
+    def data(self, rhoData: Union[pd.Series, Iterable]) -> pd.Series:
         """
         Data setter for rho to ensure the following properties of the data:
             - Shape of the data: 1 dimension
@@ -94,7 +94,7 @@ class Tpdos:
         Test the results:
         >>> assert integrate(p.data) == 1.0
         """
-        data_ = pd.Series(rho_data, name="rho")
+        data_ = pd.Series(rhoData, name="rho")
 
         if data_.index.name != "beta":
             raise SyntaxError("Energy index must be beta")
@@ -116,7 +116,7 @@ class Tpdos:
         return Beta(self.data.index.values)
 
     @classmethod
-    def from_dE(cls, T: float, rho: Iterable, interval_energy: float):
+    def from_dE(cls, T: float, rho: Iterable, intervalE: float):
         """
         Extract rho in energy from the introduced data and create a pdos object
         for a certain temperature.
@@ -127,7 +127,7 @@ class Tpdos:
             Temperature in K.
         rho: '1D iterable'
             rho values.
-        interval_energy: 'float'
+        intervalE: 'float'
             Energy interval in eV.
 
         Returns
@@ -154,7 +154,7 @@ class Tpdos:
         Name: rho, dtype: float64
         """
         rho_ = np.array(rho)
-        grid = np.arange(len(rho_)) * interval_energy
+        grid = np.arange(len(rho_)) * intervalE
         return cls(T, rho_, index=Beta.from_dE(grid, T).to_index)
 
     @classmethod
@@ -548,7 +548,7 @@ class Epdos:
         return self._data
 
     @data.setter
-    def data(self, rho_data: Union[pd.Series, Iterable]) -> pd.Series:
+    def data(self, rhoData: Union[pd.Series, Iterable]) -> pd.Series:
         """
         Data setter for rho to ensure the following properties of the data:
             - Shape of the data: 1 dimension
@@ -580,7 +580,7 @@ class Epdos:
         Test the results:
         >>> assert integrate(p.data) == 1.0
         """
-        data_ = pd.Series(rho_data, name="rho")
+        data_ = pd.Series(rhoData, name="rho")
 
         if data_.index.name != "dE" and data_.index.name != "E":
             raise SyntaxError("Energy index must be dE")
@@ -594,7 +594,7 @@ class Epdos:
         self._data = data_ / integrate(data_)
 
     @classmethod
-    def from_dE(cls, rho: Iterable, interval_energy: float):
+    def from_dE(cls, rho: Iterable, intervalE: float):
         """
         Extract rho in energy from the introduced data.
 
@@ -602,7 +602,7 @@ class Epdos:
         ----------
         rho : 1D iterable
             rho values.
-        interval_energy : 'float'
+        intervalE : 'float'
             Energy interval in eV.
 
         Returns
@@ -631,7 +631,7 @@ class Epdos:
         Name: rho, dtype: float64
         """
         rho_ = np.array(rho)
-        index = pd.Index(np.arange(len(rho_)) * interval_energy, name="dE")
+        index = pd.Index(np.arange(len(rho_)) * intervalE, name="dE")
         return cls(rho_, index=index)
 
     @classmethod
@@ -944,7 +944,7 @@ class Npdos:
         return cls({T: method(T, file, *args) for file, T in zip(file_, T_)})
 
     @classmethod
-    def from_dE(cls, T: list, rho: [list, np.ndarray], interval_energy: list):
+    def from_dE(cls, T: list, rho: [list, np.ndarray], intervalE: list):
         """
         Create a Npdos object from a list of Tpdos objects.
 
@@ -954,7 +954,7 @@ class Npdos:
             List of temperatures in K.
         rho: list of '1D iterable'
             rho function values store in each row.
-        interval_energy: list of 'float'
+        intervalE: list of 'float'
             List of energy interval in eV.
 
         Returns
@@ -962,7 +962,7 @@ class Npdos:
         "Npdos"
             Rho normalize object.
         """
-        return cls({T[i]: Tpdos.from_dE(T[i], rho[i], interval_energy[i])
+        return cls({T[i]: Tpdos.from_dE(T[i], rho[i], intervalE[i])
                     for i in range(len(T))})
 
     def compute_spline(self):

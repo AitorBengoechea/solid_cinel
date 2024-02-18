@@ -234,9 +234,9 @@ class Sab:
         Check if the normalization is satisfied
     get_momentum -> Sab or pd.DataFrame
         Return the S(alpha, beta) matrix n momentum
-    get_beta -> Sab or pd.DataFrame
+    interp_beta -> Sab or pd.DataFrame
         Quadratic interpolation to get the probability of the new beta value
-    get_alpha -> Sab or pd.DataFrame
+    interp_alpha -> Sab or pd.DataFrame
         Unit base interpolation to get the probability of the new alpha values
     get_value_from_alpha_beta -> pd.DataFrame
         Return the S(alpha, beta) matrix value for a given alpha and beta
@@ -413,13 +413,9 @@ class Sab:
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
-        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(
-            alpha)
+        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
         if beta_.kind == "abs":
-            S_values = get_SabSct(alpha_.data,
-                                   - beta_.data,
-                                   1.0,
-                                   wt)
+            S_values = get_SabSct(alpha_.data, - beta_.data, 1.0, wt)
         else:
             raise ValueError(
                 "The beta grid contains negative values and the input is the absolute beta grid")
@@ -484,10 +480,7 @@ class Sab:
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
         if beta_.kind == "abs":
-            S_values = get_SabSct(alpha_.data,
-                                   - beta_.data,  # S(alpha, -beta)
-                                   ratio,
-                                   ws)
+            S_values = get_SabSct(alpha_.data, - beta_.data, ratio, ws)
         else:
             raise ValueError(
                 "The beta grid contains negative values and the input is the absolute beta grid")
@@ -574,25 +567,21 @@ class Sab:
 
         # Expansion order:
         if nphonon:
-            warnings.warn(
-                "Is posible that the expansion order is not enough to get the correct results")
+            warnings.warn("Is posible that the expansion order is not enough to get the correct results")
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
             order_max = kwargs.get("order_max", 5000)
             nphonon = alpha_.expansionOrder(debye_waller_coeff, decimal, order_max)
 
         # Get the parameters for calculation:
-        tauN = pdos.tauN(T, nphonon, threshold=kwargs.get("threshold", 0.0),
-                           values=True)
+        tauN = pdos.tauN(T, nphonon, threshold=kwargs.get("threshold", 0.0), values=True)
         tau1beta = pdos.beta_grid(T).data.index.values
         tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
         save_tau(tauN, nphonon, T, kwargs.get("tau_to_file", False),
                  kwargs.get("binary", False))
-        S_values = phonon_expansion(alpha_.data,
-                                    beta_.data,
+        S_values = phonon_expansion(alpha_.data, beta_.data,
                                     nphonon,
-                                    tauN,
-                                    tauNbeta,
+                                    tauN, tauNbeta,
                                     debye_waller_coeff)
         return cls(S_values, columns=beta_.data, index=alpha_.data)
 
@@ -788,11 +777,9 @@ class Sab:
         # interpolation and normalization check
         cls.DebyeWallerCoeff = DebyeWallerCoeff
 
-        S_values = phonon_expansion(alpha_.data,
-                                    beta_.data,
-                                    tauN.shape[0],
-                                    tauN,
-                                    tauNbeta,
+        S_values = phonon_expansion(alpha_.data, beta_.data,
+                                    tauN.shape[0],  # nphonon
+                                    tauN, tauNbeta,
                                     DebyeWallerCoeff)
         return cls(S_values, columns=beta_.data, index=alpha_.data)
 
@@ -966,19 +953,19 @@ class Sab:
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
-    def get_beta(self, beta_new: Union[Iterable, float],
+    def interp_beta(self, betaNew: Union[Iterable, float],
                  add: bool = False) -> pd.DataFrame:
         """
         Quadratic interpolation to get the probability of the new beta value
         for all the alpha existing in the S(alpha, -beta) matrix:
         .. math::
-            \left\{ \mid\beta_{new}\mid = P\left(\mid\beta_new\mid, \alpha_k\right)\right\} \text{ for }k=0, 1, ...
+            \left\{ \mid\beta_{new}\mid = P\left(\mid\betaNew\mid, \alpha_k\right)\right\} \text{ for }k=0, 1, ...
 
         The method do not make extrapolation.
 
         Parameters
         ----------
-        beta_new : "float" or 1D iterable
+        betaNew : "float" or 1D iterable
             New beta values.
         add : "bool", optional
             Optional argument to add the output to the existing S(alpha, -beta)
@@ -998,8 +985,8 @@ class Sab:
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
-        >>> beta_new = 0.01
-        >>> S_mat.get_beta(beta_new).iloc[0:10]
+        >>> betaNew = 0.01
+        >>> S_mat.interp_beta(betaNew).iloc[0:10]
         beta          0.01
         alpha
         0.004893  0.005423
@@ -1013,8 +1000,8 @@ class Sab:
         0.044039  0.045929
         0.048932  0.050641
 
-        >>> beta_new = [0.01, 0.03]
-        >>> S_mat.get_beta(beta_new, add=True).data.iloc[0:10, 0:4] #doctest: +NORMALIZE_WHITESPACE
+        >>> betaNew = [0.01, 0.03]
+        >>> S_mat.interp_beta(betaNew, add=True).data.iloc[0:10, 0:4] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.010000  0.024466  0.030000
         alpha
         0.004893  0.005396  0.005423  0.005462  0.005477
@@ -1028,23 +1015,20 @@ class Sab:
         0.044039  0.045710  0.045929  0.046243  0.046361
         0.048932  0.050400  0.050641  0.050984  0.051114
         """
-        beta_new_ = beta_new if hasattr(beta_new, '__len__') else [beta_new]
-        beta_values = self.data.apply(lambda x: reshape_differential(x,
-                                                                     beta_new_,
-                                                                     bounds_error=True,
-                                                                     kind="quadratic"),
-                                      axis=1)
-        beta_df = pd.DataFrame.from_records(beta_values.values,
-                                            index=beta_values.index,
-                                            columns=pd.Index(beta_new_,
+        interpArgs = {"bounds_error": True, "kind": "quadratic"}
+        betaNew_ = betaNew if hasattr(betaNew, '__len__') else [betaNew]
+        betaValues = self.data.apply(lambda x: reshape_differential(x, betaNew_, **interpArgs), axis=1)
+        beta_df = pd.DataFrame.from_records(betaValues.values,
+                                            index=betaValues.index,
+                                            columns=pd.Index(betaNew_,
                                                              name="beta"))
         if add:
             return Sab(pd.concat([beta_df, self.data], axis=1))
         else:
             return beta_df
 
-    def get_alpha(self, alpha_new: Union[Iterable, float],
-                  add: bool = False) -> pd.DataFrame:
+    def interp_alpha(self, alphaNew: Union[Iterable, float],
+                     add: bool = False) -> pd.DataFrame:
         """
         Unit base interpolation to get the probability of the new alpha values
         for all the beta existing in the S(alpha, -beta) matrix.
@@ -1055,7 +1039,7 @@ class Sab:
 
         Parameters
         ----------
-        alpha_new : "float" or 1D iterable
+        alphaNew : "float" or 1D iterable
             New alpha values.
         add : "bool", optional
             Optional argument to add the output to the existing S(alpha, -beta)
@@ -1075,21 +1059,21 @@ class Sab:
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
-        >>> alpha_new = 0.00013
-        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
+        >>> alphaNew = 0.00013
+        >>> S_mat.interp_alpha(alphaNew).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta     0.000000  0.025237  0.050474  0.075712  0.100949
         alpha
         0.00013  0.000498  0.000504  0.000467  0.000461  0.000462
 
-        >>> alpha_new = [1.25e-4, 1.35e-4]
-        >>> S_mat.get_alpha(alpha_new).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
+        >>> alphaNew = [1.25e-4, 1.35e-4]
+        >>> S_mat.interp_alpha(alphaNew).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.025237  0.050474  0.075712  0.100949
         alpha
         0.000125  0.000479  0.000484  0.000449  0.000444  0.000445
         0.000135  0.000517  0.000523  0.000485  0.000479  0.000480
 
-        >>> alpha_new = [1.25e-4, 1.35e-4]
-        >>> S_mat.get_alpha(alpha_new, add=True).data.iloc[0:5, 0:5] #doctest: +NORMALIZE_WHITESPACE
+        >>> alphaNew = [1.25e-4, 1.35e-4]
+        >>> S_mat.interp_alpha(alphaNew, add=True).data.iloc[0:5, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta	    0.000000	0.025237	0.050474	0.075712	0.100949
         alpha
         0.000112	0.000430	0.000435	0.000403	0.000399	0.000399
@@ -1098,17 +1082,17 @@ class Sab:
         0.000129	0.000493	0.000499	0.000463	0.000457	0.000458
         0.000135	0.000517	0.000523	0.000485	0.000479	0.000480
         """
-        alpha_new_ = alpha_new if hasattr(alpha_new, '__len__') else [alpha_new]
-        alpha_vector = []
-        for new_alpha in alpha_new_:
-            alpha_vector.append(self._get_single_alpha(new_alpha))
-        alpha_new_df = pd.concat(alpha_vector, axis=1).T
+        alphaNew_ = alphaNew if hasattr(alphaNew, '__len__') else [alphaNew]
+        alphaVec = []
+        for new_alpha in alphaNew_:
+            alphaVec.append(self._interp_alpha(new_alpha))
+        alphaNew_df = pd.concat(alphaVec, axis=1).T
         if add:
-            return Sab(pd.concat([self.data, alpha_new_df]))
+            return Sab(pd.concat([self.data, alphaNew_df]))
         else:
-            return Sab(alpha_new_df)
+            return Sab(alphaNew_df)
 
-    def _get_single_alpha(self, alpha_new: float) -> pd.DataFrame:
+    def _interp_alpha(self, alphaNew: float) -> pd.DataFrame:
         """
         Interpolate S(alpha, -beta) using unit base interpolation to get the
         probabilities for the new alpha values:
@@ -1119,7 +1103,7 @@ class Sab:
 
         Parameters
         ----------
-        alpha_new : "float"
+        alphaNew : "float"
             Alpha value to get interpolated.
 
         Returns
@@ -1134,9 +1118,9 @@ class Sab:
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
-        >>> alpha_new = 0.00013
-        >>> alpha_vector = S_mat._get_single_alpha(alpha_new)
-        >>> alpha_vector.iloc[0:10]  #doctest: +NORMALIZE_WHITESPACE
+        >>> alphaNew = 0.00013
+        >>> alphaVec = S_mat._interp_alpha(alphaNew)
+        >>> alphaVec.iloc[0:10]  #doctest: +NORMALIZE_WHITESPACE
         alpha     0.00013
         beta
         0.000000  0.000498
@@ -1151,47 +1135,47 @@ class Sab:
         0.227135  0.000553
 
         Check the contrains:
-        >>> debye_weller = pdos.DebyeWallerCoeff(T)
-        >>> round(integrate(alpha_vector.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debye_weller * alpha_new)), 6)
+        >>> debyeWeller = pdos.DebyeWallerCoeff(T)
+        >>> round(integrate(alphaVec.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debyeWeller * alphaNew)), 6)
         1.005976
 
-        >>> round(integrate(alpha_vector.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
+        >>> round(integrate(alphaVec.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
         0.000131
         """
         alpha = self.alpha.data
-        if alpha_new > alpha.max():
+        if alphaNew > alpha.max():
             raise SyntaxError("alpha out of range(alpha_max = "
                               + str(alpha.max()) + ")")
-        elif alpha_new < alpha.min():
+        elif alphaNew < alpha.min():
             raise SyntaxError("alpha out of range (alpha_min = "
                               + str(alpha.min()) + ")")
-        elif alpha_new in alpha:
-            return self.data.loc[alpha_new]
+        elif alphaNew in alpha:
+            return self.data.loc[alphaNew]
 
         beta = self.beta.data
-        upper_bound = alpha.searchsorted(alpha_new, side="right")
-        alpha_0 = alpha[upper_bound - 1]
-        alpha_2 = alpha[upper_bound]
-        prob = self.data.loc[[alpha_0, alpha_2]].T
+        upper_bound = alpha.searchsorted(alphaNew, side="right")
+        alpha0 = alpha[upper_bound - 1]
+        alpha2 = alpha[upper_bound]
+        prob = self.data.loc[[alpha0, alpha2]].T
 
         if hasattr(self, "DebyeWallerCoeff"):
-            debye_weller = self.DebyeWallerCoeff
-            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (
-                        1 - np.exp(-debye_weller * x.name)))
+            debyeWeller = self.DebyeWallerCoeff
+            probNorm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (
+                        1 - np.exp(-debyeWeller * x.name)))
         else:
-            prob_norm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
+            probNorm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
 
-        q = proportionality_factor(alpha_new, alpha_0, alpha_2, mode="linlog")
-        alpha_new_escale = (1 - q) * prob_norm.loc[::, alpha_0] + q * prob_norm.loc[::, alpha_2]
+        q = proportionality_factor(alphaNew, alpha0, alpha2, mode="linlog")
+        alphaNew_escale = (1 - q) * probNorm.loc[::, alpha0] + q * probNorm.loc[::, alpha2]
 
-        alpha_new_vector = alpha_new_escale / (1 + np.exp(-beta))
+        alphaNewVec = alphaNew_escale / (1 + np.exp(-beta))
         if hasattr(self, "DebyeWallerCoeff"):
-            alpha_new_vector *= (1 - np.exp(- debye_weller * alpha_new))
-        return pd.DataFrame(alpha_new_vector,
-                            columns=pd.Index([alpha_new], name="alpha"))
+            alphaNewVec *= (1 - np.exp(- debyeWeller * alphaNew))
+        return pd.DataFrame(alphaNewVec,
+                            columns=pd.Index([alphaNew], name="alpha"))
 
-    def get_Alpha_Beta(self, alpha: Union[Iterable, float],
-                       beta: Union[Iterable, float]) -> pd.DataFrame:
+    def interp_alphaBeta(self, alpha: Union[Iterable, float],
+                         beta: Union[Iterable, float]) -> pd.DataFrame:
         """
         Get intepolated values for the beta and alpha values from the
         S(alpha, beta) matrix. This method take into account the sing of the
@@ -1221,9 +1205,9 @@ class Sab:
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
-        >>> alpha_new = [1.25e-4, 1.35e-4]
-        >>> beta_new = [0.01, 0.03, -0.01, -0.03]
-        >>> S_mat.get_Alpha_Beta(alpha_new, beta_new) #doctest: +NORMALIZE_WHITESPACE
+        >>> alphaNew = [1.25e-4, 1.35e-4]
+        >>> betaNew = [0.01, 0.03, -0.01, -0.03]
+        >>> S_mat.interp_alphaBeta(alphaNew, betaNew) #doctest: +NORMALIZE_WHITESPACE
         beta         -0.03     -0.01      0.01      0.03
         alpha
         0.000125  0.000479  0.000487  0.000483  0.000465
@@ -1231,15 +1215,14 @@ class Sab:
         """
         alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
         beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
-        interp_Alpha_Beta = self.get_alpha(alpha_) \
-            .get_beta(abs(beta_)) \
-            .set_axis(pd.Index(beta_, name="beta"), axis=1)
+        interp_alphabeta = self.interp_alpha(alpha_).interp_beta(abs(beta_))\
+                               .set_axis(pd.Index(beta_, name="beta"), axis=1)
         if (beta_ > 0).any():
-            interp_Alpha_Beta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
-        return interp_Alpha_Beta.sort_index(axis=0).sort_index(axis=1)
+            interp_alphabeta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
+        return interp_alphabeta.sort_index(axis=0).sort_index(axis=1)
 
 
-def _SumRule(x: pd.Series, n: int = 1) -> float:
+def _SumRule(x: pd.Series) -> float:
     """
     Calculate the "n" sum rule value for a fix alpha value.
     .. math::

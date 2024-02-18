@@ -9,7 +9,7 @@ import numba as nb
 import re
 from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import sigma1, get_ScatSctAngular, getScatFuncClmRow
+from solid_cinel.core.scattering_function import sigma1, get_ScatSctAngular, get_ScatFuncClmRow
 from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
@@ -568,14 +568,14 @@ class XsMat:
         # Some values are nan, so we replace them with the next values:
         nan_indices = np.where(np.isnan(DebyeWallerCoeff))
         if nan_indices[0].size > 0:
-            new_value_index = nan_indices[0].max() + 1
-            tau1beta[nan_indices] = tau1beta[new_value_index]
-            DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[new_value_index]
-            tau1[nan_indices] = tau1[new_value_index]
+            newValueIndex = nan_indices[0].max() + 1
+            tau1beta[nan_indices] = tau1beta[newValueIndex]
+            DebyeWallerCoeff[nan_indices] = DebyeWallerCoeff[newValueIndex]
+            tau1[nan_indices] = tau1[newValueIndex]
         return tau1, DebyeWallerCoeff, tau1beta
 
     @staticmethod
-    def get_Teff(pdos: Pdos, Tarno):
+    def get_Teff(pdos: Pdos, Tarno: np.ndarray) -> np.ndarray:
         """
         Get the effective temperature for the sct model. If Teff can't be calculated,
         the values are nan, so we replace them with the next values.
@@ -635,21 +635,21 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
     9.09
     """
-    Eout_small = np.linspace(0,
+    EoutSmall = np.linspace(0,
                              0.99 * Ein,
                              2000)
-    Eout_middle = np.linspace(0.99 * Ein,
+    EoutMid = np.linspace(0.99 * Ein,
                               Ein * 1.01,
                               3000)
     if Ein * 2 < 5.0:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(5.0),
                                  2000)
     else:
-        Eout_great = np.logspace(np.log10(Ein * 1.01),
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(2 * Ein),
                                  2000)
-    return np.sort(np.concatenate((Eout_great, Eout_small, Eout_middle)))
+    return np.sort(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -667,11 +667,11 @@ def default_absBeta(T: float) -> np.ndarray:
     beta: np.ndarray
         Beta grid
     """
-    beta_mid = 0.08 / (kb * T)
-    beta_max = 5.0 / (kb * T)
-    beta_small = np.linspace(0, beta_mid,2000)
-    beta_great = np.logspace(np.log10(beta_mid), np.log10(beta_max), 1000)
-    return np.concatenate((beta_small, beta_great[1::]))
+    betaMid = 0.08 / (kb * T)
+    betaMax = 5.0 / (kb * T)
+    betaSmall = np.linspace(0, betaMid,2000)
+    beta_great = np.logspace(np.log10(betaMid), np.log10(betaMax), 1000)
+    return np.concatenate((betaSmall, beta_great[1::]))
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -983,8 +983,8 @@ def update_XsMatClmRow(xs_mat: np.ndarray, tauN: np.ndarray,
     """
     for j in prange(len(xs_mat)):
         Eout_db = default_Eout(Ein_row[j])
-        pdf = getScatFuncClmRow(Ein_row[j], M, T, Eout_db, mu_fit, tauN, tauNbeta,
-                                debyewallercoeff)
+        pdf = get_ScatFuncClmRow(Ein_row[j], M, T, Eout_db, mu_fit, tauN, tauNbeta,
+                                 debyewallercoeff)
         xs_mat[j] += Db(xsValues, xsE, Ein_row[j], Eout_db, pdf)
 
 
@@ -1024,8 +1024,7 @@ def update_XsMatSigma1(xs_mat: np.ndarray, EinArno: np.ndarray, start: int,
         for j in prange(EinArno.shape[1]):
             Eout_db = default_Eout(EinArno[i, j])
             pdf = sigma1(Eout_db, EinArno[i, j], Tarno[i], M)
-            xs_mat[i, j] += Db(xsValues, xsE, EinArno[i, j], Eout_db,
-                                pdf)
+            xs_mat[i, j] += Db(xsValues, xsE, EinArno[i, j], Eout_db, pdf)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)

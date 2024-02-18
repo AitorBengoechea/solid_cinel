@@ -4,7 +4,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.xs import XsMat, ScatFunc, DDxs, Pdos, Sab
 from solid_cinel.core.scattering_function.alpha import get_alphaFromEout, get_expansionOrder, get_gressierRecoil
 from solid_cinel.core.scattering_function.beta import get_beta
-from solid_cinel.core.scattering_function import getScatFuncClmRow
+from solid_cinel.core.scattering_function import get_ScatFuncClmRow
 from solid_cinel.core.material.vibration.tau import save_tau, get_tauNfunc, get_tauNbeta
 from solid_cinel.core.xs.xs_mat import update_XsMatClmRecoilRow, default_absBeta, EinArnoRow
 from solid_cinel.core.generic import reshape_differential, integrate
@@ -72,8 +72,8 @@ def get_results(results: dict, prob: bool) -> pd.DataFrame:
     """
     xsDb = pd.DataFrame(results).T.sort_index()
     xsDb.index.name = "Ein"
-    columns_order = ["xs", "downscattering", "upscattering", "Ein=Eout"]
-    return xsDb[columns_order] if prob else xsDb
+    columnsOrder = ["xs", "downscattering", "upscattering", "Ein=Eout"]
+    return xsDb[columnsOrder] if prob else xsDb
 
 def from_fgm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
              thetaDiff: float, EoutNum: int, prob: bool) -> pd.DataFrame:
@@ -177,7 +177,7 @@ def from_pdos(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
               thetaDiff: float, EoutNum: int, prob: bool, pdos: Pdos,
               nphonon: int = None, decimal: float = 1.0e-6,
               orderMax: int = 5000, threshold: float = 0.0,
-              tau_to_file: bool = False, binary: bool = False) -> pd.DataFrame:
+              tauToFile: bool = False, binary: bool = False) -> pd.DataFrame:
     """
     Generate doppler broadening cross section using 4PCF with SIGMA1 doppler
     broadened XsMat and scattering function based on Phonon Expansion.
@@ -209,7 +209,7 @@ def from_pdos(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
         Maximum expansion order
     threshold: float
         Threshold to calculate the tauN functions
-    tau_to_file: bool
+    tauToFile: bool
         If True, the tauN functions are saved to a file
     binary: bool
         If True, the tauN functions are saved in binary format
@@ -224,6 +224,7 @@ def from_pdos(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
     results = {}
     theta = np.arange(1, 180 + thetaDiff, thetaDiff)
     mu = np.cos(np.deg2rad(theta))
+    muMin = mu.min()
 
     # Calculate the tauN functions:
     DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
@@ -232,11 +233,10 @@ def from_pdos(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
     else:
-        nphonon = get_expansionOrder(
-            get_alphaFromEout(1.05 * EinGrid[-1], EinGrid[-1], M, T, mu.min()),
-            DebyeWallerCoeff, decimal, orderMax)
+        alphaMax = get_alphaFromEout(1.05 * EinGrid[-1], EinGrid[-1], M, T, muMin)
+        nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, orderMax)
     tauN = pdos.tauN(T, nphonon, threshold, values=True)
-    save_tau(tauN, nphonon, T, tau_to_file, binary)
+    save_tau(tauN, nphonon, T, tauToFile, binary)
     tauNbeta = get_tauNbeta(beta, tauN.shape[1])
     # start the loop
     for Ein in EinGrid:
@@ -244,11 +244,10 @@ def from_pdos(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
         # XsMat
         xs_mat = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
         # Minimize the expansion order for each energy:
-        min_nphonon = get_expansionOrder(
-            get_alphaFromEout(1.05 * Ein, Ein, M, T, mu.min()),
-            DebyeWallerCoeff, decimal, orderMax)
+        alphaMax = get_alphaFromEout(1.05 * Ein, Ein, M, T, muMin)
+        minNphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, orderMax)
         # Scattering function:
-        scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tauN[:min_nphonon],
+        scatfunc = ScatFunc.from_tau(Ein, M, T, Eout, mu, tauN[:minNphonon],
                                      tauNbeta, DebyeWallerCoeff)
         # DDxs
         ddxs = DDxs(Ein, T, M, "4PCF(CLM)", scatfunc.convolve(xs_mat.data))
@@ -302,7 +301,7 @@ def from_model(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
         Maximum expansion order. Default: 5000
     threshold: float
         Threshold to calculate the tauN functions. Default: 0.0
-    tau_to_file: bool
+    tauToFile: bool
         If True, the tauN functions are saved to a file. Default: False
     binary: bool
         If True, the tauN functions are saved in binary format. Default: False
@@ -525,9 +524,9 @@ def ddxsClm0K(EinGrid: np.ndarray, num_Eout: int, M: float, T: float,
         # Gen Eout grid:
         Eout = np.linspace(Ein * 0.9, Ein * 1.1, num_Eout)
         EinRow = EinArnoRow(Ein, Eout, -1.0, M)
-        scattfuncRow = getScatFuncClmRow(Ein, M, T, Eout, -1.0, tauNscatt,
-                                      tauNscattBeta, DebyeWallerCoeffScatt)
-        rowResults = scattfuncRow * np.interp(EinRow, xs0KE, xs0KValues)
+        scattFuncRow = get_ScatFuncClmRow(Ein, M, T, Eout, -1.0, tauNscatt,
+                                          tauNscattBeta, DebyeWallerCoeffScatt)
+        rowResults = scattFuncRow * np.interp(EinRow, xs0KE, xs0KValues)
         EinResults = [-1.0, Ein, np.trapz(rowResults, x=Eout)]
 
         # Get probability of upscattering and downscattering:
@@ -576,7 +575,7 @@ def from_recoilClm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
         Maximum expansion order
     threshold: float
         Threshold to calculate the tauN functions
-    tau_to_file: bool
+    tauToFile: bool
         If True, the tauN functions are saved to a file
     binary: bool
         If True, the tauN functions are saved in binary format
@@ -592,6 +591,7 @@ def from_recoilClm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
     xs0KValues, xs0KE = xs0K.values, xs0K.index.values
     theta = np.arange(1, 180 + thetaDiff, thetaDiff)
     mu = np.sort(np.cos(np.deg2rad(theta)))
+    muMin = mu.min()
     Tarno = T * (1 + mu) / 2
 
     # Calculate the tauN functions for scattering function:
@@ -601,17 +601,17 @@ def from_recoilClm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
         warnings.warn(
             "Is posible that the expansion order is not enough to get the correct results")
     else:
-        alpha_max = get_alphaFromEout(EinGrid[-1] * 1.1, EinGrid[-1], M, T, mu.min())
-        nphonon = get_expansionOrder(alpha_max, DebyeWallerCoeffScatt, decimal, orderMax)
+        alphaMax = get_alphaFromEout(EinGrid[-1] * 1.1, EinGrid[-1], M, T, muMin)
+        nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeffScatt, decimal, orderMax)
     tauNscatt = pdos.tauN(T, nphonon, threshold, values=True)
-    tauNscatt_beta = get_tauNbeta(betaScatt, tauNscatt.shape[1])
+    tauNscattBeta = get_tauNbeta(betaScatt, tauNscatt.shape[1])
 
     # Create xs_mat creation data:
     tau1, DebyeWallerCoeff, beta_tau1 = XsMat.get_pdos_variables(pdos, Tarno)
 
     # Create a list to hold the results
     if mu[0] == np.cos(np.pi):
-        result = ddxsClm0K(EinGrid, EoutNum, M, T, tauNscatt, tauNscatt_beta,
+        result = ddxsClm0K(EinGrid, EoutNum, M, T, tauNscatt, tauNscattBeta,
                            DebyeWallerCoeffScatt, xs0KValues, xs0KE, prob)
         start = 1
     else:
@@ -620,11 +620,11 @@ def from_recoilClm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
 
     for i in range(start, len(theta)):
         # Create angle tauN function:
-        alpha_max = get_alphaFromEout(EinGrid[-1] * 1.1, EinGrid[-1], M,
-                                      Tarno[i], mu.min())
-        nphonon_row = get_expansionOrder(alpha_max, DebyeWallerCoeff[i], decimal,
+        alphaMax = get_alphaFromEout(EinGrid[-1] * 1.1, EinGrid[-1], M,
+                                     Tarno[i], muMin)
+        minNphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff[i], decimal,
                                          orderMax)
-        tauNangle = get_tauNfunc(tau1[i], beta_tau1[i], nphonon_row, threshold)
+        tauNangle = get_tauNfunc(tau1[i], beta_tau1[i], minNphonon, threshold)
         beta_tauNangle = get_tauNbeta(beta_tau1[i], tauNangle.shape[1])
         beta = default_absBeta(Tarno[i])
         # Select the especific data for the next function:
@@ -632,8 +632,8 @@ def from_recoilClm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
             # Gen Eout grid:
             Eout = np.linspace(Ein * 0.9, Ein * 1.1, EoutNum)
             # Scattering function for selected angle and Ein:
-            scattfuncRow = getScatFuncClmRow(Ein, M, T, Eout, mu[i], tauNscatt,
-                                          tauNscatt_beta, DebyeWallerCoeffScatt)
+            scattFuncRow = get_ScatFuncClmRow(Ein, M, T, Eout, mu[i], tauNscatt,
+                                              tauNscattBeta, DebyeWallerCoeffScatt)
 
             # xs_mat row for selected angle and Ein:
             EinRow = EinArnoRow(Ein, Eout, mu[i], M)
@@ -645,7 +645,7 @@ def from_recoilClm(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
             xsMatRow = np.zeros(EoutNum)
             update_XsMatClmRecoilRow(xsMatRow, sab.values, sab.columns.values,
                                      recoilRow, EinRow, Tarno[i], xs0KValues, xs0KE)
-            ddxsAngle = xsMatRow * scattfuncRow
+            ddxsAngle = xsMatRow * scattFuncRow
             EinResults = [mu[i], Ein, np.trapz(ddxsAngle, x=Eout)]
 
             # Get probability of upscattering and downscattering:
@@ -718,7 +718,7 @@ def from_recoil(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float,
         Maximum expansion order. Default: 5000
     threshold: float
         Threshold to calculate the tauN functions. Default: 0.0
-    tau_to_file: bool
+    tauToFile: bool
         If True, the tauN functions are saved to a file. Default: False
     binary: bool
         If True, the tauN functions are saved in binary format. Default: False

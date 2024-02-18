@@ -358,7 +358,7 @@ def get_tauNbeta(tau1_beta: np.ndarray, beta_length=int):
     Examples
     --------
     >>> tau1_beta = np.array([0.0, 0.05, 0.1, 0.2, 0.4])
-    >>> tauN_beta(tau1_beta, 8).round(2)
+    >>> get_tauNbeta(tau1_beta, 8).round(2)
     array([0.  , 0.05, 0.1 , 0.2 , 0.4 , 0.6 , 0.8 , 1.  ])
     """
     # Get the length of tau1_beta

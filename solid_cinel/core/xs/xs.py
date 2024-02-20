@@ -65,7 +65,7 @@ class Xs:
     Class for the differential cross section for elastic scattering
     """
     def __init__(self, M: float, temperatures: Union[float, Iterable[float]],
-                 *args, **kwargs):
+                 *args, xs0Kcomplete: pd.Series = None, **kwargs):
         """
         Class for working with Angle integrated scattering xs at different
         temperature.
@@ -108,26 +108,12 @@ class Xs:
         165.85470   11.753670
         200.79510   15.734840
         """
-        self._M = M
+        self.M = M
         temperatures = self.check_T(temperatures)
         data_frame = pd.DataFrame(*args, **kwargs)
         data_frame.columns = pd.Index(temperatures, name="T")
-        self.data = data_frame
-
-    @property
-    def M(self):
-        """
-        Property that returns the value of 'M' if it exists, or raises an
-        AttributeError if it doesn't.
-
-        Returns:
-        The value of 'M'.
-        """
-        if hasattr(self, '_M'):
-            return self._M
-        else:
-            raise AttributeError(
-                "'{}' object has no attribute 'M'".format(type(self).__name__))
+        self.data = data_frame.loc[:, ~data_frame.columns.duplicated()]
+        self.get_xs0Kcomplete(xs0Kcomplete)
 
     @property
     def data(self) -> pd.DataFrame:
@@ -157,19 +143,6 @@ class Xs:
         xs_.columns.name = "T"
         self._data = xs_
 
-    def get_xs0K(self) -> pd.Series:
-        """
-        Get the 0K scattering function
-
-        Returns
-        -------
-
-        """
-        if 0 in self.data.columns:
-            return self.data.loc[::, 0]
-        else:
-            raise ValueError("0K data not found")
-
     @staticmethod
     def check_T(temperatures: Union[float, Iterable[float]]):
         """
@@ -191,9 +164,75 @@ class Xs:
             raise TypeError("All temperatures must be int or float")
         return temperatures
 
+    def get_Tnew(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
+        """
+        Get the new temperatures to calculate.
+
+        Parameters
+        ----------
+        T: Union[float, Iterable[float]]
+            The temperature in K
+
+        Returns
+        -------
+        pd.Index
+            The new temperatures to calculate
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = 0
+        >>> xs = Xs(M, T, xs0K)
+        >>> xs.get_Tnew(300)
+        Int64Index([300], dtype='int64')
+        """
+        Tnew = pd.Index(self.check_T(temperatures))
+        return Tnew.difference(self.data.columns)
+
+    def get_xs0K(self) -> pd.Series:
+        """
+        Get the 0K scattering function
+
+        Returns
+        -------
+        pd.Series
+            The 0K scattering function with the data in the class attribute
+            data
+        """
+
+
+    def get_xs0Kcomplete(self, xs0Kcomplete: [pd.Series, None]) -> pd.Series:
+        """
+        Get the 0K scattering function with all the data
+
+        Parameters
+        ----------
+        xs0Kcomplete: pd.Series
+            The 0K scattering function with all the data
+
+        Returns
+        -------
+        pd.Series
+            The 0K scattering function with all the data
+        """
+        if xs0Kcomplete is None:
+            if 0 in self.data.columns:
+                self.xs0Kcomplete = self.data.loc[::, 0]
+            else:
+                raise ValueError("0K data not found")
+        else:
+            self.xs0Kcomplete = xs0Kcomplete
 
     @staticmethod
-    def _calc_sigma1(xs0K: pd.Series, EinGrid: Iterable, M: float, T: float):
+    def _calc_sigma1(xs0K: pd.Series, EinGrid: Iterable, M: float,
+                     T: float) -> pd.Series:
         """
         Calculate the elastic scattering cross section at temperature T and
         energy E
@@ -237,28 +276,144 @@ class Xs:
                 for Ein in EinGrid]
         return pd.Series(xs_T, index=pd.Index(EinGrid, name="Ein"))
 
+    def compute_sigma1results(self, xs0Kcomplete: pd.Series, M: float,
+                              Tnew: Iterable) -> list:
+        """
+        Calculate the elastic scattering cross section at new temperatures using
+        dask and Sigma1 algorithm from Njoy
+
+        Parameters
+        ----------
+        xs0Kcomplete: pd.Series
+            The 0K scattering function with all the data
+        M: float
+            The mass of the nucleus in amu
+        Tnew: Iterable
+            The new temperatures to calculate
+
+        Returns
+        -------
+        list
+            The elastic scattering cross section in barns
+        """
+        with dask.config.set(num_workers=os.cpu_count()):
+            delayed_computations = [
+                dask.delayed(self._calc_sigma1)(xs0Kcomplete, self.data.index,
+                                                M, T) for T in Tnew]
+            return dask.compute(*delayed_computations)
+
+    def update_data(self, xs_T: pd.DataFrame, inplace: bool) -> [None, pd.DataFrame]:
+        """
+        Update the data with the new results
+
+        Parameters
+        ----------
+        xs_T: pd.DataFrame
+            The new results
+        inplace: bool
+            If True, the data is stored in the class attribute, otherwise it
+            is returned as a new object
+
+        Returns
+        -------
+        pd.DataFrame
+            The new data
+        """
+        dataNew = pd.concat([self.data, xs_T], axis=1).sort_index(axis=1)
+        if inplace:
+            self.data = dataNew
+        else:
+            return Xs(self.M, dataNew.columns, dataNew)
+
+    def calc_sigma1(self, T: float, inplace: bool = False) -> [None, pd.Series]:
+        """
+        Calculate the elastic scattering cross section at temperature T and
+        energy E
+
+        Parameters
+        ----------
+        T : float
+            Temperature in K
+        inplace : bool, optional
+            If True, the data is stored in the class attribute, otherwise it
+            is returned
+
+        Returns
+        -------
+        pd.Series
+            The elastic scattering cross section in barns
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:1000], xs0Kcomplete=xs0K)
+        >>> xs.calc_sigma1(T, inplace=True)
+        >>> xs.data
+        T                 0           300
+        Ein
+        0.00001      9.420892   36.117710
+        11.23650     9.239644    9.240652
+        34.70286     1.146785    1.147109
+        58.18538     9.794358    9.793941
+        80.66597     1.639337   23.581216
+        97.56808     4.895060    4.891338
+        116.82090  457.760100  931.532221
+        145.67660   39.688900   13.281879
+        165.85470   11.753670   12.634276
+        200.79510   15.734840   15.733460
+
+        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:1000], xs0Kcomplete=xs0K)
+        >>> xs.calc_sigma1(T).data
+        T                 0           300
+        Ein
+        0.00001      9.420892   36.117710
+        11.23650     9.239644    9.240652
+        34.70286     1.146785    1.147109
+        58.18538     9.794358    9.793941
+        80.66597     1.639337   23.581216
+        97.56808     4.895060    4.891338
+        116.82090  457.760100  931.532221
+        145.67660   39.688900   13.281879
+        165.85470   11.753670   12.634276
+        200.79510   15.734840   15.733460
+        """
+        xs0Kcomplete, M = self.xs0Kcomplete, self.M
+        Tnew = self.get_Tnew(T)
+        if Tnew.empty:
+            return self
+        results = self.compute_sigma1results(xs0Kcomplete, M, Tnew)
+        xs_T = pd.DataFrame({T: result for T, result in zip(Tnew, results)})
+        return self.update_data(xs_T, inplace)
+
 
     @classmethod
     def from_sigma1(cls, T: float, M: float, xs0Kshort: pd.Series,
-                    xs0Kcomplete: pd.Series = None):
+                    xs0Kcomplete: pd.Series = None, inplace: bool = False):
         """
         Calculate the elastic scattering cross section for a nucleus with mass
         M at temperature T.
 
         Parameters
         ----------
-        xs0K: pd.Series
-            The 0K scattering function with the incident energy as index
-        M: float
-            The mass of the nucleus in amu
         T: float
             The temperature in K
-
-        Parameters for calc_sigma1:
-        xs0K : pd.Series, optional
+        M: float
+            The mass of the nucleus in amu
+        xs0Kshort: pd.Series
+            The 0K scattering function with the incident energy grid to use. It
+            is recommended to use a short grid to avoid the doppler broadening
+            of all the Ein.
+        xs0Kcomplete: pd.Series, optional
             The 0K scattering function with all the data. If not provided, it
-            will be taken from the class attribute. These option is available to
-            avoid the doppler broadening of all the Ein.
+            will be taken from the class attribute.
 
         Returns
         -------
@@ -293,11 +448,11 @@ class Xs:
         """
         # Initialize the class
         xs = cls(M, 0, xs0Kshort)
-        xs.calc_sigma1(T, xs0Kcomplete=xs0Kcomplete, inplace=True)
-        return xs
+        # Get cls attributes using the available information
+        xs.get_xs0Kcomplete(xs0Kcomplete)
+        return xs.calc_sigma1(T, inplace=inplace)
 
-    def calc_sigma1(self, T: float, M: float = None, xs0Kcomplete: pd.Series = None,
-                    inplace: bool = False) -> [None, pd.Series]:
+    def calc_T(self, T:float, algorithm: str = "sigma1", inplace: bool = False):
         """
         Calculate the elastic scattering cross section at temperature T and
         energy E
@@ -306,75 +461,10 @@ class Xs:
         ----------
         T : float
             Temperature in K
-        M : float, optional
-            The mass of the nucleus in amu
-        xs0K : pd.Series, optional
-            The 0K scattering function
-        inplace : bool, optional
-            If True, the data is stored in the class attribute, otherwise it
-            is returned
-
-        Returns
-        -------
-        pd.Series
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:1000])
-        >>> xs.calc_sigma1(T, xs0Kcomplete=xs0K, inplace=True)
-        >>> xs.data
-        T                 0           300
-        Ein
-        0.00001      9.420892   36.117710
-        11.23650     9.239644    9.240652
-        34.70286     1.146785    1.147109
-        58.18538     9.794358    9.793941
-        80.66597     1.639337   23.581216
-        97.56808     4.895060    4.891338
-        116.82090  457.760100  931.532221
-        145.67660   39.688900   13.281879
-        165.85470   11.753670   12.634276
-        200.79510   15.734840   15.733460
-        """
-        xs0Kcomplete = self.get_xs0K() if xs0Kcomplete is None else xs0Kcomplete
-        M = self.M if M is None else M
-        Tnew = self.check_T(T)
-        # Set the number of threads to the number of available processors
-        with dask.config.set(num_workers=num_processors):
-            # Create a delayed computation for each temperature
-            delayed_computations = [
-                dask.delayed(self._calc_sigma1)(xs0Kcomplete, self.data.index, M, T) for T in Tnew
-            ]
-
-            # Compute all at once
-            results = dask.compute(*delayed_computations)
-        # Create DataFrame from results
-        xs_T = pd.DataFrame({T: result for T, result in zip(Tnew, results)})
-        if inplace:
-            self.data = pd.concat([self.data, xs_T], axis=1).sort_index(axis=1)
-        else:
-            return xs_T
-
-    def calc_T(self, T:float, algorith: str = "sigma1",
-               xs0Kcomplete: pd.Series = None, inplace: bool=False):
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        energy E
-
-        Parameters
-        ----------
-        T : float
-            Temperature in K
+        algorithm : str, optional
+            The algorith to use for the calculation. The options are:
+            - "sigma1": Calculate the elastic scattering cross section with the
+                        sigma1 method from Njoy
         inplace : bool, optional
             If True, the data is stored in the class attribute, otherwise it
             is returned
@@ -395,9 +485,8 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> T = [300, 100]
-        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:1000])
-        >>> xs.calc_T(T, xs0Kcomplete=xs0K, inplace=True)
-        >>> xs.data
+        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:1000], xs0Kcomplete=xs0K)
+        >>> xs.calc_T(T).data
         T                 0            100         300
         Ein
         0.00001      9.420892    21.618999   36.117710
@@ -411,8 +500,15 @@ class Xs:
         165.85470   11.753670    11.887786   12.634276
         200.79510   15.734840    15.734518   15.733460
         """
-        if algorith == "sigma1":
-            self.calc_sigma1(T, xs0Kcomplete=xs0Kcomplete, inplace=inplace)
+        if algorithm == "sigma1":
+            return self.calc_sigma1(T, inplace=inplace)
+        else:
+            raise ValueError("Invalid algorithm")
+
+
+    def get_dxs(self, T: float, Ein: float, Eout: np.ndarray,
+                algorithm: str = "sigma1"):
+        return Dxs.from_sigma1(self.get_xs0K(), Ein, self.M, T, Eout)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)

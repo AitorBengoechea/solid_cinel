@@ -196,17 +196,6 @@ class Xs:
         Tnew = pd.Index(self.check_T(temperatures))
         return Tnew.difference(self.data.columns)
 
-    def get_xs0K(self) -> pd.Series:
-        """
-        Get the 0K scattering function
-
-        Returns
-        -------
-        pd.Series
-            The 0K scattering function with the data in the class attribute
-            data
-        """
-
 
     def get_xs0Kcomplete(self, xs0Kcomplete: [pd.Series, None]) -> pd.Series:
         """

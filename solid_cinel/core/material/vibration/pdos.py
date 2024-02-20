@@ -1065,6 +1065,9 @@ class Pdos:
             return cls(Epdos.from_dE(*args, **kwargs))
 
     def __getattr__(self, name):
-        # assume it is implemented by self.instance
-        return getattr(self.instance, name)
+        if hasattr(self.instance, name):
+            return getattr(self.instance, name)
+        else:
+            raise AttributeError(f"'{type(self.instance).__name__}' object has no attribute '{name}'")
+
 

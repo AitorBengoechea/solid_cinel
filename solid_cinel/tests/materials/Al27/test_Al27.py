@@ -36,8 +36,7 @@ rho_in_energy_str = '''
     '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
-Al = Target_mat(preferred_orientation, unit_pos,
-                dir_vec_length, dir_vec_angles,
+Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
                 A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
                 rho_in_energy, interv_in_energy)
 energy_cut = 2.301

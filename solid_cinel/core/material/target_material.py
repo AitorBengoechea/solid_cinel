@@ -196,7 +196,7 @@ b_coh = [5.878374042670532, 8.62912188811068]
 b_incoh = [0.0, 0.19947114020071632]
 
 
-class Target_mat(Solid, Pdos):
+class Target_mat(Solid):
     """
     Class to store all the Target material methods and attributes.
 
@@ -280,19 +280,12 @@ class Target_mat(Solid, Pdos):
         """
         Solid.__init__(self, *args[0:9])
         # Avoid data setter in Pdos:
-        pdos = {}
         elements_name = self.atoms.index
         if isinstance(args[10], float):
-            atom_pdos = Pdos(args[9],
-                             index=pd.Index(np.arange(len(args[9])) * args[10],
-                             name="E"))
-            pdos[elements_name[0]] = atom_pdos
+            pdos = {elements_name[0]: Pdos.from_dE(args[9], args[10])}
         else:
-            for i in range(len(args[10])):
-                atom_pdos = Pdos(args[9][i],
-                                 index=pd.Index(np.arange(len(args[9][i])) * args[10][i],
-                                 name="E"))
-                pdos[elements_name[i]] = atom_pdos
+            pdos = {elements_name[i]: Pdos.from_dE(args[9][i], args[10][i])
+                    for i in range(len(args[10]))}
         self.pdos = pd.Series(pdos)
 
     def get_Bfact(self, T: float, anstrom: bool = True) -> [float, pd.Series]:

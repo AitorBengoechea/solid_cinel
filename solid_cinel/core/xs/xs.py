@@ -189,10 +189,9 @@ class Xs:
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
-        >>> T = 0
-        >>> xs = Xs(M, T, xs0K)
-        >>> xs.get_Tnew(300)
-        Int64Index([300], dtype='int64')
+        >>> T = 300
+        >>> xs = Xs(M, 0, xs0K)
+        >>> assert (xs.get_Tnew(T).values == T).all()
         """
         Tnew = pd.Index(self.check_T(temperatures))
         return Tnew.difference(self.data.columns)

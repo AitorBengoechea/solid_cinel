@@ -10,6 +10,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 import os
+import dask
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -17,6 +18,9 @@ m = const["neutron mass in u"][0]
 
 # Avoid numba fast math:
 nb.config.FASTMATH_DEFAULT = False
+
+# Get the number of available processors
+num_processors = os.cpu_count()
 
 # Example variables:
 interv_in_energy_U238 = 6.956193E-04
@@ -344,9 +348,18 @@ class Xs:
         """
         xs0Kcomplete = self.get_xs0K() if xs0Kcomplete is None else xs0Kcomplete
         M = self.M if M is None else M
-        xs_T = pd.DataFrame(
-            {T: self._calc_sigma1(xs0Kcomplete, self.data.index, M, T) for T in self.check_T(T)}
-        )
+        Tnew = self.check_T(T)
+        # Set the number of threads to the number of available processors
+        with dask.config.set(num_workers=num_processors):
+            # Create a delayed computation for each temperature
+            delayed_computations = [
+                dask.delayed(self._calc_sigma1)(xs0Kcomplete, self.data.index, M, T) for T in Tnew
+            ]
+
+            # Compute all at once
+            results = dask.compute(*delayed_computations)
+        # Create DataFrame from results
+        xs_T = pd.DataFrame({T: result for T, result in zip(Tnew, results)})
         if inplace:
             self.data = pd.concat([self.data, xs_T], axis=1).sort_index(axis=1)
         else:

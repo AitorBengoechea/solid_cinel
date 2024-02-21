@@ -252,37 +252,98 @@ class Xs:
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> Ein = 2.0
+        >>> Xs._calc_sigma1(T, Ein, xs0K, M)
+        9.086237061960317
         """
         Eout = default_Eout(Ein)
         return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
-    def compute_sigma1(self, xs0Kcomplete: pd.Series, M: float,
-                              Tnew: Iterable) -> list:
+    def get_EinTcomb(self, Tnew: Iterable, EinGrid: Iterable = None) -> list:
+        """
+        Get the incident energy and temperature combinations
+
+        Parameters
+        ----------
+        Tnew: Iterable
+            The new temperatures to calculate
+        EinGrid: Iterable, None
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
+
+        Returns
+        -------
+        list
+            The incident energy and temperature combinations
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:5000], xs0Kcomplete=xs0K)
+        >>> Tnew = [300, 100]
+        >>> xs.get_EinTcomb(Tnew)
+        [(300, 1e-05), (300, 97.56808), (100, 1e-05), (100, 97.56808)]
+        """
+        if EinGrid:
+            EinTcomb = [(T, Ein) for T in Tnew for Ein in EinGrid]
+        else:
+            EinTcomb = [(T, Ein) for T in Tnew for Ein in self.data.index]
+        return EinTcomb
+
+    def _calc_sigma1T(self, Tnew: Iterable, EinGrid: Iterable = None) -> pd.DataFrame:
         """
         Calculate the elastic scattering cross section at new temperatures using
         dask and Sigma1 algorithm from Njoy
 
         Parameters
         ----------
-        xs0Kcomplete: pd.Series
-            The 0K scattering function with all the data
-        M: float
-            The mass of the nucleus in amu
         Tnew: Iterable
             The new temperatures to calculate
+        EinGrid: Iterable, None
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
 
         Returns
         -------
-        list
-            The elastic scattering cross section in barns
+        pd.DataFrame
+            The elastic scattering cross section in barns for the new
+            temperatures. Each value is the incident introduced by the user or
+            the default.
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:5000], xs0Kcomplete=xs0K)
+        >>> Tnew = [300, 100]
+        >>> xs._calc_sigma1T(Tnew)
+                     0         1
+        300  36.117710  4.891338
+        100  21.618999  4.893586
         """
-        EinGrid = self.data.index
-        EinTcomb = [(T, Ein) for T in Tnew for Ein in EinGrid]
-        bag = db.from_sequence(EinTcomb).map(lambda x: Xs._calc_sigma1(*x, xs0Kcomplete, M))
+        bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
+                .map(lambda x: Xs._calc_sigma1(*x, self.xs0Kcomplete, self.M))
         with dask.config.set(num_workers=os.cpu_count()):
             results = bag.compute()
-        results = np.array(results).reshape((len(Tnew), len(EinGrid)))
-        return pd.DataFrame(results.T, index=EinGrid, columns=Tnew)
+        NTnew = len(Tnew)
+        return pd.DataFrame(np.array(results).reshape(NTnew, -1), index=Tnew)
 
     def update_data(self, xs_T: pd.DataFrame, inplace: bool) -> [None, pd.DataFrame]:
         """
@@ -367,12 +428,12 @@ class Xs:
         165.85470   11.753670   12.634276
         200.79510   15.734840   15.733460
         """
-        xs0Kcomplete, M = self.xs0Kcomplete, self.M
         Tnew = self.get_Tnew(T)
         if Tnew.empty:
             return self
-        results = self.compute_sigma1(xs0Kcomplete, M, Tnew)
-        return self.update_data(results, inplace)
+        else:
+            xsT = self._calc_sigma1T(Tnew).T.set_index(self.data.index)
+            return self.update_data(xsT, inplace)
 
 
     @classmethod

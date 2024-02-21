@@ -276,12 +276,13 @@ class Xs:
         list
             The elastic scattering cross section in barns
         """
-        EinGrid = self.data.index
-        bag = db.from_sequence([(T, Ein) for T in Tnew for Ein in EinGrid])
+        EinTcombination = [(T, Ein) for T in Tnew for Ein in self.data.index]
+        bag = db.from_sequence(EinTcombination)
         bag = bag.map(lambda x: Xs._calc_sigma1(*x, xs0Kcomplete, M))
         with dask.config.set(num_workers=os.cpu_count()):
             results = bag.compute()
-        return results
+        index = pd.MultiIndex.from_tuples(EinTcombination, names=["T", "Ein"])
+        return pd.Series(results, index=index).swaplevel().unstack()
 
     def update_data(self, xs_T: pd.DataFrame, inplace: bool) -> [None, pd.DataFrame]:
         """
@@ -371,8 +372,7 @@ class Xs:
         if Tnew.empty:
             return self
         results = self.compute_sigma1results(xs0Kcomplete, M, Tnew)
-        xs_T = pd.DataFrame({T: result for T, result in zip(Tnew, results)})
-        return self.update_data(xs_T, inplace)
+        return self.update_data(results, inplace)
 
 
     @classmethod

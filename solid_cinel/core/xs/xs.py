@@ -11,6 +11,7 @@ from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 import os
 import dask
+import dask.bag as db
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -219,22 +220,24 @@ class Xs:
             self.xs0Kcomplete = xs0Kcomplete
 
     @staticmethod
-    def _calc_sigma1(xs0K: pd.Series, EinGrid: Iterable, M: float,
-                     T: float) -> pd.Series:
+    def _calc_sigma1(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
         """
         Calculate the elastic scattering cross section at temperature T and
         energy E
 
         Parameters
         ----------
+        T: float
+            The temperature in K
+        Ein: float
+            The incident energy in eV
         xs0K: pd.Series
             The 0K scattering function
         EinGrid: Iterable
             The incident energy grid in eV
         M: float
             The mass of the nucleus in amu
-        T: float
-            The temperature in K
+
 
         Returns
         -------
@@ -249,20 +252,9 @@ class Xs:
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> EinGrid = [1, 2, 3]
-        >>> Xs._calc_sigma1(xs0K, EinGrid, M, T)
-        Ein
-        1    9.270573
-        2    9.086237
-        3    8.843855
-        dtype: float64
         """
-        xs_T = [Dxs.from_sigma1(xs0K, Ein, M, T, default_Eout(Ein)).integral
-                for Ein in EinGrid]
-        return pd.Series(xs_T, index=pd.Index(EinGrid, name="Ein"))
+        Eout = default_Eout(Ein)
+        return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
     def compute_sigma1results(self, xs0Kcomplete: pd.Series, M: float,
                               Tnew: Iterable) -> list:
@@ -284,11 +276,12 @@ class Xs:
         list
             The elastic scattering cross section in barns
         """
+        EinGrid = self.data.index
+        bag = db.from_sequence([(T, Ein) for T in Tnew for Ein in EinGrid])
+        bag = bag.map(lambda x: Xs._calc_sigma1(*x, xs0Kcomplete, M))
         with dask.config.set(num_workers=os.cpu_count()):
-            delayed_computations = [
-                dask.delayed(self._calc_sigma1)(xs0Kcomplete, self.data.index,
-                                                M, T) for T in Tnew]
-            return dask.compute(*delayed_computations)
+            results = bag.compute()
+        return results
 
     def update_data(self, xs_T: pd.DataFrame, inplace: bool) -> [None, pd.DataFrame]:
         """

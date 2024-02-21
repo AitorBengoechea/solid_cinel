@@ -256,7 +256,7 @@ class Xs:
         Eout = default_Eout(Ein)
         return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
-    def compute_sigma1results(self, xs0Kcomplete: pd.Series, M: float,
+    def compute_sigma1(self, xs0Kcomplete: pd.Series, M: float,
                               Tnew: Iterable) -> list:
         """
         Calculate the elastic scattering cross section at new temperatures using
@@ -276,13 +276,13 @@ class Xs:
         list
             The elastic scattering cross section in barns
         """
-        EinTcombination = [(T, Ein) for T in Tnew for Ein in self.data.index]
-        bag = db.from_sequence(EinTcombination)
-        bag = bag.map(lambda x: Xs._calc_sigma1(*x, xs0Kcomplete, M))
+        EinGrid = self.data.index
+        EinTcomb = [(T, Ein) for T in Tnew for Ein in EinGrid]
+        bag = db.from_sequence(EinTcomb).map(lambda x: Xs._calc_sigma1(*x, xs0Kcomplete, M))
         with dask.config.set(num_workers=os.cpu_count()):
             results = bag.compute()
-        index = pd.MultiIndex.from_tuples(EinTcombination, names=["T", "Ein"])
-        return pd.Series(results, index=index).swaplevel().unstack()
+        results = np.array(results).reshape((len(Tnew), len(EinGrid)))
+        return pd.DataFrame(results.T, index=EinGrid, columns=Tnew)
 
     def update_data(self, xs_T: pd.DataFrame, inplace: bool) -> [None, pd.DataFrame]:
         """
@@ -371,7 +371,7 @@ class Xs:
         Tnew = self.get_Tnew(T)
         if Tnew.empty:
             return self
-        results = self.compute_sigma1results(xs0Kcomplete, M, Tnew)
+        results = self.compute_sigma1(xs0Kcomplete, M, Tnew)
         return self.update_data(results, inplace)
 
 

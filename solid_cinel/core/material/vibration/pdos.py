@@ -9,6 +9,8 @@ from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
 from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 import numpy as np
+import os
+import re
 from typing import Iterable, Union
 
 
@@ -218,13 +220,8 @@ class Tpdos:
         Examples
         --------
         Object initialization:
-        >>> import os
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> os.chdir("../../../data/pdos/")
-
         >>> T = 300
-        >>> file = "interp.300"
+        >>> file = "../../../data/pdos/interp.300"
         >>> Tpdos.from_dE_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
         beta
         0.000000    0.000000
@@ -233,8 +230,6 @@ class Tpdos:
         0.046418    0.005459
         0.061891    0.008876
         Name: rho, dtype: float64
-
-        >>> os.chdir(wd)
         """
         return Epdos.from_file(file, header, index_col, usecols, engine).beta_grid(T)
 
@@ -661,11 +656,7 @@ class Epdos:
         Examples
         --------
         Object initialization:
-        >>> import os
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> os.chdir("../../../data/pdos/")
-        >>> file = "interp.300"
+        >>> file = "../../../data/pdos/interp.300"
         >>> Epdos.from_file(file, usecols=[0, 1], index_col=0).data.iloc[0:5]
         dE
         0.0000    0.000000
@@ -674,7 +665,6 @@ class Epdos:
         0.0012    0.211161
         0.0016    0.343320
         Name: rho, dtype: float64
-        >>> os.chdir(wd)
         """
         df = pd.read_csv(file, delim_whitespace=True, header=header,
                          index_col=index_col,
@@ -883,8 +873,10 @@ class Npdos:
         return data
 
     @classmethod
-    def from_file(cls, T: [float, list], file: [str, list], header=None,
-                  index_col=None, usecols=None, engine="python", grid="dE"):
+    def from_file(cls, T: [float, list], file: [str, list],
+                  header: [int, list]=None, index_col: [int, list] = None,
+                  usecols: [int, list] = None, engine: str ="python",
+                  grid: str ="dE"):
         """
         Extract rho in energy from the introduced file and create a Tpdos object
         for each temperature.
@@ -914,11 +906,7 @@ class Npdos:
         Examples
         --------
         Object initialization:
-        >>> import os
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> os.chdir("../../../data/pdos/")
-        >>> file = "interp.300"
+        >>> file = "../../../data/pdos/interp.300"
         >>> T = 300
         >>> Npdos.from_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
                      300
@@ -928,7 +916,6 @@ class Npdos:
         0.0008  0.088790
         0.0012  0.211161
         0.0016  0.343320
-        >>> os.chdir(wd)
         """
         # Transform file and T to list if they are not
         file_ = [file] if isinstance(file, str) else file
@@ -942,6 +929,48 @@ class Npdos:
         # Create Tpdos objects based on the grid type
         method = Tpdos.from_dE_file if grid == "dE" else Tpdos.from_file
         return cls({T: method(T, file, *args) for file, T in zip(file_, T_)})
+
+    @classmethod
+    def from_directory(cls, pathToDirectory: str, **kwargs):
+        """
+        Create a Npdos object from a directory containing the pdos files. The
+        files must have the temperature in the name of the file.
+
+        Parameters
+        ----------
+        pathToDirectory : 'str'
+            Path to the directory containing the pdos files.
+        kwargs :  'dict'
+            Arguments to pass to the from_file function.
+
+        Returns
+        -------
+        "Npdos"
+            Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> folder = "../../../data/pdos"
+        >>> Npdos.from_directory(folder, usecols=[0, 1], index_col=0).data.iloc[0:5]
+                   300.0
+        dE
+        0.0000  0.000000
+        0.0004  0.041879
+        0.0008  0.088790
+        0.0012  0.211161
+        0.0016  0.343320
+        """
+        files = os.listdir(pathToDirectory)
+        if pathToDirectory[-1] != "/":
+            pathToDirectory = "".join([pathToDirectory, "/"])
+        file_dict = {}
+        for file in files:
+            # Get the floats and the int:
+            match = re.search(r'\d+(\.\d+)?', file)
+            if match:
+                file_dict[float(match.group())] = "".join([pathToDirectory, file])
+        return cls.from_file(file_dict.keys(), file_dict.values(), **kwargs)
 
     @classmethod
     def from_dE(cls, T: list, rho: [list, np.ndarray], intervalE: list):

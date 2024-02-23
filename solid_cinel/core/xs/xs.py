@@ -616,15 +616,23 @@ class Xs:
             The temperature in K
         M: float
             The mass of the nucleus in amu
-        xs0Kshort:
-        args
-        xs0Kcomplete
-        inplace
-        kwargs
+        xs0Kshort: pd.Series
+            The 0K scattering function with the incident energy grid to use. It
+            is recommended to use a short grid to avoid the doppler broadening
+            of all the Ein.
+        xs0Kcomplete: pd.Series, optional
+            The 0K scattering function with all the data. If not provided, it
+            will be taken from the class attribute.
+        inplace: bool, optional
+            If True, the data is stored in the class attribute, otherwise it
+            is returned
+        kwargs: dict
+            The parameters for the alpha0 model
 
         Returns
         -------
-
+        Xs
+            The elastic scattering cross section in barns
         """
         # Initialize the class
         xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)

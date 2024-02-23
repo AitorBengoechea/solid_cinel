@@ -114,7 +114,7 @@ class Xs:
         data_frame = pd.DataFrame(*args, **kwargs)
         data_frame.columns = pd.Index(temperatures, name="T")
         self.data = data_frame.loc[:, ~data_frame.columns.duplicated()]
-        self.get_xs0Kcomplete(xs0Kcomplete)
+        self.get_xs0Kcomp(xs0Kcomplete)
 
     @property
     def data(self) -> pd.DataFrame:
@@ -197,7 +197,7 @@ class Xs:
         return Tnew.difference(self.data.columns)
 
 
-    def get_xs0Kcomplete(self, xs0Kcomplete: [pd.Series, None]) -> pd.Series:
+    def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]) -> pd.Series:
         """
         Get the 0K scattering function with all the data
 
@@ -218,49 +218,6 @@ class Xs:
                 raise ValueError("0K data not found")
         else:
             self.xs0Kcomplete = xs0Kcomplete
-
-    @staticmethod
-    def _calc_sigma1(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        energy E
-
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        Ein: float
-            The incident energy in eV
-        xs0K: pd.Series
-            The 0K scattering function
-        EinGrid: Iterable
-            The incident energy grid in eV
-        M: float
-            The mass of the nucleus in amu
-
-
-        Returns
-        -------
-        pd.Series
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> Ein = 2.0
-        >>> Xs._calc_sigma1(T, Ein, xs0K, M)
-        9.086237061960317
-        """
-        Eout = default_Eout(Ein)
-        return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
     def get_EinTcomb(self, Tnew: Iterable, EinGrid: Iterable = None) -> list:
         """
@@ -299,6 +256,47 @@ class Xs:
         else:
             EinTcomb = [(T, Ein) for T in Tnew for Ein in self.data.index]
         return EinTcomb
+
+    @staticmethod
+    def _calc_sigma1Ein(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
+        """
+        Calculate the elastic scattering cross section at temperature T and
+        incident energy Ein
+
+        Parameters
+        ----------
+        T: float
+            The temperature in K
+        Ein: float
+            The incident energy in eV
+        xs0K: pd.Series
+            The 0K scattering function
+        M: float
+            The mass of the nucleus in amu
+
+
+        Returns
+        -------
+        pd.Series
+            The elastic scattering cross section in barns
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> Ein = 2.0
+        >>> Xs._calc_sigma1Ein(T, Ein, xs0K, M)
+        9.086237061960317
+        """
+        Eout = default_Eout(Ein)
+        return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
     def _calc_sigma1T(self, Tnew: Iterable, EinGrid: Iterable = None) -> pd.DataFrame:
         """
@@ -339,30 +337,31 @@ class Xs:
         100  21.618999  4.893586
         """
         bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
-                .map(lambda x: Xs._calc_sigma1(*x, self.xs0Kcomplete, self.M))
+                .map(lambda x: Xs._calc_sigma1Ein(*x, self.xs0Kcomplete, self.M))
         with dask.config.set(num_workers=os.cpu_count()):
             results = bag.compute()
         NTnew = len(Tnew)
         return pd.DataFrame(np.array(results).reshape(NTnew, -1), index=Tnew)
 
-    def update_data(self, xs_T: pd.DataFrame, inplace: bool) -> [None, pd.DataFrame]:
+    def update_data(self, xsT: pd.DataFrame, inplace: bool):
         """
         Update the data with the new results
 
         Parameters
         ----------
-        xs_T: pd.DataFrame
-            The new results
+        xsT: pd.DataFrame
+            Cross section results for the new temperatures
         inplace: bool
             If True, the data is stored in the class attribute, otherwise it
             is returned as a new object
 
         Returns
         -------
-        pd.DataFrame
-            The new data
+        None, Xs
+            New object with the updated data or None if inplace is True, so
+            the data is stored in the class attribute and modified in place.
         """
-        dataNew = pd.concat([self.data, xs_T], axis=1).sort_index(axis=1)
+        dataNew = pd.concat([self.data, xsT], axis=1).sort_index(axis=1)
         if inplace:
             self.data = dataNew
         else:
@@ -370,8 +369,8 @@ class Xs:
 
     def calc_sigma1(self, T: float, inplace: bool = False) -> [None, pd.Series]:
         """
-        Calculate the elastic scattering cross section at temperature T and
-        energy E
+        Calculate the elastic scattering cross section at temperature T using
+        the sigma1 algorithm from Njoy
 
         Parameters
         ----------
@@ -383,8 +382,9 @@ class Xs:
 
         Returns
         -------
-        pd.Series
-            The elastic scattering cross section in barns
+        None, Xs
+            New object with the updated data or None if inplace is True, so
+            the data is stored in the class attribute and modified in place.
 
         Examples
         --------
@@ -441,7 +441,7 @@ class Xs:
                     xs0Kcomplete: pd.Series = None, inplace: bool = False):
         """
         Calculate the elastic scattering cross section for a nucleus with mass
-        M at temperature T.
+        M at temperature T > 0.
 
         Parameters
         ----------
@@ -491,13 +491,13 @@ class Xs:
         # Initialize the class
         xs = cls(M, 0, xs0Kshort)
         # Get cls attributes using the available information
-        xs.get_xs0Kcomplete(xs0Kcomplete)
+        xs.get_xs0Kcomp(xs0Kcomplete)
         return xs.calc_sigma1(T, inplace=inplace)
 
     def calc_T(self, T:float, algorithm: str = "sigma1", inplace: bool = False):
         """
-        Calculate the elastic scattering cross section at temperature T and
-        energy E
+        Calculate the elastic scattering cross section at temperature T using
+        the selected algorithm.
 
         Parameters
         ----------
@@ -513,8 +513,9 @@ class Xs:
 
         Returns
         -------
-        pd.Series
-            The elastic scattering cross section in barns
+        None, Xs
+            New object with the updated data or None if inplace is True, so
+            the data is stored in the class attribute and modified in place.
 
         Examples
         --------

@@ -616,52 +616,15 @@ class Xs:
             The temperature in K
         M: float
             The mass of the nucleus in amu
-        xs0Kshort: pd.Series
-            The 0K scattering function with the incident energy grid to use. It
-            is recommended to use a short grid to avoid the doppler broadening
-            of all the Ein.
-        xs0Kcomplete: pd.Series, optional
-            The 0K scattering function with all the data. If not provided, it
-            will be taken from the class attribute.
-        inplace: bool, optional
-            If True, the data is stored in the class attribute, otherwise it
-            is returned
-        *args: tuple
-            Additional arguments for the alpha0 model calculation in
-            Dxs.from_recoil
-        **kwargs: dict
-            Additional keyword arguments for the alpha0 model calculation in
-            Dxs.from_recoil
+        xs0Kshort:
+        args
+        xs0Kcomplete
+        inplace
+        kwargs
 
         Returns
         -------
-        Xs
-            The elastic scattering cross section in barns
 
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> xs0Kshort = xs0K.iloc[1000:10000:1000]
-        >>> Xs.from_alpha0(T, M, xs0Kshort, xs0Kcomplete=xs0K, model="fgm").data
-        T                 0           300
-        Ein
-        11.23650     9.239644    9.241884
-        34.70286     1.146785    1.148096
-        58.18538     9.794358    9.794765
-        80.66597     1.639337   23.571186
-        97.56808     4.895060    4.891683
-        116.82090  457.760100  932.574071
-        145.67660   39.688900   13.284581
-        165.85470   11.753670   12.631610
-        200.79510   15.734840   15.733743
         """
         # Initialize the class
         xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)

@@ -13,7 +13,7 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
-from solid_cinel.core.scattering_function.beta import get_beta
+from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.generic import reshape_differential, integrate
 import warnings
 import os
@@ -310,7 +310,70 @@ class Xs:
         return EinTcomb
 
     @staticmethod
-    def _calc_alpha0Ein(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float, pdos: Pdos) -> pd.Series:
+    def _calc_alpha0Ein(xs0K: pd.Series, Ein: float, alpha: float, recoil: float, T: float, tauN: np.ndarray,
+                        tauNbeta: np.ndarray, DebyeWallerCoeff: float) -> float:
+        """
+        Calculate the elastic scattering cross section at temperature T and
+        incident energy Ein using alpha0 model
+
+        Parameters
+        ----------
+        xs0K : pd.Series
+            The 0K scattering function
+        Ein : float
+            The incident energy in eV
+        alpha : float
+            The alpha parameter
+        recoil : float
+            The recoil energy in eV
+        T : float
+            The temperature in K
+        tauN : np.ndarray
+            The tauN values
+        tauNbeta : np.ndarray
+            The tauNbeta values
+        DebyeWallerCoeff : float
+            The Debye-Waller coefficient
+
+        Returns
+        -------
+        float
+            The elastic scattering cross section in barns for the given
+            temperature and incident energy using alpha0 model
+
+        Examples
+        --------
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> EinGrid = np.array([2.0, 6.67])
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> recoil = get_gressierRecoil(EinGrid, T, M)
+        >>> alpha = recoil / (kb * T)
+        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+        >>> nphonon = get_expansionOrder(alpha, DebyeWallerCoeff, 1.0e-6, 5000)
+        >>> tau1 = pdos.beta_grid(T).data.index.values
+        >>> tauN = pdos.tauN(T, nphonon, 0.0, values=True)
+        >>> tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
+        >>> round(Xs._calc_alpha0Ein(xs0K, EinGrid[0], alpha[0], recoil[0], T, tauN, tauNbeta, DebyeWallerCoeff), 6)
+        9.086237
+        """
+        beta = Beta.from_Eout(default_Eout(Ein), Ein, T)
+        scatfunc = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff).full
+        EoutCalc = Ein + scatfunc.index.values * kb * T
+        # xs0K interpolation
+        xs0Kinterp = reshape_differential(xs0K, EoutCalc + recoil)
+        # XsMat
+        dxs = scatfunc * xs0Kinterp
+        dxs.index = pd.Index(EoutCalc, name="Eout")
+        return integrate(dxs) / (kb * T)
+
+    @staticmethod
+    def _calc_alpha0T(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float, pdos: Pdos) -> pd.Series:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -341,33 +404,22 @@ class Xs:
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
-
         >>> M = 238.05077040419212
         >>> T = 300
         >>> EinGrid = np.array([2.0, 6.67])
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs._calc_alpha0Ein(xs0K, EinGrid, M, T, pdos)
+        >>> Xs._calc_alpha0T(xs0K, EinGrid, M, T, pdos)
 
         """
-        xsDb = {}
         recoil = get_gressierRecoil(EinGrid, T, M)
         alpha = recoil / (kb * T)
         DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
         nphonon = get_expansionOrder(alpha, DebyeWallerCoeff, 1.0e-6, 5000)
-        tau1 = pdos.beta_grid(T).data.index.values
-        tauN = pdos.get_tau(T, nphonon, 0.0, values=True)
+        tau1 = pdos.tau1(T).index.values
+        tauN = pdos.tauN(T, nphonon, 0.0, values=True)
         tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
-        for i in range(len(EinGrid)):
-            Eout = default_Eout(EinGrid[i])
-            beta = get_beta(Eout, EinGrid[i], T)
-            scatfunc = Sab.from_tau(alpha[i], beta, tauN, tauNbeta, DebyeWallerCoeff).full
-            EoutCalc = EinGrid[i] + scatfunc.index.values * kb * T
-            # xs0K interpolation
-            xs0Kinterp = reshape_differential(xs0K, EoutCalc + recoil[i])
-            # XsMat
-            dxs = scatfunc * xs0Kinterp
-            dxs.index = pd.Index(EoutCalc, name="Eout")
-            xsDb[EinGrid[i]] = integrate(dxs) / (kb * T)
+        xsDb = {EinGrid[i]: Xs._calc_alpha0Ein(xs0K, EinGrid[i], alpha[i], recoil[i], T, tauN, tauNbeta, DebyeWallerCoeff)
+                for i in range(len(EinGrid))}
         return pd.Series(xsDb, name="xs")
 
     @staticmethod
@@ -410,73 +462,6 @@ class Xs:
         """
         Eout = default_Eout(Ein)
         return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
-
-    @staticmethod
-    def _calc_alpha0Ein(T: float, Ein: float, xs0K: pd.Series, M: float,
-                        *args, **kwargs) -> float:
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        incident energy Ein using alpha0 model
-
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        Ein: float
-            The incident energy in eV
-        xs0K: pd.Series
-            The 0K scattering function
-        M: float
-            The mass of the nucleus in amu
-        model : str
-            The model used to calculate the S(alpha, beta) distribution. The available models are:
-                - "fgm": Free Gas Model (default)
-                - "sct": Short Collision Time
-                - "pdos": Phonon Density of States
-
-        Parameters for sct
-        ------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-
-        Parameters for pdos
-        -------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        float
-            The elastic scattering cross section in barns for the given
-            temperature and incident energy.
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        # Generate Broadening test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> M = 238.05077040419212
-        >>> Xs._calc_alpha0Ein(T, Ein, xs0K, M)
-        9.085407458237226
-        """
-        Eout = default_Eout(Ein)
-        return Dxs.from_recoil(xs0K, Ein, M, T, Eout, *args, **kwargs).integral
 
     def _compute_calc(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
                       algorithm: str = "sigma1", **kwargs) -> pd.DataFrame:

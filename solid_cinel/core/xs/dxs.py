@@ -266,8 +266,10 @@ class Dxs:
         dtype: float64
         """
         scatfunction = ScatFunc.from_recoil(Ein, M, T, Eout, *args, **kwargs)
-        Exs = Eout + get_gressierRecoil(Ein, T, M)
-        return cls(Ein, T, M, "dopush", scatfunction.convolve(xs0K, Exs=Exs))
+        recoil = get_gressierRecoil(Ein, T, M)
+        if Ein + recoil <= 0:
+            raise ValueError("The incident energy is lower than the recoil energy")
+        return cls(Ein, T, M, "dopush", scatfunction.convolve(xs0K, Exs=Eout + recoil))
 
     @property
     def integral(self) -> float:

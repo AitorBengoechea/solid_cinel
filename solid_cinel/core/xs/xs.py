@@ -9,6 +9,12 @@ import numba as nb
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
+from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.vibration.tau import get_tauNbeta
+from solid_cinel.core.scattering_function.sab import Sab
+from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
+from solid_cinel.core.scattering_function.beta import get_beta
+from solid_cinel.core.generic import reshape_differential, integrate
 import warnings
 import os
 import dask
@@ -304,6 +310,67 @@ class Xs:
         return EinTcomb
 
     @staticmethod
+    def _calc_alpha0Ein(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float, pdos: Pdos) -> pd.Series:
+        """
+        Calculate the elastic scattering cross section at temperature T and
+        incident energy Ein using alpha0 model
+
+        Parameters
+        ----------
+        xs0K: pd.Series
+            The 0K scattering function
+        EinGrid: np.ndarray
+            The incident energy grid in eV
+        M: float
+            The mass of the nucleus in amu
+        T: float
+            The temperature in K
+        pdos: Pdos
+            Pdos object
+
+        Returns
+        -------
+        pd.Series
+            The elastic scattering cross section in barns for the given
+            temperature and incident energy using alpha0 model
+
+        Examples
+        --------
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> EinGrid = np.array([2.0, 6.67])
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Xs._calc_alpha0Ein(xs0K, EinGrid, M, T, pdos)
+
+        """
+        xsDb = {}
+        recoil = get_gressierRecoil(EinGrid, T, M)
+        alpha = recoil / (kb * T)
+        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+        nphonon = get_expansionOrder(alpha, DebyeWallerCoeff, 1.0e-6, 5000)
+        tau1 = pdos.beta_grid(T).data.index.values
+        tauN = pdos.get_tau(T, nphonon, 0.0, values=True)
+        tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
+        for i in range(len(EinGrid)):
+            Eout = default_Eout(EinGrid[i])
+            beta = get_beta(Eout, EinGrid[i], T)
+            scatfunc = Sab.from_tau(alpha[i], beta, tauN, tauNbeta, DebyeWallerCoeff).full
+            EoutCalc = EinGrid[i] + scatfunc.index.values * kb * T
+            # xs0K interpolation
+            xs0Kinterp = reshape_differential(xs0K, EoutCalc + recoil[i])
+            # XsMat
+            dxs = scatfunc * xs0Kinterp
+            dxs.index = pd.Index(EoutCalc, name="Eout")
+            xsDb[EinGrid[i]] = integrate(dxs) / (kb * T)
+        return pd.Series(xsDb, name="xs")
+
+    @staticmethod
     def _calc_sigma1Ein(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
         """
         Calculate the elastic scattering cross section at temperature T and
@@ -338,8 +405,8 @@ class Xs:
         >>> M = 238.05077040419212
         >>> T = 300
         >>> Ein = 2.0
-        >>> Xs._calc_sigma1Ein(T, Ein, xs0K, M)
-        9.086237061960317
+        >>> round(Xs._calc_sigma1Ein(T, Ein, xs0K, M), 6)
+        9.086237
         """
         Eout = default_Eout(Ein)
         return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral

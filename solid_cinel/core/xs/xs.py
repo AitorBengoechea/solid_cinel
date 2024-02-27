@@ -196,7 +196,7 @@ class Xs:
         elif not all(isinstance(t, (int, float)) for t in temperatures):
             raise TypeError("All temperatures must be int or float")
         return temperatures
-    def check_algorithm(self, algorithm: str) -> callable:
+    def check_algorithm(self, algorithm: str, model: str = None) -> callable:
         """
         Check the algorithm input
 
@@ -213,7 +213,7 @@ class Xs:
         if algorithm == "sigma1":
             func = self._calc_sigma1Ein
         elif algorithm == "alpha0":
-            func = self._calc_alpha0Ein
+            func = self._calc_alpha0TClm if model == "pdos" else self._calc_alpha0Ein
         else:
             raise ValueError("Invalid algorithm")
         return func
@@ -311,8 +311,101 @@ class Xs:
         return EinTcomb
 
     @staticmethod
+    def _calc_sigma1Ein(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
+        """
+        Calculate the elastic scattering cross section at temperature T and
+        incident energy Ein
+
+        Parameters
+        ----------
+        T: float
+            The temperature in K
+        Ein: float
+            The incident energy in eV
+        xs0K: pd.Series
+            The 0K scattering function
+        M: float
+            The mass of the nucleus in amu
+
+
+        Returns
+        -------
+        pd.Series
+            The elastic scattering cross section in barns
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> Ein = 2.0
+        >>> round(Xs._calc_sigma1Ein(T, Ein, xs0K, M), 6)
+        9.086237
+        """
+        Eout = default_Eout(Ein)
+        return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
+
+    @staticmethod
+    def _calc_alpha0Ein(T: float, Ein: float, xs0K: pd.Series, M: float,
+                        *args, **kwargs) -> float:
+        """
+        Calculate the elastic scattering cross section at temperature T and
+        incident energy Ein using alpha0 model
+
+        Parameters
+        ----------
+        T: float
+            The temperature in K
+        Ein: float
+            The incident energy in eV
+        xs0K: pd.Series
+            The 0K scattering function
+        M: float
+            The mass of the nucleus in amu
+        model : str
+            The model used to calculate the S(alpha, beta) distribution. The available models are:
+                - "fgm": Free Gas Model (default)
+                - "sct": Short Collision Time
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+
+        Returns
+        -------
+        float
+            The elastic scattering cross section in barns for the given
+            temperature and incident energy.
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> M = 238.05077040419212
+        >>> Xs._calc_alpha0Ein(T, Ein, xs0K, M)
+        9.085407458237226
+        """
+        Eout = default_Eout(Ein)
+        return Dxs.from_recoil(xs0K, Ein, M, T, Eout, *args, **kwargs).integral
+
+    @staticmethod
     @dask.delayed
-    def _calc_alpha0Ein(xs0K: pd.Series, Ein: float, alpha: float, recoil: float, T: float, tauN: np.ndarray,
+    def _calc_alpha0EinClm(xs0K: pd.Series, Ein: float, alpha: float, recoil: float, T: float, tauN: np.ndarray,
                         tauNbeta: np.ndarray, DebyeWallerCoeff: float) -> float:
         """
         Calculate the elastic scattering cross section at temperature T and
@@ -367,7 +460,7 @@ class Xs:
         >>> tau1 = pdos.beta_grid(T).data.index.values
         >>> tauN = pdos.tauN(T, nphonon, 0.0, values=True)
         >>> tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
-        >>> round(Xs._calc_alpha0Ein(xs0K, EinGrid[0], alpha[0], recoil[0], T, tauN, tauNbeta, DebyeWallerCoeff), 6)
+        >>> round(Xs._calc_alpha0EinClm(xs0K, EinGrid[0], alpha[0], recoil[0], T, tauN, tauNbeta, DebyeWallerCoeff), 6)
         9.086989
         """
         beta = Beta.from_Eout(default_Eout(Ein), Ein, T)
@@ -384,7 +477,8 @@ class Xs:
         return integrate(dxs) / (1 - exp(-alpha * DebyeWallerCoeff))
 
     @staticmethod
-    def _calc_alpha0T(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float, pdos: Pdos) -> pd.Series:
+    def _calc_alpha0TClm(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
+                         pdos: Pdos):
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -407,23 +501,6 @@ class Xs:
         pd.Series
             The elastic scattering cross section in barns for the given
             temperature and incident energy using alpha0 model
-
-        Examples
-        --------
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> EinGrid = np.array([2.0, 6.67])
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs._calc_alpha0T(xs0K, EinGrid, M, T, pdos)
-        Eout
-        2.00      9.081089
-        6.67    461.728178
-        Name: xs, dtype: float64
         """
         recoil = get_gressierRecoil(EinGrid, T, M)
         alpha = recoil / (kb * T)
@@ -432,52 +509,10 @@ class Xs:
         tau1 = pdos.tau1(T).index.values
         tauN = pdos.tauN(T, nphonon, 0.0, values=True)
         tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
-        xsDb = [Xs._calc_alpha0Ein(xs0K, EinGrid[i], alpha[i], recoil[i], T, tauN, tauNbeta, DebyeWallerCoeff)
+        return [Xs._calc_alpha0EinClm(xs0K, EinGrid[i], alpha[i], recoil[i], T, tauN, tauNbeta, DebyeWallerCoeff)
                 for i in range(len(EinGrid))]
-        return pd.Series(dask.compute(*xsDb), index=pd.Index(EinGrid, name="Eout"), name="xs")
 
-    @staticmethod
-    def _calc_sigma1Ein(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        incident energy Ein
-
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        Ein: float
-            The incident energy in eV
-        xs0K: pd.Series
-            The 0K scattering function
-        M: float
-            The mass of the nucleus in amu
-
-
-        Returns
-        -------
-        pd.Series
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> Ein = 2.0
-        >>> round(Xs._calc_sigma1Ein(T, Ein, xs0K, M), 6)
-        9.086237
-        """
-        Eout = default_Eout(Ein)
-        return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
-
-    def _compute_calc(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
+    def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
                       algorithm: str = "sigma1", **kwargs) -> pd.DataFrame:
         """
         Calculate the elastic scattering cross section at new temperatures using
@@ -519,25 +554,45 @@ class Xs:
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> Ein = xsSmall.index
         >>> Tnew = [300, 100]
-        >>> xs._compute_calc(Tnew).set_axis(Ein, axis=1)
+        >>> xs._compute(Tnew).set_axis(Ein, axis=1)
              0.026844    6.707699
         300  9.436372  377.019146
         100  9.423739  392.586104
 
         # Check the alpha0 algorithm with the fgm model + EinGrid < Recoil
         # situation (NaN in the results)
-        >>> xs._compute_calc(Tnew, algorithm="alpha0", model="fgm").set_axis(Ein, axis=1)
+        >>> xs._compute(Tnew, algorithm="alpha0", model="fgm").set_axis(Ein, axis=1)
              0.026844    6.707699
         300       NaN  379.097297
         100  9.417727  393.866544
+
+        >>> from solid_cinel.core.generic import interpolation
+        >>> EinGrid = np.array([2.0, 6.67])
+        >>> xsSmall = interpolation(xs0K, EinGrid)
+        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
+        >>> Tnew = [300, 100]
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> xs._compute(Tnew, pdos, algorithm="alpha0", model="pdos")
+                    0           1
+        300  9.081089  461.728178
+        100  9.076657  649.535514
         """
-        func = self.check_algorithm(algorithm)
+        func = self.check_algorithm(algorithm, kwargs.get("model"))
         args = (self.xs0Kcomplete, self.M) + args
-        bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
-                .map(lambda x: func(*x, *args, **kwargs))
-        with dask.config.set(num_workers=os.cpu_count()):
-            results = bag.compute()
         NTnew = len(Tnew)
+        if kwargs.get("model") == "pdos":
+            Ein = EinGrid if EinGrid else self.data.index.values
+            if len(Ein.shape) == 1:
+                results = [dask.compute(*func(T, Ein, *args))
+                           for T in Tnew]
+            else:
+                results = [dask.compute(*func(Tnew[i], Ein[i], *args))
+                           for i in range(NTnew)]
+        else:
+            bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
+                    .map(lambda x: func(*x, *args, **kwargs))
+            with dask.config.set(num_workers=os.cpu_count()):
+                results = bag.compute()
         return pd.DataFrame(np.array(results).reshape(NTnew, -1), index=Tnew)
 
     def calc_T(self, T:float, *args, algorithm: str = "sigma1",
@@ -575,6 +630,7 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> T = [300, 100]
+        >>>
         >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K)
         >>> xs.calc_T(T).data
         T                  0            100          300
@@ -603,13 +659,28 @@ class Xs:
         66.436310    85.621850    90.540165   114.481715
         80.731840    39.201520    40.785557    29.838786
         89.051940     9.208071     9.213726     9.226565
+
+        >>> from solid_cinel.core.generic import interpolation
+        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> xsSmall = interpolation(xs0K, EinGrid)
+        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
+        T                 0           100         300
+        Ein
+        0.065625     9.411657    9.403084    9.407981
+        2.000000     9.085342    9.076657    9.081089
+        4.000000     8.481975    8.482467    8.482017
+        5.000000     7.805580    7.806112    7.805050
+        6.670000  1269.792131  649.535514  461.728178
+        7.000000    19.825115   19.942455   20.061663
         """
         Tnew = self.get_Tnew(T)
         if Tnew.empty:
             warnings.warn("All the temperatures are already calculated")
             return self
         kwargs["algorithm"] = algorithm
-        xsT = self._compute_calc(Tnew, *args, **kwargs).T.set_index(self.data.index)
+        xsT = self._compute(Tnew, *args, **kwargs).T.set_index(self.data.index)
         return self.update_data(xsT, inplace)
 
     @classmethod

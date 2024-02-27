@@ -1098,12 +1098,14 @@ class Pdos:
 
     @classmethod
     def _from(cls, method, *args, **kwargs):
-        if isinstance(args[0], (int, float)):
-            return cls(Tpdos.__getattribute__(method)(*args, **kwargs))
+        if len(args) == 0:
+            raise TypeError("No arguments provided")
+        elif isinstance(args[0], (int, float)):
+            return cls(getattr(Tpdos, method)(*args, **kwargs))
         elif isinstance(args[-1], (list, np.ndarray)):
-            return cls(Npdos.__getattribute__(method)(*args, **kwargs))
+            return cls(getattr(Npdos, method)(*args, **kwargs))
         else:
-            return cls(Epdos.__getattribute__(method)(*args, **kwargs))
+            return cls(getattr(Epdos, method)(*args, **kwargs))
 
     @classmethod
     def from_dE(cls, *args, **kwargs):

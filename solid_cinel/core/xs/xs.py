@@ -311,6 +311,7 @@ class Xs:
         return EinTcomb
 
     @staticmethod
+    @dask.delayed
     def _calc_alpha0Ein(xs0K: pd.Series, Ein: float, alpha: float, recoil: float, T: float, tauN: np.ndarray,
                         tauNbeta: np.ndarray, DebyeWallerCoeff: float) -> float:
         """
@@ -419,6 +420,7 @@ class Xs:
         >>> EinGrid = np.array([2.0, 6.67])
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Xs._calc_alpha0T(xs0K, EinGrid, M, T, pdos)
+        Eout
         2.00      9.081089
         6.67    461.728178
         Name: xs, dtype: float64
@@ -430,9 +432,9 @@ class Xs:
         tau1 = pdos.tau1(T).index.values
         tauN = pdos.tauN(T, nphonon, 0.0, values=True)
         tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
-        xsDb = {EinGrid[i]: Xs._calc_alpha0Ein(xs0K, EinGrid[i], alpha[i], recoil[i], T, tauN, tauNbeta, DebyeWallerCoeff)
-                for i in range(len(EinGrid))}
-        return pd.Series(xsDb, name="xs")
+        xsDb = [Xs._calc_alpha0Ein(xs0K, EinGrid[i], alpha[i], recoil[i], T, tauN, tauNbeta, DebyeWallerCoeff)
+                for i in range(len(EinGrid))]
+        return pd.Series(dask.compute(*xsDb), index=pd.Index(EinGrid, name="Eout"), name="xs")
 
     @staticmethod
     def _calc_sigma1Ein(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:

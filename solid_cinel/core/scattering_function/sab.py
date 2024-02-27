@@ -20,6 +20,7 @@ try:
     import cupy as cp
     xp = cp
 except ImportError:
+    gpu_available = False
     xp = np
 
 

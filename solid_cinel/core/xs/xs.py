@@ -405,8 +405,9 @@ class Xs:
 
     @staticmethod
     @dask.delayed
-    def _calc_alpha0EinClm(xs0K: pd.Series, Ein: float, alpha: float, recoil: float, T: float, tauN: np.ndarray,
-                        tauNbeta: np.ndarray, DebyeWallerCoeff: float) -> float:
+    def _calc_alpha0EinClm(xs0K: pd.Series, Ein: float, alpha: float,
+                           recoil: float, T: float, scatfunc: np.ndarray,
+                           DebyeWallerCoeff : float) -> float:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -435,38 +436,7 @@ class Xs:
         float
             The elastic scattering cross section in barns for the given
             temperature and incident energy using alpha0 model
-
-        Examples
-        --------
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/pdos/")
-        >>> file = "interp.300"
-        >>> pdos = Pdos.from_file(file, usecols=[0, 1], index_col=0)
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> EinGrid = np.array([2.0, 6.67])
-        >>> recoil = get_gressierRecoil(EinGrid, T, M)
-        >>> alpha = recoil / (kb * T)
-        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
-        >>> nphonon = get_expansionOrder(alpha, DebyeWallerCoeff, 1.0e-6, 5000)
-        >>> tau1 = pdos.beta_grid(T).data.index.values
-        >>> tauN = pdos.tauN(T, nphonon, 0.0, values=True)
-        >>> tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
-        >>> round(Xs._calc_alpha0EinClm(xs0K, EinGrid[0], alpha[0], recoil[0], T, tauN, tauNbeta, DebyeWallerCoeff), 6)
-        9.086989
         """
-        beta = Beta.from_Eout(default_Eout(Ein), Ein, T)
-        scatfunc = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff).full
-        # scatfunc normalization:
-        scatfunc /= kb * T
         # Eout caluculation + interpolation to avoid numerical fluctuations
         EoutCalc = Ein + scatfunc.index.values * kb * T
         xs0Kinterp = reshape_differential(xs0K, EoutCalc + recoil)
@@ -509,7 +479,13 @@ class Xs:
         tau1 = pdos.tau1(T).index.values
         tauN = pdos.tauN(T, nphonon, 0.0, values=True)
         tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
-        return [Xs._calc_alpha0EinClm(xs0K, EinGrid[i], alpha[i], recoil[i], T, tauN, tauNbeta, DebyeWallerCoeff)
+        # Scattering function calculation
+        beta = Beta.from_default(T)
+        scatfunc = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff).full
+        # scatfunc normalization:
+        scatfunc /= kb * T
+        return [Xs._calc_alpha0EinClm(xs0K, EinGrid[i], alpha[i], recoil[i], T,
+                                      scatfunc.iloc[i], DebyeWallerCoeff)
                 for i in range(len(EinGrid))]
 
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
@@ -574,8 +550,8 @@ class Xs:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs._compute(Tnew, pdos, algorithm="alpha0", model="pdos")
                     0           1
-        300  9.081089  461.728178
-        100  9.076657  649.535514
+        300  9.084969  461.718705
+        100  9.085596  649.526642
         """
         func = self.check_algorithm(algorithm, kwargs.get("model"))
         args = (self.xs0Kcomplete, self.M) + args
@@ -668,12 +644,13 @@ class Xs:
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.403084    9.407981
-        2.000000     9.085342    9.076657    9.081089
-        4.000000     8.481975    8.482467    8.482017
-        5.000000     7.805580    7.806112    7.805050
-        6.670000  1269.792131  649.535514  461.728178
-        7.000000    19.825115   19.942455   20.061663
+        0.065625     9.411657    9.403287    9.408170
+        2.000000     9.085342    9.085596    9.084969
+        4.000000     8.481975    8.482253    8.481713
+        5.000000     7.805580    7.805930    7.804704
+        6.670000  1269.792131  649.526642  461.718705
+        7.000000    19.825115   19.941105   20.060625
+
         """
         Tnew = self.get_Tnew(T)
         if Tnew.empty:

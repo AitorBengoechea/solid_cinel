@@ -274,7 +274,7 @@ class Beta:
         return np.append(diff, diff[-1])
 
     @classmethod
-    def from_default(cls, T: float):
+    def from_default(cls, T: float, kind: str = "abs"):
         """
         Generate beta grid for a given temperature using the default beta grid.
 
@@ -288,7 +288,12 @@ class Beta:
         "Beta"
             Generate beta grid for a given temperature.
         """
-        return cls(default_beta(T))
+        if kind == "abs":
+            return cls(default_absBeta(T))
+        elif kind == "mix":
+            return cls(default_beta(T))
+        else:
+            raise ValueError("kind must be 'abs' or 'mix'")
 
     @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,

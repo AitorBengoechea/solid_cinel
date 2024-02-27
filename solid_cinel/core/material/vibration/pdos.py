@@ -1097,13 +1097,29 @@ class Pdos:
             self.instance = Npdos(*args, **kwargs)
 
     @classmethod
-    def from_dE(cls, *args, **kwargs):
+    def _from(cls, method, *args, **kwargs):
         if isinstance(args[0], (int, float)):
-            return cls(Tpdos.from_dE(*args, **kwargs))
+            return cls(Tpdos.__getattribute__(method)(*args, **kwargs))
         elif isinstance(args[-1], (list, np.ndarray)):
-            return cls(Npdos.from_dE(*args, **kwargs))
+            return cls(Npdos.__getattribute__(method)(*args, **kwargs))
         else:
-            return cls(Epdos.from_dE(*args, **kwargs))
+            return cls(Epdos.__getattribute__(method)(*args, **kwargs))
+
+    @classmethod
+    def from_dE(cls, *args, **kwargs):
+        return cls._from('from_dE', *args, **kwargs)
+
+    @classmethod
+    def from_file(cls, *args, **kwargs):
+        return cls._from('from_file', *args, **kwargs)
+
+    @classmethod
+    def from_directory(cls, *args, **kwargs):
+        return cls(Npdos.from_directory(*args, **kwargs))
+
+    @classmethod
+    def from_directory(cls, *args, **kwargs):
+        return cls(Npdos.from_directory(*args, **kwargs))
 
     def __getattr__(self, name):
         if hasattr(self.instance, name):

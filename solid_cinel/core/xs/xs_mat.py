@@ -14,6 +14,7 @@ from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
 from solid_cinel.core.scattering_function.sab import Sab, get_SabSctAlpha
+from solid_cinel.core.scattering_function.beta import default_beta, default_absBeta
 from solid_cinel.core.xs.dxs import Dxs
 import os
 from math import pi
@@ -650,47 +651,6 @@ def default_Eout(Ein: float) -> np.ndarray:
                                  np.log10(2 * Ein),
                                  2000)
     return np.sort(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
-
-
-@nb.jit(nopython=True, nogil=False, cache=True)
-def default_absBeta(T: float) -> np.ndarray:
-    """
-    Generate the default beta grid for a certain temperature
-
-    Parameters
-    ----------
-    T: float
-        Temperature in K
-
-    Returns
-    -------
-    beta: np.ndarray
-        Beta grid
-    """
-    betaMid = 0.08 / (kb * T)
-    betaMax = 5.0 / (kb * T)
-    betaSmall = np.linspace(0, betaMid,2000)
-    beta_great = np.logspace(np.log10(betaMid), np.log10(betaMax), 1000)
-    return np.concatenate((betaSmall, beta_great[1::]))
-
-
-@nb.jit(nopython=True, nogil=False, cache=True)
-def default_beta(T: float) -> np.ndarray:
-    """
-    Generate the default beta grid for a certain temperature
-
-    Parameters
-    ----------
-    T: float
-        Temperature in K
-
-    Returns
-    -------
-    beta: np.ndarray
-        Beta grid
-    """
-    absBeta = default_absBeta(T)
-    return np.concatenate((-absBeta[::-1], absBeta[1::]))
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)

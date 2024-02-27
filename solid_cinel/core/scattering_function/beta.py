@@ -274,6 +274,23 @@ class Beta:
         return np.append(diff, diff[-1])
 
     @classmethod
+    def from_default(cls, T: float):
+        """
+        Generate beta grid for a given temperature using the default beta grid.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in Kelvin.
+
+        Returns
+        -------
+        "Beta"
+            Generate beta grid for a given temperature.
+        """
+        return cls(default_beta(T))
+
+    @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,
                       thermal_threshold: float = 5., scale: bool = False,
                       **kwargs):
@@ -585,3 +602,43 @@ def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
     """
     beta = (Eout - Ein) / (kb * T)
     return np.unique(np.absolute(beta))
+
+@nb.jit(nopython=True, nogil=False, cache=True)
+def default_absBeta(T: float) -> np.ndarray:
+    """
+    Generate the default beta grid for a certain temperature
+
+    Parameters
+    ----------
+    T: float
+        Temperature in K
+
+    Returns
+    -------
+    beta: np.ndarray
+        Beta grid
+    """
+    betaMid = 0.08 / (kb * T)
+    betaMax = 5.0 / (kb * T)
+    betaSmall = np.linspace(0, betaMid,2000)
+    beta_great = np.logspace(np.log10(betaMid), np.log10(betaMax), 1000)
+    return np.concatenate((betaSmall, beta_great[1::]))
+
+
+@nb.jit(nopython=True, nogil=False, cache=True)
+def default_beta(T: float) -> np.ndarray:
+    """
+    Generate the default beta grid for a certain temperature
+
+    Parameters
+    ----------
+    T: float
+        Temperature in K
+
+    Returns
+    -------
+    beta: np.ndarray
+        Beta grid
+    """
+    absBeta = default_absBeta(T)
+    return np.concatenate((-absBeta[::-1], absBeta[1::]))

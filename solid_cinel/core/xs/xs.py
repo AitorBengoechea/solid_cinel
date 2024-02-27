@@ -15,6 +15,7 @@ from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.generic import reshape_differential, integrate
+from math import exp
 import warnings
 import os
 import dask
@@ -348,10 +349,16 @@ class Xs:
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
+
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/pdos/")
+        >>> file = "interp.300"
+        >>> pdos = Pdos.from_file(file, usecols=[0, 1], index_col=0)
+        >>> os.chdir(wd)
+
         >>> M = 238.05077040419212
         >>> T = 300
         >>> EinGrid = np.array([2.0, 6.67])
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> recoil = get_gressierRecoil(EinGrid, T, M)
         >>> alpha = recoil / (kb * T)
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
@@ -360,17 +367,20 @@ class Xs:
         >>> tauN = pdos.tauN(T, nphonon, 0.0, values=True)
         >>> tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
         >>> round(Xs._calc_alpha0Ein(xs0K, EinGrid[0], alpha[0], recoil[0], T, tauN, tauNbeta, DebyeWallerCoeff), 6)
-        9.086237
+        9.086989
         """
         beta = Beta.from_Eout(default_Eout(Ein), Ein, T)
         scatfunc = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff).full
+        # scatfunc normalization:
+        scatfunc /= kb * T
+        # Eout caluculation + interpolation to avoid numerical fluctuations
         EoutCalc = Ein + scatfunc.index.values * kb * T
-        # xs0K interpolation
         xs0Kinterp = reshape_differential(xs0K, EoutCalc + recoil)
-        # XsMat
+        # Dxs calculation
         dxs = scatfunc * xs0Kinterp
         dxs.index = pd.Index(EoutCalc, name="Eout")
-        return integrate(dxs) / (kb * T)
+        # Integral + 0 phonon expansion term
+        return integrate(dxs) / (1 - exp(-alpha * DebyeWallerCoeff))
 
     @staticmethod
     def _calc_alpha0T(xs0K: pd.Series, EinGrid: np.ndarray, M: float, T: float, pdos: Pdos) -> pd.Series:
@@ -409,7 +419,9 @@ class Xs:
         >>> EinGrid = np.array([2.0, 6.67])
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Xs._calc_alpha0T(xs0K, EinGrid, M, T, pdos)
-
+        2.00      9.081089
+        6.67    461.728178
+        Name: xs, dtype: float64
         """
         recoil = get_gressierRecoil(EinGrid, T, M)
         alpha = recoil / (kb * T)

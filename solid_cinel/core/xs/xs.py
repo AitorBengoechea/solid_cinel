@@ -6,6 +6,7 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
+from numba import prange
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
@@ -14,7 +15,6 @@ from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.generic import reshape_differential, integrate
 from math import exp
 import warnings
 import os
@@ -404,10 +404,11 @@ class Xs:
         return Dxs.from_recoil(xs0K, Ein, M, T, Eout, *args, **kwargs).integral
 
     @staticmethod
-    @dask.delayed
-    def _calc_alpha0EinClm(xs0K: pd.Series, Ein: float, alpha: float,
-                           recoil: float, T: float, scatfunc: np.ndarray,
-                           DebyeWallerCoeff : float) -> float:
+    @nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
+    def _calc_alpha0EinClm(xs0KValue: np.ndarray, xs0KE: np.ndarray,
+                           Ein: np.ndarray, alpha: np.ndarray,
+                           recoil: np.ndarray, T: float, scatfunc: np.ndarray,
+                           beta: np.ndarray, DebyeWallerCoeff : float) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -438,13 +439,14 @@ class Xs:
             temperature and incident energy using alpha0 model
         """
         # Eout caluculation + interpolation to avoid numerical fluctuations
-        EoutCalc = Ein + scatfunc.index.values * kb * T
-        xs0Kinterp = reshape_differential(xs0K, EoutCalc + recoil)
-        # Dxs calculation
-        dxs = scatfunc * xs0Kinterp
-        dxs.index = pd.Index(EoutCalc, name="Eout")
-        # Integral + 0 phonon expansion term
-        return integrate(dxs) / (1 - exp(-alpha * DebyeWallerCoeff))
+        xsT = np.zeros(len(Ein))
+        for i in prange(len(Ein)):
+            EoutCalc = Ein[i] + beta * kb * T
+            xs0Kinterp = np.interp(EoutCalc + recoil[i], xs0KE, xs0KValue)
+            # Dxs calculation
+            xsT[i] += np.trapz(scatfunc[i] * xs0Kinterp, EoutCalc)
+            xsT[i] /= 1 - exp(-alpha[i] * DebyeWallerCoeff)
+        return xsT
 
     @staticmethod
     def _calc_alpha0TClm(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
@@ -484,9 +486,11 @@ class Xs:
         scatfunc = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff).full
         # scatfunc normalization:
         scatfunc /= kb * T
-        return [Xs._calc_alpha0EinClm(xs0K, EinGrid[i], alpha[i], recoil[i], T,
-                                      scatfunc.iloc[i], DebyeWallerCoeff)
-                for i in range(len(EinGrid))]
+        betaScatfunc = scatfunc.columns.values
+        return Xs._calc_alpha0EinClm(xs0K.values, xs0K.index.values,
+                                     EinGrid, alpha, recoil, T,
+                                     scatfunc.values, betaScatfunc,
+                                     DebyeWallerCoeff)
 
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
                       algorithm: str = "sigma1", **kwargs) -> pd.DataFrame:
@@ -559,11 +563,9 @@ class Xs:
         if kwargs.get("model") == "pdos":
             Ein = EinGrid if EinGrid else self.data.index.values
             if len(Ein.shape) == 1:
-                results = [dask.compute(*func(T, Ein, *args))
-                           for T in Tnew]
+                results = [func(T, Ein, *args) for T in Tnew]
             else:
-                results = [dask.compute(*func(Tnew[i], Ein[i], *args))
-                           for i in range(NTnew)]
+                results = [func(Tnew[i], Ein[i], *args) for i in range(NTnew)]
         else:
             bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
                     .map(lambda x: func(*x, *args, **kwargs))
@@ -644,7 +646,7 @@ class Xs:
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.403287    9.408170
+        0.065625     9.411657    9.412832    9.411996
         2.000000     9.085342    9.085596    9.084969
         4.000000     8.481975    8.482253    8.481713
         5.000000     7.805580    7.805930    7.804704

@@ -1123,6 +1123,10 @@ class Pdos:
     def from_directory(cls, *args, **kwargs):
         return cls(Npdos.from_directory(*args, **kwargs))
 
+    @property
+    def index(self):
+        return self.instance.data.index
+
     def __getattr__(self, name):
         if hasattr(self.instance, name):
             return getattr(self.instance, name)

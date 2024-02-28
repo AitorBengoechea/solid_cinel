@@ -383,8 +383,7 @@ class Alpha:
         >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
         >>> M = 26.98153433356103
         >>> alpha = Alpha.from_recoil(Ein, T, M)
-        >>> alpha.get_recoil(T).round(6)
-        alpha
+        >>> pd.Series(alpha.get_recoil(T), index=alpha.data).round(6)
         0.118447    0.008166
         0.155038    0.010688
         0.364130    0.025103
@@ -392,7 +391,7 @@ class Alpha:
         1.164525    0.080281
         dtype: float64
         """
-        return pd.Series(self.data * kb * T, index=self.to_index)
+        return self.data * kb * T
 
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:

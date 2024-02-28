@@ -11,6 +11,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.generic import integrate
 from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
@@ -450,7 +451,7 @@ class Xs:
 
     @staticmethod
     def _calc_alpha0TClm(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
-                         pdos: Pdos):
+                         pdos: Pdos, *args, **kwargs):
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -473,24 +474,38 @@ class Xs:
         pd.Series
             The elastic scattering cross section in barns for the given
             temperature and incident energy using alpha0 model
+
+        Examples
+        --------
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> from solid_cinel.core.generic import interpolation
+        >>> EinGrid = np.array([2.0, 6.67])
+        >>> xsSmall = interpolation(xs0K, EinGrid)
+        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
+        >>> T = 300
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="fgm").round(6)
+        array([  9.527749, 457.03583 ])
+        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
+        array([  9.463265, 449.819307])
+        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
+        array([  9.084969, 461.718705])
         """
-        recoil = get_gressierRecoil(EinGrid, T, M)
-        alpha = recoil / (kb * T)
         DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
-        nphonon = get_expansionOrder(alpha, DebyeWallerCoeff, 1.0e-6, 5000)
-        tau1 = pdos.tau1(T).index.values
-        tauN = pdos.tauN(T, nphonon, 0.0, values=True)
-        tauNbeta = get_tauNbeta(tau1, tauN.shape[1])
-        # Scattering function calculation
-        beta = Beta.from_default(T)
-        scatfunc = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff).full
-        # scatfunc normalization:
-        scatfunc /= kb * T
-        betaScatfunc = scatfunc.columns.values
-        return Xs._calc_alpha0EinClm(xs0K.values, xs0K.index.values,
-                                     EinGrid, alpha, recoil, T,
-                                     scatfunc.values, betaScatfunc,
-                                     DebyeWallerCoeff)
+        if kwargs.get("model") != "fgm":
+            dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, pdos, *args, **kwargs)
+        else:
+            dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
+        alpha = dxs.index.get_level_values("alpha").to_numpy()
+        expansPorcen = (1 - np.exp(-alpha * DebyeWallerCoeff))
+        dxs.index = dxs.index.droplevel("alpha")
+        return dxs.apply(integrate, axis=1).values / expansPorcen
 
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
                       algorithm: str = "sigma1", **kwargs) -> pd.DataFrame:

@@ -274,7 +274,7 @@ class Dxs:
 
     @staticmethod
     def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
-                   compute: bool=False, **kwargs):
+                   **kwargs):
         """
         Get the Dxs function for the 0K cross section
 
@@ -365,7 +365,7 @@ class Dxs:
         dE = scatfunc.columns.values * kb * T
         result = scatfunc.apply(lambda x: x * reshape_differential(xs0K, x.name[0] + dE + x.name[2]), axis=1)
         result.index = result.index.droplevel("recoil")
-        return result.compute() if compute else result
+        return result
 
     @property
     def integral(self) -> float:

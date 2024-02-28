@@ -491,7 +491,7 @@ class Tpdos:
         Name: rho, dtype: float64
         """
         dE_index = pd.Index(self.beta.get_dE(self.T), name="dE")
-        return Epdos(self.data.values.copy(), index=dE_index)
+        return Epdos(self.data.values.copy(), index=dE_index.round(20))
 
 
 class Epdos:
@@ -876,8 +876,14 @@ class Npdos:
         """
         data = pd.DataFrame({key: pdos.dE_grid.data
                              for key, pdos in self.instance.items()})
+        data.columns.name = "T"
+        data.sort_index(axis=0, inplace=True)
+        data.sort_index(axis=1, inplace=True)
         if np.any(data.isna()):
-            data.interpolate(method="linear", axis=0).fillna(0, inplace=True)
+            # Interpolate the data if there are NaN values in the data
+            data.interpolate(method="linear", axis=0, inplace=True)
+            # Fill the limit values with 0
+            data.fillna(0, inplace=True)
         return data
 
     @classmethod
@@ -919,7 +925,7 @@ class Npdos:
         >>> file = "../../../data/pdos/interp.300"
         >>> T = 300
         >>> Npdos.from_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
-                     300
+        T            300
         dE
         0.0000  0.000000
         0.0004  0.041879
@@ -962,16 +968,19 @@ class Npdos:
         Examples
         --------
         Object initialization:
+        >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
         >>> folder = "../../../data/pdos"
-        >>> Npdos.from_directory(folder, usecols=[0, 1], index_col=0).data.iloc[0:5]
-                   300.0
+        >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0).data
+        >>> npdos.iloc[0:5]
+        T         300.0     1000.0
         dE
-        0.0000  0.000000
-        0.0004  0.041879
-        0.0008  0.088790
-        0.0012  0.211161
-        0.0016  0.343320
+        0.0000  0.000000  0.000000
+        0.0004  0.041879  0.055963
+        0.0008  0.088790  0.141224
+        0.0012  0.211161  0.209877
+        0.0012  0.277240  0.278530
+        >>> os.chdir(wd)
         """
         files = os.listdir(pathToDirectory)
         if pathToDirectory[-1] != "/":
@@ -1128,7 +1137,9 @@ class Pdos:
         return self.instance.data.index
 
     def __getattr__(self, name):
-        if hasattr(self.instance, name):
+        if name in ["beta_grid", "dE_grid"]:
+            return Pdos(getattr(self.instance, name))
+        elif hasattr(self.instance, name):
             return getattr(self.instance, name)
         else:
             raise AttributeError(f"'{type(self.instance).__name__}' object has no attribute '{name}'")

@@ -363,6 +363,37 @@ class Alpha:
         """
         return cls(get_gressierRecoil(Ein, T, M) / (kb * T))
 
+    def get_recoil(self, T: float) -> pd.Series:
+        """
+        Get the recoil energy for a given temperature.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        "pd.Series"
+            Recoil energy for a given temperature.
+
+        Example
+        -------
+        >>> T = 800
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 26.98153433356103
+        >>> alpha = Alpha.from_recoil(Ein, T, M)
+        >>> alpha.get_recoil(T).round(6)
+        alpha
+        0.118447    0.008166
+        0.155038    0.010688
+        0.364130    0.025103
+        0.730042    0.050328
+        1.164525    0.080281
+        dtype: float64
+        """
+        return pd.Series(self.data * kb * T, index=self.to_index)
+
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:
         """

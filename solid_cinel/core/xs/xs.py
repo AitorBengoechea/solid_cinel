@@ -193,7 +193,7 @@ class Xs:
         elif not all(isinstance(t, (int, float)) for t in temperatures):
             raise TypeError("All temperatures must be int or float")
         return temperatures
-    def check_algorithm(self, algorithm: str, model: str = None) -> callable:
+    def check_algorithm(self, algorithm: str) -> callable:
         """
         Check the algorithm input
 
@@ -210,10 +210,7 @@ class Xs:
         if algorithm == "sigma1":
             func = self._calc_sigma1Ein
         elif algorithm == "alpha0":
-            if model == "pdos":
-                func = self._calc_alpha0TClm
-            else:
-                func = self._calc_alpha0Sct
+            func = self._calc_alpha0T
         else:
             raise ValueError("Invalid algorithm")
         return func
@@ -397,63 +394,7 @@ class Xs:
         return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
     @staticmethod
-    def _calc_alpha0Sct(T: float, Ein: float, xs0K: pd.Series, M: float,
-                        *args, **kwargs) -> float:
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        incident energy Ein using alpha0 model
-
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        Ein: float
-            The incident energy in eV
-        xs0K: pd.Series
-            The 0K scattering function
-        M: float
-            The mass of the nucleus in amu
-        model : str
-            The model used to calculate the S(alpha, beta) distribution. The available models are:
-                - "fgm": Free Gas Model (default)
-                - "sct": Short Collision Time
-
-        Parameters for sct
-        ------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-
-        Returns
-        -------
-        float
-            The elastic scattering cross section in barns for the given
-            temperature and incident energy.
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        # Generate Broadening test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> M = 238.05077040419212
-        >>> Xs._calc_alpha0Sct(T, Ein, xs0K, M, model="fgm")
-        9.085407458237226
-
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs._calc_alpha0Sct(T, Ein, xs0K, M, pdos, model="sct")
-        9.081349151760891
-        """
-        Eout = default_Eout(Ein)
-        return Dxs.from_recoil(xs0K, Ein, M, T, Eout, *args, **kwargs).integral
-
-    @staticmethod
-    def _calc_alpha0TClm(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
+    def _calc_alpha0T(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
                          *args, **kwargs):
         """
         Calculate the elastic scattering cross section at temperature T and
@@ -492,21 +433,21 @@ class Xs:
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, model="fgm").round(6)
+        >>> Xs._calc_alpha0T(T, EinGrid, xs0K, M, model="fgm").round(6)
         array([  9.085279, 457.021623])
-        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
+        >>> Xs._calc_alpha0T(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
         array([  9.02379 , 449.805325])
-        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
+        >>> Xs._calc_alpha0T(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
         array([  9.084969, 461.718705])
         """
         model = kwargs.get("model", "fgm")
         dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
         dxsIntegral = dxs.apply(integrate, axis=1).values
-        if model == "pdos":
+        if model != "pdos":
+            return dxsIntegral
+        else:
             alpha = Alpha(dxs.index.get_level_values("alpha").to_numpy())
             return dxsIntegral / alpha.get_expansPorcen(args[0], T)
-        else:
-            return dxsIntegral
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
                       algorithm: str = "sigma1", **kwargs) -> np.ndarray:
         """
@@ -548,40 +489,41 @@ class Xs:
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
-        >>> pd.DataFrame(xs._compute(Tnew), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs._compute(Tnew, algorithm="sigma1"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.086237  455.670534
         100  9.086957  664.556512
 
-        # Check the alpha0 algorithm with the fgm model + EinGrid < Recoil
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-
-        # situation (NaN in the results)
         >>> pd.DataFrame(xs._compute(Tnew, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
                  2.00        6.67
-        300  9.085935  457.051619
-        100  9.086803  665.494663
+        300  9.085279  457.021623
+        100  9.085305  665.465406
+
+        >>> pd.DataFrame(xs._compute(Tnew, pdos, algorithm="alpha0", model="sct"), index=Tnew, columns=EinGrid)
+                2.00        6.67
+        300  9.02379  449.805325
+        100  8.62745  606.491313
 
         >>> pd.DataFrame(xs._compute(Tnew, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.084969  461.718705
         100  9.085596  649.526642
         """
-        model = kwargs.get("model", "fgm")
-        func = self.check_algorithm(algorithm, model)
+        func = self.check_algorithm(algorithm)
         args = (self.xs0Kcomplete, self.M) + args
         NTnew = len(Tnew)
-        if model == "pdos":
-            Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
-            if len(Ein.shape) == 1:
-                results = [func(T, Ein, *args, model="pdos") for T in Tnew]
-            else:
-                results = [func(Tnew[i], Ein[i], *args, model="pdos") for i in range(NTnew)]
-        else:
+        if algorithm == "sigma1":
             bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
                     .map(lambda x: func(*x, *args, **kwargs))
             with dask.config.set(num_workers=os.cpu_count()):
                 results = bag.compute()
+        else:
+            Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
+            if len(Ein.shape) == 1:
+                results = [func(T, Ein, *args, **kwargs) for T in Tnew]
+            else:
+                results = [func(Tnew[i], Ein[i], *args, **kwargs) for i in range(NTnew)]
         return np.array(results).reshape(NTnew, -1)
 
     def calc_T(self, T:float, *args, algorithm: str = "sigma1",
@@ -637,22 +579,35 @@ class Xs:
         >>> xs.calc_T(T, algorithm="alpha0", model="fgm").data
         T                  0            100          300
         Ein
-        0.065625      9.411657     9.412449     9.412080
-        6.717251    172.623200   282.663018   324.891765
-        11.367190     9.198383     9.200360     9.200623
-        20.912000  1893.389000  3261.798758  2646.577942
-        35.640580     0.974924     1.041481     1.180870
-        44.877660    14.089820    14.090070    14.092491
-        63.498800     5.773424     5.770789     5.765396
-        66.436310    85.621850    90.540165   114.481715
-        80.731840    39.201520    40.785557    29.838786
-        89.051940     9.208071     9.213726     9.226565
+        0.065625      9.411657     9.411657     9.411657
+        6.717251    172.623200   282.491968   325.018633
+        11.367190     9.198383     9.198445     9.198459
+        20.912000  1893.389000  3261.783019  2646.416609
+        35.640580     0.974924     1.041483     1.180847
+        44.877660    14.089820    14.090097    14.090536
+        63.498800     5.773424     5.770805     5.765055
+        66.436310    85.621850    90.540391   114.812318
+        80.731840    39.201520    40.786065    29.838959
+        89.051940     9.208071     9.213753     9.226470
 
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> xs.calc_T(T, pdos, algorithm="alpha0", model="sct").data
+        T                  0            100          300
+        Ein
+        0.065625      9.411657     9.223204     9.399438
+        6.717251    172.623200   299.146745   324.077689
+        11.367190     9.198383     9.011181     9.140079
+        20.912000  1893.389000  3174.309442  2617.259713
+        35.640580     0.974924     1.055881     1.178177
+        44.877660    14.089820    14.081661    14.068601
+        63.498800     5.773424     5.769416     5.761173
+        66.436310    85.621850    92.373607   117.360900
+        80.731840    39.201520    37.876184    29.529631
+        89.051940     9.208071     9.216752     9.224587
 
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
@@ -778,12 +733,22 @@ class Xs:
         >>> Xs.from_alpha0(T, M, xsSmall, model="fgm", xs0Kcomplete=xs0K).data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.412449    9.412080
-        2.000000     9.085342    9.086803    9.085935
-        4.000000     8.481975    8.484040    8.482812
-        5.000000     7.805580    7.807330    7.805865
-        6.670000  1269.792131  665.494663  457.051619
-        7.000000    19.825115   19.902142   20.048596
+        0.065625     9.411657    9.411657    9.411657
+        2.000000     9.085342    9.085305    9.085279
+        4.000000     8.481975    8.481958    8.481895
+        5.000000     7.805580    7.805221    7.804852
+        6.670000  1269.792131  665.465406  457.021623
+        7.000000    19.825115   19.896286   20.045315
+
+        >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="sct", xs0Kcomplete=xs0K).data
+        T                 0           100         300
+        Ein
+        0.065625     9.411657    9.223204    9.399438
+        2.000000     9.085342    8.627450    9.023790
+        4.000000     8.481975    8.110563    8.419166
+        5.000000     7.805580    7.495224    7.747221
+        6.670000  1269.792131  606.491313  449.805325
+        7.000000    19.825115   19.325343   19.925829
 
         >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="pdos", xs0Kcomplete=xs0K).data
         T                 0           100         300
@@ -934,12 +899,21 @@ class Xs:
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    9.104981  9.094763  9.084445  9.073848  9.063247
-        90     9.105232  9.094997  9.084678  9.074079  9.063461
-        60     9.105792  9.095559  9.085250  9.074668  9.064044
-        30     9.106263  9.096043  9.085744  9.075176  9.064543
+        120    9.103218  9.092984  9.082649  9.072035  9.061417
+        90     9.104080  9.093848  9.083530  9.072931  9.062312
+        60     9.104940  9.094711  9.084406  9.073827  9.063206
+        30     9.105556  9.095340  9.085045  9.074480  9.063851
 
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(pd.Index(theta, name="theta"), axis=0)
+        Eout        1.8       1.9       2.0       2.1       2.2
+        theta
+        180    9.102355  9.092121  9.081758  9.071139  9.060521
+        120    8.425340  8.418329  8.411313  8.404110  8.396966
+        90     8.866466  8.856143  8.845790  8.835213  8.824658
+        60     8.994640  8.984093  8.973497  8.962657  8.951797
+        30     9.035009  9.024508  9.013946  9.003133  8.992270
+
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos").set_axis(pd.Index(theta, name="theta"), axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta

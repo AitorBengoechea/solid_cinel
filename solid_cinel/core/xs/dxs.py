@@ -331,7 +331,7 @@ class Dxs:
         >>> M = 238.05077040419212
         >>> from solid_cinel.core.material.vibration import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm", compute=True).iloc[::, 1000::1000].round(6)
+        >>> Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
         beta             -3.092990  -1.544947   0.003096   1.551139   3.133205
         Ein    alpha
         6.7554 1.096220  31.456366  23.206250  10.603135   2.029509   0.135448
@@ -341,7 +341,7 @@ class Dxs:
         7.3157 1.187667   1.751764   3.566327   2.654568   0.722178   0.067466
         7.4480 1.209259   1.656176   3.307333   2.456027   0.678152   0.065471
 
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct", compute=True).iloc[::, 1000::1000].round(6)
+        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
         beta             -3.092990  -1.544947   0.003096   1.551139   3.133205
         Ein    alpha
         6.7554 1.096220  31.915827  22.819684  10.512509   1.995794   0.137611
@@ -351,7 +351,7 @@ class Dxs:
         7.3157 1.187667   1.768025   3.504498   2.634061   0.709682   0.068173
         7.4480 1.209259   1.669699   3.249574   2.437531   0.666330   0.066082
 
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos", compute=True).iloc[::, 1000::1000].round(6)
+        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
         beta             -3.092990  -1.544947   0.003096   1.551139   3.133205
         Ein    alpha
         6.7554 1.096220  29.717797  22.713501  11.081814   1.986009   0.128192

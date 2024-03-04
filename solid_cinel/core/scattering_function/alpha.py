@@ -6,6 +6,7 @@ Python file for working with alpha function.
 """
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function.beta import Beta
+from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -392,6 +393,53 @@ class Alpha:
         dtype: float64
         """
         return self.data * kb * T
+
+    def get_expansPorcen(self, pdos: Pdos, T: float) -> np.ndarray:
+        """
+        Using phonon expansion method, determine the percentage lost due to
+        zero phonon term
+
+        Parameters
+        ----------
+        pdos: Pdos
+            Pdos object
+        T: float
+            Temperature in Kelvin
+
+        Returns
+        -------
+        np.ndarray
+            Percentage of the Xs calculate using the phono expansion model
+
+        Examples
+        --------
+        >>> T = 800
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 26.98153433356103
+        >>> alpha = Alpha.from_recoil(Ein, T, M)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> pd.Series(alpha.get_expansPorcen(pdos, T), index=Ein).round(6)
+        0.33000    0.999717
+        0.40000    0.999977
+        0.80000    1.000000
+        1.50000    1.000000
+        2.33118    1.000000
+        dtype: float64
+
+        >>> T = 300
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 238.05077040419212
+        >>> alpha = Alpha.from_recoil(Ein, T, M)
+        >>> pd.Series(alpha.get_expansPorcen(pdos, T), index=Ein).round(6)
+        0.33000    0.373661
+        0.40000    0.440282
+        0.80000    0.705637
+        1.50000    0.904395
+        2.33118    0.974849
+        dtype: float64
+        """
+        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+        return 1 - np.exp(- self.data * DebyeWallerCoeff)
 
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:

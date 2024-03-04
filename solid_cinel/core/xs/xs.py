@@ -6,17 +6,12 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.generic import integrate
-from solid_cinel.core.material.vibration.tau import get_tauNbeta
-from solid_cinel.core.scattering_function.sab import Sab
-from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_expansionOrder
-from solid_cinel.core.scattering_function.beta import Beta
-from math import exp
+from solid_cinel.core.scattering_function.alpha import Alpha
 import warnings
 import os
 import dask
@@ -214,7 +209,10 @@ class Xs:
         if algorithm == "sigma1":
             func = self._calc_sigma1Ein
         elif algorithm == "alpha0":
-            func = self._calc_alpha0TClm if model == "pdos" else self._calc_alpha0Ein
+            if model == "pdos":
+                func = self._calc_alpha0TClm
+            else:
+                func = self._calc_alpha0Sct
         else:
             raise ValueError("Invalid algorithm")
         return func
@@ -353,7 +351,7 @@ class Xs:
         return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
     @staticmethod
-    def _calc_alpha0Ein(T: float, Ein: float, xs0K: pd.Series, M: float,
+    def _calc_alpha0Sct(T: float, Ein: float, xs0K: pd.Series, M: float,
                         *args, **kwargs) -> float:
         """
         Calculate the elastic scattering cross section at temperature T and
@@ -398,60 +396,19 @@ class Xs:
         >>> T = 1000
         >>> Ein = 2.0
         >>> M = 238.05077040419212
-        >>> Xs._calc_alpha0Ein(T, Ein, xs0K, M)
+        >>> Xs._calc_alpha0Sct(T, Ein, xs0K, M, model="fgm")
         9.085407458237226
+
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Xs._calc_alpha0Sct(T, Ein, xs0K, M, pdos, model="sct")
+        9.081349151760891
         """
         Eout = default_Eout(Ein)
         return Dxs.from_recoil(xs0K, Ein, M, T, Eout, *args, **kwargs).integral
 
     @staticmethod
-    @nb.jit(nopython=True, nogil=False, parallel=True, cache=True)
-    def _calc_alpha0EinClm(xs0KValue: np.ndarray, xs0KE: np.ndarray,
-                           Ein: np.ndarray, alpha: np.ndarray,
-                           recoil: np.ndarray, T: float, scatfunc: np.ndarray,
-                           beta: np.ndarray, DebyeWallerCoeff : float) -> np.ndarray:
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        incident energy Ein using alpha0 model
-
-        Parameters
-        ----------
-        xs0K : pd.Series
-            The 0K scattering function
-        Ein : float
-            The incident energy in eV
-        alpha : float
-            The alpha parameter
-        recoil : float
-            The recoil energy in eV
-        T : float
-            The temperature in K
-        tauN : np.ndarray
-            The tauN values
-        tauNbeta : np.ndarray
-            The tauNbeta values
-        DebyeWallerCoeff : float
-            The Debye-Waller coefficient
-
-        Returns
-        -------
-        float
-            The elastic scattering cross section in barns for the given
-            temperature and incident energy using alpha0 model
-        """
-        # Eout caluculation + interpolation to avoid numerical fluctuations
-        xsT = np.zeros(len(Ein))
-        for i in prange(len(Ein)):
-            EoutCalc = Ein[i] + beta * kb * T
-            xs0Kinterp = np.interp(EoutCalc + recoil[i], xs0KE, xs0KValue)
-            # Dxs calculation
-            xsT[i] += np.trapz(scatfunc[i] * xs0Kinterp, EoutCalc)
-            xsT[i] /= 1 - exp(-alpha[i] * DebyeWallerCoeff)
-        return xsT
-
-    @staticmethod
     def _calc_alpha0TClm(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
-                         pdos: Pdos, *args, **kwargs):
+                         *args, **kwargs):
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -490,23 +447,21 @@ class Xs:
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="fgm").round(6)
-        array([  9.527749, 457.03583 ])
+        >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, model="fgm").round(6)
+        array([  9.085279, 457.021623])
         >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
-        array([  9.463265, 449.819307])
+        array([  9.02379 , 449.805325])
         >>> Xs._calc_alpha0TClm(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
         array([  9.084969, 461.718705])
         """
-        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
-        if kwargs.get("model") != "fgm":
-            dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, pdos, *args, **kwargs)
+        model = kwargs.get("model", "fgm")
+        dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
+        dxsIntegral = dxs.apply(integrate, axis=1).values
+        if model == "pdos":
+            alpha = Alpha(dxs.index.get_level_values("alpha").to_numpy())
+            return dxsIntegral / alpha.get_expansPorcen(args[0], T)
         else:
-            dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
-        alpha = dxs.index.get_level_values("alpha").to_numpy()
-        expansPorcen = (1 - np.exp(-alpha * DebyeWallerCoeff))
-        dxs.index = dxs.index.droplevel("alpha")
-        return dxs.apply(integrate, axis=1).values / expansPorcen
-
+            return dxsIntegral
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
                       algorithm: str = "sigma1", **kwargs) -> pd.DataFrame:
         """
@@ -544,49 +499,46 @@ class Xs:
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
-        >>> T = 300
-        >>> xsSmall = xs0K.iloc[90:1000:500]
-        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
-        >>> Ein = xsSmall.index
-        >>> Tnew = [300, 100]
-        >>> xs._compute(Tnew).set_axis(Ein, axis=1)
-             0.026844    6.707699
-        300  9.436372  377.019146
-        100  9.423739  392.586104
-
-        # Check the alpha0 algorithm with the fgm model + EinGrid < Recoil
-        # situation (NaN in the results)
-        >>> xs._compute(Tnew, algorithm="alpha0", model="fgm").set_axis(Ein, axis=1)
-             0.026844    6.707699
-        300       NaN  379.097297
-        100  9.417727  393.866544
-
         >>> from solid_cinel.core.generic import interpolation
         >>> EinGrid = np.array([2.0, 6.67])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
+        >>> pd.DataFrame(xs._compute(Tnew), index=Tnew, columns=EinGrid)
+                 2.00        6.67
+        300  9.086237  455.670534
+        100  9.086957  664.556512
+
+        # Check the alpha0 algorithm with the fgm model + EinGrid < Recoil
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> xs._compute(Tnew, pdos, algorithm="alpha0", model="pdos")
-                    0           1
+
+        # situation (NaN in the results)
+        >>> pd.DataFrame(xs._compute(Tnew, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
+                 2.00        6.67
+        300  9.085935  457.051619
+        100  9.086803  665.494663
+
+        >>> pd.DataFrame(xs._compute(Tnew, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
+                 2.00        6.67
         300  9.084969  461.718705
         100  9.085596  649.526642
         """
-        func = self.check_algorithm(algorithm, kwargs.get("model"))
+        model = kwargs.get("model", "fgm")
+        func = self.check_algorithm(algorithm, model)
         args = (self.xs0Kcomplete, self.M) + args
         NTnew = len(Tnew)
-        if kwargs.get("model") == "pdos":
+        if model == "pdos":
             Ein = EinGrid if EinGrid else self.data.index.values
             if len(Ein.shape) == 1:
-                results = [func(T, Ein, *args) for T in Tnew]
+                results = [func(T, Ein, *args, model="pdos") for T in Tnew]
             else:
-                results = [func(Tnew[i], Ein[i], *args) for i in range(NTnew)]
+                results = [func(Tnew[i], Ein[i], *args, model="pdos") for i in range(NTnew)]
         else:
             bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
                     .map(lambda x: func(*x, *args, **kwargs))
             with dask.config.set(num_workers=os.cpu_count()):
                 results = bag.compute()
-        return pd.DataFrame(np.array(results).reshape(NTnew, -1), index=Tnew)
+        return np.array(results).reshape(NTnew, -1)
 
     def calc_T(self, T:float, *args, algorithm: str = "sigma1",
                inplace: bool = False, **kwargs):
@@ -623,7 +575,6 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> T = [300, 100]
-        >>>
         >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K)
         >>> xs.calc_T(T).data
         T                  0            100          300
@@ -661,7 +612,7 @@ class Xs:
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.412832    9.411996
+        0.065625     9.411657    9.403287    9.408170
         2.000000     9.085342    9.085596    9.084969
         4.000000     8.481975    8.482253    8.481713
         5.000000     7.805580    7.805930    7.804704
@@ -674,7 +625,8 @@ class Xs:
             warnings.warn("All the temperatures are already calculated")
             return self
         kwargs["algorithm"] = algorithm
-        xsT = self._compute(Tnew, *args, **kwargs).T.set_index(self.data.index)
+        xsT = pd.DataFrame(self._compute(Tnew, *args, **kwargs).T,
+                           index=self.data.index, columns=Tnew)
         return self.update_data(xsT, inplace)
 
     @classmethod
@@ -764,11 +716,46 @@ class Xs:
         -------
         Xs
             The elastic scattering cross section in barns
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = [300, 100]
+        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> from solid_cinel.core.generic import interpolation
+        >>> xsSmall = interpolation(xs0K, EinGrid)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> Xs.from_alpha0(T, M, xsSmall, model="fgm", xs0Kcomplete=xs0K).data
+        T                 0           100         300
+        Ein
+        0.065625     9.411657    9.412449    9.412080
+        2.000000     9.085342    9.086803    9.085935
+        4.000000     8.481975    8.484040    8.482812
+        5.000000     7.805580    7.807330    7.805865
+        6.670000  1269.792131  665.494663  457.051619
+        7.000000    19.825115   19.902142   20.048596
+
+        >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="pdos", xs0Kcomplete=xs0K).data
+        T                 0           100         300
+        Ein
+        0.065625     9.411657    9.403287    9.408170
+        2.000000     9.085342    9.085596    9.084969
+        4.000000     8.481975    8.482253    8.481713
+        5.000000     7.805580    7.805930    7.804704
+        6.670000  1269.792131  649.526642  461.718705
+        7.000000    19.825115   19.941105   20.060625
         """
         # Initialize the class
         xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
         # Get cls attributes using the available information
-        return xs.calc_T(T, algorithm="alpha0", inplace=inplace, *args, **kwargs)
+        return xs.calc_T(T, *args, algorithm="alpha0", inplace=inplace, **kwargs)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)

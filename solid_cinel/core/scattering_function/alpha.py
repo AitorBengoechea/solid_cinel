@@ -587,8 +587,33 @@ class Alpha:
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
+def get_alphaRecoil(Eout: np.ndarray, Ein: float, M: float, mu: float):
+    """
+    Get the alpha recoil value from the parameters of the function:
+    .. math::
+        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{A}
+    Parameters
+    ----------
+    Eout: 'np.ndarray', (N,)
+        Output energy of the neutron in eV.
+    Ein: 'float'
+        Incidente energy of the neutron in eV.
+    M: "float"
+        Mass in amu of the scatterer.
+    mu: 'float'
+        Cosine of the scattering angle.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Array containing all posible alpha values for the input parameters.
+    """
+    return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M / m)
+
+
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
-                        mu: float) -> np.ndarray:
+                      mu: float) -> np.ndarray:
     """
     Get the alpha value from the parameters of the function:
     .. math::
@@ -611,7 +636,7 @@ def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
     'np.ndarray', (N,)
         Array containing all posible alpha values for the input parameters.
     """
-    return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M * kb * T / m)
+    return get_alphaRecoil(Eout, Ein, M, mu) / (kb * T)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)

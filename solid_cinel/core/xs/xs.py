@@ -6,12 +6,13 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
+from numba import prange
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.generic import integrate, interpolation, reshape_differential
-from solid_cinel.core.scattering_function.alpha import Alpha
+from solid_cinel.core.generic import integrate, interpolation
+from solid_cinel.core.scattering_function.alpha import Alpha, get_alphaRecoil
 import warnings
 import os
 import dask
@@ -217,7 +218,7 @@ class Xs:
             raise ValueError("Invalid algorithm")
         return func
 
-    def get_Tnew(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
+    def get_Tcalc(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
         """
         Get the new temperatures to calculate.
 
@@ -242,11 +243,47 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> xs = Xs(M, 0, xs0K)
-        >>> assert (xs.get_Tnew(T).values == T).all()
+        >>> Xs(M, 0, xs0K).get_Tcalc(T)
+        Index([300], dtype='int64')
         """
         Tnew = pd.Index(self.check_T(temperatures))
         return Tnew.difference(self.data.columns)
+
+    def get_Tinterp(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
+        """
+        Get from the new temperatures, the temperatures already in the object
+
+        Parameters
+        ----------
+        T: Union[float, Iterable[float]]
+            The temperature in K
+
+        Returns
+        -------
+        pd.Index
+            The new temperatures to calculate
+
+        Returns
+        -------
+        pd.Index
+            The temperatures in the object
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = [0, 300]
+        >>> Xs(M, 0, xs0K).get_Tinterp(T)
+        Index([0], dtype='int64')
+        """
+        Tnew = pd.Index(self.check_T(temperatures))
+        return self.data.columns.intersection(Tnew)
 
 
     def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]) -> pd.Series:
@@ -302,12 +339,21 @@ class Xs:
         >>> Tnew = [300, 100]
         >>> xs.get_EinTcomb(Tnew)
         [(300, 1e-05), (300, 97.56808), (100, 1e-05), (100, 97.56808)]
+
+        >>> xs.get_EinTcomb(Tnew, np.array([1, 2, 3]))
+        [(300, 1), (300, 2), (300, 3), (100, 1), (100, 2), (100, 3)]
+
+        >>> xs.get_EinTcomb(Tnew, np.array([[1, 2], [3, 4]]))
+        [(300, 1), (300, 2), (100, 3), (100, 4)]
         """
-        if EinGrid:
-            EinTcomb = [(T, Ein) for T in Tnew for Ein in EinGrid]
+        if hasattr(EinGrid, "__len__"):
+            if len(EinGrid.shape) == 2:
+                N, M = EinGrid.shape[0], EinGrid.shape[1]
+                return [(Tnew[i], EinGrid[i, j]) for i in range(N) for j in range(M)]
+            else:
+                return [(T, Ein) for T in Tnew for Ein in EinGrid]
         else:
-            EinTcomb = [(T, Ein) for T in Tnew for Ein in self.data.index]
-        return EinTcomb
+            return [(T, Ein) for T in Tnew for Ein in self.data.index]
 
     @staticmethod
     def _calc_sigma1Ein(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
@@ -462,7 +508,7 @@ class Xs:
         else:
             return dxsIntegral
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
-                      algorithm: str = "sigma1", **kwargs) -> pd.DataFrame:
+                      algorithm: str = "sigma1", **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at new temperatures using
         dask and the selected algorithm.
@@ -526,7 +572,7 @@ class Xs:
         args = (self.xs0Kcomplete, self.M) + args
         NTnew = len(Tnew)
         if model == "pdos":
-            Ein = EinGrid if EinGrid else self.data.index.values
+            Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
             if len(Ein.shape) == 1:
                 results = [func(T, Ein, *args, model="pdos") for T in Tnew]
             else:
@@ -618,7 +664,7 @@ class Xs:
         7.000000    19.825115   19.941105   20.060625
 
         """
-        Tnew = self.get_Tnew(T)
+        Tnew = self.get_Tcalc(T)
         if Tnew.empty:
             warnings.warn("All the temperatures are already calculated")
             return self
@@ -792,6 +838,146 @@ class Xs:
         """
         return self.data.apply(lambda x: interpolation(x, Ein))
 
+    @staticmethod
+    def get_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                    M: float) -> np.ndarray:
+        """
+        Get the incident energy matrix for the arno model.
+
+        Parameters
+        ----------
+        Ein: float
+            The incident energy of the neutron in eV
+        Eout: np.ndarray, (Z,)
+            The neutron outgoing energy grid in eV
+        mu: np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+        M: float
+            Mass of the material in amu
+
+        Returns
+        -------
+        EinArno: np.ndarray, (M, Z)
+            Incident energy matrix for the arno model
+
+        Examples
+        --------
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
+        >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.9])
+        >>> M = 238.05077040419212
+        >>> Xs.get_4PCFEin(Ein, Eout, mu, M)
+        Eout       1.8       1.9       2.0       2.1       2.2
+        mu
+        -1.0  1.916519  1.966736  2.016949  2.067159  2.117367
+        -0.5  1.912284  1.962499  2.012712  2.062923  2.113132
+         0.0  1.908051  1.958263  2.008474  2.058686  2.108898
+         0.5  1.903825  1.954028  2.004237  2.054452  2.104671
+         0.9  1.900524  1.950660  2.000847  2.051083  2.101362
+        """
+        @nb.jit(nopython=True, nogil=False, cache=True)
+        def calc_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                         M: float) -> np.ndarray:
+            EinArno = np.empty((len(mu), len(Eout)))
+            for i in prange(len(mu)):
+                EinArno[i, :] = EinArnoRow(Ein, Eout, mu[i], M)
+            return EinArno
+        return pd.DataFrame(calc_4PCFEin(Ein, Eout, mu, M),
+                            index=pd.Index(mu, name="mu"),
+                            columns=pd.Index(Eout, name="Eout"))
+
+    def get_4PCFxs(self, Ein, T, Eout, theta, *args, **kwargs) -> pd.DataFrame:
+        """
+        Get the angle-integrated xs matrix for 4PCF model
+
+        Parameters
+        ----------
+        Ein: float
+            The incident energy of the neutron in eV
+        T: float
+            Temperature of the material in K
+        Eout: np.array, (N,)
+            The neutron outgoing energy grid in eV
+        theta: np.array, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+
+        Returns
+        -------
+        pd.DataFrame
+            Angle-integrated xs matrix for 4PCF model
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K)
+        >>> T = 300
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
+        >>> theta = np.array([180, 120, 90, 60, 30])
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="sigma1")
+        Eout                1.8       1.9       2.0       2.1       2.2
+        mu
+        -1.000000e+00  9.102355  9.092121  9.081758  9.071139  9.060521
+        -5.000000e-01  9.104914  9.094623  9.084231  9.073561  9.062890
+         6.123234e-17  9.105581  9.095328  9.084990  9.074371  9.063732
+         5.000000e-01  9.106114  9.095876  9.085560  9.074971  9.064341
+         8.660254e-01  9.106574  9.096350  9.086046  9.075473  9.064836
+
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="alpha0", model="fgm")
+        Eout                1.8       1.9       2.0       2.1       2.2
+        mu
+        -1.000000e+00  9.102355  9.092121  9.081758  9.071139  9.060521
+        -5.000000e-01  9.104981  9.094763  9.084445  9.073848  9.063247
+         6.123234e-17  9.105232  9.094997  9.084678  9.074079  9.063461
+         5.000000e-01  9.105792  9.095559  9.085250  9.074668  9.064044
+         8.660254e-01  9.106263  9.096043  9.085744  9.075176  9.064543
+
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos")
+        Eout                1.8       1.9       2.0       2.1       2.2
+        mu
+        -1.000000e+00  9.102355  9.092121  9.081758  9.071139  9.060521
+        -5.000000e-01  9.104000  9.093744  9.083411  9.072788  9.062147
+         6.123234e-17  9.103939  9.093695  9.083370  9.072767  9.062137
+         5.000000e-01  9.104621  9.094390  9.084082  9.073504  9.062880
+         8.660254e-01  9.105234  9.095019  9.084725  9.074162  9.063533
+        """
+        mu = np.sort(np.cos(np.deg2rad(theta)))
+        # Get the incident energy grid:
+        Ein_4PCF = self.get_4PCFEin(Ein, Eout, mu, self.M)
+        Eout_ = pd.Index(Eout, name="Eout")
+
+        # Get the temperatures:
+        Tarno = T * (1 + mu) / 2
+        Ein_4PCF = Ein_4PCF.set_axis(Tarno, axis=0)
+        Tcalc, Tinterp = self.get_Tcalc(Tarno), self.get_Tinterp(Tarno)
+
+        # Interpolation:
+        if Tinterp.empty:
+            xsInterp = None
+        else:
+            xsInterpComplete = self.interp_Ein(np.unique(Ein_4PCF.loc[Tinterp]))
+            xsInterpValues = {T: xsInterpComplete.loc[Ein_4PCF.loc[T], T]
+                              for T in Tinterp}
+            xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout_, axis=1)
+        # Calculation
+        if Tcalc.empty:
+            xsCalc = None
+        else:
+            xsCalcValues = self._compute(Tcalc, *args,
+                                         EinGrid=Ein_4PCF.loc[Tcalc].values,
+                                         **kwargs)
+            xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout_)
+        return pd.concat([xsInterp, xsCalc]).set_axis(pd.Index(mu, name="mu"),
+                                                      axis=0)
+
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_Eout(Ein: float) -> np.ndarray:
@@ -842,3 +1028,30 @@ def default_Eout(Ein: float) -> np.ndarray:
                                  np.log10(2 * Ein),
                                  2000)
     return np.sort(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
+
+
+@nb.jit(nopython=True, nogil=False, cache=True)
+def EinArnoRow(Ein: float, Eout: np.ndarray, mu: float,
+               M: float) -> np.ndarray:
+    """
+    Get the incident energy row for the arno model.
+
+    Parameters
+    ----------
+    Ein: float
+        The incident energy of the neutron in eV
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    mu: float
+        The cosine of the neutron outgoing angle in degrees radians (0, 180]
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    EinArnoRow: np.ndarray, (Z,)
+        Incident energy row for the arno model
+    """
+    muEinArno = (Eout + Ein) / 2 - Ein * mu * m / M
+    muEinArno += 0.5 * get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)
+    return muEinArno

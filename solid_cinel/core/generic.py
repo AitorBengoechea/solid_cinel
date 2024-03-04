@@ -98,10 +98,18 @@ def reshape_differential(data: pd.Series, xnew: Iterable,
 
     Matrix interpolation:
     >>> xnew = np.array([[1.5, 2.5, 3.5, 4.5], [1.75, 2.75, 3.75, 4.75]])
-    >>> reshape_differential(data, xnew)[0]
-    array([1.5, 2.5, 3.5, 4.5])
-    >>> reshape_differential(data, xnew)[1]
-    array([1.75, 2.75, 3.75, 4.75])
+    >>> pd.Series(reshape_differential(data, xnew)[0], index=xnew[0])
+    1.5    1.5
+    2.5    2.5
+    3.5    3.5
+    4.5    4.5
+    dtype: float64
+    >>> pd.Series(reshape_differential(data, xnew)[1], index=xnew[1])
+    1.75    1.75
+    2.75    2.75
+    3.75    3.75
+    4.75    4.75
+    dtype: float64
     """
     foo = sp.interpolate.interp1d(
                                   data.index.values,

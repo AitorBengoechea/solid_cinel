@@ -10,7 +10,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.generic import integrate
+from solid_cinel.core.generic import integrate, interpolation, reshape_differential
 from solid_cinel.core.scattering_function.alpha import Alpha
 import warnings
 import os
@@ -441,7 +441,6 @@ class Xs:
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
-        >>> from solid_cinel.core.generic import interpolation
         >>> EinGrid = np.array([2.0, 6.67])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
@@ -499,7 +498,6 @@ class Xs:
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
-        >>> from solid_cinel.core.generic import interpolation
         >>> EinGrid = np.array([2.0, 6.67])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
@@ -604,7 +602,7 @@ class Xs:
         80.731840    39.201520    40.785557    29.838786
         89.051940     9.208071     9.213726     9.226565
 
-        >>> from solid_cinel.core.generic import interpolation
+
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
@@ -729,7 +727,6 @@ class Xs:
         >>> M = 238.05077040419212
         >>> T = [300, 100]
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
-        >>> from solid_cinel.core.generic import interpolation
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Xs.from_alpha0(T, M, xsSmall, model="fgm", xs0Kcomplete=xs0K).data
@@ -756,6 +753,44 @@ class Xs:
         xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
         # Get cls attributes using the available information
         return xs.calc_T(T, *args, algorithm="alpha0", inplace=inplace, **kwargs)
+
+    def interp_Ein(self, Ein: [float, np.ndarray]) -> pd.DataFrame:
+        """
+        Interpolate Xs objet to a new Ein
+
+        Parameters
+        ----------
+        Ein: float, np.ndarray
+            New Ein grid
+
+        Returns
+        -------
+        pd.DataFrame
+            New Ein grid for all the temperatures in the object
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = [300, 100]
+        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> xsSmall = interpolation(xs0K, EinGrid)
+        >>> xs = Xs.from_sigma1(T, M, xsSmall, xs0Kcomplete=xs0K)
+        >>> xs.interp_Ein([3.0])
+        T         0         100       300
+        3.0  8.783659  8.784881  8.784565
+        >>> xs.interp_Ein([3.0, 4.5])
+        T         0         100       300
+        3.0  8.783659  8.784881  8.784565
+        4.5  8.143778  8.144254  8.144288
+        """
+        return self.data.apply(lambda x: interpolation(x, Ein))
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)

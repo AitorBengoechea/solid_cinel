@@ -193,27 +193,6 @@ class Xs:
         elif not all(isinstance(t, (int, float)) for t in temperatures):
             raise TypeError("All temperatures must be int or float")
         return temperatures
-    def check_algorithm(self, algorithm: str) -> callable:
-        """
-        Check the algorithm input
-
-        Parameters
-        ----------
-        algorithm: str
-            The algorithm to use
-
-        Returns
-        -------
-        callable
-            The algorithm to use for the calculation
-        """
-        if algorithm == "sigma1":
-            func = self._calc_sigma1Ein
-        elif algorithm == "alpha0":
-            func = self._calc_alpha0T
-        else:
-            raise ValueError("Invalid algorithm")
-        return func
 
     def get_Tcalc(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
         """
@@ -510,20 +489,21 @@ class Xs:
         300  9.084969  461.718705
         100  9.085596  649.526642
         """
-        func = self.check_algorithm(algorithm)
         args = (self.xs0Kcomplete, self.M) + args
         NTnew = len(Tnew)
         if algorithm == "sigma1":
             bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
-                    .map(lambda x: func(*x, *args, **kwargs))
+                    .map(lambda x: Xs._calc_sigma1Ein(*x, *args, **kwargs))
             with dask.config.set(num_workers=os.cpu_count()):
                 results = bag.compute()
-        else:
+        elif algorithm == "alpha0":
             Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
             if len(Ein.shape) == 1:
-                results = [func(T, Ein, *args, **kwargs) for T in Tnew]
+                results = [Xs._calc_alpha0T(T, Ein, *args, **kwargs) for T in Tnew]
             else:
-                results = [func(Tnew[i], Ein[i], *args, **kwargs) for i in range(NTnew)]
+                results = [Xs._calc_alpha0T(Tnew[i], Ein[i], *args, **kwargs) for i in range(NTnew)]
+        else:
+            raise ValueError("invalid algorithm")
         return np.array(results).reshape(NTnew, -1)
 
     def calc_T(self, T:float, *args, algorithm: str = "sigma1",

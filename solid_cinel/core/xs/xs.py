@@ -374,7 +374,7 @@ class Xs:
 
     @staticmethod
     def _calc_alpha0T(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
-                         *args, **kwargs):
+                      *args, **kwargs):
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -419,14 +419,16 @@ class Xs:
         >>> Xs._calc_alpha0T(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
         array([  9.084969, 461.718705])
         """
-        model = kwargs.get("model", "fgm")
         dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
-        dxsIntegral = dxs.apply(integrate, axis=1).values
-        if model != "pdos":
+        beta = dxs.columns.values
+        dxsIntegral = dxs.apply(lambda x: np.trapz(x, x=beta),
+                                raw=True, axis=1).values
+        if kwargs.get("model", "fgm") != "pdos":
             return dxsIntegral
         else:
-            alpha = Alpha(dxs.index.get_level_values("alpha").to_numpy())
+            alpha = Alpha.from_recoil(EinGrid, T, M)
             return dxsIntegral / alpha.get_expansPorcen(args[0], T)
+
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
                       algorithm: str = "sigma1", **kwargs) -> np.ndarray:
         """
@@ -506,7 +508,7 @@ class Xs:
             raise ValueError("invalid algorithm")
         return np.array(results).reshape(NTnew, -1)
 
-    def calc_T(self, T:float, *args, algorithm: str = "sigma1",
+    def calc_T(self, T: float, *args, algorithm: str = "sigma1",
                inplace: bool = False, **kwargs):
         """
         Calculate the elastic scattering cross section at temperature T using
@@ -921,11 +923,9 @@ class Xs:
         if Tinterp.empty:
             xsInterp = None
         else:
-            kind = kwargs.pop("kind", "slinear")
-            bounds_error = kwargs.pop("bounds_error", True)
             xsInterpComplete = self.interp_Ein(np.unique(Ein_4PCF.loc[Tinterp]),
-                                               kind=kind,
-                                               bounds_error=bounds_error)
+                                               kind=kwargs.pop("kind", "slinear"),
+                                               bounds_error=kwargs.pop("bounds_error", True))
             xsInterpValues = {T: xsInterpComplete.loc[Ein_4PCF.loc[T], T]
                               for T in Tinterp}
             xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout_, axis=1)

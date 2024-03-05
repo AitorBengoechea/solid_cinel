@@ -833,7 +833,8 @@ class Xs:
                             index=pd.Index(mu, name="mu"),
                             columns=pd.Index(Eout, name="Eout"))
 
-    def get_4PCFxs(self, Ein, T, Eout, theta, *args, **kwargs) -> pd.DataFrame:
+    def get_4PCFxs(self, Ein: float, T: float, Eout: np.ndarray,
+                   theta: np.ndarray, *args, **kwargs) -> pd.DataFrame:
         """
         Get the angle-integrated xs matrix for 4PCF model
 

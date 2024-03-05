@@ -745,7 +745,8 @@ class Xs:
         # Get cls attributes using the available information
         return xs.calc_T(T, *args, algorithm="alpha0", inplace=inplace, **kwargs)
 
-    def interp_Ein(self, Ein: [float, np.ndarray]) -> pd.DataFrame:
+    def interp_Ein(self, Ein: [float, np.ndarray], kind: str = "slinear",
+                         bounds_error: bool = True) -> pd.DataFrame:
         """
         Interpolate Xs objet to a new Ein
 
@@ -781,7 +782,8 @@ class Xs:
         3.0  8.783659  8.784881  8.784565
         4.5  8.143778  8.144254  8.144288
         """
-        return self.data.apply(lambda x: interpolation(x, Ein))
+        return self.data.apply(lambda x: interpolation(x, Ein, kind=kind,
+                                                       bounds_error=bounds_error))
 
     @staticmethod
     def get_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
@@ -866,7 +868,8 @@ class Xs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
         >>> theta = np.array([180, 120, 90, 60, 30])
-        >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="sigma1").set_axis(pd.Index(theta, name="theta"), axis=0)
+        >>> index = pd.Index(theta, name="theta")
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="sigma1").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
@@ -875,7 +878,7 @@ class Xs:
         60     9.106114  9.095876  9.085560  9.074971  9.064341
         30     9.106574  9.096350  9.086046  9.075473  9.064836
 
-        >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="alpha0", model="fgm").set_axis(pd.Index(theta, name="theta"), axis=0)
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="alpha0", model="fgm").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
@@ -885,7 +888,7 @@ class Xs:
         30     9.105556  9.095340  9.085045  9.074480  9.063851
 
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(pd.Index(theta, name="theta"), axis=0)
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
@@ -894,7 +897,7 @@ class Xs:
         60     8.994640  8.984093  8.973497  8.962657  8.951797
         30     9.035009  9.024508  9.013946  9.003133  8.992270
 
-        >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos").set_axis(pd.Index(theta, name="theta"), axis=0)
+        >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
@@ -917,7 +920,11 @@ class Xs:
         if Tinterp.empty:
             xsInterp = None
         else:
-            xsInterpComplete = self.interp_Ein(np.unique(Ein_4PCF.loc[Tinterp]))
+            kind = kwargs.pop("kind", "slinear")
+            bounds_error = kwargs.pop("bounds_error", True)
+            xsInterpComplete = self.interp_Ein(np.unique(Ein_4PCF.loc[Tinterp]),
+                                               kind=kind,
+                                               bounds_error=bounds_error)
             xsInterpValues = {T: xsInterpComplete.loc[Ein_4PCF.loc[T], T]
                               for T in Tinterp}
             xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout_, axis=1)

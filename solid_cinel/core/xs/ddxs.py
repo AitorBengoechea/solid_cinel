@@ -6,15 +6,14 @@ Python for working with Double Diferential XS.
 import numpy as np
 import pandas as pd
 import numba as nb
-from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import ScatFunc
-from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.generic import integrate, reshift
-from solid_cinel.core.xs.dxs import Dxs, check_dx
-from solid_cinel.core.xs.xs_mat import XsMat
 import os
-
+from scipy.constants import physical_constants as const
 from typing import Iterable
+from solid_cinel.core.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.xs import Xs, Dxs
+from solid_cinel.core.generic import integrate, reshift
+from solid_cinel.core.xs.dxs import check_dx
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -177,7 +176,6 @@ class DDxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> from solid_cinel.core.material.vibration.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # S(alpha, -beta) algorithm for FGM:
@@ -225,7 +223,8 @@ class DDxs:
 
     @classmethod
     def from_4PCF(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
-                  Eout: np.ndarray, theta: np.ndarray, *args, **kwargs):
+                  Eout: np.ndarray, theta: np.ndarray, *args,
+                  algorithm: str = "sigma1", **kwargs):
         """
         Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
         correlation function modified
@@ -243,7 +242,7 @@ class DDxs:
         xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
-        The incident energy of the neutron in eV
+            The incident energy of the neutron in eV
         M : float
             Mass of the material in amu
         T : float
@@ -252,6 +251,11 @@ class DDxs:
             The neutron outgoing energy grid in eV
         theta : np.ndarray, (M,)
             The neutron outgoing angle grid in degrees (0, 180]
+        algorithm: str, optional
+            The algorithm use for getting the angle-integrated xs. The options
+            are:
+                - "sigma1" (default)
+                - "alpha0"
 
         Parameters for sct
         ------------------
@@ -285,135 +289,183 @@ class DDxs:
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> theta = np.arange(0, 180, 10)[1::]
-        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> index = pd.Index(theta[::-1], name="theta")
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # Coercelle with sigma1 algorithm:
-        >>> DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta).data.iloc[::, ::200].round(6)
-        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -9.848078e-01  1.799454  12.011826  23.795201  15.058832  3.254168
-        -9.396926e-01  1.676368  11.820165  24.045974  15.218228  3.207630
-        -8.660254e-01  1.481046  11.484979  24.467361  15.486062  3.125737
-        -7.660444e-01  1.229144  10.983197  25.064005  15.865282  3.002054
-        -6.427876e-01  0.943760  10.284397  25.841170  16.359232  2.827887
-        -5.000000e-01  0.654925   9.354774  26.802832  16.970446  2.593109
-        -3.420201e-01  0.396320   8.165850  27.947664  17.698083  2.288171
-        -1.736482e-01  0.197800   6.711538  29.260922  18.532824  1.908309
-         6.123234e-17  0.074460   5.037219  30.697832  19.446272  1.461210
-         1.736482e-01  0.018204   3.278979  32.148848  20.368969  0.978386
-         3.420201e-01  0.002218   1.689219  33.366368  21.143932  0.525271
-         5.000000e-01  0.000081   0.578041  33.810815  21.428972  0.191553
-         6.427876e-01  0.000000   0.090864  32.347398  20.504444  0.033458
-         7.660444e-01  0.000000   0.002704  26.829842  17.009134  0.001208
-         8.660254e-01  0.000000   0.000001  14.852992   9.417271  0.000001
-         9.396926e-01  0.000000   0.000000   1.824940   1.157149  0.000000
-         9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
+        >>> ddxs_test = DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200]
+        >>> ddxs_test.set_axis(index).round(6)
+        Eout   1.80000    1.88008    1.96016    2.04024   2.12032
+        theta
+        170   1.799455  12.011833  23.795214  15.058840  3.254169
+        160   1.676460  11.820765  24.047103  15.218889  3.207758
+        150   1.481311  11.486974  24.471480  15.488588  3.126231
+        140   1.229370  10.985188  25.068483  15.868074  3.002575
+        130   0.943903  10.285942  25.845029  16.361656  2.828302
+        120   0.655005   9.355920  26.806106  16.972506  2.593422
+        110   0.396361   8.166704  27.950568  17.699917  2.288406
+        100   0.197819   6.712172  29.263668  18.534550  1.908486
+        90    0.074467   5.037671  30.700572  19.447990  1.461338
+        80    0.018206   3.279271  32.151673  20.370743  0.978470
+        70    0.002219   1.689372  33.369338  21.145787  0.525316
+        60    0.000081   0.578095  33.813903  21.430898  0.191570
+        50    0.000000   0.090873  32.350444  20.506342  0.033461
+        40    0.000000   0.002704  26.832445  17.010759  0.001208
+        30    0.000000   0.000001  14.854473   9.418193  0.000001
+        20    0.000000   0.000000   1.825126   1.157265  0.000000
+        10    0.000000   0.000000   0.000005   0.000003  0.000000
 
-        # Coercelle with fgm model:
-        >>> DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
-        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -9.848078e-01  1.799454  12.011827  23.795202  15.058833  3.254168
-        -9.396926e-01  1.676368  11.820167  24.045979  15.218231  3.207630
-        -8.660254e-01  1.481046  11.484979  24.467361  15.486062  3.125737
-        -7.660444e-01  1.229143  10.983196  25.064002  15.865280  3.002054
-        -6.427876e-01  0.943760  10.284396  25.841173  16.359234  2.827887
-        -5.000000e-01  0.654925   9.354772  26.802836  16.970448  2.593109
-        -3.420201e-01  0.396320   8.165849  27.947661  17.698086  2.288171
-        -1.736482e-01  0.197800   6.711537  29.260920  18.532823  1.908310
-         6.123234e-17  0.074460   5.037219  30.697833  19.446271  1.461210
-         1.736482e-01  0.018204   3.278979  32.148851  20.368970  0.978386
-         3.420201e-01  0.002218   1.689220  33.366374  21.143934  0.525271
-         5.000000e-01  0.000081   0.578041  33.810822  21.428975  0.191553
-         6.427876e-01  0.000000   0.090864  32.347404  20.504447  0.033458
-         7.660444e-01  0.000000   0.002704  26.829847  17.009136  0.001208
-         8.660254e-01  0.000000   0.000001  14.852993   9.417271  0.000001
-         9.396926e-01  0.000000   0.000000   1.824941   1.157150  0.000000
-         9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
-
-        # Coercelle with sct model:
-        >>> DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
-        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -9.848078e-01  1.812376  12.019176  23.754160  15.057222  3.271238
-        -9.396926e-01  1.688887  11.828533  24.004617  15.216660  3.224747
-        -8.660254e-01  1.492848  11.495030  24.425472  15.484572  3.142910
-        -7.660444e-01  1.239858  10.995558  25.021399  15.863937  3.019258
-        -6.427876e-01  0.952978  10.299610  25.797763  16.358166  2.845039
-        -5.000000e-01  0.662263   9.373166  26.758645  16.969858  2.610032
-        -3.420201e-01  0.401536   8.187339  27.902924  17.698312  2.304547
-        -1.736482e-01  0.200934   6.735340  29.216223  18.534407  1.923624
-         6.123234e-17  0.075917   5.061517  30.654357  19.450089  1.474709
-         1.736482e-01  0.018657   3.300792  32.108796  20.376432  0.989124
-         3.420201e-01  0.002291   1.705042  33.333670  21.157296  0.532392
-         5.000000e-01  0.000085   0.585907  33.792208  21.451727  0.194923
-         6.427876e-01  0.000000   0.092747  32.353400  20.541320  0.034272
-         7.660444e-01  0.000000   0.002796  26.871913  17.063274  0.001253
-         8.660254e-01  0.000000   0.000001  14.921198   9.475763  0.000001
-         9.396926e-01  0.000000   0.000000   1.849244   1.174449  0.000000
-         9.848078e-01  0.000000   0.000000   0.000006   0.000004  0.000000
+        >>> ddxs_test = DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200]
+        >>> ddxs_test.set_axis(index).round(6)
+        Eout    1.80000    1.88008    1.96016    2.04024   2.12032
+        theta
+        170    1.812378  12.019195  23.754255  15.057246  3.271243
+        160    1.688981  11.829141  24.005795  15.217329  3.224878
+        150    1.493116  11.497031  24.429613  15.487104  3.143408
+        140    1.240086  10.997557  25.025894  15.866739  3.019783
+        130    0.953122  10.301162  25.801627  16.360593  2.845458
+        120    0.662345   9.374318  26.761920  16.971921  2.610348
+        110    0.401578   8.188197  27.905835  17.700146  2.304785
+        100    0.200953   6.735978  29.218973  18.536138  1.923802
+        90     0.075924   5.061972  30.657097  19.451811  1.474838
+        80     0.018659   3.301086  32.111619  20.378208  0.989209
+        70     0.002291   1.705196  33.336635  21.159152  0.532438
+        60     0.000085   0.585961  33.795291  21.453654  0.194940
+        50     0.000000   0.092756  32.356444  20.543220  0.034276
+        40     0.000000   0.002796  26.874517  17.064899  0.001253
+        30     0.000000   0.000001  14.922686   9.476692  0.000001
+        20     0.000000   0.000000   1.849432   1.174567  0.000000
+        10     0.000000   0.000000   0.000006   0.000004  0.000000
 
         # Coercelle with pdos model: (Example not very accurate, only for
         # demonstration purposes)
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
         >>> theta = np.arange(10, 190, 10)
+        >>> index = pd.Index(theta[::-1], name="theta")
         >>> ddxs_test = DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=100, model="pdos").data
-        >>> ddxs_test.set_axis(theta[::-1]).round(6)
-        Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
-        180   2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
-        170   2.322242  9.709096  21.591080   22.629430  10.248767  2.236507  0.261395
-        160   2.184305  9.495283  21.680440   22.942594  10.293308  2.188585  0.246138
-        150   1.963128  9.127680  21.817322   23.476630  10.361956  2.106059  0.221630
-        140   1.673261  8.592115  21.983471   24.253407  10.446299  1.985547  0.189424
-        130   1.336876  7.872568  22.147225   25.305572  10.531655  1.823139  0.151908
-        120   0.984164  6.957435  22.257099   26.680161  10.594023  1.615780  0.112375
-        110   0.651328  5.850551  22.232566   28.445456  10.595724  1.363767  0.074832
-        100   0.374294  4.587258  21.949746   30.701521  10.478464  1.074447  0.043334
-        90    0.178027  3.253160  21.222714   33.598268  10.154164  0.766695  0.020801
-        80    0.065776  1.993485  19.787501   37.371072   9.496498  0.473504  0.007766
-        70    0.017496  0.986708  17.317657   42.432964   8.346393  0.236599  0.002087
-        60    0.003118  0.359353  13.554393   49.718219   6.570866  0.087061  0.000375
-        50    0.000357  0.086814   8.694447   61.832770   4.247230  0.021201  0.000043
-        40    0.000026  0.013420   3.927192   83.133021   1.934737  0.003275  0.000003
-        30    0.000001  0.001397   0.987060  103.939037   0.488590  0.000339  0.000000
-        20    0.000000  0.000066   0.110366   82.225458   0.053962  0.000016  0.000000
-        10    0.000000  0.000001   0.008850   25.054400   0.004153  0.000000  0.000000
+        >>> ddxs_test.set_axis(index).round(6)
+        Eout   1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
+        theta
+        180    2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
+        170    2.321903  9.707659  21.587844   22.625885  10.247125  2.236144  0.261352
+        160    2.184144  9.494530  21.678610   22.940447  10.292278  2.188355  0.246111
+        150    1.963352  9.128663  21.819529   23.478804  10.362838  2.106225  0.221646
+        140    1.673562  8.593624  21.987238   24.257452  10.447988  1.985860  0.189452
+        130    1.337120  7.873980  22.151133   25.309972  10.533444  1.823442  0.151932
+        120    0.984333  6.958613  22.260799   26.684541  10.595729  1.616035  0.112392
+        110    0.651434  5.851483  22.236041   28.449841  10.597323  1.363968  0.074842
+        100    0.374352  4.587958  21.953029   30.706029  10.479973  1.074598  0.043340
+        90     0.178054  3.253646  21.225810   33.603077  10.155584  0.766800  0.020804
+        80     0.065786  1.993781  19.790373   37.376383   9.497815  0.473568  0.007767
+        70     0.017498  0.986856  17.320184   42.439017   8.347557  0.236631  0.002087
+        60     0.003118  0.359408  13.556401   49.725412   6.571793  0.087073  0.000375
+        50     0.000357  0.086827   8.695622   61.840892   4.247772  0.021204  0.000043
+        40     0.000026  0.013422   3.927734   83.144145   1.934989  0.003275  0.000003
+        30     0.000001  0.001397   0.987198  103.953211   0.488655  0.000339  0.000000
+        20     0.000000  0.000066   0.110381   82.236817   0.053969  0.000016  0.000000
+        10     0.000000  0.000001   0.008851   25.057890   0.004153  0.000000  0.000000
+
+        # alpha0:
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> theta = np.arange(0, 180, 10)[1::]
+        >>> index = pd.Index(theta[::-1], name="theta")
+        >>> ddxs_test = DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, algorithm="alpha0", model="fgm").data.iloc[::, ::200]
+        >>> ddxs_test.set_axis(index).round(6)
+        Eout    1.80000    1.88008    1.96016    2.04024   2.12032
+        theta
+        170    1.799454  12.011827  23.795201  15.058833  3.254168
+        160    1.676368  11.820171  24.045985  15.218236  3.207631
+        150    1.481047  11.484990  24.467384  15.486077  3.125740
+        140    1.229145  10.983212  25.064040  15.865304  3.002058
+        130    0.943762  10.284418  25.841231  16.359271  2.827893
+        120    0.654927   9.354802  26.802921  16.970502  2.593117
+        110    0.396321   8.165883  27.947781  17.698162  2.288181
+        100    0.197802   6.711574  29.261084  18.532927  1.908320
+        90     0.074460   5.037252  30.698047  19.446408  1.461220
+        80     0.018204   3.279005  32.149110  20.369142  0.978394
+        70     0.002218   1.689235  33.366688  21.144134  0.525276
+        60     0.000081   0.578047  33.811182  21.429205  0.191556
+        50     0.000000   0.090865  32.347784  20.504689  0.033458
+        40     0.000000   0.002704  26.830185  17.009357  0.001208
+        30     0.000000   0.000001  14.853195   9.417400  0.000001
+        20     0.000000   0.000000   1.824966   1.157166  0.000000
+        10     0.000000   0.000000   0.000005   0.000003  0.000000
+
+        >>> ddxs_test = DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, pdos, algorithm="alpha0", model="sct").data.iloc[::, ::200]
+        >>> ddxs_test.set_axis(index).round(6)
+        Eout    1.80000    1.88008    1.96016    2.04024   2.12032
+        theta
+        170    1.418728   9.432845  18.689928  11.876672  2.586581
+        160    1.422079   9.973461  20.267428  12.864941  2.730009
+        150    1.366027  10.522000  22.365509  14.183555  2.879851
+        140    1.190620  10.558988  24.028284  15.234573  2.899543
+        130    0.934896  10.103778  25.306300  16.045967  2.790649
+        120    0.655777   9.281028  26.494695  16.801908  2.584118
+        110    0.399326   8.142063  27.747922  17.599566  2.291635
+        100    0.200261   6.712676  29.117395  18.471388  1.917050
+        90     0.075751   5.050406  30.586677  19.406900  1.471416
+        80     0.018629   3.295766  32.059596  20.345022  0.987590
+        70     0.002289   1.703141  33.296246  21.133386  0.531786
+        60     0.000085   0.585404  33.763011  21.433065  0.194752
+        50     0.000000   0.092683  32.330895  20.526930  0.034248
+        40     0.000000   0.002794  26.856213  17.053232  0.001252
+        30     0.000000   0.000001  14.913579   9.470889  0.000001
+        20     0.000000   0.000000   1.848385   1.173900  0.000000
+        10     0.000000   0.000000   0.000006   0.000004  0.000000
+
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+        >>> theta = np.arange(10, 190, 10)
+        >>> index = pd.Index(theta[::-1], name="theta")
+        >>> ddxs_test = DDxs.from_4PCF(xs0K, Ein, M, T, Eout, theta, pdos, algorithm="alpha0", threshold=1.0e-14, nphonon=100, model="pdos").data
+        >>> ddxs_test.set_axis(index).round(6)
+        Eout   1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
+        theta
+        180    2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
+        170    2.322358  9.709553  21.592034   22.630398  10.249174  2.236589  0.261404
+        160    2.184449  9.495879  21.681735   22.943925  10.293871  2.188697  0.246150
+        150    1.963212  9.128038  21.818094   23.477408  10.362263  2.106113  0.221635
+        140    1.673276  8.592165  21.983522   24.253411  10.446267  1.985534  0.189422
+        130    1.336884  7.872591  22.147231   25.305535  10.531607  1.823125  0.151906
+        120    0.984180  6.957531  22.257347   26.680416  10.594098  1.615787  0.112375
+        110    0.651347  5.850704  22.233098   28.446094  10.595934  1.363790  0.074833
+        100    0.374309  4.587426  21.950504   30.702523  10.478783  1.074477  0.043335
+        90     0.178035  3.253304  21.223608   33.599626  10.154549  0.766722  0.020802
+        80     0.065779  1.993584  19.788448   37.372793   9.496911  0.473523  0.007766
+        70     0.017497  0.986762  17.318553   42.435080   8.346791  0.236609  0.002087
+        60     0.003118  0.359373  13.555137   49.720852   6.571197  0.087065  0.000375
+        50     0.000357  0.086818   8.694808   61.835208   4.247386  0.021202  0.000043
+        40     0.000026  0.013420   3.927362   83.136428   1.934812  0.003275  0.000003
+        30     0.000001  0.001397   0.987104  103.943448   0.488610  0.000339  0.000000
+        20     0.000000  0.000066   0.110371   82.229012   0.053964  0.000016  0.000000
+        10     0.000000  0.000001   0.008851   25.055494   0.004153  0.000000  0.000000
         """
-        if len(args) == 0:  # SIGMA1 or FGM
-            ddxs_values = cls.gen_4PCF(xs0K, Ein, M, T, Eout, theta,
-                                       *args, **kwargs)
-        elif isinstance(args[0], Pdos):  # SCT or PDOS
-            ddxs_values = cls.gen_4PCF(xs0K, Ein, M, T, Eout, theta,
-                                       *args, **kwargs)
-        else:  # tauN Files
-            raise ValueError('Not implemented yet')
-        return cls(Ein, T, M, "4PCF", ddxs_values)
+        # Generate ScarFunc object
+        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,*args, **kwargs)
+        # Get Xs matrix for convolution with scattering function
+        if algorithm == "sigma1":
+            xsMat = cls.get_xsMat(xs0K, Ein, M, T, Eout, theta, algorithm)
+        else:
+            xsMat = cls.get_xsMat(xs0K, Ein, M, T, Eout, theta, algorithm,
+                                  *args, **kwargs)
+        return cls(Ein, T, M, "4PCF", scatfunction.convolve(xsMat))
 
     @staticmethod
-    def gen_4PCF(xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 theta: np.ndarray, *args, **kwargs) -> pd.DataFrame:
+    def get_xsMat(xs0K: pd.Series, Ein: float, M: float, T: float,
+                  Eout: np.ndarray, theta: np.ndarray, algorithm: str,
+                  *args, **kwargs) -> pd.DataFrame:
         """
-        Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
-        correlation function modified
-        ..math::
-            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E + \frac{\alpha k_{B} T}{1-\mu})/2 - E \mu / A)
+        Get the angle-integrated xs values using sigma1 or alpha0 matrix using
+        Xs class method
 
-        For the xs matrix calculation, they are the following models available:
-            - "sigma1": sigma1 algorithm from NJOY2016 manual (default)
-            - "fgm": Free Gas Model
-            - "sct": Short Collision Time
-            - "pdos": Phonon Density of States
-
-        Common parameters
-        -----------------
+        Parameters
+        ----------
         xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
-        The incident energy of the neutron in eV
+            The incident energy of the neutron in eV
         M : float
             Mass of the material in amu
         T : float
@@ -422,6 +474,11 @@ class DDxs:
             The neutron outgoing energy grid in eV
         theta : np.ndarray, (M,)
             The neutron outgoing angle grid in degrees (0, 180]
+        algorithm: str, optional
+            The algorithm use for getting the angle-integrated xs. The options
+            are:
+                - "sigma1" (default)
+                - "alpha0"
 
         Parameters for sct
         ------------------
@@ -441,67 +498,7 @@ class DDxs:
         Returns
         -------
         pd.DataFrame
-            The Double Differential XS for elastic scattering
-        """
-        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,
-                                           *args, **kwargs)
-        if kwargs.get("model"):
-            mu_fit = scatfunction.get_angle
-            xs = XsMat.from_model(xs0K, Ein, M, T, Eout, theta,
-                                  mu_fit, *args, **kwargs)
-        else:
-            xs = XsMat.from_model(xs0K, Ein, M, T, Eout, theta)
-        return scatfunction.convolve(xs.data)
-
-    @classmethod
-    def from_4PCF_recoil(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
-                         Eout: np.ndarray, theta: np.ndarray, *args, **kwargs) -> pd.DataFrame:
-        """
-        Generate the Double Differential XS for elastic scattering from Fourier
-        double-Laplace transform of a 4-point correlation function modified
-        ..math::
-            \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E + \frac{\alpha k_{B} T}{1-\mu})/2 - E \mu / A)
-
-        For the xs matrix calculation, the gressier recoil energy is used to
-        get the doppler broadening cross sections.
-
-        Common parameters
-        -----------------
-        xs0K : pd.Series, (Z,)
-            0K xs data for the given material in barns
-        Ein : float
-        The incident energy of the neutron in eV
-        M : float
-            Mass of the material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.ndarray, (N,)
-            The neutron outgoing energy grid in eV
-        theta : np.ndarray, (M,)
-            The neutron outgoing angle grid in degrees (0, 180]
-
-        Parameters for sct
-        ------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object
-
-        Parameters for pdos
-        -------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN functions. For T>200 is convenient to set into
-            1.0e-14 to speed up the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        pd.DataFrame
-            The Double Differential XS for elastic scattering
+            Angle-integrated xs matrix for 4PCF model
 
         Examples
         --------
@@ -512,91 +509,52 @@ class DDxs:
         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
-        # Generate DDXS test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> theta = np.arange(0, 180, 10)[1::]
-        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> T = 300
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
+        >>> theta = np.array([180, 120, 90, 60, 30])
+        >>> index = pd.Index(theta, name="theta")
+        >>> DDxs.get_xsMat(xs0K, Ein, M, T, Eout, theta, "sigma1").set_axis(index, axis=0)
+        Eout        1.8       1.9       2.0       2.1       2.2
+        theta
+        180    9.102355  9.092121  9.081758  9.071139  9.060521
+        120    9.104914  9.094623  9.084231  9.073561  9.062890
+        90     9.105581  9.095328  9.084990  9.074371  9.063732
+        60     9.106114  9.095876  9.085560  9.074971  9.064341
+        30     9.106574  9.096350  9.086046  9.075473  9.064836
+
+        >>> DDxs.get_xsMat(xs0K, Ein, M, T, Eout, theta, "alpha0", model="fgm").set_axis(index, axis=0)
+        Eout        1.8       1.9       2.0       2.1       2.2
+        theta
+        180    9.102355  9.092121  9.081758  9.071139  9.060521
+        120    9.103218  9.092984  9.082649  9.072035  9.061417
+        90     9.104080  9.093848  9.083530  9.072931  9.062312
+        60     9.104940  9.094711  9.084406  9.073827  9.063206
+        30     9.105556  9.095340  9.085045  9.074480  9.063851
+
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> DDxs.get_xsMat(xs0K, Ein, M, T, Eout, theta, "alpha0", pdos, model="sct").set_axis(index, axis=0)
+        Eout        1.8       1.9       2.0       2.1       2.2
+        theta
+        180    9.102355  9.092121  9.081758  9.071139  9.060521
+        120    8.425340  8.418329  8.411313  8.404110  8.396966
+        90     8.866466  8.856143  8.845790  8.835213  8.824658
+        60     8.994640  8.984093  8.973497  8.962657  8.951797
+        30     9.035009  9.024508  9.013946  9.003133  8.992270
 
-        # Coercelle with FGM algorithm:
-        >>> DDxs.from_4PCF_recoil(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::, ::200].round(6)
-        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -9.848078e-01  1.799454  12.011827  23.795201  15.058833  3.254168
-        -9.396926e-01  1.676368  11.820171  24.045985  15.218236  3.207631
-        -8.660254e-01  1.481047  11.484990  24.467384  15.486077  3.125740
-        -7.660444e-01  1.229145  10.983212  25.064040  15.865304  3.002058
-        -6.427876e-01  0.943762  10.284418  25.841231  16.359271  2.827893
-        -5.000000e-01  0.654927   9.354802  26.802921  16.970502  2.593117
-        -3.420201e-01  0.396321   8.165883  27.947781  17.698162  2.288181
-        -1.736482e-01  0.197802   6.711574  29.261084  18.532927  1.908320
-         6.123234e-17  0.074460   5.037252  30.698047  19.446408  1.461220
-         1.736482e-01  0.018204   3.279005  32.149110  20.369142  0.978394
-         3.420201e-01  0.002218   1.689235  33.366688  21.144134  0.525276
-         5.000000e-01  0.000081   0.578047  33.811182  21.429205  0.191556
-         6.427876e-01  0.000000   0.090865  32.347784  20.504689  0.033458
-         7.660444e-01  0.000000   0.002704  26.830185  17.009357  0.001208
-         8.660254e-01  0.000000   0.000001  14.853195   9.417400  0.000001
-         9.396926e-01  0.000000   0.000000   1.824966   1.157166  0.000000
-         9.848078e-01  0.000000   0.000000   0.000005   0.000003  0.000000
-
-        # Coercelle with SCT algorithm:
-        >>> DDxs.from_4PCF_recoil(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::, ::200].round(6)
-        Eout            1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -9.848078e-01  1.812377  12.019189  23.754185  15.057238  3.271241
-        -9.396926e-01  1.688889  11.828546  24.004643  15.216676  3.224750
-        -8.660254e-01  1.492850  11.495045  24.425504  15.484593  3.142914
-        -7.660444e-01  1.239860  10.995579  25.021448  15.863968  3.019264
-        -6.427876e-01  0.952980  10.299636  25.797829  16.358208  2.845046
-        -5.000000e-01  0.662266   9.373197  26.758737  16.969917  2.610041
-        -3.420201e-01  0.401538   8.187375  27.903049  17.698392  2.304558
-        -1.736482e-01  0.200935   6.735377  29.216391  18.534514  1.923635
-         6.123234e-17  0.075917   5.061551  30.654575  19.450228  1.474719
-         1.736482e-01  0.018657   3.300818  32.109059  20.376606  0.989133
-         3.420201e-01  0.002291   1.705058  33.333987  21.157498  0.532397
-         5.000000e-01  0.000085   0.585913  33.792571  21.451959  0.194925
-         6.427876e-01  0.000000   0.092748  32.353783  20.541564  0.034273
-         7.660444e-01  0.000000   0.002796  26.872254  17.063492  0.001253
-         8.660254e-01  0.000000   0.000001  14.921401   9.475894  0.000001
-         9.396926e-01  0.000000   0.000000   1.849270   1.174466  0.000000
-         9.848078e-01  0.000000   0.000000   0.000006   0.000004  0.000000
-
-        # Coercelle with pdos model: (Example not very accurate, only for
-        # demonstration purposes)
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
-        >>> theta = np.arange(10, 190, 10)
-        >>> ddxs_test = DDxs.from_4PCF_recoil(xs0K, Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data
-        >>> ddxs_test.set_axis(theta[::-1]).round(6)
-        Eout  1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
-        180   2.368692  9.777714  21.556849   22.522613  10.231717  2.251831  0.266523
-        170   1.065432  4.510560  10.153941   10.770182   4.935073  1.089313  0.128745
-        160   1.049539  4.618627  10.672548   11.426635   5.185495  1.114927  0.126765
-        150   1.134515  5.332886  12.883144   14.007421   6.245290  1.281919  0.136205
-        140   1.201536  6.223266  16.056316   17.858496   7.752670  1.484856  0.142710
-        130   1.119359  6.632177  18.768109   21.566705   9.024823  1.570539  0.131526
-        120   0.900970  6.394603  20.534025   24.703531   9.842909  1.506148  0.105078
-        110   0.624735  5.624970  21.423056   27.467395  10.251675  1.321948  0.072665
-        100   0.367234  4.506707  21.590946   30.234341  10.330029  1.060278  0.042802
-        90    0.176504  3.227634  21.069999   33.376565  10.092712  0.762439  0.020695
-        80    0.065519  1.986464  19.724574   37.263767   9.471872  0.472395  0.007749
-        70    0.017464  0.985112  17.292756   42.378768   8.336923  0.236360  0.002085
-        60    0.003115  0.359076  13.545275   49.689060   6.567504  0.087022  0.000375
-        50    0.000357  0.086780   8.691473   61.814614   4.246158  0.021197  0.000043
-        40    0.000026  0.013417   3.926490   83.120568   1.934495  0.003275  0.000003
-        30    0.000001  0.001396   0.986962  103.930777   0.488559  0.000339  0.000000
-        20    0.000000  0.000066   0.110359   82.221789   0.053960  0.000016  0.000000
-        10    0.000000  0.000001   0.008850   25.053692   0.004152  0.000000  0.000000
+        >>> DDxs.get_xsMat(xs0K, Ein, M, T, Eout, theta, "alpha0", pdos, model="pdos").set_axis(index, axis=0)
+        Eout        1.8       1.9       2.0       2.1       2.2
+        theta
+        180    9.102355  9.092121  9.081758  9.071139  9.060521
+        120    9.104000  9.093744  9.083411  9.072788  9.062147
+        90     9.103939  9.093695  9.083370  9.072767  9.062137
+        60     9.104621  9.094390  9.084082  9.073504  9.062880
+        30     9.105234  9.095019  9.084725  9.074162  9.063533
         """
-        scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,
-                                           *args, **kwargs)
-        xs = XsMat.from_recoil(xs0K, Ein, M, T, Eout, theta, *args,
-                               **kwargs)
-        ddxs = scatfunction.convolve(xs.data)
-        return cls(Ein, T, M, "4PCF", ddxs)
+        xs = Xs(M, 0, xs0K)
+        return xs.get_4PCFxs(Ein, T, Eout, theta, *args,
+                             algorithm=algorithm, **kwargs)
 
     @property
     def angular(self) -> Dxs:
@@ -660,7 +618,6 @@ class DDxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> from solid_cinel.core.material.vibration.pdos import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # S(alpha, -beta) algorithm for FGM:

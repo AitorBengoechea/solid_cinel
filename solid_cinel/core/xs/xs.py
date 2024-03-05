@@ -332,7 +332,7 @@ class Xs:
             return [(T, Ein) for T in Tnew for Ein in self.data.index]
 
     @staticmethod
-    def _calc_sigma1Ein(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
+    def _calc_sigma1(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein
@@ -366,15 +366,15 @@ class Xs:
         >>> M = 238.05077040419212
         >>> T = 300
         >>> Ein = 2.0
-        >>> round(Xs._calc_sigma1Ein(T, Ein, xs0K, M), 6)
+        >>> round(Xs._calc_sigma1(T, Ein, xs0K, M), 6)
         9.086237
         """
         Eout = default_Eout(Ein)
         return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
 
     @staticmethod
-    def _calc_alpha0T(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
-                      *args, **kwargs):
+    def _calc_alpha0(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
+                      *args, **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -389,8 +389,30 @@ class Xs:
             The mass of the nucleus in amu
         T: float
             The temperature in K
-        pdos: Pdos
-            Pdos object
+        model: str, optional
+            The model to use for the calculation. The options are:
+            - "fgm": Use the free gas model (default)
+            - "sct": Use Short Collision Time model
+            - "pdos": Use the phonon expansion model
+
+        Extra parameters for sct
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+
+        Extra parameters for pdos
+        --------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
 
         Returns
         -------
@@ -412,11 +434,11 @@ class Xs:
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs._calc_alpha0T(T, EinGrid, xs0K, M, model="fgm").round(6)
+        >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, model="fgm").round(6)
         array([  9.085279, 457.021623])
-        >>> Xs._calc_alpha0T(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
+        >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
         array([  9.02379 , 449.805325])
-        >>> Xs._calc_alpha0T(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
+        >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
         array([  9.084969, 461.718705])
         """
         dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
@@ -429,8 +451,87 @@ class Xs:
             alpha = Alpha.from_recoil(EinGrid, T, M)
             return dxsIntegral / alpha.get_expansPorcen(args[0], T)
 
+    def _compute_sigma1(self, Tnew: Iterable, EinGrid: [Iterable, None]) -> list:
+        """
+        Calculate the elastic scattering cross section at new temperatures using
+        sigma1 method from Njoy
+
+        Parameters
+        ----------
+        Tnew: Iterable
+            The new temperatures to calculate
+        EinGrid: Iterable, None
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
+
+        Returns
+        -------
+        list
+            The elastic scattering cross section in barns for the new
+        """
+        bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid)) \
+                .map(lambda x: self._calc_sigma1(*x, self.xs0Kcomplete, self.M))
+        with dask.config.set(num_workers=os.cpu_count()):
+            return bag.compute()
+
+    def _compute_alpha0(self, Tnew: Iterable, EinGrid: [Iterable, None], *args,
+                        **kwargs) -> list:
+        """
+        Calculate the elastic scattering cross section at new temperatures using
+        alpha0 model
+
+        Parameters
+        ----------
+        Tnew: Iterable
+            The new temperatures to calculate
+        EinGrid: Iterable, None
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
+        T: float
+            The temperature in K
+        model: str, optional
+            The model to use for the calculation. The options are:
+            - "fgm": Use the free gas model (default)
+            - "sct": Use Short Collision Time model
+            - "pdos": Use the phonon expansion model
+
+        Extra parameters for sct
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+
+        Extra parameters for pdos
+        --------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        list
+            The elastic scattering cross section in barns for the new
+            temperatures. Each value is the incident introduced by the user or
+            the default.
+        """
+        args = (self.xs0Kcomplete, self.M) + args
+        Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
+        if len(Ein.shape) == 1:
+            return [Xs._calc_alpha0(T, Ein, *args, **kwargs)
+                    for T in Tnew]
+        else:
+            return [Xs._calc_alpha0(Tnew[i], Ein[i], *args, **kwargs)
+                    for i in range(len(Tnew))]
+
     def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
-                      algorithm: str = "sigma1", **kwargs) -> np.ndarray:
+                 algorithm: str = "sigma1", **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at new temperatures using
         dask and the selected algorithm.
@@ -491,22 +592,13 @@ class Xs:
         300  9.084969  461.718705
         100  9.085596  649.526642
         """
-        args = (self.xs0Kcomplete, self.M) + args
-        NTnew = len(Tnew)
         if algorithm == "sigma1":
-            bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid))\
-                    .map(lambda x: Xs._calc_sigma1Ein(*x, *args, **kwargs))
-            with dask.config.set(num_workers=os.cpu_count()):
-                results = bag.compute()
+            results = self._compute_sigma1(Tnew, EinGrid)
         elif algorithm == "alpha0":
-            Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
-            if len(Ein.shape) == 1:
-                results = [Xs._calc_alpha0T(T, Ein, *args, **kwargs) for T in Tnew]
-            else:
-                results = [Xs._calc_alpha0T(Tnew[i], Ein[i], *args, **kwargs) for i in range(NTnew)]
+            results = self._compute_alpha0(Tnew, EinGrid, *args, **kwargs)
         else:
             raise ValueError("invalid algorithm")
-        return np.array(results).reshape(NTnew, -1)
+        return np.array(results).reshape(len(Tnew), -1)
 
     def calc_T(self, T: float, *args, algorithm: str = "sigma1",
                inplace: bool = False, **kwargs):

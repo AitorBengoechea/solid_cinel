@@ -362,6 +362,22 @@ class Xs:
 
     def get_output(self, data: [list, np.ndarray], T: Iterable = None,
                    Ein: Iterable = None) -> [pd.Series, pd.DataFrame]:
+        """
+        Get the output data
+        Parameters
+        ----------
+        data: list, np.ndarray
+            The output data
+        T: Iterable, None
+            The new temperatures calculated temperatures
+        Ein: Iterable, None
+            The new incident energies calculated
+
+        Returns
+        -------
+        pd.Series, pd.DataFrame
+            The output data in the corresponding format
+        """
 
         T_ = self.data.columns if T is None else pd.Index(self.check_T(T), name="T")
         Ein_ = self.data.index if Ein is None else pd.Index(self.check_T(Ein), name="Ein")
@@ -388,7 +404,6 @@ class Xs:
             The 0K scattering function
         M: float
             The mass of the nucleus in amu
-
 
         Returns
         -------
@@ -1176,10 +1191,9 @@ class Xs:
             xsInterp = None
         else:
             kind = kwargs.pop("kind", "slinear")
-            bounds_error = kwargs.pop("bounds_error", True)
-            EinInterp = np.unique(Ein4PCF.loc[Tinterp])
-            xsInterpValues = self.interp_Ein(EinInterp, T=Tinterp, kind=kind,
-                                             bounds_error=bounds_error)
+            bounds = kwargs.pop("bounds_error", True)
+            xsInterpValues = self.interp_Ein(Ein4PCF.loc[Tinterp], T=Tinterp,
+                                             kind=kind, bounds_error=bounds)
             if len(Tinterp) > 1:
                 # Reshape the data row wise:
                 xsInterpValues = {T: xsInterpValues.loc[Ein4PCF.loc[T], T]

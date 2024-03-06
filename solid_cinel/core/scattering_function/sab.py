@@ -342,14 +342,15 @@ class Sab:
         return self.data * np.exp(- self.beta.data / 2) if detail_balance else self.data
 
     @property
-    def full(self) -> pd.DataFrame:
+    def full(self) -> [pd.Series, pd.DataFrame]:
         """
         Get the full S(alpha, beta) matrix.
 
         Returns
         -------
-        'pd.DataFrame'
-            the full S(alpha, beta) matrix
+        'pd.DataFrame' or 'pd.Series'
+            the full S(alpha, beta) matrix. If the matrix has only one row, it
+            will return a Series.
 
         Example
         -------
@@ -785,7 +786,7 @@ class Sab:
         return cls(S_values, columns=beta_.data, index=alpha_.data)
 
     @classmethod
-    def from_recoil(cls, Ein: [int, float, np.ndarray], T: float, M: float,
+    def from_alpha0(cls, Ein: [int, float, np.ndarray], T: float, M: float,
                     beta: Union[Beta, Iterable], *args,
                     model: str = "pdos", **kwargs):
         """
@@ -836,7 +837,7 @@ class Sab:
         >>> beta = Beta.generate_grid(T).data
         >>> Ein = np.array([6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0])
         >>> M = 26
-        >>> Sab.from_recoil(Ein, T, M, beta, model="fgm").data.iloc[::, :5].round(6)
+        >>> Sab.from_alpha0(Ein, T, M, beta, model="fgm").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         9.045004   0.009776  0.009839  0.009902  0.009966  0.010030
@@ -850,7 +851,7 @@ class Sab:
 
         SCT:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Sab.from_recoil(Ein, T, M, beta, pdos, model="sct").data.iloc[::, :5].round(6)
+        >>> Sab.from_alpha0(Ein, T, M, beta, pdos, model="sct").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         9.045004   0.011253  0.011320  0.011387  0.011455  0.011522
@@ -863,7 +864,7 @@ class Sab:
         10.056229  0.008460  0.008510  0.008560  0.008611  0.008662
 
         Phonon Expansion:
-        >>> Sab.from_recoil(Ein, T, M, beta, pdos, model="pdos").data.iloc[::, :5].round(6)
+        >>> Sab.from_alpha0(Ein, T, M, beta, pdos, model="pdos").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         9.045004   0.010582  0.010650  0.010719  0.010788  0.010857

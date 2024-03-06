@@ -98,10 +98,18 @@ def reshape_differential(data: pd.Series, xnew: Iterable,
 
     Matrix interpolation:
     >>> xnew = np.array([[1.5, 2.5, 3.5, 4.5], [1.75, 2.75, 3.75, 4.75]])
-    >>> reshape_differential(data, xnew)[0]
-    array([1.5, 2.5, 3.5, 4.5])
-    >>> reshape_differential(data, xnew)[1]
-    array([1.75, 2.75, 3.75, 4.75])
+    >>> pd.Series(reshape_differential(data, xnew)[0], index=xnew[0])
+    1.5    1.5
+    2.5    2.5
+    3.5    3.5
+    4.5    4.5
+    dtype: float64
+    >>> pd.Series(reshape_differential(data, xnew)[1], index=xnew[1])
+    1.75    1.75
+    2.75    2.75
+    3.75    3.75
+    4.75    4.75
+    dtype: float64
     """
     foo = sp.interpolate.interp1d(
                                   data.index.values,
@@ -116,7 +124,8 @@ def reshape_differential(data: pd.Series, xnew: Iterable,
     return foo(xnew)
 
 
-def interpolation(data: pd.Series, xnew: Iterable, values=False) -> [np.ndarray, pd.Series]:
+def interpolation(data: pd.Series, xnew: Iterable,
+                  values: bool = False, **kwargs) -> [np.ndarray, pd.Series]:
     """
     Interpolate the data over new energy grid structure.
 
@@ -126,6 +135,23 @@ def interpolation(data: pd.Series, xnew: Iterable, values=False) -> [np.ndarray,
         Original data
     xnew: 1d array-like object with at least two entries
         new energy grid
+    values: bool
+        If True, the function returns a numpy array instead a pd.Series
+    kind: "str"
+        Specifies the kind of interpolation as a string or as an integer
+        specifying the order of the spline interpolator to use. The string has
+        to be one of ‘linear’, ‘nearest’, ‘nearest-up’, ‘zero’, ‘slinear’,
+        ‘quadratic’, ‘cubic’, ‘previous’, or ‘next’. ‘zero’, ‘slinear’,
+        ‘quadratic’ and ‘cubic’ refer to a spline interpolation of zeroth,
+        first, second or third order; ‘previous’ and ‘next’ simply return the
+        previous or next value of the point; ‘nearest-up’ and ‘nearest’ differ
+        when interpolating half-integers (e.g. 0.5, 1.5) in that ‘nearest-up’
+        rounds up and ‘nearest’ rounds down. Default is ‘linear’
+    bounds_error: "bool"
+        if True, a ValueError is raised any time interpolation is attempted on a
+        value outside of the range of x (where extrapolation is necessary). If
+        False, out of bounds values are assigned fill_value. By default, an
+        error is raised unless fill_value="extrapolate".
 
     Returns
     -------
@@ -146,7 +172,7 @@ def interpolation(data: pd.Series, xnew: Iterable, values=False) -> [np.ndarray,
     4.5    4.5
     dtype: float64
     """
-    data_interp = reshape_differential(data, xnew)
+    data_interp = reshape_differential(data, xnew, **kwargs)
     if values:
         return data_interp
     else:

@@ -9,8 +9,8 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.scattering_function.beta import get_beta
-from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder
+from solid_cinel.core.scattering_function.beta import get_beta, Beta
+from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder, Alpha
 from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import save_tau, get_tauNbeta
@@ -561,6 +561,93 @@ class ScatFuncSD:
         scatfunc = np.interp(Eout, EoutCalc, sab.values)
         scatfunc /= kb * T
         return cls(Ein, T, M, scatfunc, index=Eout)
+
+    @staticmethod
+    def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
+                   model: str = "fgm", **kwargs) -> pd.DataFrame:
+
+        """
+        Calculate the alpha0 scattering function.
+
+        Parameters
+        ----------
+        EinGrid: np.ndarray
+            The incident energy grid in eV
+        M: float
+            The mass of the target material in amu
+        T: float
+            Temperature of the material in K
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        pd.DataFrame
+            The alpha0 scattering function
+
+        Examples
+        --------
+        >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> ScatFuncSD.get_alpha0(Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
+        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        Ein
+        6.7554   0.108530   0.257338   0.204528   0.054488   0.004558
+        6.9050   0.111882   0.255988   0.201056   0.054207   0.004704
+        7.0439   0.114902   0.254680   0.197928   0.053935   0.004837
+        7.2000   0.118190   0.253153   0.194516   0.053616   0.004981
+        7.3157   0.120553   0.251987   0.192055   0.053373   0.005085
+        7.4480   0.123179   0.250621   0.189308   0.053087   0.005201
+
+        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
+        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        Ein
+        6.7554   0.110115   0.253051   0.202780   0.053582   0.004631
+        6.9050   0.113346   0.251671   0.199382   0.053295   0.004772
+        7.0439   0.116251   0.250341   0.196320   0.053018   0.004900
+        7.2000   0.119407   0.248795   0.192981   0.052695   0.005038
+        7.3157   0.121672   0.247619   0.190571   0.052449   0.005138
+        7.4480   0.124185   0.246244   0.187882   0.052162   0.005249
+
+        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
+        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        Ein
+        6.7554   0.102532   0.251873   0.213761   0.053320   0.004314
+        6.9050   0.105622   0.250961   0.209850   0.053131   0.004448
+        7.0439   0.108424   0.250037   0.206350   0.052940   0.004570
+        7.2000   0.111492   0.248916   0.202558   0.052707   0.004704
+        7.3157   0.113710   0.248034   0.199838   0.052523   0.004801
+        7.4480   0.116187   0.246977   0.196817   0.052303   0.004910
+        """
+        Ein = np.unique(EinGrid) if hasattr(EinGrid, '__len__') else np.array([EinGrid])
+        # Scattering function calculation
+        alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
+        scatfunc = Sab.from_model(alpha, beta, T, *args,
+                   model=model, **kwargs).full
+        return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
 
     @property
     def cdf(self) -> pd.Series:

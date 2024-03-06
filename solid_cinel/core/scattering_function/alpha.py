@@ -6,6 +6,7 @@ Python file for working with alpha function.
 """
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function.beta import Beta
+from solid_cinel.core.material.vibration.pdos import Pdos
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -363,6 +364,83 @@ class Alpha:
         """
         return cls(get_gressierRecoil(Ein, T, M) / (kb * T))
 
+    def get_recoil(self, T: float) -> pd.Series:
+        """
+        Get the recoil energy for a given temperature.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        "pd.Series"
+            Recoil energy for a given temperature.
+
+        Example
+        -------
+        >>> T = 800
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 26.98153433356103
+        >>> alpha = Alpha.from_recoil(Ein, T, M)
+        >>> pd.Series(alpha.get_recoil(T), index=alpha.data).round(6)
+        0.118447    0.008166
+        0.155038    0.010688
+        0.364130    0.025103
+        0.730042    0.050328
+        1.164525    0.080281
+        dtype: float64
+        """
+        return self.data * kb * T
+
+    def get_expansPorcen(self, pdos: Pdos, T: float) -> np.ndarray:
+        """
+        Using phonon expansion method, determine the percentage lost due to
+        zero phonon term
+
+        Parameters
+        ----------
+        pdos: Pdos
+            Pdos object
+        T: float
+            Temperature in Kelvin
+
+        Returns
+        -------
+        np.ndarray
+            Percentage of the Xs calculate using the phono expansion model
+
+        Examples
+        --------
+        >>> T = 800
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 26.98153433356103
+        >>> alpha = Alpha.from_recoil(Ein, T, M)
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> pd.Series(alpha.get_expansPorcen(pdos, T), index=Ein).round(6)
+        0.33000    0.999717
+        0.40000    0.999977
+        0.80000    1.000000
+        1.50000    1.000000
+        2.33118    1.000000
+        dtype: float64
+
+        >>> T = 300
+        >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
+        >>> M = 238.05077040419212
+        >>> alpha = Alpha.from_recoil(Ein, T, M)
+        >>> pd.Series(alpha.get_expansPorcen(pdos, T), index=Ein).round(6)
+        0.33000    0.373661
+        0.40000    0.440282
+        0.80000    0.705637
+        1.50000    0.904395
+        2.33118    0.974849
+        dtype: float64
+        """
+        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
+        return 1 - np.exp(- self.data * DebyeWallerCoeff)
+
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:
         """
@@ -509,8 +587,33 @@ class Alpha:
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
+def get_alphaRecoil(Eout: np.ndarray, Ein: float, M: float, mu: float):
+    """
+    Get the alpha recoil value from the parameters of the function:
+    .. math::
+        \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{A}
+    Parameters
+    ----------
+    Eout: 'np.ndarray', (N,)
+        Output energy of the neutron in eV.
+    Ein: 'float'
+        Incidente energy of the neutron in eV.
+    M: "float"
+        Mass in amu of the scatterer.
+    mu: 'float'
+        Cosine of the scattering angle.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Array containing all posible alpha values for the input parameters.
+    """
+    return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M / m)
+
+
+@nb.jit(nopython=True, nogil=False, cache=True)
 def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
-                        mu: float) -> np.ndarray:
+                      mu: float) -> np.ndarray:
     """
     Get the alpha value from the parameters of the function:
     .. math::
@@ -533,7 +636,7 @@ def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
     'np.ndarray', (N,)
         Array containing all posible alpha values for the input parameters.
     """
-    return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M * kb * T / m)
+    return get_alphaRecoil(Eout, Ein, M, mu) / (kb * T)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True, parallel=True)

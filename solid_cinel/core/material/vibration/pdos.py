@@ -97,9 +97,7 @@ class Tpdos:
         >>> assert integrate(p.data) == 1.0
         """
         data_ = pd.Series(rhoData, name="rho")
-
-        if data_.index.name != "beta":
-            raise SyntaxError("Energy index must be beta")
+        data_.index.name = "beta"
 
         if not len(data_.shape) == 1:
             raise TypeError("Rho must have one dimension")
@@ -491,7 +489,7 @@ class Tpdos:
         Name: rho, dtype: float64
         """
         dE_index = pd.Index(self.beta.get_dE(self.T), name="dE")
-        return Epdos(self.data.values.copy(), index=dE_index)
+        return Epdos(self.data.values.copy(), index=dE_index.round(20))
 
 
 class Epdos:
@@ -580,9 +578,7 @@ class Epdos:
         >>> assert integrate(p.data) == 1.0
         """
         data_ = pd.Series(rhoData, name="rho")
-
-        if data_.index.name != "dE" and data_.index.name != "E":
-            raise SyntaxError("Energy index must be dE")
+        data_.index.name = "dE"
 
         if not len(data_.shape) == 1:
             raise TypeError("Rho must have one dimension")
@@ -876,9 +872,68 @@ class Npdos:
         """
         data = pd.DataFrame({key: pdos.dE_grid.data
                              for key, pdos in self.instance.items()})
+        data.columns.name = "T"
+        data.index.name = "dE"
+        data.sort_index(axis=0, inplace=True)
+        data.sort_index(axis=1, inplace=True)
         if np.any(data.isna()):
-            data.interpolate(method="linear", axis=0).fillna(0, inplace=True)
+            # Interpolate the data if there are NaN values in the data
+            data.interpolate(method="linear", axis=0, inplace=True)
+            # Fill the limit values with 0
+            data.fillna(0, inplace=True)
         return data
+
+    @staticmethod
+    def check_T(temperatures: Union[float, Iterable[float]]):
+        """
+        Check the temperature input
+
+        Parameters
+        ----------
+        temperatures: Union[float, Iterable[float]]
+            The temperature in K
+
+        Returns
+        -------
+        Union[float, Iterable[float]]
+            The temperature in K
+        """
+        if isinstance(temperatures, (int, float)):
+            temperatures = [temperatures]
+        elif not all(isinstance(t, (int, float)) for t in temperatures):
+            raise TypeError("All temperatures must be int or float")
+        return temperatures
+
+    def get_Tnew(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
+        """
+        Get the new temperatures to calculate.
+
+        Parameters
+        ----------
+        T: Union[float, Iterable[float]]
+            The temperature in K
+
+        Returns
+        -------
+        pd.Index
+            The new temperatures to calculate
+
+        Examples
+        --------
+        Object initialization:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
+        >>> npdos.get_Tnew([300])
+        Index([], dtype='int64')
+        >>> npdos.get_Tnew(200)
+        Index([200], dtype='int64')
+        >>> npdos.get_Tnew([600, 200])
+        Index([200, 600], dtype='int64')
+        """
+        Tnew = pd.Index(self.check_T(temperatures))
+        return Tnew.difference(self.data.columns).sort_values()
 
     @classmethod
     def from_file(cls, T: [float, list], file: [str, list],
@@ -919,7 +974,7 @@ class Npdos:
         >>> file = "../../../data/pdos/interp.300"
         >>> T = 300
         >>> Npdos.from_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
-                     300
+        T            300
         dE
         0.0000  0.000000
         0.0004  0.041879
@@ -962,16 +1017,19 @@ class Npdos:
         Examples
         --------
         Object initialization:
+        >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
         >>> folder = "../../../data/pdos"
-        >>> Npdos.from_directory(folder, usecols=[0, 1], index_col=0).data.iloc[0:5]
-                   300.0
+        >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0).data
+        >>> npdos.iloc[0:5]
+        T         300.0     500.0     1000.0    1700.0
         dE
-        0.0000  0.000000
-        0.0004  0.041879
-        0.0008  0.088790
-        0.0012  0.211161
-        0.0016  0.343320
+        0.0000  0.000000  0.000000  0.000000  0.000000
+        0.0004  0.041879  0.047919  0.055963  0.070446
+        0.0008  0.088790  0.117714  0.141224  0.170520
+        0.0012  0.211161  0.178579  0.209877  0.262514
+        0.0012  0.277240  0.239444  0.278530  0.354508
+        >>> os.chdir(wd)
         """
         files = os.listdir(pathToDirectory)
         if pathToDirectory[-1] != "/":
@@ -1010,10 +1068,11 @@ class Npdos:
         """
         Compute the spline interpolation of the pdos data if it is not computed
         """
-        data = self.data.copy()
-        dE, T = data.index.values, data.columns.values
+        data_ = self.data.copy()
+        T = data_.columns
         ky = 3 if len(T) > 3 else len(T) - 1
-        self.interp_spline = RectBivariateSpline(dE, T, data.values, ky=ky)
+        self.interp_spline = RectBivariateSpline(data_.index, T, data_.values,
+                                                 ky=ky)
 
     def Tinterp(self, Tnew: [float, np.ndarray],
                 inplace: bool = False) -> [None, dict, Tpdos]:
@@ -1031,13 +1090,40 @@ class Npdos:
         -------
         "pd.DataFrame"
             Interpolated pdos data.
+
+        Examples
+        --------
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
+        >>> npdos.Tinterp(600).data.iloc[0:5]
+        beta
+        0.000000     4.710799e-09
+        19.340864    5.938613e-07
+        38.681727    1.538605e-06
+        58.022591    2.143123e-06
+        77.363454    2.874966e-06
+        Name: rho, dtype: float64
+        >>> npdos.Tinterp([600, 200], inplace=True)
+        >>> npdos.data.iloc[0:5]
+        T             200.0     300.0     500.0         600.0     1000.0    1700.0
+        dE
+        0.0000  1.242620e-07  0.000000  0.000000  9.111091e-08  0.000000  0.000000
+        0.0004  1.485226e-07  0.041879  0.047919  1.248230e-07  0.055963  0.070446
+        0.0008  1.727832e-07  0.088790  0.117714  1.585351e-07  0.141224  0.170520
+        0.0012  1.970438e-07  0.211161  0.178579  1.922471e-07  0.209877  0.262514
+        0.0012  2.213044e-07  0.277240  0.239444  2.259592e-07  0.278530  0.354508
+
+        >>> os.chdir(wd)
         """
-        Tnew_ = Tnew if hasattr(Tnew, "__len__") else [Tnew]
+        Tnew_ = self.get_Tnew(Tnew)
         if self.interp_spline is None:
             self.compute_spline()
+        if Tnew_.empty:
+            return self
         # Get the index values from the data
         dE = self.data.index.values
-
         # Use the previously computed spline function to interpolate the data
         interpolated_T = self.interp_spline(dE, Tnew_)
 
@@ -1097,13 +1183,27 @@ class Pdos:
             self.instance = Npdos(*args, **kwargs)
 
     @classmethod
-    def from_dE(cls, *args, **kwargs):
-        if isinstance(args[0], (int, float)):
-            return cls(Tpdos.from_dE(*args, **kwargs))
+    def _from(cls, method, *args, **kwargs):
+        if len(args) == 0:
+            raise TypeError("No arguments provided")
+        elif isinstance(args[0], (int, float)):
+            return cls(getattr(Tpdos, method)(*args, **kwargs))
         elif isinstance(args[-1], (list, np.ndarray)):
-            return cls(Npdos.from_dE(*args, **kwargs))
+            return cls(getattr(Npdos, method)(*args, **kwargs))
         else:
-            return cls(Epdos.from_dE(*args, **kwargs))
+            return cls(getattr(Epdos, method)(*args, **kwargs))
+
+    @classmethod
+    def from_dE(cls, *args, **kwargs):
+        return cls._from('from_dE', *args, **kwargs)
+
+    @classmethod
+    def from_file(cls, *args, **kwargs):
+        return cls._from('from_file', *args, **kwargs)
+
+    @classmethod
+    def from_directory(cls, *args, **kwargs):
+        return cls(Npdos.from_directory(*args, **kwargs))
 
     def __getattr__(self, name):
         if hasattr(self.instance, name):

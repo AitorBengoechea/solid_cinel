@@ -233,7 +233,7 @@ class Tpdos:
 
         >>> os.chdir(wd)
         """
-        return Epdos.from_file(file, header, index_col, usecols, engine).beta_grid(T)
+        return Epdos.from_file(file, header, index_col, usecols, engine).get_Tpdos(T)
 
     @property
     def P(self, threshold=1.0e-6) -> pd.Series:
@@ -676,7 +676,7 @@ class Epdos:
         df.index.name = "dE"
         return cls(df)
 
-    def beta_grid(self, T: float):
+    def get_Tpdos(self, T: float):
         """
         Change the energy grid of rho. Two options available:
             - Tranform energy grid in beta grid by introducing T
@@ -707,7 +707,7 @@ class Epdos:
 
         Test the results:
         >>> T = 300
-        >>> p.beta_grid(T).data.iloc[0:5]
+        >>> p.get_Tpdos(T).data.iloc[0:5]
         beta
         0.000000    0.000000
         0.030945    0.001064
@@ -742,7 +742,7 @@ class Epdos:
         >>> pdos.Teff(T).round(4)
         149.1699
         """
-        return self.beta_grid(T).Teff
+        return self.get_Tpdos(T).Teff
 
     def DebyeWallerCoeff(self, T: float) -> float:
         """
@@ -765,7 +765,7 @@ class Epdos:
         >>> Epdos.from_dE(rho_in_energy, interv_in_energy).DebyeWallerCoeff(20).round(6)
         0.077454
         """
-        return self.beta_grid(T).DebyeWallerCoeff
+        return self.get_Tpdos(T).DebyeWallerCoeff
 
     def tau1(self, T: float) -> pd.Series:
         """
@@ -798,7 +798,7 @@ class Epdos:
         4.177627    0.018020
         Name: 1, dtype: float64
         """
-        return self.beta_grid(T).tau1
+        return self.get_Tpdos(T).tau1
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:
@@ -839,7 +839,7 @@ class Epdos:
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
         """
-        return self.beta_grid(T).tauN(nphonon, threshold, check, values)
+        return self.get_Tpdos(T).tauN(nphonon, threshold, check, values)
 
 
 class Npdos:
@@ -1149,22 +1149,57 @@ class Npdos:
         >>> os.chdir(wd)
         """
         Tnew_ = self.get_Tnew(Tnew)
-        if self.interp_spline is None:
-            self.compute_spline()
         if Tnew_.empty:
             return self
+        if self.interp_spline is None:
+            self.compute_spline()
         # Get the index values from the data
         dE = self.data.index.values
         # Use the previously computed spline function to interpolate the data
         interpolated_T = self.interp_spline(dE, Tnew_)
 
         # Compute the Tpdos object for the Tnew temperature
-        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i]).beta_grid(T)
+        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i]).get_Tpdos(T)
                              for i, T in enumerate(Tnew_)}
         if inplace:
             self.instance.update(intepolated_Tpdos)
         else:
             return intepolated_Tpdos[Tnew] if len(Tnew_) == 1 else intepolated_Tpdos
+
+    def get_Tpdos(self, T: float) -> Tpdos:
+        """
+        Get the Tpdos object for a certain temperature.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        "Tpdos"
+            Tpdos object for the temperature T.
+
+        Examples
+        --------
+        Object initialization:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
+        >>> npdos.get_Tpdos(300).data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.015473    0.001083
+        0.030945    0.002295
+        0.046418    0.005459
+        0.061891    0.008876
+        Name: rho, dtype: float64
+        >>> os.chdir(wd)
+        """
+        # Interpolate the data to the temperature T for avoiding the
+        # numerical errors
+        return self.Tinterp(T).instance[T]
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:

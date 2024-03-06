@@ -784,57 +784,61 @@ class Xs:
         >>> xs.calc_Ein(Ein, algorithm="alpha0", model="fgm").data
         T                  0            100          300
         Ein
-        0.065625      9.411657     9.411657     9.411657
+        0.065625      9.411657     9.414734     9.419595
         1.000000     32.338500    32.338500    32.338500
         2.000000     56.875590    56.875590    56.875594
-        6.717251    172.623200   282.491968   325.018633
-        11.367190     9.198383     9.198445     9.198459
-        20.912000  1893.389000  3261.783019  2646.416609
-        35.640580     0.974924     1.041483     1.180847
-        44.877660    14.089820    14.090097    14.090536
-        63.498800     5.773424     5.770805     5.765055
-        66.436310    85.621850    90.540391   114.812318
-        80.731840    39.201520    40.786065    29.838959
-        89.051940     9.208071     9.213753     9.226470
-
+        6.717251    172.623200   282.096835   323.919192
+        11.367190     9.198383     9.198416     9.199371
+        20.912000  1893.389000  3257.315536  2639.268058
+        35.640580     0.974924     1.042582     1.184656
+        44.877660    14.089820    14.090012    14.090359
+        63.498800     5.773424     5.770605     5.764487
+        66.436310    85.621850    90.534332   114.828045
+        80.731840    39.201520    40.746929    29.811032
+        89.051940     9.208071     9.213771     9.226450
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="sct").data
         T                  0            100          300
         Ein
-        0.065625      9.411657     9.223204     9.399438
-        6.717251    172.623200   299.146745   324.077689
-        11.367190     9.198383     9.011181     9.140079
-        20.912000  1893.389000  3174.309442  2617.259713
-        35.640580     0.974924     1.055881     1.178177
-        44.877660    14.089820    14.081661    14.068601
-        63.498800     5.773424     5.769416     5.761173
-        66.436310    85.621850    92.373607   117.360900
-        80.731840    39.201520    37.876184    29.529631
-        89.051940     9.208071     9.216752     9.224587
+        0.065625      9.411657     9.414734     9.419595
+        1.000000     32.338500    30.728900    32.152847
+        2.000000     56.875590    53.981171    56.485189
+        6.717251    172.623200   282.096835   323.919192
+        11.367190     9.198383     9.198416     9.199371
+        20.912000  1893.389000  3257.315536  2639.268058
+        35.640580     0.974924     1.042582     1.184656
+        44.877660    14.089820    14.090012    14.090359
+        63.498800     5.773424     5.770605     5.764487
+        66.436310    85.621850    90.534332   114.828045
+        80.731840    39.201520    40.746929    29.811032
+        89.051940     9.208071     9.213771     9.226450
 
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
-        >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="pdos").data
+        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K).calc_T(T)
+        >>> xs.calc_Ein(EinGrid, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.403287    9.408170
-        2.000000     9.085342    9.085596    9.084969
-        4.000000     8.481975    8.482253    8.481713
-        5.000000     7.805580    7.805930    7.804704
-        6.670000  1269.792131  649.526642  461.718705
-        7.000000    19.825115   19.941105   20.060625
+        0.065625     9.411657    9.414734    9.419595
+        2.000000     9.085342    9.086957    9.086237
+        4.000000     8.481975    8.482804    8.482893
+        5.000000     7.805580    7.805703    7.805682
+        6.670000  1269.792131  664.556512  455.670534
+        7.000000    19.825115   19.893739   20.039076
         """
         EinGrid = self.get_Eincalc(Ein)
         if EinGrid.size == 0:
             warnings.warn("All the incident energies are already calculated")
             return self
-        temp = self.data.columns
-        xsEinValues = self._compute(temp[1:], *args, EinGrid=EinGrid, **kwargs).T
-        xsEin = self.get_output(xsEinValues, Ein=EinGrid, T=temp[1:])
-        # OK data interpolated:
-        xsEin[temp[0]] = self.interp_Ein(EinGrid, T=0)
-        return self.update_data(xsEin, inplace, axis=0)
+        temp = self.data.columns.drop([0])
+        # Interpolation of 0K data, Necessary for calculation
+        xsEin = self.interp_Ein(EinGrid, T=0).to_frame()
+        if temp.empty:
+            return Xs(self.M, 0, xsEin, xs0Kcomplete=self.xs0Kcomplete)
+        xsEinValuesCalc = self._compute(temp, *args, EinGrid=EinGrid,
+                                        **kwargs).T
+        xsEinCalc = self.get_output(xsEinValuesCalc, Ein=EinGrid, T=temp)
+        return self.update_data(xsEin.join(xsEinCalc), inplace, axis=0)
                  
 
     @classmethod
@@ -1024,6 +1028,7 @@ class Xs:
         3.0  8.783659  8.784881  8.784565
         4.5  8.143778  8.144254  8.144288
         """
+        Ein = np.unique(Ein)
         def interpolate_row(x):
             return interpolation(x, Ein, kind=kind, bounds_error=bounds_error)
 
@@ -1158,38 +1163,38 @@ class Xs:
         30     9.105234  9.095019  9.084725  9.074162  9.063533
         """
         mu = np.sort(np.cos(np.deg2rad(theta)))
+        T4PCF = T * (1 + mu) / 2
         # Get the incident energy grid:
-        Ein_4PCF = self.get_4PCFEin(Ein, Eout, mu, self.M)
-        Eout_ = pd.Index(Eout, name="Eout")
+        Ein4PCF = self.get_4PCFEin(Ein, Eout, mu, self.M).set_axis(T4PCF, axis=0)
+        Eout, mu = pd.Index(Eout, name="Eout"), pd.Index(mu, name="mu")
 
         # Get the temperatures:
-        Tarno = T * (1 + mu) / 2
-        Ein_4PCF = Ein_4PCF.set_axis(Tarno, axis=0)
-        Tcalc, Tinterp = self.get_Tcalc(Tarno), self.get_Tinterp(Tarno)
+        Tcalc, Tinterp = self.get_Tcalc(T4PCF), self.get_Tinterp(T4PCF)
 
         # Interpolation:
         if Tinterp.empty:
             xsInterp = None
         else:
-            xsInterpValues = self.interp_Ein(np.unique(Ein_4PCF.loc[Tinterp]),
-                                             T=Tinterp,
-                                             kind=kwargs.pop("kind", "slinear"),
-                                             bounds_error=kwargs.pop("bounds_error", True))
+            kind = kwargs.pop("kind", "slinear")
+            bounds_error = kwargs.pop("bounds_error", True)
+            EinInterp = np.unique(Ein4PCF.loc[Tinterp])
+            xsInterpValues = self.interp_Ein(EinInterp, T=Tinterp, kind=kind,
+                                             bounds_error=bounds_error)
             if len(Tinterp) > 1:
-                xsInterpValues = {T: xsInterpValues.loc[Ein_4PCF.loc[T], T]
+                # Reshape the data row wise:
+                xsInterpValues = {T: xsInterpValues.loc[Ein4PCF.loc[T], T]
                                   for T in Tinterp}
-            xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout_, axis=1)
+            xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout, axis=1)
 
         # Calculation
         if Tcalc.empty:
             xsCalc = None
         else:
             xsCalcValues = self._compute(Tcalc, *args,
-                                         EinGrid=Ein_4PCF.loc[Tcalc].values,
+                                         EinGrid=Ein4PCF.loc[Tcalc].values,
                                          **kwargs)
-            xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout_)
-        return pd.concat([xsInterp, xsCalc]).set_axis(pd.Index(mu, name="mu"),
-                                                      axis=0)
+            xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
+        return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)

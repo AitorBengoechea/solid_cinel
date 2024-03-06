@@ -1089,8 +1089,11 @@ class Npdos:
         if len(rho.shape) == 2 and rho.shape[0] != len(intervalE_):
             raise ValueError("The number of rho and intervalE must be the same")
         if Ntemp >= 2 and len(intervalE_) == 1:
-            return cls({T_[i]: Tpdos.from_dE(T_[i], rho, intervalE_[0])
-                        for i in range(Ntemp)})
+            # Don use zero temperature
+            T_ = T_[T_ != 0]
+            # Use the same intervalE for all the temperatures
+            return cls({T_[i]: Tpdos.from_dE(T_[i], rho, intervalE)
+                        for i in range(len(T_))})
         else:
             return cls({T_[i]: Tpdos.from_dE(T_[i], rho[i], intervalE_[i])
                         for i in range(Ntemp)})
@@ -1254,10 +1257,10 @@ class Pdos:
             raise TypeError("No arguments provided")
         elif isinstance(args[0], (int, float)):
             return cls(getattr(Tpdos, method)(*args, **kwargs))
-        elif isinstance(args[-1], (list, np.ndarray)):
-            return cls(getattr(Npdos, method)(*args, **kwargs))
-        else:
+        elif len(args) == 2:
             return cls(getattr(Epdos, method)(*args, **kwargs))
+        else:
+            return cls(getattr(Npdos, method)(*args, **kwargs))
 
     @classmethod
     def from_dE(cls, *args, **kwargs):

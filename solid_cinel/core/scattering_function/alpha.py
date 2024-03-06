@@ -6,7 +6,7 @@ Python file for working with alpha function.
 """
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.vibration.pdos import Pdos, Tpdos
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -438,8 +438,8 @@ class Alpha:
         2.33118    0.974849
         dtype: float64
         """
-        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
-        return 1 - np.exp(- self.data * DebyeWallerCoeff)
+        tempPdos = pdos if isinstance(pdos.instance, Tpdos) else pdos.get_Tpdos(T)
+        return 1 - np.exp(- self.data * tempPdos.DebyeWallerCoeff)
 
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:

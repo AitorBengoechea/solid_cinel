@@ -149,7 +149,7 @@ class Xs:
         xs_.columns.name = "T"
         self._data = xs_
 
-    def update_data(self, xsT: pd.DataFrame, inplace: bool):
+    def update_data(self, xsT: pd.DataFrame, inplace: bool, axis: int = 1):
         """
         Update the data with the new results
 
@@ -160,6 +160,8 @@ class Xs:
         inplace: bool
             If True, the data is stored in the class attribute, otherwise it
             is returned as a new object
+        axis: int
+            The axis to concatenate the data
 
         Returns
         -------
@@ -167,14 +169,21 @@ class Xs:
             New object with the updated data or None if inplace is True, so
             the data is stored in the class attribute and modified in place.
         """
-        dataNew = pd.concat([self.data, xsT], axis=1).sort_index(axis=1)
+        if isinstance(xsT, pd.Series):
+            dataNew = self.data.copy()
+            if xsT.name == "Ein":
+                dataNew = dataNew.append(xsT)
+            else:
+                dataNew[xsT.name] = xsT
+        else:
+            dataNew = pd.concat([self.data, xsT], axis=axis)
         if inplace:
-            self.data = dataNew
+            self.data = dataNew.sort_index(axis=axis)
         else:
             return Xs(self.M, dataNew.columns, dataNew)
 
     @staticmethod
-    def check_T(temperatures: Union[float, Iterable[float]]):
+    def check_T(temperatures: Union[float, Iterable[float]]) -> Iterable:
         """
         Check the temperature input
 
@@ -190,9 +199,29 @@ class Xs:
         """
         if isinstance(temperatures, (int, float)):
             temperatures = [temperatures]
-        elif not all(isinstance(t, (int, float)) for t in temperatures):
-            raise TypeError("All temperatures must be int or float")
         return temperatures
+
+    def get_Eincalc(self, Ein: [float, Iterable[float]]):
+        """
+        Check the incident energy input
+
+        Parameters
+        ----------
+        Ein: Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Returns
+        -------
+        Union[float, Iterable[float]]
+            The incident energy in eV
+        """ 
+        if isinstance(Ein, (int, float)):
+            Ein = pd.Index([Ein])
+        elif hasattr(Ein, "__len__"):
+            Ein = pd.Index(Ein)
+        elif not all(isinstance(e, (int, float)) for e in Ein):
+            raise TypeError("All incident energies must be int or float")
+        return Ein.difference(self.data.index).values
 
     def get_Tcalc(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
         """
@@ -330,6 +359,18 @@ class Xs:
                 return [(T, Ein) for T in Tnew for Ein in EinGrid]
         else:
             return [(T, Ein) for T in Tnew for Ein in self.data.index]
+
+    def get_output(self, data: [list, np.ndarray], T: Iterable = None,
+                   Ein: Iterable = None) -> [pd.Series, pd.DataFrame]:
+
+        T_ = self.data.columns if T is None else pd.Index(self.check_T(T), name="T")
+        Ein_ = self.data.index if Ein is None else pd.Index(self.check_T(Ein), name="Ein")
+        if len(T_) == 1:
+            return pd.Series(data.squeeze(), index=Ein_, name=T_[0])
+        elif len(Ein_) == 1:
+            return pd.Series(data.squeeze(), index=T_, name=Ein_[0])
+        else:
+            return pd.DataFrame(data, index=Ein_, columns=T_)
 
     @staticmethod
     def _calc_sigma1(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
@@ -600,8 +641,7 @@ class Xs:
             raise ValueError("invalid algorithm")
         return np.array(results).reshape(len(Tnew), -1)
 
-    def calc_T(self, T: float, *args, algorithm: str = "sigma1",
-               inplace: bool = False, **kwargs):
+    def calc_T(self, T: float, *args, inplace: bool = False, **kwargs):
         """
         Calculate the elastic scattering cross section at temperature T using
         the selected algorithm.
@@ -614,6 +654,8 @@ class Xs:
             The algorith to use for the calculation. The options are:
             - "sigma1": Calculate the elastic scattering cross section with the
                         sigma1 method from Njoy
+            - "alpha0": Calculate the elastic scattering cross section with the
+                        alpha0
         inplace : bool, optional
             If True, the data is stored in the class attribute, otherwise it
             is returned
@@ -691,16 +733,109 @@ class Xs:
         5.000000     7.805580    7.805930    7.804704
         6.670000  1269.792131  649.526642  461.718705
         7.000000    19.825115   19.941105   20.060625
-
         """
         Tnew = self.get_Tcalc(T)
         if Tnew.empty:
             warnings.warn("All the temperatures are already calculated")
             return self
-        kwargs["algorithm"] = algorithm
-        xsT = pd.DataFrame(self._compute(Tnew, *args, **kwargs).T,
-                           index=self.data.index, columns=Tnew)
+        xsTValues = self._compute(Tnew, *args, **kwargs).T
+        xsT = self.get_output(xsTValues, T=Tnew)
         return self.update_data(xsT, inplace)
+
+    def calc_Ein(self, Ein: [float, np.ndarray], *args, inplace: bool = False,
+                 **kwargs):
+        """
+        Calculate the elastic scattering cross section at incident energies
+        using the selected algorithm.
+
+        Parameters
+        ----------
+        Ein: Union[float, Iterable[float]]
+            The incident energy in eV
+        algorithm : str, optional
+            The algorith to use for the calculation. The options are:
+            - "sigma1": Calculate the elastic scattering cross section with the
+                        sigma1 method from Njoy
+            - "alpha0": Calculate the elastic scattering cross section with the
+                        alpha0
+        inplace : bool, optional
+            If True, the data is stored in the class attribute, otherwise it
+            is returned
+
+        Returns
+        -------
+        Xs
+            New object with the updated data or None if inplace is True, so
+            the data is stored in the class attribute and modified in place.
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> T = [300, 100]
+        >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K).calc_T(T)
+        >>> Ein = [1.0, 2.0]
+        >>> xs.calc_Ein(Ein, algorithm="alpha0", model="fgm").data
+        T                  0            100          300
+        Ein
+        0.065625      9.411657     9.411657     9.411657
+        1.000000     32.338500    32.338500    32.338500
+        2.000000     56.875590    56.875590    56.875594
+        6.717251    172.623200   282.491968   325.018633
+        11.367190     9.198383     9.198445     9.198459
+        20.912000  1893.389000  3261.783019  2646.416609
+        35.640580     0.974924     1.041483     1.180847
+        44.877660    14.089820    14.090097    14.090536
+        63.498800     5.773424     5.770805     5.765055
+        66.436310    85.621850    90.540391   114.812318
+        80.731840    39.201520    40.786065    29.838959
+        89.051940     9.208071     9.213753     9.226470
+
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="sct").data
+        T                  0            100          300
+        Ein
+        0.065625      9.411657     9.223204     9.399438
+        6.717251    172.623200   299.146745   324.077689
+        11.367190     9.198383     9.011181     9.140079
+        20.912000  1893.389000  3174.309442  2617.259713
+        35.640580     0.974924     1.055881     1.178177
+        44.877660    14.089820    14.081661    14.068601
+        63.498800     5.773424     5.769416     5.761173
+        66.436310    85.621850    92.373607   117.360900
+        80.731840    39.201520    37.876184    29.529631
+        89.051940     9.208071     9.216752     9.224587
+
+        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> xsSmall = interpolation(xs0K, EinGrid)
+        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
+        >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="pdos").data
+        T                 0           100         300
+        Ein
+        0.065625     9.411657    9.403287    9.408170
+        2.000000     9.085342    9.085596    9.084969
+        4.000000     8.481975    8.482253    8.481713
+        5.000000     7.805580    7.805930    7.804704
+        6.670000  1269.792131  649.526642  461.718705
+        7.000000    19.825115   19.941105   20.060625
+        """
+        EinGrid = self.get_Eincalc(Ein)
+        if EinGrid.size == 0:
+            warnings.warn("All the incident energies are already calculated")
+            return self
+        temp = self.data.columns
+        xsEinValues = self._compute(temp[1:], *args, EinGrid=EinGrid, **kwargs).T
+        xsEin = self.get_output(xsEinValues, Ein=EinGrid, T=temp[1:])
+        # OK data interpolated:
+        xsEin[temp[0]] = self.interp_Ein(EinGrid, T=0)
+        return self.update_data(xsEin, inplace, axis=0)
+                 
 
     @classmethod
     def from_sigma1(cls, T: float, M: float, xs0Kshort: pd.Series,
@@ -839,8 +974,8 @@ class Xs:
         # Get cls attributes using the available information
         return xs.calc_T(T, *args, algorithm="alpha0", inplace=inplace, **kwargs)
 
-    def interp_Ein(self, Ein: [float, np.ndarray], kind: str = "slinear",
-                         bounds_error: bool = True) -> pd.DataFrame:
+    def interp_Ein(self, Ein: [float, np.ndarray], T: [float, Iterable] = None,
+                   kind: str = "slinear", bounds_error: bool = True) -> [pd.Series, pd.DataFrame]:
         """
         Interpolate Xs objet to a new Ein
 
@@ -868,16 +1003,37 @@ class Xs:
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs.from_sigma1(T, M, xsSmall, xs0Kcomplete=xs0K)
+        >>> xs.interp_Ein([3.0], T=0)
+        Ein
+        3.0    8.783659
+        Name: 0, dtype: float64
+        >>> xs.interp_Ein([3.0, 4.5], T=100)
+        Ein
+        3.0    8.784881
+        4.5    8.144254
+        Name: 100, dtype: float64
         >>> xs.interp_Ein([3.0])
-        T         0         100       300
-        3.0  8.783659  8.784881  8.784565
+        T
+        0      8.783659
+        100    8.784881
+        300    8.784565
+        Name: 3.0, dtype: float64
         >>> xs.interp_Ein([3.0, 4.5])
         T         0         100       300
+        Ein
         3.0  8.783659  8.784881  8.784565
         4.5  8.143778  8.144254  8.144288
         """
-        return self.data.apply(lambda x: interpolation(x, Ein, kind=kind,
-                                                       bounds_error=bounds_error))
+        def interpolate_row(x):
+            return interpolation(x, Ein, kind=kind, bounds_error=bounds_error)
+
+        if T is None:
+            xsInterp = self.data.apply(interpolate_row)
+            return self.get_output(xsInterp, Ein=Ein)
+        else:
+            Tinterp = self.get_Tinterp(T)
+            xsInterp = self.data.loc[::, Tinterp].apply(interpolate_row)
+            return self.get_output(xsInterp, Ein=Ein, T=Tinterp)
 
     @staticmethod
     def get_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
@@ -1015,11 +1171,13 @@ class Xs:
         if Tinterp.empty:
             xsInterp = None
         else:
-            xsInterpComplete = self.interp_Ein(np.unique(Ein_4PCF.loc[Tinterp]),
-                                               kind=kwargs.pop("kind", "slinear"),
-                                               bounds_error=kwargs.pop("bounds_error", True))
-            xsInterpValues = {T: xsInterpComplete.loc[Ein_4PCF.loc[T], T]
-                              for T in Tinterp}
+            xsInterpValues = self.interp_Ein(np.unique(Ein_4PCF.loc[Tinterp]),
+                                             T=Tinterp,
+                                             kind=kwargs.pop("kind", "slinear"),
+                                             bounds_error=kwargs.pop("bounds_error", True))
+            if len(Tinterp) > 1:
+                xsInterpValues = {T: xsInterpValues.loc[Ein_4PCF.loc[T], T]
+                                  for T in Tinterp}
             xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout_, axis=1)
 
         # Calculation

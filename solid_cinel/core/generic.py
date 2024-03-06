@@ -172,7 +172,7 @@ def interpolation(data: pd.Series, xnew: Iterable,
     4.5    4.5
     dtype: float64
     """
-    data_interp = reshape_differential(data, xnew)
+    data_interp = reshape_differential(data, xnew, **kwargs)
     if values:
         return data_interp
     else:

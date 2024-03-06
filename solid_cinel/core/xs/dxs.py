@@ -189,7 +189,7 @@ class Dxs:
         return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs0K))
 
     @classmethod
-    def from_recoil(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
+    def from_alpha0(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
                     Eout: np.ndarray, *args, **kwargs):
         """
         Generate the Differential xs for elastic scattering from the most similar distribution of the S(alpha, -beta)
@@ -251,26 +251,28 @@ class Dxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
 
-        # DOPUSH algorithm:
-        >>> Dxs.from_recoil(xs0K, Ein, M, T, Eout, model="fgm").data.iloc[::100]
+        # alpha0 algorithm:
+        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, model="fgm").data.iloc[::100]
         Eout
         1.80000     0.000127
-        1.84004     0.020078
-        1.88008     0.977778
+        1.84004     0.020090
+        1.88008     0.977898
         1.92012    14.653507
-        1.96016    67.580932
+        1.96016    67.580929
         2.00020    95.914649
-        2.04024    41.890458
-        2.08028     5.630233
-        2.12032     0.232873
+        2.04024    41.890462
+        2.08028     5.630375
+        2.12032     0.232929
         2.16036     0.002964
         dtype: float64
         """
-        scatfunction = ScatFunc.from_recoil(Ein, M, T, Eout, *args, **kwargs)
+        scatfunction = ScatFunc.from_alpha0(Ein, M, T, Eout, *args, **kwargs)
         recoil = get_gressierRecoil(Ein, T, M)
         if Ein + recoil <= 0:
             raise ValueError("The incident energy is lower than the recoil energy")
-        return cls(Ein, T, M, "dopush", scatfunction.convolve(xs0K, Exs=Eout + recoil))
+        else:
+            EoutShift = Eout + recoil
+        return cls(Ein, T, M, "alpha0", scatfunction.convolve(xs0K, Exs=EoutShift))
 
     @staticmethod
     def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
@@ -397,7 +399,7 @@ class Dxs:
 
         # DOPUSH algorithm:
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> round(Dxs.from_recoil(xs0K, Ein, M, T, Eout, model="fgm").integral, 2)
+        >>> round(Dxs.from_alpha0(xs0K, Ein, M, T, Eout, model="fgm").integral, 2)
         9.09
         """
         return integrate(self.data)

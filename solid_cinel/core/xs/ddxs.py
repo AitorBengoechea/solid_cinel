@@ -592,7 +592,8 @@ class DDxs:
         2.12032     2.920481
         dtype: float64
         """
-        return Dxs(self.Ein, self.T, self.M, self.algorithm, self.data.apply(integrate, axis=0))
+        dxs = self.data.apply(integrate, axis=0)
+        return Dxs(self.Ein, self.T, self.M, self.algorithm, dxs)
     @property
     def integral(self) -> float:
         """

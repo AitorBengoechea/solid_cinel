@@ -388,7 +388,7 @@ class Sab:
         Tpdos
             TPdos object.
         """
-        if isinstance(pdos, Tpdos):
+        if isinstance(pdos.instance, Tpdos):
             if pdos.T != T:
                 raise ValueError(f"The temperature of the pdos object {pdos.T} is different from the input temperature {T}")
             return pdos

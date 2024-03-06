@@ -884,7 +884,7 @@ class Npdos:
         return data
 
     @staticmethod
-    def check_T(temperatures: Union[float, Iterable[float]]):
+    def check_list(temperatures: Union[float, Iterable[float]]):
         """
         Check the temperature input
 
@@ -932,7 +932,7 @@ class Npdos:
         >>> npdos.get_Tnew([600, 200])
         Index([200, 600], dtype='int64')
         """
-        Tnew = pd.Index(self.check_T(temperatures))
+        Tnew = pd.Index(self.check_list(temperatures))
         return Tnew.difference(self.data.columns).sort_values()
 
     @classmethod
@@ -1043,7 +1043,7 @@ class Npdos:
         return cls.from_file(file_dict.keys(), file_dict.values(), **kwargs)
 
     @classmethod
-    def from_dE(cls, T: list, rho: [list, np.ndarray], intervalE: list):
+    def from_dE(cls, T: list, rho: np.ndarray, intervalE: list):
         """
         Create a Npdos object from a list of Tpdos objects.
 
@@ -1051,7 +1051,7 @@ class Npdos:
         ----------
         T: list of 'float'
             List of temperatures in K.
-        rho: list of '1D iterable'
+        rho: np.ndarray
             rho function values store in each row.
         intervalE: list of 'float'
             List of energy interval in eV.
@@ -1060,9 +1060,40 @@ class Npdos:
         -------
         "Npdos"
             Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = [300, 500]
+        >>> p = Npdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> p.instance[300].data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.030945    0.001064
+        0.061891    0.004256
+        0.092836    0.009576
+        0.123782    0.017008
+        Name: rho, dtype: float64
+        >>> p.instance[500].data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.018567    0.001773
+        0.037134    0.007093
+        0.055702    0.015960
+        0.074269    0.028346
+        Name: rho, dtype: float64
         """
-        return cls({T[i]: Tpdos.from_dE(T[i], rho[i], intervalE[i])
-                    for i in range(len(T))})
+        T_ = np.array(cls.check_list(T))
+        Ntemp = len(T_)
+        intervalE_ = np.array(cls.check_list(intervalE))
+        if len(rho.shape) == 2 and rho.shape[0] != len(intervalE_):
+            raise ValueError("The number of rho and intervalE must be the same")
+        if Ntemp >= 2 and len(intervalE_) == 1:
+            return cls({T_[i]: Tpdos.from_dE(T_[i], rho, intervalE_[0])
+                        for i in range(Ntemp)})
+        else:
+            return cls({T_[i]: Tpdos.from_dE(T_[i], rho[i], intervalE_[i])
+                        for i in range(Ntemp)})
 
     def compute_spline(self):
         """

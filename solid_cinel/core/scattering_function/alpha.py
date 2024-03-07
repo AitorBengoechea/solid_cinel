@@ -438,8 +438,8 @@ class Alpha:
         2.33118    0.974849
         dtype: float64
         """
-        DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
-        return 1 - np.exp(- self.data * DebyeWallerCoeff)
+        tempPdos = pdos if pdos.type == "Tpdos" else pdos.get_Tpdos(T)
+        return 1 - np.exp(- self.data * tempPdos.DebyeWallerCoeff)
 
     def get_theta(self, T: float, Ein: float, M: float,
                   beta_grid: Union[Beta, Iterable]) -> pd.Series:

@@ -1157,8 +1157,9 @@ class Xs:
         90     9.104080  9.093848  9.083530  9.072931  9.062312
         60     9.104940  9.094711  9.084406  9.073827  9.063206
         30     9.105556  9.095340  9.085045  9.074480  9.063851
-
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> T4PCF = T * (1 + mu) / 2
+        >>> pdos = Pdos.from_dE(T4PCF, rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta

@@ -33,7 +33,7 @@ class Tpdos:
     Object containing the method and properties of the phonon density of states
     for a certain temperature.
     """
-    def __init__(self, T, *args, **kwargs):
+    def __init__(self, T: float, *args, **kwargs):
         """
         Initialize of the pdos object.
         Parameters
@@ -233,7 +233,7 @@ class Tpdos:
 
         >>> os.chdir(wd)
         """
-        return Epdos.from_file(file, header, index_col, usecols, engine).beta_grid(T)
+        return Epdos.from_file(file, header, index_col, usecols, engine).get_Tpdos(T)
 
     @property
     def P(self, threshold=1.0e-6) -> pd.Series:
@@ -454,7 +454,7 @@ class Tpdos:
             return tauN
 
     @property
-    def dE_grid(self):
+    def to_Epdos(self):
         """
         Transform from a specific temperature phonon spectrum to a general
         phonon spectrum in energy.
@@ -479,7 +479,7 @@ class Tpdos:
         Name: rho, dtype: float64
 
         Test the results:
-        >>> p.dE_grid.data.iloc[0:5]
+        >>> p.to_Epdos.data.iloc[0:5]
         dE
         0.0000    0.000000
         0.0008    0.041157
@@ -630,8 +630,9 @@ class Epdos:
         return cls(rho_, index=index)
 
     @classmethod
-    def from_file(cls, file: str, header=None, index_col=None,
-                  usecols=None, engine="python"):
+    def from_file(cls, file: str, header: [int, list] = None,
+                  index_col: [int, list] = None, usecols: [int, list] = None,
+                  engine: str = "python"):
         """
         Extract rho in energy from the introduced file.
 
@@ -676,7 +677,7 @@ class Epdos:
         df.index.name = "dE"
         return cls(df)
 
-    def beta_grid(self, T: float):
+    def get_Tpdos(self, T: float) -> Tpdos:
         """
         Change the energy grid of rho. Two options available:
             - Tranform energy grid in beta grid by introducing T
@@ -707,7 +708,7 @@ class Epdos:
 
         Test the results:
         >>> T = 300
-        >>> p.beta_grid(T).data.iloc[0:5]
+        >>> p.get_Tpdos(T).data.iloc[0:5]
         beta
         0.000000    0.000000
         0.030945    0.001064
@@ -742,7 +743,7 @@ class Epdos:
         >>> pdos.Teff(T).round(4)
         149.1699
         """
-        return self.beta_grid(T).Teff
+        return self.get_Tpdos(T).Teff
 
     def DebyeWallerCoeff(self, T: float) -> float:
         """
@@ -765,7 +766,7 @@ class Epdos:
         >>> Epdos.from_dE(rho_in_energy, interv_in_energy).DebyeWallerCoeff(20).round(6)
         0.077454
         """
-        return self.beta_grid(T).DebyeWallerCoeff
+        return self.get_Tpdos(T).DebyeWallerCoeff
 
     def tau1(self, T: float) -> pd.Series:
         """
@@ -798,7 +799,7 @@ class Epdos:
         4.177627    0.018020
         Name: 1, dtype: float64
         """
-        return self.beta_grid(T).tau1
+        return self.get_Tpdos(T).tau1
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:
@@ -839,7 +840,7 @@ class Epdos:
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
         """
-        return self.beta_grid(T).tauN(nphonon, threshold, check, values)
+        return self.get_Tpdos(T).tauN(nphonon, threshold, check, values)
 
 
 class Npdos:
@@ -870,7 +871,7 @@ class Npdos:
         "pd.DataFrame"
             Data of the pdos objects in a DataFrame format.
         """
-        data = pd.DataFrame({key: pdos.dE_grid.data
+        data = pd.DataFrame({key: pdos.to_Epdos.data
                              for key, pdos in self.instance.items()})
         data.columns.name = "T"
         data.index.name = "dE"
@@ -884,7 +885,7 @@ class Npdos:
         return data
 
     @staticmethod
-    def check_T(temperatures: Union[float, Iterable[float]]):
+    def check_list(temperatures: Union[float, Iterable[float]]):
         """
         Check the temperature input
 
@@ -910,7 +911,7 @@ class Npdos:
 
         Parameters
         ----------
-        T: Union[float, Iterable[float]]
+        temperatures: Union[float, Iterable[float]]
             The temperature in K
 
         Returns
@@ -932,14 +933,14 @@ class Npdos:
         >>> npdos.get_Tnew([600, 200])
         Index([200, 600], dtype='int64')
         """
-        Tnew = pd.Index(self.check_T(temperatures))
+        Tnew = pd.Index(self.check_list(temperatures))
         return Tnew.difference(self.data.columns).sort_values()
 
     @classmethod
     def from_file(cls, T: [float, list], file: [str, list],
-                  header: [int, list]=None, index_col: [int, list] = None,
-                  usecols: [int, list] = None, engine: str ="python",
-                  grid: str ="dE"):
+                  header: [int, list] = None, index_col: [int, list] = None,
+                  usecols: [int, list] = None, engine: str = "python",
+                  grid: str = "dE"):
         """
         Extract rho in energy from the introduced file and create a Tpdos object
         for each temperature.
@@ -1043,7 +1044,7 @@ class Npdos:
         return cls.from_file(file_dict.keys(), file_dict.values(), **kwargs)
 
     @classmethod
-    def from_dE(cls, T: list, rho: [list, np.ndarray], intervalE: list):
+    def from_dE(cls, T: list, rho: np.ndarray, intervalE: list):
         """
         Create a Npdos object from a list of Tpdos objects.
 
@@ -1051,7 +1052,7 @@ class Npdos:
         ----------
         T: list of 'float'
             List of temperatures in K.
-        rho: list of '1D iterable'
+        rho: np.ndarray
             rho function values store in each row.
         intervalE: list of 'float'
             List of energy interval in eV.
@@ -1060,9 +1061,43 @@ class Npdos:
         -------
         "Npdos"
             Rho normalize object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> T = [300, 500]
+        >>> p = Npdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> p.instance[300].data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.030945    0.001064
+        0.061891    0.004256
+        0.092836    0.009576
+        0.123782    0.017008
+        Name: rho, dtype: float64
+        >>> p.instance[500].data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.018567    0.001773
+        0.037134    0.007093
+        0.055702    0.015960
+        0.074269    0.028346
+        Name: rho, dtype: float64
         """
-        return cls({T[i]: Tpdos.from_dE(T[i], rho[i], intervalE[i])
-                    for i in range(len(T))})
+        T_ = np.array(cls.check_list(T))
+        Ntemp = len(T_)
+        intervalE_ = np.array(cls.check_list(intervalE))
+        if len(rho.shape) == 2 and rho.shape[0] != len(intervalE_):
+            raise ValueError("The number of rho and intervalE must be the same")
+        if Ntemp >= 2 and len(intervalE_) == 1:
+            # Dont use zero temperature:
+            T_ = T_[T_ != 0]
+            # Use the same intervalE for all the temperatures
+            return cls({T_[i]: Tpdos.from_dE(T_[i], rho, intervalE)
+                        for i in range(len(T_))})
+        else:
+            return cls({T_[i]: Tpdos.from_dE(T_[i], rho[i], intervalE_[i])
+                        for i in range(Ntemp)})
 
     def compute_spline(self):
         """
@@ -1118,22 +1153,58 @@ class Npdos:
         >>> os.chdir(wd)
         """
         Tnew_ = self.get_Tnew(Tnew)
-        if self.interp_spline is None:
-            self.compute_spline()
         if Tnew_.empty:
             return self
+        if self.interp_spline is None:
+            self.compute_spline()
         # Get the index values from the data
         dE = self.data.index.values
+
         # Use the previously computed spline function to interpolate the data
         interpolated_T = self.interp_spline(dE, Tnew_)
 
         # Compute the Tpdos object for the Tnew temperature
-        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i]).beta_grid(T)
+        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i]).get_Tpdos(T)
                              for i, T in enumerate(Tnew_)}
         if inplace:
             self.instance.update(intepolated_Tpdos)
         else:
             return intepolated_Tpdos[Tnew] if len(Tnew_) == 1 else intepolated_Tpdos
+
+    def get_Tpdos(self, T: float) -> Tpdos:
+        """
+        Get the Tpdos object for a certain temperature.
+
+        Parameters
+        ----------
+        T: 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        "Tpdos"
+            Tpdos object for the temperature T.
+
+        Examples
+        --------
+        Object initialization:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
+        >>> npdos.get_Tpdos(300).data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.015473    0.001083
+        0.030945    0.002295
+        0.046418    0.005459
+        0.061891    0.008876
+        Name: rho, dtype: float64
+        >>> os.chdir(wd)
+        """
+        # Interpolate the data to the temperature T for avoiding the
+        # numerical errors
+        return self.Tinterp(T).instance[T]
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:
@@ -1188,10 +1259,10 @@ class Pdos:
             raise TypeError("No arguments provided")
         elif isinstance(args[0], (int, float)):
             return cls(getattr(Tpdos, method)(*args, **kwargs))
-        elif isinstance(args[-1], (list, np.ndarray)):
-            return cls(getattr(Npdos, method)(*args, **kwargs))
-        else:
+        elif len(args) == 2:
             return cls(getattr(Epdos, method)(*args, **kwargs))
+        else:
+            return cls(getattr(Npdos, method)(*args, **kwargs))
 
     @classmethod
     def from_dE(cls, *args, **kwargs):
@@ -1203,7 +1274,57 @@ class Pdos:
 
     @classmethod
     def from_directory(cls, *args, **kwargs):
+        """
+        Create a Pdos object from a directory containing the pdos files. The
+        files must have the temperature in the name of the file.
+
+        Parameters
+        ----------
+        pathToDirectory : 'str'
+            Path to the directory containing the pdos files.
+        kwargs :  'dict'
+            Arguments to pass to the Npdos.from_file function.
+
+        Returns
+        -------
+        Object initialization:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> npdos = Pdos.from_directory(folder, usecols=[0, 1], index_col=0).data
+        >>> npdos.iloc[0:5]
+        T         300.0     500.0     1000.0    1700.0
+        dE
+        0.0000  0.000000  0.000000  0.000000  0.000000
+        0.0004  0.041879  0.047919  0.055963  0.070446
+        0.0008  0.088790  0.117714  0.141224  0.170520
+        0.0012  0.211161  0.178579  0.209877  0.262514
+        0.0012  0.277240  0.239444  0.278530  0.354508
+        >>> os.chdir(wd)
+        """
         return cls(Npdos.from_directory(*args, **kwargs))
+
+    @property
+    def type(self) -> str:
+        """
+        Get the type of the pdos object instace (Epdos, Tpdos, Npdos).
+
+        Returns
+        -------
+        "str"
+            Type of the pdos object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> pdos = Pdos.from_directory(folder, usecols=[0, 1], index_col=0)
+        >>> pdos.type
+        'Npdos'
+        """
+        return type(self.instance).__name__
 
     def __getattr__(self, name):
         if hasattr(self.instance, name):

@@ -371,6 +371,30 @@ class Sab:
                                  axis=1)
         return Sab_complete if len(Sab_complete.index) > 1 else Sab_complete.iloc[0]
 
+    @staticmethod
+    def define_pdos(pdos: Pdos, T: float):
+        """
+        Check if the Pdos object is fixed for 1 temperature.
+
+        Parameters
+        ----------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float' or 'Iterable', optional
+            Temperature in K. The default is None.
+
+        Returns
+        -------
+        Tpdos
+            TPdos object.
+        """
+        if pdos.type == "Tpdos":
+            if pdos.T != T:
+                raise ValueError(f"The temperature of the pdos object {pdos.T} is different from the input temperature {T}")
+            return pdos
+        else:
+            return pdos.get_Tpdos(T)
+
     @classmethod
     def from_fgm(cls, alpha: Union[Alpha, Iterable],
                  beta: Union[Beta, Iterable], T: float = None, wt: float = 1):
@@ -474,10 +498,10 @@ class Sab:
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
         # Save the Phonon Density of States for extrapolation
-        cls.pdos = pdos
+        cls.pdos = Sab.define_pdos(pdos, T)
 
         # Start the calculation:
-        ratio = pdos.Teff(T) / T
+        ratio = cls.pdos.Teff / T
 
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
@@ -559,13 +583,11 @@ class Sab:
         """
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
+        cls.pdos = Sab.define_pdos(pdos, T)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check
-        cls.DebyeWallerCoeff = debye_waller_coeff = pdos.DebyeWallerCoeff(T)
-
-        # Save the Phonon Density of States for extrapolation
-        cls.pdos = pdos
+        debye_waller_coeff = cls.pdos.DebyeWallerCoeff
 
         # Expansion order:
         if nphonon:
@@ -576,11 +598,9 @@ class Sab:
             nphonon = alpha_.expansionOrder(debye_waller_coeff, decimal, order_max)
 
         # Get the parameters for calculation:
-        tauN = pdos.tauN(T, nphonon, threshold=kwargs.get("threshold", 0.0), values=True)
-        tau1beta = pdos.beta_grid(T).data.index.values
-        tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-        save_tau(tauN, nphonon, T, kwargs.get("tau_to_file", False),
-                 kwargs.get("binary", False))
+        tauN = cls.pdos.tauN(nphonon, threshold=kwargs.get("threshold", 0.0), values=True)
+        tauNbeta = get_tauNbeta(cls.pdos.beta.data, tauN.shape[1])
+        save_tau(tauN, nphonon, T, kwargs.get("tau_to_file", False), kwargs.get("binary", False))
         S_values = phonon_expansion(alpha_.data, beta_.data,
                                     nphonon,
                                     tauN, tauNbeta,
@@ -748,12 +768,12 @@ class Sab:
         Example
         -------
         >>> T = 800
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> pdos = Pdos.from_dE(T, rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
-        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff(T)
-        >>> tau1 = pdos.tau1(T).values
-        >>> tau1beta = pdos.beta_grid(T).data.index.values
+        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
+        >>> tau1 = pdos.tau1.values
+        >>> tau1beta = pdos.beta.data
         >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tauN = get_tauNfunc(tau1, tau1beta, nphonon, 0.0)
         >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
@@ -947,9 +967,9 @@ class Sab:
 
         """
         norm = S.apply(_norm, axis="columns")
-        if hasattr(self, "DebyeWallerCoeff"):
-            norm /= (
-                        1 - np.exp(- S.index.values * self.DebyeWallerCoeff))
+        if hasattr(self, "pdos"):
+            debye_waller_coeff = self.pdos.DebyeWallerCoeff
+            norm /= 1 - np.exp(- S.index.values * debye_waller_coeff)
         if (abs(norm - 1.0) > 1.0e-2).any():
             warnings.warn(
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
@@ -1123,14 +1143,14 @@ class Sab:
         >>> alphaNew = 0.00013
         >>> alphaVec = S_mat._interp_alpha(alphaNew)
         >>> alphaVec.iloc[0:10]  #doctest: +NORMALIZE_WHITESPACE
-        alpha     0.00013
+        alpha      0.00013
         beta
         0.000000  0.000498
         0.025237  0.000504
         0.050474  0.000467
-        0.075712  0.000461
-        0.100949  0.000462
-        0.126186  0.000472
+        0.075712  0.000462
+        0.100949  0.000463
+        0.126186  0.000473
         0.151423  0.000490
         0.176660  0.000509
         0.201898  0.000528
@@ -1139,7 +1159,7 @@ class Sab:
         Check the contrains:
         >>> debyeWeller = pdos.DebyeWallerCoeff(T)
         >>> round(integrate(alphaVec.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debyeWeller * alphaNew)), 6)
-        1.005976
+        1.006246
 
         >>> round(integrate(alphaVec.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
         0.000131

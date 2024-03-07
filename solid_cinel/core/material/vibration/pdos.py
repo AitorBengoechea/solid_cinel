@@ -33,7 +33,7 @@ class Tpdos:
     Object containing the method and properties of the phonon density of states
     for a certain temperature.
     """
-    def __init__(self, T, *args, **kwargs):
+    def __init__(self, T: float, *args, **kwargs):
         """
         Initialize of the pdos object.
         Parameters
@@ -454,7 +454,7 @@ class Tpdos:
             return tauN
 
     @property
-    def dE_grid(self):
+    def to_Epdos(self):
         """
         Transform from a specific temperature phonon spectrum to a general
         phonon spectrum in energy.
@@ -479,7 +479,7 @@ class Tpdos:
         Name: rho, dtype: float64
 
         Test the results:
-        >>> p.dE_grid.data.iloc[0:5]
+        >>> p.to_Epdos.data.iloc[0:5]
         dE
         0.0000    0.000000
         0.0008    0.041157
@@ -630,8 +630,9 @@ class Epdos:
         return cls(rho_, index=index)
 
     @classmethod
-    def from_file(cls, file: str, header=None, index_col=None,
-                  usecols=None, engine="python"):
+    def from_file(cls, file: str, header: [int, list] = None,
+                  index_col: [int, list] = None, usecols: [int, list] = None,
+                  engine: str = "python"):
         """
         Extract rho in energy from the introduced file.
 
@@ -676,7 +677,7 @@ class Epdos:
         df.index.name = "dE"
         return cls(df)
 
-    def get_Tpdos(self, T: float):
+    def get_Tpdos(self, T: float) -> Tpdos:
         """
         Change the energy grid of rho. Two options available:
             - Tranform energy grid in beta grid by introducing T
@@ -870,7 +871,7 @@ class Npdos:
         "pd.DataFrame"
             Data of the pdos objects in a DataFrame format.
         """
-        data = pd.DataFrame({key: pdos.dE_grid.data
+        data = pd.DataFrame({key: pdos.to_Epdos.data
                              for key, pdos in self.instance.items()})
         data.columns.name = "T"
         data.index.name = "dE"
@@ -910,7 +911,7 @@ class Npdos:
 
         Parameters
         ----------
-        T: Union[float, Iterable[float]]
+        temperatures: Union[float, Iterable[float]]
             The temperature in K
 
         Returns
@@ -937,9 +938,9 @@ class Npdos:
 
     @classmethod
     def from_file(cls, T: [float, list], file: [str, list],
-                  header: [int, list]=None, index_col: [int, list] = None,
-                  usecols: [int, list] = None, engine: str ="python",
-                  grid: str ="dE"):
+                  header: [int, list] = None, index_col: [int, list] = None,
+                  usecols: [int, list] = None, engine: str = "python",
+                  grid: str = "dE"):
         """
         Extract rho in energy from the introduced file and create a Tpdos object
         for each temperature.
@@ -1089,7 +1090,7 @@ class Npdos:
         if len(rho.shape) == 2 and rho.shape[0] != len(intervalE_):
             raise ValueError("The number of rho and intervalE must be the same")
         if Ntemp >= 2 and len(intervalE_) == 1:
-            # Don use zero temperature
+            # Dont use zero temperature:
             T_ = T_[T_ != 0]
             # Use the same intervalE for all the temperatures
             return cls({T_[i]: Tpdos.from_dE(T_[i], rho, intervalE)
@@ -1158,6 +1159,7 @@ class Npdos:
             self.compute_spline()
         # Get the index values from the data
         dE = self.data.index.values
+
         # Use the previously computed spline function to interpolate the data
         interpolated_T = self.interp_spline(dE, Tnew_)
 
@@ -1272,7 +1274,57 @@ class Pdos:
 
     @classmethod
     def from_directory(cls, *args, **kwargs):
+        """
+        Create a Pdos object from a directory containing the pdos files. The
+        files must have the temperature in the name of the file.
+
+        Parameters
+        ----------
+        pathToDirectory : 'str'
+            Path to the directory containing the pdos files.
+        kwargs :  'dict'
+            Arguments to pass to the Npdos.from_file function.
+
+        Returns
+        -------
+        Object initialization:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> npdos = Pdos.from_directory(folder, usecols=[0, 1], index_col=0).data
+        >>> npdos.iloc[0:5]
+        T         300.0     500.0     1000.0    1700.0
+        dE
+        0.0000  0.000000  0.000000  0.000000  0.000000
+        0.0004  0.041879  0.047919  0.055963  0.070446
+        0.0008  0.088790  0.117714  0.141224  0.170520
+        0.0012  0.211161  0.178579  0.209877  0.262514
+        0.0012  0.277240  0.239444  0.278530  0.354508
+        >>> os.chdir(wd)
+        """
         return cls(Npdos.from_directory(*args, **kwargs))
+
+    @property
+    def type(self) -> str:
+        """
+        Get the type of the pdos object instace (Epdos, Tpdos, Npdos).
+
+        Returns
+        -------
+        "str"
+            Type of the pdos object.
+
+        Examples
+        --------
+        Object initialization:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("pdos.py", ""))
+        >>> folder = "../../../data/pdos"
+        >>> pdos = Pdos.from_directory(folder, usecols=[0, 1], index_col=0)
+        >>> pdos.type
+        'Npdos'
+        """
+        return type(self.instance).__name__
 
     def __getattr__(self, name):
         if hasattr(self.instance, name):

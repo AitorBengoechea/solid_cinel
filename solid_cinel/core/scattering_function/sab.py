@@ -5,7 +5,7 @@ Python file for working with S(alpha, -beta) matrixs.
 """
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel.core.material.vibration.pdos import Pdos, Tpdos
+from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNfunc, save_tau, gpu_available, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.scattering_function.alpha import Alpha
@@ -388,7 +388,7 @@ class Sab:
         Tpdos
             TPdos object.
         """
-        if isinstance(pdos.instance, Tpdos):
+        if pdos.type == "Tpdos":
             if pdos.T != T:
                 raise ValueError(f"The temperature of the pdos object {pdos.T} is different from the input temperature {T}")
             return pdos

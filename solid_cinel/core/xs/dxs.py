@@ -7,12 +7,10 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import ScatFunc
+from solid_cinel.core.scattering_function import ScatFunc, Beta
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil
 from solid_cinel.core.generic import integrate, reshift, reshape_differential
 import os
-import dask.dataframe as dd
-
 from typing import Iterable
 
 # constants
@@ -276,7 +274,7 @@ class Dxs:
 
     @staticmethod
     def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
-                   **kwargs):
+                **kwargs) -> [np.array, Beta]:
         """
         Get the Dxs function for the 0K cross section
 
@@ -329,44 +327,49 @@ class Dxs:
         >>> os.chdir(wd)
 
         >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> index = pd.Index(Ein, name="Ein")
         >>> T = 300
         >>> M = 238.05077040419212
         >>> from solid_cinel.core.material.vibration import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
-        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        >>> dxs, beta = Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm")
+        >>> pd.DataFrame(dxs, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
         Ein
-        6.7554  31.456366  23.206250  10.603135   2.029509   0.135448
-        6.9050   3.501076   6.742401   4.654205   1.134568   0.090675
-        7.0439   2.307629   4.753928   3.477131   0.900269   0.077224
-        7.2000   1.895145   3.906531   2.903342   0.777047   0.070285
-        7.3157   1.751764   3.566327   2.654568   0.722178   0.067466
-        7.4480   1.656176   3.307333   2.456027   0.678152   0.065471
-
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
-        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        6.7554  28.734670  20.108117   7.358406   1.078944        0.0
+        6.9050   4.650556   6.747923   3.490777   0.636176        0.0
+        7.0439   3.129387   4.835731   2.650856   0.514044        0.0
+        7.2000   2.566863   3.985399   2.229881   0.449221        0.0
+        7.3157   2.361360   3.634402   2.044991   0.420547        0.0
+        7.4480   2.216768   3.362471   1.896636   0.397744        0.0
+        >>> dxs, beta = Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct")
+        >>> pd.DataFrame(dxs, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
         Ein
-        6.7554  31.915827  22.819684  10.512509   1.995794   0.137611
-        6.9050   3.546883   6.628704   4.615447   1.115483   0.091980
-        7.0439   2.334717   4.672934   3.448883   0.884966   0.078229
-        7.2000   1.914666   3.839277   2.880421   0.763697   0.071095
-        7.3157   1.768025   3.504498   2.634061   0.709682   0.068173
-        7.4480   1.669699   3.249574   2.437531   0.666330   0.066082
-
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
-        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        6.7554  28.821334  19.787290   7.292477   1.076292        0.0
+        6.9050   4.638501   6.628216   3.456548   0.633850        0.0
+        7.0439   3.117428   4.748840   2.624669   0.511817        0.0
+        7.2000   2.554504   3.913638   2.208039   0.446993        0.0
+        7.3157   2.348490   3.569032   2.025162   0.418284        0.0
+        7.4480   2.203177   3.302152   1.878482   0.395426        0.0
+        >>> dxs, beta = Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos")
+        >>> pd.DataFrame(dxs, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
         Ein
-        6.7554  29.717797  22.713501  11.081814   1.986009   0.128192
-        6.9050   3.305189   6.610009   4.857762   1.112052   0.085735
-        7.0439   2.177516   4.667254   3.625085   0.883661   0.072968
-        7.2000   1.787745   3.841138   3.023379   0.763867   0.066377
-        7.3157   1.652327   3.510379   2.762150   0.710686   0.063699
-        7.4480   1.562170   3.259248   2.553446   0.668138   0.061807
+        6.7554  28.922999  22.199127  10.213472   1.734711   0.018831
+        6.9050   3.532269   6.685214   4.562669   0.982888   0.013663
+        7.0439   2.338940   4.737526   3.419771   0.784096   0.012083
+        7.2000   1.920413   3.901155   2.858675   0.679510   0.011346
+        7.3157   1.773443   3.563735   2.614582   0.633089   0.011108
+        7.4480   1.674328   3.306635   2.419227   0.596052   0.011008
         """
-        scatfunc = ScatFunc.get_alpha0(Ein, M, T, *args, **kwargs)
-        dE = (scatfunc.columns.values * kb * T)[:, np.newaxis]
-        EinGrid = dE + Ein + get_gressierRecoil(Ein, T, M)
-        return scatfunc * reshape_differential(xs0K, EinGrid.T)
+        scatfunc, beta = ScatFunc.get_alpha0(Ein, M, T, *args, **kwargs)
+        EinGrid = beta.get_dE(T)[:, np.newaxis] + Ein
+        # Add recoil:
+        EinGrid += get_gressierRecoil(Ein, T, M)
+        # Transform the xs0K into the appropriate shape:
+        xs0Kmat = reshape_differential(xs0K, EinGrid.T)
+        return scatfunc * xs0Kmat, beta
 
     @property
     def integral(self) -> float:

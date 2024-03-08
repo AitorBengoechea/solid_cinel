@@ -279,7 +279,7 @@ class ScatFuncSD:
 
     @staticmethod
     def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
-                   model: str = "fgm", **kwargs) -> pd.DataFrame:
+                   model: str = "fgm", **kwargs) -> [np.array, Beta]:
 
         """
         Calculate the alpha0 scattering function.
@@ -292,6 +292,15 @@ class ScatFuncSD:
             The mass of the target material in amu
         T: float
             Temperature of the material in K
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+        display: bool
+            If True, return a pd.DataFrame for visualization.
+            If False, return a xp.ndarray for computation.
 
         Parameters for SCT model
         ------------------------
@@ -324,45 +333,51 @@ class ScatFuncSD:
         Examples
         --------
         >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> index = pd.Index(Ein, name="Ein")
         >>> T = 300
         >>> M = 238.05077040419212
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncSD.get_alpha0(Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
-        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        >>> scatfuncValues, beta = ScatFuncSD.get_alpha0(Ein, M, T, model="fgm")
+        >>> pd.DataFrame(scatfuncValues, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
         Ein
-        6.7554   0.108530   0.257338   0.204528   0.054488   0.004558
-        6.9050   0.111882   0.255988   0.201056   0.054207   0.004704
-        7.0439   0.114902   0.254680   0.197928   0.053935   0.004837
-        7.2000   0.118190   0.253153   0.194516   0.053616   0.004981
-        7.3157   0.120553   0.251987   0.192055   0.053373   0.005085
-        7.4480   0.123179   0.250621   0.189308   0.053087   0.005201
+        6.7554   0.153967   0.269409   0.158014   0.031065        0.0
+        6.9050   0.156781   0.266477   0.155477   0.031139        0.0
+        7.0439   0.159258   0.263776   0.153185   0.031192        0.0
+        7.2000   0.161892   0.260769   0.150679   0.031233        0.0
+        7.3157   0.163744   0.258559   0.148868   0.031253        0.0
+        7.4480   0.165761   0.256053   0.146842   0.031264        0.0
 
-        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
-        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        >>> scatfuncValues, beta = ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="sct")
+        >>> pd.DataFrame(scatfuncValues, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
         Ein
-        6.7554   0.110115   0.253051   0.202780   0.053582   0.004631
-        6.9050   0.113346   0.251671   0.199382   0.053295   0.004772
-        7.0439   0.116251   0.250341   0.196320   0.053018   0.004900
-        7.2000   0.119407   0.248795   0.192981   0.052695   0.005038
-        7.3157   0.121672   0.247619   0.190571   0.052449   0.005138
-        7.4480   0.124185   0.246244   0.187882   0.052162   0.005249
+        6.7554   0.153590   0.264466   0.156371   0.030960        0.0
+        6.9050   0.156257   0.261604   0.153885   0.031015        0.0
+        7.0439   0.158601   0.258970   0.151640   0.031051        0.0
+        7.2000   0.161088   0.256037   0.149185   0.031075        0.0
+        7.3157   0.162834   0.253884   0.147411   0.031082        0.0
+        7.4480   0.164732   0.251443   0.145427   0.031080        0.0
 
-        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
-        beta    -3.092990  -1.544947   0.003096   1.551139   3.133205
+        >>> scatfuncValues, beta = ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="pdos")
+        >>> pd.DataFrame(scatfuncValues, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
         Ein
-        6.7554   0.102532   0.251873   0.213761   0.053320   0.004314
-        6.9050   0.105622   0.250961   0.209850   0.053131   0.004448
-        7.0439   0.108424   0.250037   0.206350   0.052940   0.004570
-        7.2000   0.111492   0.248916   0.202558   0.052707   0.004704
-        7.3157   0.113710   0.248034   0.199838   0.052523   0.004801
-        7.4480   0.116187   0.246977   0.196817   0.052303   0.004910
+        6.7554   0.111171   0.257399   0.201964   0.047321   0.000699
+        6.9050   0.114250   0.256102   0.198472   0.047219   0.000738
+        7.0439   0.117031   0.254833   0.195325   0.047108   0.000774
+        7.2000   0.120064   0.253339   0.191893   0.046964   0.000815
+        7.3157   0.122248   0.252190   0.189417   0.046847   0.000846
+        7.4480   0.124680   0.250838   0.186655   0.046702   0.000881
         """
         Ein = np.unique(EinGrid) if hasattr(EinGrid, '__len__') else np.array([EinGrid])
         # Scattering function calculation
         alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
-        scatfunc = Sab.from_model(alpha, beta, T, *args,
-                   model=model, **kwargs).full
-        return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
+        scatfunc = Sab.from_model(alpha, beta, T, *args, model=model,
+                                  **kwargs).full
+        scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
+        return scatfunc.values, Beta(scatfunc.columns.values)
+
 
     @property
     def cdf(self) -> pd.Series:

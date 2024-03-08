@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.generic import integrate, interpolation
+from solid_cinel.core.generic import interpolation
 from solid_cinel.core.scattering_function.alpha import Alpha, get_alphaRecoil
 import warnings
 import os
@@ -498,9 +498,7 @@ class Xs:
         array([  9.084969, 461.718705])
         """
         dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
-        beta = dxs.columns.values
-        dxsIntegral = dxs.apply(lambda x: np.trapz(x, x=beta),
-                                raw=True, axis=1).values
+        dxsIntegral = np.trapz(dxs, dxs.columns.values, axis=1)
         if kwargs.get("model", "fgm") != "pdos":
             return dxsIntegral
         else:
@@ -579,6 +577,7 @@ class Xs:
         """
         args = (self.xs0Kcomplete, self.M) + args
         Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
+        # Calculation:
         if len(Ein.shape) == 1:
             return [Xs._calc_alpha0(T, Ein, *args, **kwargs)
                     for T in Tnew]

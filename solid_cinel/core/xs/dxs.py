@@ -332,8 +332,7 @@ class Dxs:
         >>> M = 238.05077040419212
         >>> from solid_cinel.core.material.vibration import Pdos
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> dxs, beta = Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm")
-        >>> pd.DataFrame(dxs, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        >>> Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
         beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
         Ein
         6.7554  28.734670  20.108117   7.358406   1.078944        0.0
@@ -342,8 +341,7 @@ class Dxs:
         7.2000   2.566863   3.985399   2.229881   0.449221        0.0
         7.3157   2.361360   3.634402   2.044991   0.420547        0.0
         7.4480   2.216768   3.362471   1.896636   0.397744        0.0
-        >>> dxs, beta = Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct")
-        >>> pd.DataFrame(dxs, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
         beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
         Ein
         6.7554  28.821334  19.787290   7.292477   1.076292        0.0
@@ -352,8 +350,7 @@ class Dxs:
         7.2000   2.554504   3.913638   2.208039   0.446993        0.0
         7.3157   2.348490   3.569032   2.025162   0.418284        0.0
         7.4480   2.203177   3.302152   1.878482   0.395426        0.0
-        >>> dxs, beta = Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos")
-        >>> pd.DataFrame(dxs, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
         beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
         Ein
         6.7554  28.922999  22.199127  10.213472   1.734711   0.018831
@@ -363,13 +360,10 @@ class Dxs:
         7.3157   1.773443   3.563735   2.614582   0.633089   0.011108
         7.4480   1.674328   3.306635   2.419227   0.596052   0.011008
         """
-        scatfunc, beta = ScatFunc.get_alpha0(Ein, M, T, *args, **kwargs)
-        EinGrid = beta.get_dE(T)[:, np.newaxis] + Ein
-        # Add recoil:
+        scatfunc = ScatFunc.get_alpha0(Ein, M, T, *args, **kwargs)
+        EinGrid = Ein + (scatfunc.columns.values * kb * T)[:, np.newaxis]
         EinGrid += get_gressierRecoil(Ein, T, M)
-        # Transform the xs0K into the appropriate shape:
-        xs0Kmat = reshape_differential(xs0K, EinGrid.T)
-        return scatfunc * xs0Kmat, beta
+        return scatfunc * reshape_differential(xs0K, EinGrid.T)
 
     @property
     def integral(self) -> float:

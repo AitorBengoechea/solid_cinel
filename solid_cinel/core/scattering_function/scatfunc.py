@@ -337,8 +337,7 @@ class ScatFuncSD:
         >>> T = 300
         >>> M = 238.05077040419212
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> scatfuncValues, beta = ScatFuncSD.get_alpha0(Ein, M, T, model="fgm")
-        >>> pd.DataFrame(scatfuncValues, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        >>> ScatFuncSD.get_alpha0(Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
         beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
         Ein
         6.7554   0.153967   0.269409   0.158014   0.031065        0.0
@@ -347,9 +346,7 @@ class ScatFuncSD:
         7.2000   0.161892   0.260769   0.150679   0.031233        0.0
         7.3157   0.163744   0.258559   0.148868   0.031253        0.0
         7.4480   0.165761   0.256053   0.146842   0.031264        0.0
-
-        >>> scatfuncValues, beta = ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="sct")
-        >>> pd.DataFrame(scatfuncValues, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
         beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
         Ein
         6.7554   0.153590   0.264466   0.156371   0.030960        0.0
@@ -358,9 +355,7 @@ class ScatFuncSD:
         7.2000   0.161088   0.256037   0.149185   0.031075        0.0
         7.3157   0.162834   0.253884   0.147411   0.031082        0.0
         7.4480   0.164732   0.251443   0.145427   0.031080        0.0
-
-        >>> scatfuncValues, beta = ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="pdos")
-        >>> pd.DataFrame(scatfuncValues, index=index, columns=beta.to_index).iloc[::, 1000::1000].round(6)
+        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
         beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
         Ein
         6.7554   0.111171   0.257399   0.201964   0.047321   0.000699
@@ -373,11 +368,10 @@ class ScatFuncSD:
         Ein = np.unique(EinGrid) if hasattr(EinGrid, '__len__') else np.array([EinGrid])
         # Scattering function calculation
         alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
-        scatfunc = Sab.from_model(alpha, beta, T, *args, model=model,
-                                  **kwargs).full
+        scatfunc = Sab.from_model(alpha, beta, T, *args,
+                   model=model, **kwargs).full
         scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
-        return scatfunc.values, Beta(scatfunc.columns.values)
-
+        return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
 
     @property
     def cdf(self) -> pd.Series:

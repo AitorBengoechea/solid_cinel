@@ -497,8 +497,8 @@ class Xs:
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
         array([  9.084969, 461.718705])
         """
-        dxs, beta = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
-        dxsIntegral = np.trapz(dxs, beta.data, axis=1)
+        dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
+        dxsIntegral = np.trapz(dxs, dxs.columns.values, axis=1)
         if kwargs.get("model", "fgm") != "pdos":
             return dxsIntegral
         else:
@@ -577,6 +577,7 @@ class Xs:
         """
         args = (self.xs0Kcomplete, self.M) + args
         Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
+        # Calculation:
         if len(Ein.shape) == 1:
             return [Xs._calc_alpha0(T, Ein, *args, **kwargs)
                     for T in Tnew]

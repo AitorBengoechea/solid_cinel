@@ -279,7 +279,7 @@ class ScatFuncSD:
 
     @staticmethod
     def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
-                   model: str = "fgm", **kwargs) -> pd.DataFrame:
+                   model: str = "fgm", **kwargs) -> [np.array, Beta]:
 
         """
         Calculate the alpha0 scattering function.
@@ -292,6 +292,15 @@ class ScatFuncSD:
             The mass of the target material in amu
         T: float
             Temperature of the material in K
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+        display: bool
+            If True, return a pd.DataFrame for visualization.
+            If False, return a xp.ndarray for computation.
 
         Parameters for SCT model
         ------------------------
@@ -324,6 +333,7 @@ class ScatFuncSD:
         Examples
         --------
         >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> index = pd.Index(Ein, name="Ein")
         >>> T = 300
         >>> M = 238.05077040419212
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)

@@ -7,12 +7,10 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import ScatFunc
+from solid_cinel.core.scattering_function import ScatFunc, Beta
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil
 from solid_cinel.core.generic import integrate, reshift, reshape_differential
 import os
-import dask.dataframe as dd
-
 from typing import Iterable
 
 # constants
@@ -276,7 +274,7 @@ class Dxs:
 
     @staticmethod
     def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
-                   **kwargs):
+                **kwargs) -> [np.array, Beta]:
         """
         Get the Dxs function for the 0K cross section
 
@@ -329,6 +327,7 @@ class Dxs:
         >>> os.chdir(wd)
 
         >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> index = pd.Index(Ein, name="Ein")
         >>> T = 300
         >>> M = 238.05077040419212
         >>> from solid_cinel.core.material.vibration import Pdos

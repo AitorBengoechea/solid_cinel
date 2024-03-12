@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder, Alpha
-from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
+from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab, interp_tauN
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import save_tau, get_tauNbeta
 from typing import Iterable
@@ -1151,9 +1151,9 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     return scatfunc
 
 
-@nb.jit(nopython=True, cache=True, nogil=False)
+@nb.jit(nopython=True, cache=True)
 def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
-                        M: float, Teff: float, ws: float) -> np.array:
+                       M: float, Teff: float, ws: float) -> np.ndarray:
     """
     Calculate the scattering function from the Short Collision Time model using
     a single angle.
@@ -1194,9 +1194,8 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     return sabValues * normFactor(Eout, Ein, T, M)
 
 
-@nb.jit(nopython=True, cache=True, nogil=False)
-def get_SabClm(alpha: np.ndarray, beta: np.ndarray,
-               tauN: np.ndarray, tauNbeta: np.ndarray,
+@nb.jit(nopython=True, cache=True)
+def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
                DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
@@ -1206,14 +1205,10 @@ def get_SabClm(alpha: np.ndarray, beta: np.ndarray,
     ----------
     alpha : 'np.ndarray', (Z, N)
         alpha grid values.
-    beta : 'np.ndarray', (N,)
-        beta grid values.
     nphonon : 'int', optional
         Phonon expansion order.
-    tauN : 'np.ndarray', (M, T)
-        all tau n functions in one array.
-    tauNbeta : 'np.ndarray', (M,)
-        Space between beta grid points of tau n functions.
+    tauNinterp : 'np.ndarray', (Z, N)
+        tauN function for the phonon expansion interpolated to the beta grid.
     DebyeWallerCoeff : 'float'
         Debye Waller Coefficient in LEAPR formalism.
 
@@ -1239,7 +1234,8 @@ def get_SabClm(alpha: np.ndarray, beta: np.ndarray,
     >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
     >>> tau1beta = pdos.beta.data
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
     >>> pd.DataFrame(sabValues, index=[120], columns=beta).T.iloc[::100].round(6)
                    120
     0.000000  0.210641
@@ -1257,18 +1253,18 @@ def get_SabClm(alpha: np.ndarray, beta: np.ndarray,
     # Zero phonon expansion:
     IterSum = np.log(alpha * DebyeWallerCoeff)
     alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-    S_diag = alphaMul * np.interp(beta, tauNbeta, tauN[0])
+    S_diag = alphaMul * tauNinterp[0]
 
     # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, tauN.shape[0]):
+    for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
         IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
         alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-        S_diag += alphaMul * np.interp(beta, tauNbeta, tauN[n])
+        S_diag += alphaMul * tauNinterp[n]
     return S_diag
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the scattering function calculation.
@@ -1295,7 +1291,7 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
                            T: float, M: float) -> (np.ndarray, np.ndarray):
     """
@@ -1337,7 +1333,8 @@ def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
     >>> tau1beta = pdos.beta.data
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
     >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
     >>> pd.Series(scatFuncValues, index=EoutCalc).iloc[::200].round(6)
     6.755400    0.036933
@@ -1368,7 +1365,7 @@ def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
 
     return EoutCalc, scatFuncValues[positiveMask] * norm
 
-@nb.jit(nopython=True, cache=True, nogil=False)
+@nb.jit(nopython=True, cache=True)
 def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
                            T: float, M: float) -> (np.ndarray, np.ndarray):
     """
@@ -1414,7 +1411,8 @@ def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
     >>> beta = get_beta(Eout, Ein, T)
     >>> alpha_mat = get_alphaMat(beta * kb * T + Ein, Ein, T, M, mu)
-    >>> sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
     >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
     >>> pd.DataFrame(scatFuncValues, index=[120], columns=EoutCalc).T.iloc[::200].round(6)
                    120
@@ -1445,7 +1443,7 @@ def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     return EoutCalc, scatFuncValues[::, positiveMask] * norm
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=False)
 def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
                     mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
                     DebyeWallerCoeff: float) -> np.ndarray:
@@ -1503,21 +1501,20 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     dtype: float64
     """
     beta = get_beta(Eout, Ein, T)
-    alpha_mat = get_alphaMat(beta * kb * T + Ein if len(beta) < len(Eout) else Eout,
-                              Ein, T, M, mu)
-    sabValues = get_SabClm(alpha_mat, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    nphonon = tauN.shape[0]
+    tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    alphaMat = get_alphaMat(beta * kb * T + Ein if len(beta) < len(Eout) else Eout,
+                            Ein, T, M, mu)
+    sabValues = get_SabClm(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)
     EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
-    select_scarfunc = np.zeros((len(mu), len(Eout)))
-    for i in range(len(mu)):
-        select_scarfunc[i] += np.interp(Eout, EoutCalc, scatFuncValues[i])
-    return select_scarfunc
+    return interp_tauN(Eout, len(mu), scatFuncValues, EoutCalc)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=False, cache=False)
 def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
-                      mu: float, tauN: np.ndarray, tauNbeta: np.ndarray,
-                      DebyeWallerCoeff: float) -> np.ndarray:
+                       mu: float, tauN: np.ndarray, tauNbeta: np.ndarray,
+                       DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -1572,9 +1569,11 @@ def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
     dtype: float64
     """
     beta = get_beta(Eout, Ein, T)
+    nphonon = tauN.shape[0]
+    tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
     alpha = get_alphaFromEout(Eout_, Ein, T, M, mu)
-    sabValues = get_SabClm(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
+    sabValues = get_SabClm(alpha, nphonon, tauNinterp, DebyeWallerCoeff)
     EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
     return np.interp(Eout, EoutCalc, scatFuncValues)

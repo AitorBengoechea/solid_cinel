@@ -126,26 +126,54 @@ def reshape_differential(data: pd.Series, xnew: Iterable,
 def interp_xnewParallel(xnew: np.ndarray, xnewShape: tuple,
                         x: np.ndarray, y: np.ndarray):
     """
-    Interpolate tauN functions to the beta grid.
+    Interpolate multiple xnew using the (x, y) function.
 
     Parameters
     ----------
-    beta: 'np.ndarray', (M,)
-        beta grid values.
-    tauN: 'np.ndarray', (Z, T)
-        tauN functions. The first dimension is the number of the expansion
-        and the second dimension is the number of the beta grid.
-    tauNbeta: 'np.ndarray', (T,)
-        Beta values of the tauN functions.
+    xnew: 'np.ndarray', (M, Z)
+        New grid values.
+    xnewShape: 'tuple'
+        Shape of the new grid.
+    x: 'np.ndarray', (T,)
+        Original grid values.
+    y: 'np.ndarray', (T,)
+        Original function values.
 
     Returns
     -------
-    'np.ndarray', (Z, M)
-        Interpolated tauN functions to the beta grid.
+    'np.ndarray', (M, Z)
+        Interpolated values.
     """
     yinterp = np.zeros(xnewShape)
     for n in prange(xnewShape[0]):
         yinterp[n] += np.interp(xnew[n], x, y)
+    return yinterp
+
+@nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
+def interp_multyParallel(xnew: np.ndarray, x: np.ndarray, y: np.ndarray):
+    """
+    Interpolate to xnew using multiple function with the same x grid.
+
+    Parameters
+    ----------
+    xnew: 'np.ndarray', (M,)
+        New grid values.
+    xnewShape: 'tuple'
+        Shape of the new grid.
+    x: 'np.ndarray', (T, )
+        Original grid values.
+    y: 'np.ndarray', (Z, T)
+        Original function values.
+
+    Returns
+    -------
+    'np.ndarray', (Z, M)
+        Interpolated values.
+    """
+    Nrow, Ncolumn = y.shape[0], len(xnew)
+    yinterp = np.zeros((Nrow, Ncolumn))
+    for n in prange(Nrow):
+        yinterp[n] += np.interp(xnew, x, y[n])
     return yinterp
 def interpolation(data: pd.Series, xnew: Iterable,
                   values: bool = False, parallel=False,
@@ -197,14 +225,14 @@ def interpolation(data: pd.Series, xnew: Iterable,
     dtype: float64
     """
     xnewShape = xnew.shape
-    if parallel or len(xnewShape[0]) > 100:
+    if parallel or xnewShape[0] > 100:
         yinterp = interp_xnewParallel(xnew, xnewShape, data.index.values, data.values)
     else:
         yinterp = reshape_differential(data, xnew, **kwargs)
     if values or len(xnewShape) == 2:
         return yinterp
     else:
-         return pd.Series(yinterp, index=xnew)
+        return pd.Series(yinterp, index=xnew)
 
 def reshift(data: pd.Series, dx: [float, np.ndarray]) -> pd.Series:
     """

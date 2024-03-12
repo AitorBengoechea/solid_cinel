@@ -8,10 +8,10 @@ import pandas as pd
 import numba as nb
 import os
 from scipy.constants import physical_constants as const
-from solid_cinel.core.generic import integrate, reshape_differential
+from solid_cinel.core.generic import integrate, interpolation, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder, Alpha
-from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab, interp_tauN
+from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import save_tau, get_tauNbeta
 from typing import Iterable
@@ -1085,7 +1085,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
                 E = self.data.columns.values
             else:
                 E = self.data.index.values
-            xs_reshaped = reshape_differential(xs, E)
+            xs_reshaped = interpolation(xs, E, values=True)
 
         elif len(xs.shape) == 2:
             xs_reshaped = xs.values if isinstance(xs, pd.DataFrame) else xs
@@ -1234,7 +1234,7 @@ def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
     >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
     >>> tau1beta = pdos.beta.data
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    >>> tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
     >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
     >>> pd.DataFrame(sabValues, index=[120], columns=beta).T.iloc[::100].round(6)
                    120
@@ -1333,7 +1333,7 @@ def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
     >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
     >>> tau1beta = pdos.beta.data
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    >>> tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
     >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
     >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
     >>> pd.Series(scatFuncValues, index=EoutCalc).iloc[::200].round(6)
@@ -1411,7 +1411,7 @@ def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
     >>> beta = get_beta(Eout, Ein, T)
     >>> alpha_mat = get_alphaMat(beta * kb * T + Ein, Ein, T, M, mu)
-    >>> tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    >>> tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
     >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
     >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
     >>> pd.DataFrame(scatFuncValues, index=[120], columns=EoutCalc).T.iloc[::200].round(6)
@@ -1502,13 +1502,13 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     """
     beta = get_beta(Eout, Ein, T)
     nphonon = tauN.shape[0]
-    tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
     alphaMat = get_alphaMat(beta * kb * T + Ein if len(beta) < len(Eout) else Eout,
                             Ein, T, M, mu)
     sabValues = get_SabClm(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)
     EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
-    return interp_tauN(Eout, len(mu), scatFuncValues, EoutCalc)
+    return interp_multyParallel(Eout, EoutCalc, scatFuncValues)
 
 
 @nb.jit(nopython=True, nogil=False, cache=False)
@@ -1570,7 +1570,7 @@ def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
     """
     beta = get_beta(Eout, Ein, T)
     nphonon = tauN.shape[0]
-    tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
     alpha = get_alphaFromEout(Eout_, Ein, T, M, mu)
     sabValues = get_SabClm(alpha, nphonon, tauNinterp, DebyeWallerCoeff)

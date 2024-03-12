@@ -4,7 +4,7 @@ Python file for working with S(alpha, -beta) matrixs.
 @author: AB272525
 """
 from scipy.constants import physical_constants as const
-from solid_cinel.core.generic import integrate, reshape_differential
+from solid_cinel.core.generic import integrate, reshape_differential, interp_multyParallel
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNfunc, save_tau, gpu_available, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
@@ -1447,7 +1447,7 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     'xp.ndarray', (N, M)
         S(alpha, -beta) matrix values.
     """
-    tauNinterp = interp_tauN(beta, nphonon, tauN, tauNbeta)
+    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
     if gpu_available:
         try:
             return _phonon_expansion_gpu(xp.asarray(alpha), nphonon,
@@ -1456,32 +1456,6 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
         except xp.cuda.memory.OutOfMemoryError:
             pass
     return _phonon_expansion_cpu(alpha, nphonon, tauNinterp, DebyeWallerCoeff)
-
-@nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
-def interp_tauN(beta: np.ndarray, nphonon: int, tauN: np.ndarray,
-                tauNbeta: np.ndarray):
-    """
-    Interpolate tauN functions to the beta grid.
-
-    Parameters
-    ----------
-    beta: 'np.ndarray', (M,)
-        beta grid values.
-    tauN: 'np.ndarray', (Z, T)
-        tauN functions. The first dimension is the number of the expansion
-        and the second dimension is the number of the beta grid.
-    tauNbeta: 'np.ndarray', (T,)
-        Beta values of the tauN functions.
-
-    Returns
-    -------
-    'np.ndarray', (Z, M)
-        Interpolated tauN functions to the beta grid.
-    """
-    tauNinterp = np.zeros((nphonon, len(beta)))
-    for n in prange(nphonon):
-        tauNinterp[n] += np.interp(beta, tauNbeta, tauN[n])
-    return tauNinterp
 
 
 @nb.jit(nopython=True, cache=True)

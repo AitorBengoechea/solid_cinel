@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.generic import interpolation
+from solid_cinel.core.generic import interpolation, trapz_parallel
 from solid_cinel.core.scattering_function.alpha import Alpha, get_alphaRecoil
 import warnings
 import os
@@ -430,7 +430,7 @@ class Xs:
 
     @staticmethod
     def _calc_alpha0(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
-                      *args, **kwargs) -> np.ndarray:
+                     *args, **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -498,7 +498,7 @@ class Xs:
         array([  9.084969, 461.718705])
         """
         dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
-        dxsIntegral = np.trapz(dxs, dxs.columns.values, axis=1)
+        dxsIntegral = trapz_parallel(dxs.values, dxs.columns.values)
         if kwargs.get("model", "fgm") != "pdos":
             return dxsIntegral
         else:
@@ -741,7 +741,7 @@ class Xs:
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.403287    9.408170
+        0.065625     9.411657    9.412832    9.411996
         2.000000     9.085342    9.085596    9.084969
         4.000000     8.481975    8.482253    8.481713
         5.000000     7.805580    7.805930    7.804704
@@ -896,7 +896,7 @@ class Xs:
         >>> Xs.from_sigma1(T, M, xs0Kshort, xs0Kcomplete=xs0K).data
         T                 0           300
         Ein
-        0.00001      9.420892   36.117710
+        0.00001      9.420892   36.244119
         11.23650     9.239644    9.240652
         34.70286     1.146785    1.147109
         58.18538     9.794358    9.793941
@@ -980,7 +980,7 @@ class Xs:
         >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="pdos", xs0Kcomplete=xs0K).data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.403287    9.408170
+        0.065625     9.411657    9.412832    9.411996
         2.000000     9.085342    9.085596    9.084969
         4.000000     8.481975    8.482253    8.481713
         5.000000     7.805580    7.805930    7.804704
@@ -1209,6 +1209,7 @@ class Xs:
                                          **kwargs)
             xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
+
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)

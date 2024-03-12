@@ -50,6 +50,27 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
         raise ValueError("kind is not properly introduced")
     return y_norm
 
+@nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
+def trapz_parallel(data: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """
+    Trapezoidal integration of a 2D array in parallel for the same x grid.
+
+    Parameters
+    ----------
+    data: np.ndarray, (N, M)
+        2D array to integrate
+    x: np.ndarray, (M,)
+        x grid
+
+    Returns
+    -------
+    np.ndarray, (N,)
+    """
+    result = np.zeros(data.shape[0])
+    for i in prange(data.shape[0]):
+        result[i] += np.trapz(data[i], x)
+    return result
+
 
 def reshape_differential(data: pd.Series, xnew: Iterable,
                          kind: str = "slinear",

@@ -279,7 +279,7 @@ class ScatFuncSD:
 
     @staticmethod
     def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
-                   model: str = "fgm", **kwargs) -> [np.array, Beta]:
+                   model: str = "fgm", **kwargs) -> pd.DataFrame:
 
         """
         Calculate the alpha0 scattering function.

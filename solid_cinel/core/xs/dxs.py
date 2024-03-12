@@ -274,7 +274,7 @@ class Dxs:
 
     @staticmethod
     def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
-                **kwargs) -> [np.array, Beta]:
+                   **kwargs) -> pd.DataFrame:
         """
         Get the Dxs function for the 0K cross section
 

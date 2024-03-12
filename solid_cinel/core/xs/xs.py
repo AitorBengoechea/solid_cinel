@@ -523,10 +523,10 @@ class Xs:
         list
             The elastic scattering cross section in barns for the new
         """
-        bag = db.from_sequence(self.get_EinTcomb(Tnew, EinGrid)) \
+        EinTcomb = self.get_EinTcomb(Tnew, EinGrid)
+        bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count()) \
                 .map(lambda x: self._calc_sigma1(*x, self.xs0Kcomplete, self.M))
-        with dask.config.set(num_workers=os.cpu_count()):
-            return bag.compute()
+        return bag.compute()
 
     def _compute_alpha0(self, Tnew: Iterable, EinGrid: [Iterable, None], *args,
                         **kwargs) -> list:
@@ -1055,8 +1055,7 @@ class Xs:
             return self.get_output(xsInterp, Ein=Ein, T=Tinterp)
 
     @staticmethod
-    def get_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                    M: float) -> np.ndarray:
+    def get_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> pd.DataFrame:
         """
         Get the incident energy matrix for the arno model.
 
@@ -1091,16 +1090,9 @@ class Xs:
          0.5  1.903825  1.954028  2.004237  2.054452  2.104671
          0.9  1.900524  1.950660  2.000847  2.051083  2.101362
         """
-        @nb.jit(nopython=True, nogil=False, cache=True)
-        def calc_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                         M: float) -> np.ndarray:
-            EinArno = np.empty((len(mu), len(Eout)))
-            for i in prange(len(mu)):
-                EinArno[i, :] = EinArnoRow(Ein, Eout, mu[i], M)
-            return EinArno
-        return pd.DataFrame(calc_4PCFEin(Ein, Eout, mu, M),
-                            index=pd.Index(mu, name="mu"),
-                            columns=pd.Index(Eout, name="Eout"))
+        EinValues = calc_4PCFEin(Ein, Eout, mu, M)
+        mu_, Eout_ = pd.Index(mu, name="mu"), pd.Index(Eout, name="Eout")
+        return pd.DataFrame(EinValues, index=mu_, columns=Eout_)
 
     def get_4PCFxs(self, Ein: float, T: float, Eout: np.ndarray,
                    theta: np.ndarray, *args, **kwargs) -> pd.DataFrame:
@@ -1263,7 +1255,36 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.sort(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=True, parallel=True)
+def calc_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                 M: float) -> np.ndarray:
+    """
+    Get the incident energy matrix for 4PCF model.
+
+    Parameters
+    ----------
+    Ein: float
+        The incident energy of the neutron in eV
+    Eout: np.ndarray, (Z,)
+        The neutron outgoing energy grid in eV
+    mu: np.ndarray, (M,)
+        The cosine of the neutron outgoing angle
+    M: float
+        Mass of the material in amu
+
+    Returns
+    -------
+    Ein4PCF: np.ndarray, (M, Z)
+        Incident energy matrix for 4PCF model
+    """
+    Nmu = len(mu)
+    Ein4PCF = np.zeros((Nmu, len(Eout)))
+    for i in prange(Nmu):
+        Ein4PCF[i, :] += EinArnoRow(Ein, Eout, mu[i], M)
+    return Ein4PCF
+
+
+@nb.jit(nopython=True, cache=True)
 def EinArnoRow(Ein: float, Eout: np.ndarray, mu: float,
                M: float) -> np.ndarray:
     """

@@ -7,9 +7,8 @@ Python file for generic function.
 import scipy as sp
 import numpy as np
 import pandas as pd
-import re
-import os
-import tempfile
+import numba as nb
+from numba import prange
 from typing import Iterable
 from scipy.stats import qmc
 
@@ -123,9 +122,34 @@ def reshape_differential(data: pd.Series, xnew: Iterable,
                                   )
     return foo(xnew)
 
+@nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
+def interp_xnewParallel(xnew: np.ndarray, xnewShape: tuple,
+                        x: np.ndarray, y: np.ndarray):
+    """
+    Interpolate tauN functions to the beta grid.
 
+    Parameters
+    ----------
+    beta: 'np.ndarray', (M,)
+        beta grid values.
+    tauN: 'np.ndarray', (Z, T)
+        tauN functions. The first dimension is the number of the expansion
+        and the second dimension is the number of the beta grid.
+    tauNbeta: 'np.ndarray', (T,)
+        Beta values of the tauN functions.
+
+    Returns
+    -------
+    'np.ndarray', (Z, M)
+        Interpolated tauN functions to the beta grid.
+    """
+    yinterp = np.zeros(xnewShape)
+    for n in prange(xnewShape[0]):
+        yinterp[n] += np.interp(xnew[n], x, y)
+    return yinterp
 def interpolation(data: pd.Series, xnew: Iterable,
-                  values: bool = False, **kwargs) -> [np.ndarray, pd.Series]:
+                  values: bool = False, parallel=False,
+                  **kwargs) -> [np.ndarray, pd.Series]:
     """
     Interpolate the data over new energy grid structure.
 
@@ -172,11 +196,15 @@ def interpolation(data: pd.Series, xnew: Iterable,
     4.5    4.5
     dtype: float64
     """
-    data_interp = reshape_differential(data, xnew, **kwargs)
-    if values:
-        return data_interp
+    xnewShape = xnew.shape
+    if parallel or len(xnewShape[0]) > 100:
+        yinterp = interp_xnewParallel(xnew, xnewShape, data.index.values, data.values)
     else:
-        return pd.Series(data_interp, index=xnew)
+        yinterp = reshape_differential(data, xnew, **kwargs)
+    if values or len(xnewShape) == 2:
+        return yinterp
+    else:
+         return pd.Series(yinterp, index=xnew)
 
 def reshift(data: pd.Series, dx: [float, np.ndarray]) -> pd.Series:
     """

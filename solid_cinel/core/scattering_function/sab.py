@@ -502,7 +502,9 @@ class Sab:
 
         # Start the calculation:
         ratio = cls.pdos.Teff / T
-
+        if np.isnan(ratio):
+            warnings.warn("The effective temperature is not defined, the ratio will be 1")
+            ratio = 1.0
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
         if beta_.kind == "abs":

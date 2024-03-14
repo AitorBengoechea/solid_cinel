@@ -488,7 +488,7 @@ class Tpdos:
         0.0032    0.657892
         Name: rho, dtype: float64
         """
-        dE_index = pd.Index(self.beta.get_dE(self.T), name="dE")
+        dE_index = pd.Index(self.beta.get_dE(self.T).round(10), name="dE")
         return Epdos(self.data.values.copy(), index=dE_index.round(20))
 
 
@@ -1028,8 +1028,8 @@ class Npdos:
         0.0000  0.000000  0.000000  0.000000  0.000000
         0.0004  0.041879  0.047919  0.055963  0.070446
         0.0008  0.088790  0.117714  0.141224  0.170520
-        0.0012  0.211161  0.178579  0.209877  0.262514
-        0.0012  0.277240  0.239444  0.278530  0.354508
+        0.0012  0.211161  0.239444  0.278530  0.354508
+        0.0016  0.343320  0.397844  0.462783  0.604724
         >>> os.chdir(wd)
         """
         files = os.listdir(pathToDirectory)
@@ -1134,27 +1134,27 @@ class Npdos:
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> npdos.Tinterp(600).data.iloc[0:5]
         beta
-        0.000000     4.710799e-09
-        19.340864    5.938613e-07
-        38.681727    1.538605e-06
-        58.022591    2.143123e-06
-        77.363454    2.874966e-06
+        0.000000    0.000000
+        0.007736    0.002592
+        0.015473    0.006558
+        0.023209    0.012920
+        0.030945    0.021546
         Name: rho, dtype: float64
         >>> npdos.Tinterp([600, 200], inplace=True)
         >>> npdos.data.iloc[0:5]
-        T             200.0     300.0     500.0         600.0     1000.0    1700.0
+        T         200.0     300.0     500.0     600.0     1000.0    1700.0
         dE
-        0.0000  1.242620e-07  0.000000  0.000000  9.111091e-08  0.000000  0.000000
-        0.0004  1.485226e-07  0.041879  0.047919  1.248230e-07  0.055963  0.070446
-        0.0008  1.727832e-07  0.088790  0.117714  1.585351e-07  0.141224  0.170520
-        0.0012  1.970438e-07  0.211161  0.178579  1.922471e-07  0.209877  0.262514
-        0.0012  2.213044e-07  0.277240  0.239444  2.259592e-07  0.278530  0.354508
+        0.0000  0.000000  0.000000  0.000000  0.000000  0.000000  0.000000
+        0.0004  0.041879  0.041879  0.047919  0.050128  0.055963  0.070446
+        0.0008  0.088790  0.088790  0.117714  0.126835  0.141224  0.170520
+        0.0012  0.211161  0.211161  0.239444  0.249884  0.278530  0.354508
+        0.0016  0.343320  0.343320  0.397844  0.416720  0.462783  0.604724
 
         >>> os.chdir(wd)
         """
         Tnew_ = self.get_Tnew(Tnew)
         if Tnew_.empty:
-            return self
+            return {T: self.instance[T] for T in self.check_list(Tnew)}
         if self.interp_spline is None:
             self.compute_spline()
         # Get the index values from the data
@@ -1162,9 +1162,10 @@ class Npdos:
 
         # Use the previously computed spline function to interpolate the data
         interpolated_T = self.interp_spline(dE, Tnew_)
+        interpolated_T[0, ::] = 0.0
 
         # Compute the Tpdos object for the Tnew temperature
-        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i]).get_Tpdos(T)
+        intepolated_Tpdos = {T: Epdos(interpolated_T[:, i], index=dE).get_Tpdos(T)
                              for i, T in enumerate(Tnew_)}
         if inplace:
             self.instance.update(intepolated_Tpdos)
@@ -1213,7 +1214,7 @@ class Npdos:
         """
         # Interpolate the data to the temperature T for avoiding the
         # numerical errors
-        return self.Tinterp(T).instance[T]
+        return self.Tinterp(T)[T]
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:
@@ -1307,8 +1308,8 @@ class Pdos:
         0.0000  0.000000  0.000000  0.000000  0.000000
         0.0004  0.041879  0.047919  0.055963  0.070446
         0.0008  0.088790  0.117714  0.141224  0.170520
-        0.0012  0.211161  0.178579  0.209877  0.262514
-        0.0012  0.277240  0.239444  0.278530  0.354508
+        0.0012  0.211161  0.239444  0.278530  0.354508
+        0.0016  0.343320  0.397844  0.462783  0.604724
         >>> os.chdir(wd)
         """
         return cls(Npdos.from_directory(*args, **kwargs))

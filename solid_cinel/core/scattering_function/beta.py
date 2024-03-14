@@ -7,7 +7,6 @@ from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange
 from scipy.constants import physical_constants as const
 
 

@@ -1200,6 +1200,15 @@ class Npdos:
         0.046418    0.005459
         0.061891    0.008876
         Name: rho, dtype: float64
+
+        >>> npdos.get_Tpdos(500).data.iloc[0:5]
+        beta
+        0.000000    0.000000
+        0.009284    0.002065
+        0.018567    0.005072
+        0.027851    0.010317
+        0.037134    0.017142
+        Name: rho, dtype: float64
         >>> os.chdir(wd)
         """
         # Interpolate the data to the temperature T for avoiding the

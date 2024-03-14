@@ -445,11 +445,6 @@ class ScatFuncDD:
         dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
         dd_pdf_.index.name = "mu"
         dd_pdf_.columns.name = "Eout"
-        norm = integrate(dd_pdf_.apply(integrate))
-        if abs(norm - 1) >= 0.1 and self.Ein <= 0.005:
-            raise ValueError(f"The scattering function is not normalized ({norm} < 0.9)")
-        elif abs(norm - 1) >= 0.01:
-            warnings.warn("Normalizaton not satisfied with 1% accuracy")
         self._data = dd_pdf_
 
     @classmethod

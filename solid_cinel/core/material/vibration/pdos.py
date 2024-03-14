@@ -1154,7 +1154,9 @@ class Npdos:
         """
         Tnew_ = self.get_Tnew(Tnew)
         if Tnew_.empty:
-            return {T: self.instance[T] for T in self.check_list(Tnew)}
+            Textract = self.check_list(Tnew)
+            pdosExtract = {T: self.instance[T] for T in Textract}
+            return pdosExtract[Tnew] if len(Textract) == 1 else pdosExtract
         if self.interp_spline is None:
             self.compute_spline()
         # Get the index values from the data
@@ -1214,7 +1216,7 @@ class Npdos:
         """
         # Interpolate the data to the temperature T for avoiding the
         # numerical errors
-        return self.Tinterp(T)[T]
+        return self.Tinterp(T)
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
               values: bool = False) -> [np.ndarray, pd.DataFrame]:

@@ -80,7 +80,7 @@ class Atom:
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert Al.name == "Al27"
@@ -101,7 +101,7 @@ class Atom:
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert Al.zam == 130270
@@ -123,7 +123,7 @@ class Atom:
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert np.double(Al.boundXs).round(6) == np.double(1.503081)
@@ -144,7 +144,7 @@ class Atom:
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert np.double(Al.boundIncXs).round(6) == np.double(0.008235)
@@ -165,7 +165,7 @@ class Atom:
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert np.double(Al.freeXs).round(6) == np.double(1.396702)
@@ -244,12 +244,12 @@ class Molecule(Atom):
         Object initialization:
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Molecule(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, name="Al")
+        >>> Al = Molecule(A, Z, atomic_mass, b_coh, b_incoh, name="Al")
 
         Test the results:
         >>> assert Al.name == "Al"
         >>> assert Al.atoms["Al27"].name == "Al27"
-        >>> Al = Molecule(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Molecule(A, Z, atomic_mass, b_coh, b_incoh)
         >>> assert Al.name == "Al27"
         """
         return self._name

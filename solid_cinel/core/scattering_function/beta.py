@@ -9,13 +9,9 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 
-
+# Constants
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
-
-# Examples variables:
-from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
-from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
 
 
 class Beta:

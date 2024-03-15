@@ -299,7 +299,7 @@ class Sab:
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
         # Save the Phonon Density of States for extrapolation
-        cls.pdos = pdos.define_pdos(T)
+        cls.pdos = pdos.fix_T(T)
 
         # Start the calculation:
         ratio = cls.pdos.Teff / T
@@ -387,7 +387,7 @@ class Sab:
         """
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
-        cls.pdos = pdos.define_pdos(T)
+        cls.pdos = pdos.fix_T(T)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check

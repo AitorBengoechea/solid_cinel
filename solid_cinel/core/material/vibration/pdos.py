@@ -1328,7 +1328,7 @@ class Pdos:
         """
         return type(self.instance).__name__
 
-    def define_pdos(self, T: float) -> Tpdos:
+    def fix_T(self, T: float) -> Tpdos:
         """
         Check if the Pdos object is fixed for 1 temperature.
 

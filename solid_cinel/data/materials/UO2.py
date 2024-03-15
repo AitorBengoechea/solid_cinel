@@ -1,5 +1,6 @@
 import numpy as np
 
+# Structural information for the material:
 preferred_orientation = [0, 0, 1]
 unit_pos_U_str = '''
 0.500000  0.000000  0.000000

@@ -180,7 +180,7 @@ class Solid(CrystalStructure, Molecule):
         >>> UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh)
 
         Test the results:
-        >>> Al.unit_pos.loc["Al27"]
+        >>> Al.unit_pos["Al27"]
               x     y     z
         0  0.25  0.25  0.25
         1  0.75  0.25  0.25
@@ -191,7 +191,7 @@ class Solid(CrystalStructure, Molecule):
         6  0.75  0.75  0.25
         7  0.25  0.75  0.25
 
-        >>> UO2.unit_pos.loc["O16"]
+        >>> UO2.unit_pos["O16"]
               x     y     z
         0  0.25  0.25  0.25
         1  0.75  0.25  0.25
@@ -202,7 +202,7 @@ class Solid(CrystalStructure, Molecule):
         6  0.75  0.75  0.25
         7  0.25  0.75  0.25
 
-        >>> UO2.unit_pos.loc["U238"]
+        >>> UO2.unit_pos["U238"]
              x    y    z
         0  0.5  0.0  0.0
         1  0.5  0.5  0.5
@@ -218,8 +218,7 @@ class Solid(CrystalStructure, Molecule):
             _unit_pos = {element: pd.DataFrame(single_unit_pos.reshape(-1, 3), columns=col)
                          for element, single_unit_pos in unit_pos.items()}
         else:
-            _unit_pos = {self.name: pd.DataFrame(np.array(unit_pos).reshape(-1, 3),
-                                                 columns=col)}
+            _unit_pos = {self.name: pd.DataFrame(np.array(unit_pos).reshape(-1, 3), columns=col)}
         self._unit_pos = pd.Series(_unit_pos)
 
     @property
@@ -251,7 +250,7 @@ class Solid(CrystalStructure, Molecule):
         6	3.570888	 2.061653	0.583124
         7	2.142533	 2.061653	0.583124
 
-        >>> UO2.atom_pos.loc["O16"].round(6)
+        >>> UO2.atom_pos["O16"].round(6)
                   x         y         z
         0  1.386952  1.386952  1.386952
         1  4.160858  1.386952  1.386952
@@ -262,7 +261,7 @@ class Solid(CrystalStructure, Molecule):
         6  4.160858  4.160858  1.386952
         7  1.386953  4.160858  1.386952
 
-        >>> UO2.atom_pos.loc["U238"].round(6)
+        >>> UO2.atom_pos["U238"].round(6)
                   x         y         z
         0  2.773905  0.000000  0.000000
         1  2.773905  2.773905  2.773905

@@ -1204,7 +1204,7 @@ class Xs:
 
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=True)
 def default_Eout(Ein: float) -> np.ndarray:
     """
     Generate the default Eout grid for the convolution. The grid is tested with
@@ -1284,7 +1284,7 @@ def calc_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     return Ein4PCF
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True, nogil=True)
 def EinArnoRow(Ein: float, Eout: np.ndarray, mu: float,
                M: float) -> np.ndarray:
     """

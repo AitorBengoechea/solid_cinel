@@ -1104,7 +1104,7 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             return scatfuncConvol
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=True)
 def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     """
     Sigma1 function for Energy differential scattering function
@@ -1151,7 +1151,7 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     return scatfunc
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True)
 def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
                        M: float, Teff: float, ws: float) -> np.ndarray:
     """
@@ -1194,7 +1194,7 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     return sabValues * normFactor(Eout, Ein, T, M)
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True)
 def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
                DebyeWallerCoeff: float) -> np.ndarray:
     """
@@ -1264,7 +1264,7 @@ def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
     return S_diag
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True, nogil=True)
 def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the scattering function calculation.
@@ -1291,7 +1291,7 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True, nogil=True)
 def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
                            T: float, M: float) -> (np.ndarray, np.ndarray):
     """
@@ -1365,7 +1365,7 @@ def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
 
     return EoutCalc, scatFuncValues[positiveMask] * norm
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True, nogil=True)
 def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
                            T: float, M: float) -> (np.ndarray, np.ndarray):
     """
@@ -1443,7 +1443,7 @@ def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
     return EoutCalc, scatFuncValues[::, positiveMask] * norm
 
 
-@nb.jit(nopython=True, nogil=False, cache=False)
+@nb.jit(nopython=True)
 def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
                     mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
                     DebyeWallerCoeff: float) -> np.ndarray:
@@ -1511,7 +1511,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     return interp_multyParallel(Eout, EoutCalc, scatFuncValues)
 
 
-@nb.jit(nopython=True, nogil=False, cache=False)
+@nb.jit(nopython=True)
 def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
                        mu: float, tauN: np.ndarray, tauNbeta: np.ndarray,
                        DebyeWallerCoeff: float) -> np.ndarray:

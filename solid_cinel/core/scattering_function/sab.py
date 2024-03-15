@@ -1376,7 +1376,7 @@ def _phonon_expansion_gpu(alpha: xp.ndarray, nphonon: int, tauNinterp: xp.ndarra
     return sabValues
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True)
 def _phonon_expansion_cpu(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
                           DebyeWallerCoeff: float) -> np.ndarray:
     """
@@ -1460,7 +1460,7 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     return _phonon_expansion_cpu(alpha, nphonon, tauNinterp, DebyeWallerCoeff)
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(nopython=True, nogil=True)
 def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float,
                     ws: float) -> np.ndarray:
     """

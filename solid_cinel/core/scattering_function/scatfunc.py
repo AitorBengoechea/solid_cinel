@@ -25,43 +25,6 @@ import warnings
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
-# Example variables:
-interv_in_energy_U238 = 6.956193E-04
-rho_in_energy_U238_str = '''
-0.000000E+00 1.041128E-01 3.759952E-01 8.354039E-01
-1.469796E+00 2.335578E+00 3.467660E+00 4.841392E+00
-6.492841E+00 8.608376E+00 1.131303E+01 1.504441E+01
-2.006807E+01 2.750471E+01 4.171597E+01 1.585670E+02
-1.978483E+02 1.144621E+02 7.555927E+01 4.831100E+01
-4.389081E+01 4.246484E+01 4.103699E+01 3.986249E+01
-3.827959E+01 3.592088E+01 3.272170E+01 3.914602E+01
-8.144694E+01 9.693959E+01 5.503795E+01 2.619253E+01
-1.763331E+01 1.475875E+01 1.522465E+01 1.213117E+01
-6.175029E+00 2.483519E+00 1.445581E+00 1.423177E+00
-1.502350E+00 1.718768E+00 2.211346E+00 3.061686E+00
-3.550530E+00 3.349917E+00 2.768379E+00 2.177488E+00
-1.856123E+00 1.622775E+00 1.445254E+00 1.300794E+00
-1.180078E+00 1.075748E+00 9.928057E-01 9.238564E-01
-8.577708E-01 8.073819E-01 7.634820E-01 7.172257E-01
-6.728183E-01 6.251482E-01 5.496737E-01 4.992486E-01
-3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-01
-9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
-7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
-1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
-3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
-2.653572E-02 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 7.105193E-03 5.274518E-02 1.324974E-01
-2.310275E-01 4.042710E-01 6.421137E-01 8.073457E-01
-9.162074E-01 1.077923E+00 1.142595E+00 1.092532E+00
-1.060668E+00 1.000020E+00 8.769838E-01 7.610532E-01
-6.898200E-01 6.324347E-01 5.857072E-01 5.563076E-01
-5.468099E-01 5.515587E-01 4.871045E-01 3.198787E-01
-1.132118E-01 2.066306E-03 0.000000E+00
-'''
-rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
-                                   sep=' ')
-
 
 class ScatFuncSD:
     """
@@ -234,6 +197,7 @@ class ScatFuncSD:
 
         Examples
         --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -334,6 +298,7 @@ class ScatFuncSD:
 
         Examples
         --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
         >>> index = pd.Index(Ein, name="Ein")
         >>> T = 300
@@ -539,6 +504,7 @@ class ScatFuncDD:
          9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
 
         # Using the Short Collision Time model:
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> ScatFuncDD.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
@@ -630,6 +596,7 @@ class ScatFuncDD:
 
         Examples
         --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -694,6 +661,7 @@ class ScatFuncDD:
 
         Examples
         --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
         >>> T = 1000
@@ -809,6 +777,7 @@ class ScatFuncDD:
 
         Examples
         --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -1219,6 +1188,7 @@ def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
 
     Examples
     --------
+    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
     >>> Ein = 7.2
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -1318,6 +1288,7 @@ def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
 
     Examples
     --------
+    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
     >>> Ein = 7.2
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -1396,6 +1367,7 @@ def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
 
     Examples
     --------
+    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
     >>> Ein = 7.2
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -1477,6 +1449,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
 
     Examples
     --------
+    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
     >>> Ein = 7.2
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -1545,6 +1518,7 @@ def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
 
     Examples
     --------
+    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
     >>> Ein = 7.2
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])

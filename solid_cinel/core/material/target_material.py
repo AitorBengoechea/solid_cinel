@@ -31,32 +31,19 @@ Bfac_unit_change = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
 Bragg_unit_change = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
 # Examples variables:
-# 1 atom
-rho_in_energy_Al27_str = '''
-    0 .0066 .0264 .0594 .1055 .1649 .2374 .3232 .4221
-    .5342 .6595 .7980 .9497 1.1146 1.2927 1.4839 1.6884
-    2.0169 2.4373 2.9366 3.6133 4.6775 7.1346 7.3650
-    7.5156 7.6733 7.8309 8.0740 8.4419 9.0595 9.6773
-    7.3645 6.2674 5.1965 4.7958 4.8024 4.6841 4.4673
-    4.1914 3.8169 3.3439 2.7855 3.2782 5.3082 8.5930
-    12.3377 8.4616 5.6695 4.1585 2.6081 0.0
-'''
-rho_in_energy_Al27 = np.fromstring(rho_in_energy_Al27_str, dtype=np.float64,
-                                   sep=' ')
+# 1 atom:
+rho_in_energy_str_Al27 = '''
+        0 .0066 .0264 .0594 .1055 .1649 .2374 .3232 .4221
+        .5342 .6595 .7980 .9497 1.1146 1.2927 1.4839 1.6884
+        2.0169 2.4373 2.9366 3.6133 4.6775 7.1346 7.3650
+        7.5156 7.6733 7.8309 8.0740 8.4419 9.0595 9.6773
+        7.3645 6.2674 5.1965 4.7958 4.8024 4.6841 4.4673
+        4.1914 3.8169 3.3439 2.7855 3.2782 5.3082 8.5930
+        12.3377 8.4616 5.6695 4.1585 2.6081 0.0
+    '''
+rho_in_energy_Al27 = np.fromstring(rho_in_energy_str_Al27, dtype=np.float64, sep=' ')
 interv_in_energy_Al27 = 0.0008
-
-preferred_orientation_Al27 = np.array([0, 0, 1])
-a_Al27 = 2.856710674519725
-dir_vec_length_Al27 = [a_Al27, a_Al27, a_Al27]
-dir_vec_angles_Al27 = [60, 60, 60]
-unit_pos_Al27 = np.array([0.0, 0.0, 0.0])
-A_Al27 = 27
-Z_Al27 = 13
-atomic_mass_Al27 = 26.98153433356103
-b_coh_Al27 = 3.449
-b_incoh_Al27 = 0.256
-
-alpha0_str = '''
+alpha0_str_Al27 = '''
   .005 .010 .015 .020 .025 .030 .035 .040 .045 .050
   .060 .070 .080 .090 .100 .125 .150 .175 .200 .225
   .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
@@ -73,8 +60,8 @@ alpha0_str = '''
   30.0 32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5
   55.0 57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0
 '''
-alpha0_ = np.fromstring(alpha0_str, dtype=np.float64, sep=' ')
-beta0_str = '''
+alpha0_Al27 = np.fromstring(alpha0_str_Al27, dtype=np.float64, sep=' ')
+beta0_str_Al27 = '''
   .000 .025 .050 .075 .100 .125 .150 .175 .200 .225
   .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
   .500 .525 .550 .575 .600 .625 .650 .675 .700 .725
@@ -91,7 +78,7 @@ beta0_str = '''
   57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0 77.5 80.0
   82.5 85.0 87.5 90.0
 '''
-beta0_ = np.fromstring(beta0_str, dtype=np.float64, sep=' ')
+beta0_Al27 = np.fromstring(beta0_str_Al27, dtype=np.float64, sep=' ')
 
 # 2 atom:
 rho_in_energy_O16_str = '''
@@ -164,36 +151,6 @@ rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 rho_in_energy = [rho_in_energy_O16, rho_in_energy_U238]
 interv_in_energy = [interv_in_energy_O16, interv_in_energy_U238]
-preferred_orientation = np.array([0, 0, 1])
-unit_pos_U_str = '''
-0.500000  0.000000  0.000000
-0.500000  0.500000  0.500000
-0.000000  0.000000  0.500000
-0.000000  0.500000  0.000000'''
-unit_pos_U = np.fromstring(unit_pos_U_str, dtype=np.float64, sep=' ')\
-               .reshape(-1, 3)
-unit_pos_O_str = '''
-0.250000  0.250000  0.250000
-0.750000  0.250000  0.250000
-0.250000  0.750000  0.750000
-0.750000  0.750000  0.750000
-0.750000  0.250000  0.750000
-0.250000  0.250000  0.750000
-0.750000  0.750000  0.250000
-0.250000  0.750000  0.250000'''
-unit_pos_O = np.fromstring(unit_pos_O_str, dtype=np.float64, sep=' ')\
-               .reshape(-1, 3)
-unit_pos = {"O16": unit_pos_O, "U238": unit_pos_U}
-a = 5.54781
-dir_vec_length = [a, a, a]
-dir_vec_angles = [90, 90, 90]
-energy_sup = 5.  # eV
-energy_cut = 6.85e-1
-A = [16, 238]
-Z = [8, 92]
-atom_mass = [15.99491399021626, 238.05077040419212]
-b_coh = [5.878374042670532, 8.62912188811068]
-b_incoh = [0.0, 0.19947114020071632]
 
 
 class Target_mat(Solid):
@@ -309,7 +266,9 @@ class Target_mat(Solid):
         Examples
         --------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.UO2 import *
         >>> UO2 = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
 
         Test the results:
@@ -362,7 +321,8 @@ class Target_mat(Solid):
         Examples
         --------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
 
         Test the results:
         >>> T = 20
@@ -451,7 +411,8 @@ class Target_mat(Solid):
         Example
         -------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -569,7 +530,8 @@ class Target_mat(Solid):
         Example
         -------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -638,7 +600,8 @@ class Target_mat(Solid):
         Example
         -------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> unit_cell_vol = Al.unit_cell_vol
@@ -735,7 +698,8 @@ class Target_mat(Solid):
         Example
         -------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
 
@@ -860,7 +824,8 @@ class Target_mat(Solid):
         Examples
         --------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
 
@@ -1154,7 +1119,8 @@ class Target_mat(Solid):
         Example
         -------
         Object initialization:
-        >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
 
         Test the results:
         FGM:
@@ -1195,8 +1161,8 @@ class Target_mat(Solid):
 
         Phonon Expansion:
         >>> T = 800
-        >>> beta_grid = Beta(beta0_).scale(T).data
-        >>> alpha_grid = Alpha(alpha0_).scale(T).data
+        >>> beta_grid = Beta(beta0_Al27).scale(T).data
+        >>> alpha_grid = Alpha(alpha0_Al27).scale(T).data
         >>> Al.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion", threshold=1.0e-14)["Al27"].data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -1259,8 +1225,11 @@ def numba_hkl_data(d_min: float,
     Examples
     --------
     Object initialization:
+
     >>> unit_pos_Al27 = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-    >>> Al = Target_mat(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, rho_in_energy_Al27, interv_in_energy_Al27)
+    >>> from solid_cinel.data.materials.Al27 import *
+    >>> Al = Target_mat(preferred_orientation, unit_pos_Al27, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+    >>> from solid_cinel.data.materials.UO2 import *
     >>> UO2 = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
 
     Test the results:

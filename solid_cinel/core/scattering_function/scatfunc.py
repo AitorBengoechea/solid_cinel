@@ -615,7 +615,7 @@ class ScatFuncDD:
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
         # Get Tpdos:
-        Tpdos = Sab.define_pdos(pdos, T)
+        Tpdos = pdos.define_pdos(T)
         DebyeWallerCoeff = Tpdos.DebyeWallerCoeff
         if nphonon:
             warnings.warn(
@@ -684,7 +684,7 @@ class ScatFuncDD:
          8.660254e-01  0.000000  0.000000  0.002116   5.225195  0.024538  0.000000
          9.659258e-01  0.000000  0.000000  0.000000  10.545191  0.000000  0.000000
         """
-        Teff = Sab.define_pdos(pdos, T).Teff
+        Teff = pdos.define_pdos(T).Teff
         scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, Teff, ws)
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 

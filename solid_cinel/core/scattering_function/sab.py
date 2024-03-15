@@ -195,30 +195,6 @@ class Sab:
                                  axis=1)
         return Sab_complete if len(Sab_complete.index) > 1 else Sab_complete.iloc[0]
 
-    @staticmethod
-    def define_pdos(pdos: Pdos, T: float):
-        """
-        Check if the Pdos object is fixed for 1 temperature.
-
-        Parameters
-        ----------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        T : 'float' or 'Iterable', optional
-            Temperature in K. The default is None.
-
-        Returns
-        -------
-        Tpdos
-            TPdos object.
-        """
-        if pdos.type == "Tpdos":
-            if pdos.T != T:
-                raise ValueError(f"The temperature of the pdos object {pdos.T} is different from the input temperature {T}")
-            return pdos
-        else:
-            return pdos.get_Tpdos(T)
-
     @classmethod
     def from_fgm(cls, alpha: Union[Alpha, Iterable],
                  beta: Union[Beta, Iterable], T: float = None, wt: float = 1):
@@ -323,7 +299,7 @@ class Sab:
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
         # Save the Phonon Density of States for extrapolation
-        cls.pdos = Sab.define_pdos(pdos, T)
+        cls.pdos = pdos.define_pdos(T)
 
         # Start the calculation:
         ratio = cls.pdos.Teff / T
@@ -411,7 +387,7 @@ class Sab:
         """
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
-        cls.pdos = Sab.define_pdos(pdos, T)
+        cls.pdos = pdos.define_pdos(T)
 
         # Save Debye wallerr coefficient of the S(alpha, -beta) matrix for
         # interpolation and normalization check

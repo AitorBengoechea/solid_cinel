@@ -27,9 +27,6 @@ rho_in_energy_str = '''
     '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
-Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
-                A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
-                rho_in_energy, interv_in_energy)
 energy_cut = 2.301
 energy_sup = 10.0
 alpha0_str = '''
@@ -68,6 +65,11 @@ beta0_str = '''
   82.5 85.0 87.5 90.0
 '''
 beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
+
+# Target material:
+Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
+                A, Z, atomic_mass, b_coh, b_incoh,
+                rho_in_energy, interv_in_energy)
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])

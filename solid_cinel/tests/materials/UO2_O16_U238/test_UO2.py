@@ -13,7 +13,10 @@ from solid_cinel.core.scattering_function.beta import Beta
 from scipy.integrate import trapezoid
 import pytest
 import os
+# Material information variables:
+from solid_cinel.data.materials.UO2 import *
 
+# Examples variables:
 rho_in_energy_O16_str = '''
 0.000000E+00 6.923874E-03 2.497670E-02 5.488348E-02
 9.504920E-02 1.479389E-01 2.139513E-01 2.889902E-01
@@ -84,40 +87,6 @@ rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
                                    sep=' ')
 rho_in_energy = [rho_in_energy_O16, rho_in_energy_U238]
 interv_in_energy = [interv_in_energy_O16, interv_in_energy_U238]
-preferred_orientation = np.array([0, 0, 1])
-unit_pos_U_str = '''
-0.500000  0.000000  0.000000
-0.500000  0.500000  0.500000
-0.000000  0.000000  0.500000
-0.000000  0.500000  0.000000'''
-unit_pos_U = np.fromstring(unit_pos_U_str, dtype=np.float64, sep=' ')\
-               .reshape(-1, 3)
-unit_pos_O_str = '''
-0.250000  0.250000  0.250000
-0.750000  0.250000  0.250000
-0.250000  0.750000  0.750000
-0.750000  0.750000  0.750000
-0.750000  0.250000  0.750000
-0.250000  0.250000  0.750000
-0.750000  0.750000  0.250000
-0.250000  0.750000  0.250000'''
-unit_pos_O = np.fromstring(unit_pos_O_str, dtype=np.float64, sep=' ')\
-               .reshape(-1, 3)
-unit_pos = {"O16": unit_pos_O, "U238": unit_pos_U}
-a = 5.54781
-dir_vec_length = [a, a, a]
-dir_vec_angles = [90, 90, 90]
-energy_sup = 5.  # eV
-energy_cut = 6.85e-1
-A = [16, 238]
-Z = [8, 92]
-atom_mass = [15.99491399021626, 238.05077040419212]
-b_coh = [5.878374042670532, 8.62912188811068]
-b_incoh = [0.0, 0.19947114020071632]
-UO2 = Target_mat(preferred_orientation, unit_pos,
-                 dir_vec_length, dir_vec_angles,
-                 A, Z, atom_mass, b_coh, b_incoh,
-                 rho_in_energy, interv_in_energy)
 alpha0_str_U238  = '''
  1.14731156e-04 1.22909925e-04 1.31671728e-04 1.41058129e-04
  1.51113653e-04 1.61885998e-04 1.73426265e-04 1.85789196e-04
@@ -306,6 +275,12 @@ beta0_str_O16 = '''
 '''
 alpha0_O16 = np.fromstring(alpha0_str_O16, dtype=np.float64, sep=' ')
 beta0_O16 = np.fromstring(beta0_str_O16, dtype=np.float64, sep=' ')
+
+# Target Material
+UO2 = Target_mat(preferred_orientation, unit_pos,
+                 dir_vec_length, dir_vec_angles,
+                 A, Z, atom_mass, b_coh, b_incoh,
+                 rho_in_energy, interv_in_energy)
 
 
 @pytest.mark.parametrize("T", [296, 400, 500, 600, 700, 800, 1000, 1200])

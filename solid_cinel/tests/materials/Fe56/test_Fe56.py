@@ -13,18 +13,10 @@ from solid_cinel.core.scattering_function.beta import Beta
 from scipy.integrate import trapezoid
 import pytest
 import os
+# Material information variables:
+from solid_cinel.data.materials.Fe56 import *
 
 
-preferred_orientation = np.array([0, 0, 1])
-a = 2.476832
-dir_vec_length = [a, a, a]
-dir_vec_angles = [109.47122063449069, 109.47122063449069, 109.47122063449069]
-unit_pos = np.array([0., 0., 0.])
-A = 56
-Z = 26
-atomic_mass_Al27 = 55.934504245209524
-b_coh_Al27 = 10.131877333163509
-b_incoh_Al27 = 0.
 # Examples variables:
 rho_in_energy_str = '''
     0. .000111 .000443 .000996 .00177 .00277 .00398 .00542 .00708
@@ -38,10 +30,6 @@ rho_in_energy_str = '''
     '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0005
-Fe = Target_mat(preferred_orientation, unit_pos,
-                dir_vec_length, dir_vec_angles,
-                A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
-                rho_in_energy, interv_in_energy)
 energy_cut = 4.096
 energy_sup = 10.0
 alpha0_str = '''
@@ -77,6 +65,12 @@ beta0_str = '''
   90.0
 '''
 beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
+
+# Target material
+Fe = Target_mat(preferred_orientation, unit_pos,
+                dir_vec_length, dir_vec_angles,
+                A, Z, atomic_mass, b_coh, b_incoh,
+                rho_in_energy, interv_in_energy)
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])

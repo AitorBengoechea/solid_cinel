@@ -11,53 +11,7 @@ import numpy as np
 import pandas as pd
 import collections
 from typing import Iterable, Union
-
 collections.Callable = collections.abc.Callable
-
-# Example variables:
-# 1 atom:
-preferred_orientation_Al27 = np.array([0, 1, 1])
-a_Al27 = 2.856710674519725
-dir_vec_length_Al27 = [a_Al27, a_Al27, a_Al27]
-dir_vec_angles_Al27 = [60, 60, 60]
-unit_pos_Al27 = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25, 0.75, 0.25])
-A_Al27 = 27
-Z_Al27 = 13
-atomic_mass_Al27 = 26.98153433356103
-b_coh_Al27 = 3.449
-b_incoh_Al27 = 0.256
-
-# 2 atom:
-preferred_orientation = np.array([0, 1, 1])
-unit_pos_U_str = '''
-0.500000  0.000000  0.000000
-0.500000  0.500000  0.500000
-0.000000  0.000000  0.500000
-0.000000  0.500000  0.000000'''
-unit_pos_U = np.fromstring(unit_pos_U_str, dtype=np.float64, sep=' ')\
-               .reshape(-1, 3)
-unit_pos_O_str = '''
-0.250000  0.250000  0.250000
-0.750000  0.250000  0.250000
-0.250000  0.750000  0.750000
-0.750000  0.750000  0.750000
-0.750000  0.250000  0.750000
-0.250000  0.250000  0.750000
-0.750000  0.750000  0.250000
-0.250000  0.750000  0.250000'''
-unit_pos_O = np.fromstring(unit_pos_O_str, dtype=np.float64, sep=' ')\
-               .reshape(-1, 3)
-unit_pos = {"O16": unit_pos_O, "U238": unit_pos_U}
-a = 5.54781
-dir_vec_length = [a, a, a]
-dir_vec_angles = [90, 90, 90]
-energy_sup = 5.  # eV
-energy_cut = 6.85e-1
-A = [16, 238]
-Z = [8, 92]
-atom_mass = [15.99491399021626, 238.05077040419212]
-b_coh = [5.878374042670532, 8.62912188811068]
-b_incoh = [0.0, 0.19947114020071632]
 
 
 class Solid(CrystalStructure, Molecule):
@@ -176,21 +130,8 @@ class Solid(CrystalStructure, Molecule):
         Example
         -------
         Object initialization:
-        >>> Al = Solid(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.UO2 import *
         >>> UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh)
-
-        Test the results:
-        >>> Al.unit_pos["Al27"]
-              x     y     z
-        0  0.25  0.25  0.25
-        1  0.75  0.25  0.25
-        2  0.25  0.75  0.75
-        3  0.75  0.75  0.75
-        4  0.75  0.25  0.75
-        5  0.25  0.25  0.75
-        6  0.75  0.75  0.25
-        7  0.25  0.75  0.25
-
         >>> UO2.unit_pos["O16"]
               x     y     z
         0  0.25  0.25  0.25
@@ -235,20 +176,8 @@ class Solid(CrystalStructure, Molecule):
         Example
         -------
         Object initialization:
-        >>> Al = Solid(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.UO2 import *
         >>> UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh)
-
-        Test the results:
-        >>> Al.atom_pos["Al27"].round(6)
-                   x      	y	       z
-        0	1.428355	 0.824661	0.583124
-        1	2.856711	 0.824661	0.583124
-        2	2.856711	 2.473984	1.749371
-        3	4.285066	 2.473984	1.749371
-        4	3.570888	 1.236992	1.749371
-        5	2.142533	 1.236992	1.749371
-        6	3.570888	 2.061653	0.583124
-        7	2.142533	 2.061653	0.583124
 
         >>> UO2.atom_pos["O16"].round(6)
                   x         y         z
@@ -284,11 +213,13 @@ class Solid(CrystalStructure, Molecule):
         Example
         -------
         Object initialization:
-        >>> Al = Solid(preferred_orientation_Al27, unit_pos_Al27, dir_vec_length_Al27, dir_vec_angles_Al27, A_Al27, Z_Al27, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh)
+        >>> from solid_cinel.data.materials.UO2 import *
         >>> UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh)
 
         Test the results:
-        >>> assert Al.atom_number == 8
+        >>> assert Al.atom_number == 1
         >>> assert UO2.atom_number == 12
         """
         return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
@@ -316,7 +247,8 @@ def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
     Example
     -------
     Object initialization:
-    >>> crys = CrystalStructure(dir_vec_length_Al27, dir_vec_angles_Al27)
+    >>> from solid_cinel.data.materials.Al27 import *
+    >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
     >>> rec_vecs = crys.reciproc_vec.values
     >>> d_min = 0.2360746677309732
     >>> hkl_max_value(rec_vecs, d_min)

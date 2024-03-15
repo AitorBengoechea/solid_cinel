@@ -13,19 +13,9 @@ from solid_cinel.core.scattering_function.beta import Beta
 from scipy.integrate import trapezoid
 import pytest
 import os
+# Material information variables:
+from solid_cinel.data.materials.Be9 import *
 
-
-preferred_orientation = np.array([ 0, 0, 1 ])
-a = 2.271566
-c = 3.545935
-dir_vec_length = [a, a, c]
-dir_vec_angles = [90, 90, 120]
-unit_pos = np.array([[0.3333, 0.6667, 0.25], [0.6667, 0.3333, 0.75]])
-A = 9
-Z = 4
-atomic_mass_Be9 = 9.012199117106308
-b_coh_Be9 = 7.780229639986676
-b_incoh_Be9 = 0.1196826841204298
 # Examples variables:
 rho_in_energy_str = '''
     0.0000E+00 7.2477E-04 3.7084E-03 8.0087E-03
@@ -63,10 +53,6 @@ rho_in_energy_str = '''
     '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.00069552
-Be = Target_mat(preferred_orientation, unit_pos,
-                dir_vec_length, dir_vec_angles,
-                A, Z, atomic_mass_Be9, b_coh_Be9, b_incoh_Be9,
-                rho_in_energy, interv_in_energy)
 energy_sup = 6.41e-1
 energy_cut = 6.408e-1
 alpha0_str = '''
@@ -145,6 +131,12 @@ beta0_str = '''
 1.582811E+02 1.673147E+02 1.768640E+02 1.869582E+02 1.976285E+02
 '''
 beta0_ = np.fromstring(beta0_str, dtype = np.float64, sep = ' ')
+
+# Target material:
+Be = Target_mat(preferred_orientation, unit_pos,
+                dir_vec_length, dir_vec_angles,
+                A, Z, atomic_mass, b_coh, b_incoh,
+                rho_in_energy, interv_in_energy)
 
 
 @pytest.mark.parametrize("T", [296, 400, 500, 600, 700, 800, 1000, 1200])

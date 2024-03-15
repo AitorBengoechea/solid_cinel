@@ -15,7 +15,6 @@ from solid_cinel.core.generic import interpolation, trapz_parallel
 from solid_cinel.core.scattering_function.alpha import Alpha, get_alphaRecoil
 import warnings
 import os
-import dask
 import dask.bag as db
 
 # constants
@@ -24,46 +23,6 @@ m = const["neutron mass in u"][0]
 
 # Avoid numba fast math:
 nb.config.FASTMATH_DEFAULT = False
-
-# Get the number of available processors
-num_processors = os.cpu_count()
-
-# Example variables:
-interv_in_energy_U238 = 6.956193E-04
-rho_in_energy_U238_str = '''
-0.000000E+00 1.041128E-01 3.759952E-01 8.354039E-01
-1.469796E+00 2.335578E+00 3.467660E+00 4.841392E+00
-6.492841E+00 8.608376E+00 1.131303E+01 1.504441E+01
-2.006807E+01 2.750471E+01 4.171597E+01 1.585670E+02
-1.978483E+02 1.144621E+02 7.555927E+01 4.831100E+01
-4.389081E+01 4.246484E+01 4.103699E+01 3.986249E+01
-3.827959E+01 3.592088E+01 3.272170E+01 3.914602E+01
-8.144694E+01 9.693959E+01 5.503795E+01 2.619253E+01
-1.763331E+01 1.475875E+01 1.522465E+01 1.213117E+01
-6.175029E+00 2.483519E+00 1.445581E+00 1.423177E+00
-1.502350E+00 1.718768E+00 2.211346E+00 3.061686E+00
-3.550530E+00 3.349917E+00 2.768379E+00 2.177488E+00
-1.856123E+00 1.622775E+00 1.445254E+00 1.300794E+00
-1.180078E+00 1.075748E+00 9.928057E-01 9.238564E-01
-8.577708E-01 8.073819E-01 7.634820E-01 7.172257E-01
-6.728183E-01 6.251482E-01 5.496737E-01 4.992486E-01
-3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-01
-9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
-7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
-1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
-3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
-2.653572E-02 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 7.105193E-03 5.274518E-02 1.324974E-01
-2.310275E-01 4.042710E-01 6.421137E-01 8.073457E-01
-9.162074E-01 1.077923E+00 1.142595E+00 1.092532E+00
-1.060668E+00 1.000020E+00 8.769838E-01 7.610532E-01
-6.898200E-01 6.324347E-01 5.857072E-01 5.563076E-01
-5.468099E-01 5.515587E-01 4.871045E-01 3.198787E-01
-1.132118E-01 2.066306E-03 0.000000E+00
-'''
-rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
-                                   sep=' ')
 
 
 class Xs:
@@ -378,7 +337,6 @@ class Xs:
         pd.Series, pd.DataFrame
             The output data in the corresponding format
         """
-
         T_ = self.data.columns if T is None else pd.Index(self.check_T(T), name="T")
         Ein_ = self.data.index if Ein is None else pd.Index(self.check_T(Ein), name="Ein")
         if len(T_) == 1:
@@ -484,6 +442,7 @@ class Xs:
         >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
         >>> os.chdir(wd)
 
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> M = 238.05077040419212
         >>> EinGrid = np.array([2.0, 6.67])
         >>> xsSmall = interpolation(xs0K, EinGrid)
@@ -631,6 +590,7 @@ class Xs:
         300  9.086237  455.670534
         100  9.086957  664.556512
 
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> pd.DataFrame(xs._compute(Tnew, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
                  2.00        6.67
@@ -720,6 +680,7 @@ class Xs:
         80.731840    39.201520    40.786065    29.838959
         89.051940     9.208071     9.213753     9.226470
 
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="sct").data
         T                  0            100          300
@@ -810,6 +771,7 @@ class Xs:
         66.436310    85.621850    90.534332   114.828045
         80.731840    39.201520    40.746929    29.811032
         89.051940     9.208071     9.213771     9.226450
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="sct").data
         T                  0            100          300
@@ -945,6 +907,8 @@ class Xs:
 
         Examples
         --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+
         # 0K xs data for U238:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
@@ -1150,6 +1114,7 @@ class Xs:
         30     9.105556  9.095340  9.085045  9.074480  9.063851
         >>> mu = np.cos(np.deg2rad(theta))
         >>> T4PCF = T * (1 + mu) / 2
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T4PCF, rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2

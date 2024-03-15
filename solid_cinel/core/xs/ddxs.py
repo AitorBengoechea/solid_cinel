@@ -444,11 +444,13 @@ class DDxs:
         """
         # Generate ScarFunc object
         scatfunction = ScatFunc.from_model(Ein, M, T, Eout, theta,*args, **kwargs)
+        # Use only Eout values greater with information:
+        Eout_ = scatfunction.data.columns.values
         # Get Xs matrix for convolution with scattering function
         if algorithm == "sigma1":
-            xsMat = cls.get_xsMat(xs0K, Ein, M, T, Eout, theta, algorithm)
+            xsMat = cls.get_xsMat(xs0K, Ein, M, T, Eout_, theta, algorithm)
         else:
-            xsMat = cls.get_xsMat(xs0K, Ein, M, T, Eout, theta, algorithm,
+            xsMat = cls.get_xsMat(xs0K, Ein, M, T, Eout_, theta, algorithm,
                                   *args, **kwargs)
         return cls(Ein, T, M, "4PCF", scatfunction.convolve(xsMat))
 

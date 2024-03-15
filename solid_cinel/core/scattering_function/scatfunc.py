@@ -118,6 +118,8 @@ class ScatFuncSD:
 
         """
         pdf_ = pd.Series(pdf).sort_index()
+        # Erase the rows with all zeros
+        pdf_ = pdf_[pdf_ != 0]
         norm = integrate(pdf_)
         if abs(norm - 1) >= 0.1 and self.Ein >= 0.005:
             raise ValueError(f"The scattering function is not normalized ({norm} < 0.9)")
@@ -370,6 +372,7 @@ class ScatFuncSD:
         alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
         scatfunc = Sab.from_model(alpha, beta, T, *args,
                    model=model, **kwargs).full
+        # Erase the columns with all zeros
         scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
         return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
 
@@ -445,6 +448,8 @@ class ScatFuncDD:
         dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
         dd_pdf_.index.name = "mu"
         dd_pdf_.columns.name = "Eout"
+        # Erase the columns with all zeros
+        dd_pdf_ = dd_pdf_.loc[::, ~dd_pdf_.eq(0).all()]
         self._data = dd_pdf_
 
     @classmethod

@@ -1328,6 +1328,29 @@ class Pdos:
         """
         return type(self.instance).__name__
 
+    def define_pdos(self, T: float) -> Tpdos:
+        """
+        Check if the Pdos object is fixed for 1 temperature.
+
+        Parameters
+        ----------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float' or 'Iterable', optional
+            Temperature in K. The default is None.
+
+        Returns
+        -------
+        Tpdos
+            TPdos object.
+        """
+        if type(self.instance).__name__ == "Tpdos":
+            if self.instance.T != T:
+                raise ValueError(f"The temperature of the pdos object {self.instance.T} is different from the input temperature {T}")
+            return self.instance
+        else:
+            return self.instance.get_Tpdos(T)
+
     def __getattr__(self, name):
         if hasattr(self.instance, name):
             return getattr(self.instance, name)

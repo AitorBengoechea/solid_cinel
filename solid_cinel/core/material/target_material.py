@@ -260,18 +260,13 @@ class TargetMat(Solid):
               18  0.090247  0.0          88.521943         192.0
               19  0.090090  0.0          86.309150         168.0
         """
-        recs_vec = self.reciproc_vec.values
-        d_min = Neutron(energy_cut).d_min
-        hkl_max = hkl_max_value(recs_vec, d_min)
-        hkl_data = numba_hkl_data(d_min,
-                                  hkl_max,
-                                  recs_vec,
+        hkl_data = numba_hkl_data(Neutron(energy_cut).d_min,
+                                  self.reciproc_vec.values,
                                   self.get_Bfact(T, **kwargs),
                                   self.atom_pos,
                                   self.atoms.apply(lambda x: x.b["b_coh"]),
                                   self.preferred_orientation.values,
-                                  np.array(precision)
-                                  )
+                                  precision)
         return hkl_data.sort_values(by=["h", "k", "l"])\
                        .set_index(["h", "k", "l"])
 
@@ -790,13 +785,12 @@ class TargetMat(Solid):
 
 
 def numba_hkl_data(d_min: float,
-                   hkl_max: np.ndarray,
                    rec_vecs: np.ndarray,
                    Bfac: pd.Series,
                    pos: pd.Series,
                    csl: pd.Series,
                    preferred_orientation: pd.Series,
-                   precision: np.ndarray) -> pd.DataFrame:
+                   precision: list) -> pd.DataFrame:
     """
     Obtain hkl data for the solid in a certain temperature and for a neutron
     certain energy.
@@ -806,8 +800,6 @@ def numba_hkl_data(d_min: float,
     ----------
     d_min : 'float'
         The minimum dspacing for the LEAPR module of NJOY
-    hkl_max : 'np.ndarray', (3)
-        Maximun h, k, l index for generating a d>d_min
     rec_vecs : 'np.ndarray', (3, 3)
         Reciprocal vectors
     Bfac : 'pd.Series'
@@ -817,7 +809,7 @@ def numba_hkl_data(d_min: float,
         object.
     csl : 'pd.Series'
         Coherent elastic length for each element of TargetMaterial object.
-    precision: 'np.ndarray', (2,):
+    precision: 'list', (2,):
         Array containing:
             0: Precision to reagroup in multiplicity the d_hkl
             1: Precision to reagroup in multiplicity the Fsq_hkl
@@ -846,13 +838,12 @@ def numba_hkl_data(d_min: float,
     >>> E = 2.301
     >>> recs_vec = Al.reciproc_vec.values
     >>> d_min = Neutron(E).d_min
-    >>> hkl_max = hkl_max_value(recs_vec, d_min)
     >>> B = Al.get_Bfact(T)
     >>> pos = Al.atom_pos
     >>> csl = Al.atoms.apply(lambda x: x.b["b_coh"])
     >>> precision = np.array([6, 6])
     >>> preferred_orientation = Al.preferred_orientation.values
-    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl, preferred_orientation, precision)
+    >>> hkl_data = numba_hkl_data(d_min, recs_vec, B, pos, csl, preferred_orientation, precision)
     >>> hkl_data.shape[0]
     678
     >>> hkl_data.round(6).iloc[:10]
@@ -872,13 +863,12 @@ def numba_hkl_data(d_min: float,
     >>> E = 6.85e-1
     >>> recs_vec = UO2.reciproc_vec.values
     >>> d_min = Neutron(E).d_min
-    >>> hkl_max = hkl_max_value(recs_vec, d_min)
     >>> B = UO2.get_Bfact(T)
     >>> pos = UO2.atom_pos
     >>> csl = UO2.atoms.apply(lambda x: x.b["b_coh"])
     >>> precision = np.array([6, 6])
     >>> preferred_orientation = UO2.preferred_orientation.values
-    >>> hkl_data = numba_hkl_data(d_min, hkl_max, recs_vec, B, pos, csl, preferred_orientation, precision)
+    >>> hkl_data = numba_hkl_data(d_min, recs_vec, B, pos, csl, preferred_orientation, precision)
     >>> hkl_data.round(6).iloc[:10]
         h  k  l         d       Fsq  Orientation angle  Multiplicity
     0  33  7  2  0.164168  0.000000          86.607081         216.0
@@ -892,35 +882,25 @@ def numba_hkl_data(d_min: float,
     8  33  5  4  0.165037  0.000000          83.166021         528.0
     9  33  5  3  0.165551  0.116100          84.863872         120.0
     """
-    # Preparation of variables to be accept in numba nopython mode:
-    Bfac_ = nb.typed.Dict.empty(
-            key_type=nb.core.types.unicode_type,
-            value_type=nb.core.types.float64,
-        )
-    pos_ = nb.typed.Dict.empty(
-            key_type=nb.core.types.unicode_type,
-            value_type=nb.core.types.float64[:, :],
-        )
-    csl_ = nb.typed.Dict.empty(
-            key_type=nb.core.types.unicode_type,
-            value_type=nb.core.types.float64,
-        )
-    for element, value in Bfac.items():
-        Bfac_[element] = value
-        pos_[element] = pos.loc[element].values
-        csl_[element] = csl[element]
+    # hkl_max calculation
+    hkl_max = hkl_max_value(rec_vecs, d_min)
 
+    # Preparation of variables to be accept in numba nopython mode:
+    keys, values = nb.core.types.unicode_type, nb.core.types.float64
+    Bfac_ = nb.typed.Dict.empty(key_type=keys, value_type=values)
+    pos_ = nb.typed.Dict.empty(key_type=keys, value_type=values[:, :])
+    csl_ = nb.typed.Dict.empty(key_type=keys, value_type=values)
+    for element in Bfac.index:
+        Bfac_[element], csl_[element] = Bfac[element], csl[element]
+        pos_[element] = pos[element].values
     preferred_orientation_ = np.array(preferred_orientation, dtype=float)
     # Execute numba
     hkl_data_dict = hklloop(d_min, hkl_max, rec_vecs, Bfac_, pos_, csl_,
-                            preferred_orientation_, precision)
+                            preferred_orientation_, np.array(precision))
 
     # Order the output
     columns = ["h", "k", "l", "d", "Fsq", "Orientation angle", "Multiplicity"]
-
-    return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, orientation, mul]
-                         for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul]
-                         in hkl_data_dict.items()],
+    return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, orientation, mul] for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul] in hkl_data_dict.items()],
                         columns=columns)
 
 

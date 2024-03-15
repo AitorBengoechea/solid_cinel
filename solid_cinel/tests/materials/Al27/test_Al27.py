@@ -12,18 +12,9 @@ from solid_cinel.core.scattering_function.beta import Beta
 from scipy.integrate import trapezoid
 import pytest
 import os
+# Material information variables:
+from solid_cinel.data.materials.Al27 import *
 
-
-preferred_orientation = np.array([0, 0, 1])
-a = 2.856710674519725
-dir_vec_length = [a, a, a]
-dir_vec_angles = [60, 60, 60]
-unit_pos = np.array([0., 0., 0.])
-A = 27
-Z = 13
-atomic_mass_Al27 = 26.98153433356103
-b_coh_Al27 = 3.449
-b_incoh_Al27 = 0.256
 # Examples variables:
 rho_in_energy_str = '''
         0 .0066 .0264 .0594 .1055 .1649 .2374 .3232 .4221

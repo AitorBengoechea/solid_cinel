@@ -79,11 +79,7 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
+        >>> from solid_cinel.data.materials.Al27 import *
         >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
@@ -104,11 +100,7 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
+        >>> from solid_cinel.data.materials.Al27 import *
         >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
@@ -130,11 +122,7 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
+        >>> from solid_cinel.data.materials.Al27 import *
         >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
@@ -155,11 +143,7 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
+        >>> from solid_cinel.data.materials.Al27 import *
         >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
@@ -180,11 +164,7 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
+        >>> from solid_cinel.data.materials.Al27 import *
         >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
 
         Test the results:
@@ -262,11 +242,8 @@ class Molecule(Atom):
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
+        Object initialization:
+        >>> from solid_cinel.data.materials.Al27 import *
         >>> Al = Molecule(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, name="Al")
 
         Test the results:

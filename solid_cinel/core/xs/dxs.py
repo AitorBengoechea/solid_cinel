@@ -9,7 +9,7 @@ import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import ScatFunc, Beta
 from solid_cinel.core.scattering_function.alpha import get_gressierRecoil
-from solid_cinel.core.generic import integrate, reshift, reshape_differential
+from solid_cinel.core.generic import integrate, reshift, interpolation
 import os
 from typing import Iterable
 
@@ -274,7 +274,7 @@ class Dxs:
 
     @staticmethod
     def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
-                **kwargs) -> [np.array, Beta]:
+                   **kwargs) -> pd.DataFrame:
         """
         Get the Dxs function for the 0K cross section
 
@@ -363,7 +363,7 @@ class Dxs:
         scatfunc = ScatFunc.get_alpha0(Ein, M, T, *args, **kwargs)
         EinGrid = Ein + (scatfunc.columns.values * kb * T)[:, np.newaxis]
         EinGrid += get_gressierRecoil(Ein, T, M)
-        return scatfunc * reshape_differential(xs0K, EinGrid.T)
+        return scatfunc * interpolation(xs0K, EinGrid.T, parallel=True)
 
     @property
     def integral(self) -> float:

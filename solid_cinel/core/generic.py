@@ -7,9 +7,8 @@ Python file for generic function.
 import scipy as sp
 import numpy as np
 import pandas as pd
-import re
-import os
-import tempfile
+import numba as nb
+from numba import prange
 from typing import Iterable
 from scipy.stats import qmc
 
@@ -50,6 +49,27 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
     else:
         raise ValueError("kind is not properly introduced")
     return y_norm
+
+@nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
+def trapz_parallel(data: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """
+    Trapezoidal integration of a 2D array in parallel for the same x grid.
+
+    Parameters
+    ----------
+    data: np.ndarray, (N, M)
+        2D array to integrate
+    x: np.ndarray, (M,)
+        x grid
+
+    Returns
+    -------
+    np.ndarray, (N,)
+    """
+    result = np.zeros(data.shape[0])
+    for i in prange(data.shape[0]):
+        result[i] += np.trapz(data[i], x)
+    return result
 
 
 def reshape_differential(data: pd.Series, xnew: Iterable,
@@ -123,9 +143,62 @@ def reshape_differential(data: pd.Series, xnew: Iterable,
                                   )
     return foo(xnew)
 
+@nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
+def interp_xnewParallel(xnew: np.ndarray, xnewShape: tuple,
+                        x: np.ndarray, y: np.ndarray):
+    """
+    Interpolate multiple xnew using the (x, y) function.
 
+    Parameters
+    ----------
+    xnew: 'np.ndarray', (M, Z)
+        New grid values.
+    xnewShape: 'tuple'
+        Shape of the new grid.
+    x: 'np.ndarray', (T,)
+        Original grid values.
+    y: 'np.ndarray', (T,)
+        Original function values.
+
+    Returns
+    -------
+    'np.ndarray', (M, Z)
+        Interpolated values.
+    """
+    yinterp = np.zeros(xnewShape)
+    for n in prange(xnewShape[0]):
+        yinterp[n] += np.interp(xnew[n], x, y)
+    return yinterp
+
+@nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
+def interp_multyParallel(xnew: np.ndarray, x: np.ndarray, y: np.ndarray):
+    """
+    Interpolate to xnew using multiple function with the same x grid.
+
+    Parameters
+    ----------
+    xnew: 'np.ndarray', (M,)
+        New grid values.
+    xnewShape: 'tuple'
+        Shape of the new grid.
+    x: 'np.ndarray', (T, )
+        Original grid values.
+    y: 'np.ndarray', (Z, T)
+        Original function values.
+
+    Returns
+    -------
+    'np.ndarray', (Z, M)
+        Interpolated values.
+    """
+    Nrow, Ncolumn = y.shape[0], len(xnew)
+    yinterp = np.zeros((Nrow, Ncolumn))
+    for n in prange(Nrow):
+        yinterp[n] += np.interp(xnew, x, y[n])
+    return yinterp
 def interpolation(data: pd.Series, xnew: Iterable,
-                  values: bool = False, **kwargs) -> [np.ndarray, pd.Series]:
+                  values: bool = False, parallel=False,
+                  **kwargs) -> [np.ndarray, pd.Series]:
     """
     Interpolate the data over new energy grid structure.
 
@@ -172,11 +245,15 @@ def interpolation(data: pd.Series, xnew: Iterable,
     4.5    4.5
     dtype: float64
     """
-    data_interp = reshape_differential(data, xnew, **kwargs)
-    if values:
-        return data_interp
+    xnewShape = xnew.shape
+    if parallel or xnewShape[0] > 100:
+        yinterp = interp_xnewParallel(xnew, xnewShape, data.index.values, data.values)
     else:
-        return pd.Series(data_interp, index=xnew)
+        yinterp = reshape_differential(data, xnew, **kwargs)
+    if values or len(xnewShape) == 2:
+        return yinterp
+    else:
+        return pd.Series(yinterp, index=xnew)
 
 def reshift(data: pd.Series, dx: [float, np.ndarray]) -> pd.Series:
     """

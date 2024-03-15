@@ -4,7 +4,7 @@ Python file for working with S(alpha, -beta) matrixs.
 @author: AB272525
 """
 from scipy.constants import physical_constants as const
-from solid_cinel.core.generic import integrate, reshape_differential
+from solid_cinel.core.generic import integrate, reshape_differential, interp_multyParallel
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNfunc, save_tau, gpu_available, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
@@ -502,7 +502,9 @@ class Sab:
 
         # Start the calculation:
         ratio = cls.pdos.Teff / T
-
+        if np.isnan(ratio):
+            warnings.warn("The effective temperature is not defined, the ratio will be 1")
+            ratio = 1.0
         beta_ = beta if isinstance(beta, Beta) else Beta(beta)
         alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
         if beta_.kind == "abs":
@@ -1331,8 +1333,7 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-def _phonon_expansion_gpu(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
-                          tauN: xp.ndarray, tauNbeta: np.ndarray,
+def _phonon_expansion_gpu(alpha: xp.ndarray, nphonon: int, tauNinterp: xp.ndarray,
                           DebyeWallerCoeff: float) -> xp.ndarray:
     """
     Generate S(alpha, -beta) matrix using tauN functions:
@@ -1363,21 +1364,20 @@ def _phonon_expansion_gpu(alpha: xp.ndarray, beta: xp.ndarray, nphonon: int,
     """
     # Zero phonon expansion:
     IterSum = xp.log(alpha * DebyeWallerCoeff)
-    alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
-    sab_values = xp.outer(alpha_mul, xp.interp(beta, tauNbeta, tauN[0]))
+    alphaMul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
+    sabValues = xp.outer(alphaMul, tauNinterp[0])
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
         IterSum += xp.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
-        sab_values += xp.outer(alpha_mul, xp.interp(beta, tauNbeta, tauN[n]))
-    return sab_values
+        alphaMul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
+        sabValues += xp.outer(alphaMul, tauNinterp[n])
+    return sabValues
 
 
-@nb.jit(nopython=True, cache=True, nogil=True)
-def _phonon_expansion_cpu(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
-                          tauN: np.ndarray, tauNbeta: np.ndarray,
+@nb.jit(nopython=True, cache=True)
+def _phonon_expansion_cpu(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
                           DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using tauN functions:
@@ -1408,16 +1408,16 @@ def _phonon_expansion_cpu(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     """
     # Zero phonon expansion:
     IterSum = np.log(alpha * DebyeWallerCoeff)
-    alpha_mul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-    sab_values = np.outer(alpha_mul, np.interp(beta, tauNbeta, tauN[0]))
+    alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+    sabValues = np.outer(alphaMul, tauNinterp[0])
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
         IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alpha_mul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-        sab_values += np.outer(alpha_mul, np.interp(beta, tauNbeta, tauN[n]))
-    return sab_values
+        alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
+        sabValues += np.outer(alphaMul, tauNinterp[n])
+    return sabValues
 
 
 def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
@@ -1449,21 +1449,18 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     'xp.ndarray', (N, M)
         S(alpha, -beta) matrix values.
     """
+    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
     if gpu_available:
         try:
-            return _phonon_expansion_gpu(xp.asarray(alpha),
-                                         xp.asarray(beta),
-                                         nphonon,
-                                         xp.asarray(tauN),
-                                         xp.asarray(tauNbeta),
+            return _phonon_expansion_gpu(xp.asarray(alpha), nphonon,
+                                         xp.asarray(tauNinterp),
                                          DebyeWallerCoeff).get()
         except xp.cuda.memory.OutOfMemoryError:
             pass
-    return _phonon_expansion_cpu(alpha, beta, nphonon, tauN, tauNbeta,
-                                 DebyeWallerCoeff)
+    return _phonon_expansion_cpu(alpha, nphonon, tauNinterp, DebyeWallerCoeff)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float,
                     ws: float) -> np.ndarray:
     """
@@ -1488,11 +1485,11 @@ def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float,
     'np.ndarray', (M,)
         S(alpha, beta) matrix values for a single alpha value.
     """
-    sab_values = np.exp(-(ws * alpha + beta) ** 2 / (4 * alpha * Tratio * ws))
-    return sab_values / np.sqrt(4 * pi * ws * alpha * Tratio)
+    sabValues = np.exp(-(ws * alpha + beta) ** 2 / (4 * alpha * Tratio * ws))
+    return sabValues / np.sqrt(4 * pi * ws * alpha * Tratio)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(nopython=True, nogil=True, parallel=True)
 def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
                ws: float) -> np.ndarray:
     """
@@ -1516,7 +1513,8 @@ def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values.
     """
-    Sab = np.zeros((len(alpha), len(beta)))
-    for i in prange(len(alpha)):
+    Nalpha = len(alpha)
+    Sab = np.zeros((Nalpha, len(beta)))
+    for i in prange(Nalpha):
         Sab[i] += get_SabSctAlpha(alpha[i], beta, Tratio, ws)
     return Sab

@@ -8,7 +8,7 @@ import pandas as pd
 from typing import Iterable
 
 
-class Crystal_structure():
+class CrystalStructure:
     """
     Class for the crystal structure.
 
@@ -70,7 +70,7 @@ class Crystal_structure():
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = Crystal_structure(dir_vec_length, dir_vec_angles)
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
         >>> cubic_vec = crys.operator.values
 
         Test the results:
@@ -109,7 +109,7 @@ class Crystal_structure():
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = Crystal_structure(dir_vec_length, dir_vec_angles)
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
         >>> direct_vectors = crys.dir_vec
 
         Test the results:
@@ -136,7 +136,7 @@ class Crystal_structure():
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = Crystal_structure(dir_vec_length, dir_vec_angles)
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
 
         Test the results:
         >>> assert crys.unit_cell_vol.round(6) == 16.484804
@@ -160,7 +160,7 @@ class Crystal_structure():
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = Crystal_structure(dir_vec_length, dir_vec_angles)
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
         >>> reciprocal_vector = crys.reciproc_vec
 
         Test the results:

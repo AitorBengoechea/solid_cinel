@@ -5,7 +5,7 @@ Python file for working with the solid structure.
 """
 
 from solid_cinel.core.material.structure.material_composition import Molecule
-from solid_cinel.core.material.structure.crystal_symmetry import Crystal_structure
+from solid_cinel.core.material.structure.crystal_symmetry import CrystalStructure
 from scipy.optimize import minimize
 import numpy as np
 import pandas as pd
@@ -60,7 +60,7 @@ b_coh = [5.878374042670532, 8.62912188811068]
 b_incoh = [0.0, 0.19947114020071632]
 
 
-class Solid(Crystal_structure, Molecule):
+class Solid(CrystalStructure, Molecule):
     """
     Class to store the properties and methods for solid materials.
 
@@ -121,7 +121,7 @@ class Solid(Crystal_structure, Molecule):
             Multiple atoms: 'dict'
                 {"atom name" : [atom positions]}
 
-        Parameters for Crystal_structure
+        Parameters for CrystalStructure
         --------------------------------
         length : iterable or `np.array` of size (1, 3)
             Direct lattice vectors length in fm.
@@ -152,7 +152,7 @@ class Solid(Crystal_structure, Molecule):
             structure of a solid.
 
         """
-        Crystal_structure.__init__(self, *args[0:2])
+        CrystalStructure.__init__(self, *args[0:2])
         Molecule.__init__(self, *args[2:], **kwargs)
 
         if len(preferred_orientation) != 3:
@@ -317,7 +317,7 @@ def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
     Example
     -------
     Object initialization:
-    >>> crys = Crystal_structure(dir_vec_length_Al27, dir_vec_angles_Al27)
+    >>> crys = CrystalStructure(dir_vec_length_Al27, dir_vec_angles_Al27)
     >>> rec_vecs = crys.reciproc_vec.values
     >>> d_min = 0.2360746677309732
     >>> hkl_max_value(rec_vecs, d_min)

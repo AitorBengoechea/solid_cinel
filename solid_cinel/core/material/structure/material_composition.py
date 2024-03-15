@@ -64,8 +64,7 @@ class Atom:
         self.A = A
         self.Z = Z
         self.atom_mass = atom_mass
-        self.b = {"b_coh": b_coh,
-                  "b_incoh": b_incoh}
+        self.b = {"b_coh": b_coh, "b_incoh": b_incoh}
 
     @property
     def name(self) -> str:

@@ -5,7 +5,7 @@ Created on Fri Nov 25 14:52:18 2022
 @author: AB272525
 """
 import pandas as pd
-from solid_cinel.core.material.target_material import Target_mat
+from solid_cinel.core.material.target_material import TargetMat
 from solid_cinel.core.scattering_function.alpha import Alpha
 from solid_cinel.core.scattering_function.beta import Beta
 from scipy.integrate import trapezoid
@@ -18,7 +18,7 @@ from solid_cinel.data.materials.Al27 import *
 from examples import *
 
 # Target material:
-Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
+Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
                 A, Z, atomic_mass, b_coh, b_incoh,
                 rho_in_energy, interv_in_energy)
 

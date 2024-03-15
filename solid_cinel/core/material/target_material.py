@@ -12,12 +12,13 @@ from solid_cinel.core.scattering_function.alpha import Alpha
 from solid_cinel.core.scattering_function import Sab
 from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
-import scipy as sp
 import numpy as np
 from math import pi, cos, sin, acos, exp
 import pandas as pd
 import numba as nb
 import collections
+from scipy.constants import c
+
 
 collections.Callable = collections.abc.Callable
 
@@ -26,7 +27,6 @@ h = const["reduced Planck constant in eV s"][0]
 m_to_eV = const["atomic mass unit-electron volt relationship"][0]
 mn_to_MeV = const["neutron mass energy equivalent in MeV"][0]
 kb = const["Boltzmann constant in eV/K"][0]
-c = sp.constants.c
 Bfac_unit_change = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
 Bragg_unit_change = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
@@ -153,7 +153,7 @@ rho_in_energy = [rho_in_energy_O16, rho_in_energy_U238]
 interv_in_energy = [interv_in_energy_O16, interv_in_energy_U238]
 
 
-class Target_mat(Solid):
+class TargetMat(Solid):
     """
     Class to store all the Target material methods and attributes.
 
@@ -267,9 +267,9 @@ class Target_mat(Solid):
         --------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> from solid_cinel.data.materials.UO2 import *
-        >>> UO2 = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
+        >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
 
         Test the results:
         >>> T = 20
@@ -322,7 +322,7 @@ class Target_mat(Solid):
         --------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
 
         Test the results:
         >>> T = 20
@@ -412,7 +412,7 @@ class Target_mat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -431,7 +431,7 @@ class Target_mat(Solid):
             3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> Target_mat._get_pddf(multiplicity).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_pddf(multiplicity).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity  PDDF
         h k l
         1 1 0  2.019999  0.115016                0.0           6.0   1.0
@@ -446,7 +446,7 @@ class Target_mat(Solid):
             3  0.777498  0.094765                0.0          32.0   1.0
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat._get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  0.464758
@@ -461,7 +461,7 @@ class Target_mat(Solid):
             3  0.777498  0.094765          70.528779          32.0  1.193243
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat._get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  1.716531
@@ -476,7 +476,7 @@ class Target_mat(Solid):
             3  0.777498  0.094765          70.528779          32.0  1.459426
 
         >>> multiplicity = Al.get_multiplicity(T, E)
-        >>> Target_mat._get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0  0.206522
@@ -531,7 +531,7 @@ class Target_mat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -550,7 +550,7 @@ class Target_mat(Solid):
             3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> Target_mat._get_difrac_angles(multiplicity, E).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_difrac_angles(multiplicity, E).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity     theta
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0   5.350060
@@ -601,7 +601,7 @@ class Target_mat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
         >>> unit_cell_vol = Al.unit_cell_vol
@@ -622,7 +622,7 @@ class Target_mat(Solid):
             3  0.777498  0.094765                0.0          32.0   1.0  0.033831
 
         Test the results:
-        >>> Target_mat._get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
         h  k  l
         1  1  1    0.005370
               0    0.003459
@@ -637,7 +637,7 @@ class Target_mat(Solid):
         Name: Xs, dtype: float64
         """
         if "PDDF" not in data.columns:
-            Target_mat.get_pddf(data)
+            TargetMat.get_pddf(data)
         data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
         data["Xs"] *= Bragg_unit_change * pi ** 2 / (unit_cell_vol * atom_number)
         if threshold:
@@ -699,7 +699,7 @@ class Target_mat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
 
@@ -825,7 +825,7 @@ class Target_mat(Solid):
         --------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
         >>> T = 20
         >>> E = 2.301
 
@@ -1120,7 +1120,7 @@ class Target_mat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
 
         Test the results:
         FGM:
@@ -1206,12 +1206,12 @@ def numba_hkl_data(d_min: float,
     rec_vecs : 'np.ndarray', (3, 3)
         Reciprocal vectors
     Bfac : 'pd.Series'
-        Pandas series with the B factor for Target_Material object elements.
+        Pandas series with the B factor for TargetMaterial object elements.
     pos : 'pd.Series'
-        Pandas series with atomic position of elements in Target_Material
+        Pandas series with atomic position of elements in TargetMaterial
         object.
     csl : 'pd.Series'
-        Coherent elastic length for each element of Target_Material object.
+        Coherent elastic length for each element of TargetMaterial object.
     precision: 'np.ndarray', (2,):
         Array containing:
             0: Precision to reagroup in multiplicity the d_hkl
@@ -1228,9 +1228,9 @@ def numba_hkl_data(d_min: float,
 
     >>> unit_pos_Al27 = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
     >>> from solid_cinel.data.materials.Al27 import *
-    >>> Al = Target_mat(preferred_orientation, unit_pos_Al27, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+    >>> Al = TargetMat(preferred_orientation, unit_pos_Al27, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
     >>> from solid_cinel.data.materials.UO2 import *
-    >>> UO2 = Target_mat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
+    >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
 
     Test the results:
     >>> T = 20
@@ -1335,11 +1335,11 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
     rec_vecs : 'np.ndarray' (3, 3)
         Reciprocal vectors
     Bfac : 'nb.typed.Dict'
-        Dict with the B factor for Target_Material object elements.
+        Dict with the B factor for TargetMaterial object elements.
     pos : 'nb.typed.Dict'
-        Dict with atomic position of elements in Target_Material object.
+        Dict with atomic position of elements in TargetMaterial object.
     csl : 'nb.typed.Dict'
-        Coherent elastic length for each element of Target_Material object.
+        Coherent elastic length for each element of TargetMaterial object.
     preferred_orientation: "np.ndarray", (3)
         Array with the preferred orientation of the solid.
     precision: "float"
@@ -1398,11 +1398,11 @@ def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
     vec_tau_hkl : 'np.ndarray', (3, 3)
         Reciprocal vectors
     Bfac : 'nb.typed.Dict'
-        Dict with the B factor for Target_Material object elements.
+        Dict with the B factor for TargetMaterial object elements.
     pos : 'nb.typed.Dict'
-        Dict with atomic position of elements in Target_Material object.
+        Dict with atomic position of elements in TargetMaterial object.
     csl : 'nb.typed.Dict'
-        Coherent elastic length for each element of Target_Material object.
+        Coherent elastic length for each element of TargetMaterial object.
 
     Returns
     -------

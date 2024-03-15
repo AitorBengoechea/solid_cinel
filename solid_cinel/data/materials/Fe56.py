@@ -1,3 +1,4 @@
+# Structural information for the material:
 preferred_orientation = [0, 0, 1]
 a = 2.476832
 dir_vec_length = [a, a, a]

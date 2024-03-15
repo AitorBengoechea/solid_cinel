@@ -1,3 +1,4 @@
+# Structural information for the material:
 preferred_orientation = [ 0, 0, 1 ]
 a = 2.271566
 c = 3.545935

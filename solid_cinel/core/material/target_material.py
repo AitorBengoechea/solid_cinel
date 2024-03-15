@@ -7,9 +7,6 @@ Python file for working with Target Material.
 
 from solid_cinel.core.material.structure.solid import Solid, hkl_max_value
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.scattering_function import Beta
-from solid_cinel.core.scattering_function.alpha import Alpha
-from solid_cinel.core.scattering_function import Sab
 from solid_cinel.core.cinematic.frames import Neutron
 from scipy.constants import physical_constants as const
 import numpy as np
@@ -29,128 +26,6 @@ mn_to_MeV = const["neutron mass energy equivalent in MeV"][0]
 kb = const["Boltzmann constant in eV/K"][0]
 Bfac_unit_change = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
 Bragg_unit_change = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
-
-# Examples variables:
-# 1 atom:
-rho_in_energy_str_Al27 = '''
-        0 .0066 .0264 .0594 .1055 .1649 .2374 .3232 .4221
-        .5342 .6595 .7980 .9497 1.1146 1.2927 1.4839 1.6884
-        2.0169 2.4373 2.9366 3.6133 4.6775 7.1346 7.3650
-        7.5156 7.6733 7.8309 8.0740 8.4419 9.0595 9.6773
-        7.3645 6.2674 5.1965 4.7958 4.8024 4.6841 4.4673
-        4.1914 3.8169 3.3439 2.7855 3.2782 5.3082 8.5930
-        12.3377 8.4616 5.6695 4.1585 2.6081 0.0
-    '''
-rho_in_energy_Al27 = np.fromstring(rho_in_energy_str_Al27, dtype=np.float64, sep=' ')
-interv_in_energy_Al27 = 0.0008
-alpha0_str_Al27 = '''
-  .005 .010 .015 .020 .025 .030 .035 .040 .045 .050
-  .060 .070 .080 .090 .100 .125 .150 .175 .200 .225
-  .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
-  .500 .525 .550 .575 .600 .625 .675 .700 .725 .750
-  .800 .850 .900 .950 1.00 1.05 1.10 1.15 1.20 1.25
-  1.30 1.35 1.40 1.50 1.60 1.70 1.80 1.90 2.00 2.10
-  2.20 2.30 2.40 2.50 2.60 2.70 2.80 2.90 3.00 3.10
-  3.20 3.30 3.40 3.50 3.60 3.80 4.00 4.20 4.40 4.60
-  4.80 5.00 5.20 5.40 5.60 5.80 6.00 6.20 6.40 6.60
-  6.80 7.00 7.40 7.80 8.20 8.60 9.00 9.40 9.80 10.2
-  10.6 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0
-  15.5 16.0 16.5 17.0 17.5 18.0 18.5 19.0 19.5 20.0
-  21.0 22.0 23.0 24.0 24.5 25.0 26.0 27.0 28.0 29.0
-  30.0 32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5
-  55.0 57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0
-'''
-alpha0_Al27 = np.fromstring(alpha0_str_Al27, dtype=np.float64, sep=' ')
-beta0_str_Al27 = '''
-  .000 .025 .050 .075 .100 .125 .150 .175 .200 .225
-  .250 .275 .300 .325 .350 .375 .400 .425 .450 .475
-  .500 .525 .550 .575 .600 .625 .650 .675 .700 .725
-  .750 .775 .800 .825 .850 .875 .900 .925 .950 .975
-  1.00 1.05 1.10 1.15 1.20 1.25 1.30 1.35 1.40 1.45
-  1.50 1.55 1.60 1.70 1.80 1.90 2.00 2.10 2.20 2.30
-  2.40 2.50 2.60 2.70 2.80 2.90 3.00 3.10 3.20 3.30
-  3.40 3.50 3.60 3.70 3.80 3.90 4.00 4.10 4.20 4.30
-  4.40 4.50 4.60 4.70 4.80 4.90 5.00 5.10 5.20 5.30
-  5.40 5.50 5.60 5.70 5.80 5.90 6.00 6.25 6.50 6.75
-  7.00 7.50 8.00 8.50 9.00 10.0 11.0 12.0 13.0 14.0
-  15.0 16.0 17.0 18.0 19.0 20.0 22.5 25.0 27.5 30.0
-  32.5 35.0 37.5 40.0 42.5 45.0 47.5 50.0 52.5 55.0
-  57.5 60.0 62.5 65.0 67.5 70.0 72.5 75.0 77.5 80.0
-  82.5 85.0 87.5 90.0
-'''
-beta0_Al27 = np.fromstring(beta0_str_Al27, dtype=np.float64, sep=' ')
-
-# 2 atom:
-rho_in_energy_O16_str = '''
-0.000000E+00 6.923874E-03 2.497670E-02 5.488348E-02
-9.504920E-02 1.479389E-01 2.139513E-01 2.889902E-01
-3.722217E-01 4.694096E-01 5.797566E-01 7.142103E-01
-8.648680E-01 1.037820E+00 1.270585E+00 1.816629E+00
-1.726038E+00 1.064790E+00 8.615329E-01 8.017556E-01
-7.808027E-01 7.815640E-01 7.991818E-01 8.341637E-01
-8.819783E-01 9.379855E-01 1.239156E+00 2.544143E+00
-5.493169E+00 7.542890E+00 6.200347E+00 3.899265E+00
-3.176137E+00 3.982750E+00 5.293972E+00 5.997778E+00
-6.310875E+00 6.750886E+00 7.348876E+00 9.615086E+00
-1.342006E+01 1.785015E+01 2.514254E+01 3.308876E+01
-3.394329E+01 3.018225E+01 2.677197E+01 2.401069E+01
-2.264379E+01 2.170413E+01 2.108204E+01 2.061835E+01
-2.034441E+01 2.020180E+01 2.021090E+01 2.032422E+01
-2.048390E+01 2.089081E+01 2.149127E+01 2.224180E+01
-2.335361E+01 2.456841E+01 2.400029E+01 2.378412E+01
-2.057435E+01 1.340375E+01 1.410426E+01 1.986035E+01
-2.335756E+01 2.336811E+01 2.139441E+01 2.074719E+01
-2.063757E+01 2.095150E+01 2.158940E+01 2.254504E+01
-2.422993E+01 2.691331E+01 3.179124E+01 4.563659E+01
-5.752641E+01 5.609342E+01 4.689648E+01 2.438494E+01
-4.135546E+00 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 5.255256E-01 2.237281E+00 4.016499E+00
-5.186199E+00 6.762413E+00 8.981823E+00 1.161543E+01
-1.599614E+01 3.174364E+01 3.582525E+01 2.322394E+01
-1.668530E+01 1.262719E+01 1.004853E+01 8.184454E+00
-6.946893E+00 6.009886E+00 5.284656E+00 4.766380E+00
-4.441574E+00 4.272284E+00 3.664723E+00 2.362237E+00
-8.264423E-01 1.493527E-02 0.000000E+00'''
-rho_in_energy_O16 = np.fromstring(rho_in_energy_O16_str, dtype=np.float64,
-                                  sep=' ')
-interv_in_energy_O16 = interv_in_energy_U238 = 6.956193E-04
-rho_in_energy_U238_str = '''
-0.000000E+00 1.041128E-01 3.759952E-01 8.354039E-01
-1.469796E+00 2.335578E+00 3.467660E+00 4.841392E+00
-6.492841E+00 8.608376E+00 1.131303E+01 1.504441E+01
-2.006807E+01 2.750471E+01 4.171597E+01 1.585670E+02
-1.978483E+02 1.144621E+02 7.555927E+01 4.831100E+01
-4.389081E+01 4.246484E+01 4.103699E+01 3.986249E+01
-3.827959E+01 3.592088E+01 3.272170E+01 3.914602E+01
-8.144694E+01 9.693959E+01 5.503795E+01 2.619253E+01
-1.763331E+01 1.475875E+01 1.522465E+01 1.213117E+01
-6.175029E+00 2.483519E+00 1.445581E+00 1.423177E+00
-1.502350E+00 1.718768E+00 2.211346E+00 3.061686E+00
-3.550530E+00 3.349917E+00 2.768379E+00 2.177488E+00
-1.856123E+00 1.622775E+00 1.445254E+00 1.300794E+00
-1.180078E+00 1.075748E+00 9.928057E-01 9.238564E-01
-8.577708E-01 8.073819E-01 7.634820E-01 7.172257E-01
-6.728183E-01 6.251482E-01 5.496737E-01 4.992486E-01
-3.945195E-01 2.206960E-01 1.452214E-01 1.246671E-01
-9.863893E-02 7.855588E-02 6.536053E-02 6.568678E-02
-7.308199E-02 8.388478E-02 1.026265E-01 1.245221E-01
-1.487740E-01 1.757085E-01 2.055793E-01 2.473042E-01
-3.128097E-01 3.455081E-01 3.048708E-01 1.621507E-01
-2.653572E-02 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 0.000000E+00 0.000000E+00 0.000000E+00
-0.000000E+00 7.105193E-03 5.274518E-02 1.324974E-01
-2.310275E-01 4.042710E-01 6.421137E-01 8.073457E-01
-9.162074E-01 1.077923E+00 1.142595E+00 1.092532E+00
-1.060668E+00 1.000020E+00 8.769838E-01 7.610532E-01
-6.898200E-01 6.324347E-01 5.857072E-01 5.563076E-01
-5.468099E-01 5.515587E-01 4.871045E-01 3.198787E-01
-1.132118E-01 2.066306E-03 0.000000E+00
-'''
-rho_in_energy_U238 = np.fromstring(rho_in_energy_U238_str, dtype=np.float64,
-                                   sep=' ')
-rho_in_energy = [rho_in_energy_O16, rho_in_energy_U238]
-interv_in_energy = [interv_in_energy_O16, interv_in_energy_U238]
 
 
 class TargetMat(Solid):
@@ -236,21 +111,25 @@ class TargetMat(Solid):
             Energy interval in eV for each element.
         """
         Solid.__init__(self, *args[0:9])
-        if len(args) > 9:
-            self.add_pdos(args[9:])
         # Avoid data setter in Pdos:
-        elements_name = self.atoms.index
-        if isinstance(args[10], float):
-            pdos = {elements_name[0]: Pdos.from_dE(args[9], args[10])}
+        if len(args) > 9:
+            self.compute_pdos(args[9])
         else:
-            pdos = {elements_name[i]: Pdos.from_dE(args[9][i], args[10][i])
-                    for i in range(len(args[10]))}
-        self.pdos = pd.Series(pdos)
+            self.pdos = None
 
-    def add_pdos(self, pdosDict: dict[Pdos]):
-        return
+    def compute_pdos(self, pdosDict: [Pdos, dict[Pdos]]):
+        atoms = self.atoms.index
+        if len(atoms) == 1:
+            pdosCheck = pd.Series(pdosDict, index=atoms)
+        else:
+            pdosCheck = pd.Series({element: pdosDict.get(element) for element in atoms})
+            if pdosCheck.isnull().any():
+                raise ValueError("The pdosDict must have the same elements as the object.")
+        self.pdos = pdosCheck
 
-    def get_Bfact(self, T: float, anstrom: bool = True) -> [float, pd.Series]:
+
+    def get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
+                  anstrom: bool = True) -> [float, pd.Series]:
         """
         Calculate mean square displacement for a certain pdos information.
         .. math::
@@ -260,6 +139,8 @@ class TargetMat(Solid):
         ----------
         T : 'float'
             Temperature in K
+        pdosDict : 'dict[Pdos]', optional
+            Dictionary with the pdos for each element. The default is None.
         anstrom : 'bool', optional
             Option to obtain the B unit in A^2. The default is True.
 
@@ -272,17 +153,21 @@ class TargetMat(Solid):
         --------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh)
         >>> from solid_cinel.data.materials.UO2 import *
-        >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
+        >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
+        >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
         Test the results:
         >>> T = 20
-        >>> Al.get_Bfact(T)["Al27"].round(6)
+        >>> Al.get_Bfact(T, pdosAl27)["Al27"].round(6)
         0.274871
 
         >>> T = 80
-        >>> Al.get_Bfact(T)["Al27"].round(6)
+        >>> Al.get_Bfact(T, pdosAl27)["Al27"].round(6)
         0.337081
 
         >>> T = 296
@@ -297,13 +182,16 @@ class TargetMat(Solid):
         U238    0.340297
         dtype: float64
         """
-
+        if pdosDict is not None:
+            self.compute_pdos(pdosDict)
+        elif self.pdos is None:
+            raise ValueError("The pdosDict must be defined or initialized in the object.")
         Bfact = Bfac_unit_change * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
         Bfact /= T * self.atoms.apply(lambda x: x.atom_mass)
         return Bfact * 1.0e20 if anstrom else Bfact
 
     def get_multiplicity(self, T: float, energy_cut: float,
-                         precision: list = [6, 6]) -> pd.DataFrame:
+                         precision: list = [6, 6], **kwargs) -> pd.DataFrame:
         """
         Obtain hkl data for the solid in a certain temperature and for a neutron
         certain energy filtering with the multiplicity.
@@ -318,6 +206,13 @@ class TargetMat(Solid):
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
 
+        Parameters for get_Bfact
+        ------------------------
+        pdosDict : 'dict[Pdos]', optional
+            Dictionary with the pdos for each element. The default is None.
+        anstrom : 'bool', optional
+            Option to obtain the B unit in A^2. The default is True.
+
         Returns
         -------
         "pd.DataFrame", (N, 4)
@@ -327,7 +222,9 @@ class TargetMat(Solid):
         --------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
 
         Test the results:
         >>> T = 20
@@ -369,7 +266,7 @@ class TargetMat(Solid):
         hkl_data = numba_hkl_data(d_min,
                                   hkl_max,
                                   recs_vec,
-                                  self.get_Bfact(T),
+                                  self.get_Bfact(T, **kwargs),
                                   self.atom_pos,
                                   self.atoms.apply(lambda x: x.b["b_coh"]),
                                   self.preferred_orientation.values,
@@ -417,7 +314,9 @@ class TargetMat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -536,7 +435,9 @@ class TargetMat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> E = 2.301
         >>> multiplicity = Al.get_multiplicity(T, E)
@@ -606,7 +507,9 @@ class TargetMat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> E = 2.301
         >>> unit_cell_vol = Al.unit_cell_vol
@@ -704,7 +607,9 @@ class TargetMat(Solid):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> E = 2.301
 
@@ -830,7 +735,9 @@ class TargetMat(Solid):
         --------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> E = 2.301
 
@@ -926,9 +833,13 @@ def numba_hkl_data(d_min: float,
 
     >>> unit_pos_Al27 = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
     >>> from solid_cinel.data.materials.Al27 import *
-    >>> Al = TargetMat(preferred_orientation, unit_pos_Al27, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, rho_in_energy_Al27, interv_in_energy_Al27)
+    >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> Al = TargetMat(preferred_orientation, unit_pos_Al27, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
     >>> from solid_cinel.data.materials.UO2 import *
-    >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, rho_in_energy, interv_in_energy)
+    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
+    >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
+    >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
     Test the results:
     >>> T = 20

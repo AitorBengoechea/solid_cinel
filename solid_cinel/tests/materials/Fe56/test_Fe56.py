@@ -6,9 +6,7 @@ Created on Fri Nov 25 14:52:18 2022
 from scipy.integrate import trapezoid
 """
 import pandas as pd
-from solid_cinel.core.material.target_material import TargetMat
-from solid_cinel.core.scattering_function.alpha import Alpha
-from solid_cinel.core.scattering_function.beta import Beta
+from solid_cinel import TargetMat, Alpha, Beta, Pdos, Sab
 from scipy.integrate import trapezoid
 import pytest
 import os
@@ -16,14 +14,13 @@ import os
 from solid_cinel.data.materials.Fe56 import *
 
 
-# Examples variables:
+# Example variables:
 from examples import *
 
 # Target material
-Fe = TargetMat(preferred_orientation, unit_pos,
-                dir_vec_length, dir_vec_angles,
-                A, Z, atomic_mass, b_coh, b_incoh,
-                rho_in_energy, interv_in_energy)
+pdosFe56 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+Fe = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
+               A, Z, atomic_mass, b_coh, b_incoh, pdosFe56)
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
@@ -32,9 +29,7 @@ def test_Fe56_BraggEddges(T):
     os.chdir(__file__.replace("test_Fe56.py", ""))
     test_data = pd.read_hdf(os.path.abspath(f"Multiplicity_Fe_{T}K.dat"),
                             key="test")
-    data = Fe.get_BraggEdges(T, energy_cut)\
-             .iloc[::, :4:-1]\
-             .drop(columns="theta")
+    data = Fe.get_BraggEdges(energy_cut, T).iloc[::, :4:-1].drop(columns="theta")
     comp = test_data/data - 1
     comp_inv = data/test_data - 1  # Avoid one 0 and the other a number
     assert (comp.fillna(0) < 1.0e-4).all().all()
@@ -47,10 +42,7 @@ def test_Fe56_coherent_Xs(T):
     wd = os.getcwd()
     os.chdir(__file__.replace("test_Fe56.py", ""))
     test_data = pd.read_hdf(os.path.abspath(f"Fe56_Fe_{T}K_coh_XS"), key="test")
-    test_data.columns = pd.MultiIndex.from_product(
-        [Fe.atoms.apply(lambda x: x.zam).values, [2]],
-        names=["ZAM", "MT"])
-    data = Fe.get_coherent_Xs(energy_cut, energy_sup, T)
+    data = Fe.get_XsCoh(energy_cut, T)
     comp = test_data/data - 1
     comp_inv = data/test_data - 1  # Avoid one 0 and the other a number
     assert (comp.fillna(0) < 1.0e-4).all().all()
@@ -61,16 +53,18 @@ def test_Fe56_coherent_Xs(T):
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])
 def test_Fe56_Sab(T):
     wd = os.getcwd()
+    # Get the grid
     beta_grid = Beta(beta0_).scale(T).data
     alpha_grid = Alpha(alpha0_).scale(T).data
+    # Get the test data
     os.chdir(__file__.replace("test_Fe56.py", ""))
     test_data = pd.read_hdf(os.path.abspath(f"Fe56_Fe_{T}K_SSab"), key="test").T
     test_data *= np.exp(beta_grid/2)
     test_data.index = pd.Index(alpha_grid, name="alpha")
     test_data.columns = pd.Index(beta_grid, name="beta")
+    # Calculate the data
     threshold = 0.0 if T < 200 else 1.0e-14
-    data = Fe.get_Sab(alpha_grid, beta_grid, T, model="phonon expansion",
-                      threshold=threshold)["Fe56"].data
+    data = Sab.from_pdos(alpha_grid, beta_grid, T, pdosFe56, threshold=threshold).data
     Sab_normalize = []
     for ia in range(len(test_data.index)):
         Sab_normalize_original = trapezoid(beta_grid * data.iloc[ia] * (1 + np.exp(-beta_grid)), beta_grid)

@@ -58,7 +58,7 @@ class TargetMat(Solid):
         Energy intervals in which the density of states is defined, eV.
     energy_sup : float
         Upper limit of the energy range, eV.
-    energy_cut : float
+    energyCut : float
         Energy cut for the density of states, eV.
 
     Methods
@@ -70,7 +70,7 @@ class TargetMat(Solid):
         certain energy filtering with the multiplicity
     get_BraggEdges: pd.DataFrame
         Get Bragg Edges
-    get_coherent_Xs: pd.DataFrame
+    get_XsCoh: pd.DataFrame
         Get coherent xs for the materials in the class
     get_Sab: pd.Series
         Generate S(alpha, -beta) matrix for the materials in the class
@@ -190,7 +190,7 @@ class TargetMat(Solid):
         Bfact /= T * self.atoms.apply(lambda x: x.atom_mass)
         return Bfact * 1.0e20 if anstrom else Bfact
 
-    def get_multiplicity(self, T: float, energy_cut: float,
+    def get_multiplicity(self, energyCut: float, T: float,
                          precision: list = [6, 6], **kwargs) -> pd.DataFrame:
         """
         Obtain hkl data for the solid in a certain temperature and for a neutron
@@ -200,7 +200,7 @@ class TargetMat(Solid):
         ----------
         T : 'float'
             Temperature in K
-        energy_cut : 'float'
+        energyCut : 'float'
             Energy limit for d espace limit in eV
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
@@ -228,8 +228,8 @@ class TargetMat(Solid):
 
         Test the results:
         >>> T = 20
-        >>> E = 2.301
-        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> energyCut = 2.301
+        >>> multiplicity = Al.get_multiplicity(energyCut, T)
         >>> multiplicity.shape[0]
         678
         >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
@@ -260,7 +260,7 @@ class TargetMat(Solid):
               18  0.090247  0.0          88.521943         192.0
               19  0.090090  0.0          86.309150         168.0
         """
-        hkl_data = numba_hkl_data(Neutron(energy_cut).d_min,
+        hkl_data = numba_hkl_data(Neutron(energyCut).d_min,
                                   self.reciproc_vec.values,
                                   self.get_Bfact(T, **kwargs),
                                   self.atom_pos,
@@ -313,8 +313,8 @@ class TargetMat(Solid):
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
-        >>> E = 2.301
-        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> energyCut = 2.301
+        >>> multiplicity = Al.get_multiplicity(energyCut, T)
         >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity
         h k l
@@ -344,7 +344,7 @@ class TargetMat(Solid):
           3 2  0.824661  0.097189                0.0          24.0   1.0
             3  0.777498  0.094765                0.0          32.0   1.0
 
-        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> multiplicity = Al.get_multiplicity(energyCut, T)
         >>> TargetMat._get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
@@ -359,7 +359,7 @@ class TargetMat(Solid):
           3 2  0.824661  0.097189          90.000000          24.0  2.828427
             3  0.777498  0.094765          70.528779          32.0  1.193243
 
-        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> multiplicity = Al.get_multiplicity(energyCut, T)
         >>> TargetMat._get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
@@ -374,7 +374,7 @@ class TargetMat(Solid):
           3 2  0.824661  0.097189          90.000000          24.0  1.367879
             3  0.777498  0.094765          70.528779          32.0  1.459426
 
-        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> multiplicity = Al.get_multiplicity(energyCut, T)
         >>> TargetMat._get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity      PDDF
         h k l
@@ -408,7 +408,7 @@ class TargetMat(Solid):
         return data
 
     @staticmethod
-    def _get_difrac_angles(data: pd.DataFrame, energy_cut: float) -> pd.DataFrame:
+    def _get_difracAngles(data: pd.DataFrame, energyCut: float) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the difraction angles(ª) vs hkl data.
         .. math::
@@ -418,7 +418,7 @@ class TargetMat(Solid):
         ----------
         data: 'pd.DataFrame', (N, M)
             Frame with hkl data.
-        energy_cut : 'float'
+        energyCut : 'float'
             Energy cut for d espace in eV
 
         Returns
@@ -434,8 +434,8 @@ class TargetMat(Solid):
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
-        >>> E = 2.301
-        >>> multiplicity = Al.get_multiplicity(T, E)
+        >>> energyCut = 2.301
+        >>> multiplicity = Al.get_multiplicity(energyCut, T)
         >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity
         h k l
@@ -451,7 +451,7 @@ class TargetMat(Solid):
             3  0.777498  0.094765          70.528779          32.0
 
         Test the results:
-        >>> TargetMat._get_difrac_angles(multiplicity, E).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_difracAngles(multiplicity, energyCut).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity     theta
         h k l
         1 1 0  2.019999  0.115016         125.264390           6.0   5.350060
@@ -467,13 +467,13 @@ class TargetMat(Solid):
 
         """
         d = data.loc[:, "d"]
-        angle_value = np.clip(1 - pi ** 2 * Bragg_unit_change / (d ** 2 * energy_cut),
+        angle_value = np.clip(1 - pi ** 2 * Bragg_unit_change / (d ** 2 * energyCut),
                               -1, 1)
         data["theta"] = np.rad2deg(np.arccos(angle_value))
         return data
 
     @staticmethod
-    def _get_BraggEdges_Xs(data: pd.DataFrame, unit_cell_vol: float,
+    def _get_BraggEdgesXs(data: pd.DataFrame, unit_cell_vol: float,
                            atom_number: int,
                            threshold: float = 1.e-30) -> pd.DataFrame:
         """
@@ -506,10 +506,10 @@ class TargetMat(Solid):
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
-        >>> E = 2.301
+        >>> energyCut = 2.301
         >>> unit_cell_vol = Al.unit_cell_vol
         >>> atom_number = Al.atom_number
-        >>> BraggEdges = Al.get_BraggEdges(T, E, xs=False, theta=False)
+        >>> BraggEdges = Al.get_BraggEdges(energyCut, T, xs=False, theta=False)
         >>> BraggEdges.iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity  PDDF         E
         h k l
@@ -525,7 +525,7 @@ class TargetMat(Solid):
             3  0.777498  0.094765                0.0          32.0   1.0  0.033831
 
         Test the results:
-        >>> TargetMat._get_BraggEdges_Xs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
+        >>> TargetMat._get_BraggEdgesXs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
         h  k  l
         1  1  1    0.005370
               0    0.003459
@@ -569,7 +569,7 @@ class TargetMat(Solid):
         -------------------------------
         T : 'float'
             Temperature in K
-        energy_cut : 'float'
+        energyCut : 'float'
             Energy cut for d espace in eV
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
@@ -606,10 +606,10 @@ class TargetMat(Solid):
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
-        >>> E = 2.301
+        >>> energyCut = 2.301
 
         Test the results:
-        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, :4] #doctest: +NORMALIZE_WHITESPACE
+        >>> Al.get_BraggEdges(energyCut, T).round(6).iloc[:10, :4] #doctest: +NORMALIZE_WHITESPACE
                       d       Fsq  Orientation angle  Multiplicity
         h k l
         1 1 1  2.332494  0.115989                0.0           8.0
@@ -623,7 +623,7 @@ class TargetMat(Solid):
           3 2  0.824661  0.097189                0.0          24.0
             3  0.777498  0.094765                0.0          32.0
 
-        >>> Al.get_BraggEdges(T, E).round(6).iloc[:10, 4::] #doctest: +NORMALIZE_WHITESPACE
+        >>> Al.get_BraggEdges(energyCut, T).round(6).iloc[:10, 4::] #doctest: +NORMALIZE_WHITESPACE
                PDDF         E        Xs      theta
         h k l
         1 1 1   1.0  0.003759  0.005370   4.632867
@@ -638,52 +638,37 @@ class TargetMat(Solid):
             3   1.0  0.033831  0.005850  13.929091
         """
         # Get multiplicity
-        data = self.get_multiplicity(*args,
-                                     precision=kwargs.pop("precision", [6, 6])
-                                     )
+        data = self.get_multiplicity(*args, precision=kwargs.pop("precision", [6, 6]))
         # Get PDDF:
-        self._get_pddf(data,
-                       kwargs.pop("kind", None),
-                       kwargs.pop("pddf_val", None)
-                       )
+        self._get_pddf(data, kwargs.pop("kind", None), kwargs.pop("pddf_val", None))
 
         # Get Bragg Edges:
         data["E"] = pi ** 2 * Bragg_unit_change / (2 * data["d"] ** 2)
-        data = data.sort_values(by=["E"])
+        data.sort_values(by=["E"], inplace=True)
 
         # Optional argument:
         # Xs:
         if xs:
-            self._get_BraggEdges_Xs(data,
-                                    self.unit_cell_vol,
-                                    self.atom_number,
-                                    threshold=kwargs.get("threshold", 1.e-30)
-                                    )
+            self._get_BraggEdgesXs(data, self.unit_cell_vol, self.atom_number,
+                                   threshold=kwargs.get("threshold", 1.e-30))
 
         # difraction angles vs hkl data
         if theta:
-            self._get_difrac_angles(data,
-                                    args[1]
-                                    )
+            self._get_difracAngles(data, args[0])
 
         # Get the final result
         if file_BraggEdges:
-            data.to_csv(file_BraggEdges,
-                        sep='\t',
-                        float_format="%20.10e")
+            data.to_csv(file_BraggEdges, sep='\t', float_format="%20.10e")
         return data
 
-    def get_coherent_Xs(self, energy_cut: float, energy_sup: float, *args,
-                        file_Xs: str = None, **kwargs) -> pd.DataFrame:
+    def get_XsCoh(self, energyCut: float, *args, file_Xs: str = None, **kwargs) -> pd.Series:
         """
         Get coherent Xs.
 
         Parameters
         ----------
-        energy_cut : 'float'
+        energyCut : 'float'
             energy cut-off, above which the peak will not be stored.
-        energy_sup : 'float', optional
-            Superior bound of energy. The default is False.
         file_Xs : 'str', optional
             Name of the file to write Xs the data. The default is False.
 
@@ -733,63 +718,67 @@ class TargetMat(Solid):
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
-        >>> T = 20
-        >>> E = 2.301
+        >>> from solid_cinel.data.materials.UO2 import *
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
+        >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
+        >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
         Test the results:
-        >>> energy_cut = 2.301
-        >>> energy_sup = 10.0
-        >>> Al.get_coherent_Xs(energy_cut, energy_sup, T).round(6).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-        ZAM         130270
-        MT               2
+        >>> T = 20
+        >>> energyCut = 2.301
+        >>> Al.get_XsCoh(energyCut, T).round(6).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
         E
-        0.003759  1.428617
-        0.005012  1.761562
-        0.010024  1.352593
-        0.013783  1.554360
-        0.015036  1.590374
-        0.020048  1.270752
-        0.023807  1.305112
-        0.025060  1.455634
-        0.030072  1.371739
-        0.033831  1.392243
-        """
-        BraggEdges_Xs = self.get_BraggEdges(*args, energy_cut, **kwargs)\
-                            .reset_index()\
-                            .loc[::, ["E", "Xs"]]
-        BraggEdges_Xs["E"] = BraggEdges_Xs["E"].round(6)
-        BraggEdges_Xs = BraggEdges_Xs[BraggEdges_Xs["E"] <= energy_cut]
+        0.003759    1.429108
+        0.005012    1.762248
+        0.010024    1.353373
+        0.013783    1.555654
+        0.015036    1.591791
+        0.020048    1.271960
+        0.023807    1.306647
+        0.025060    1.457593
+        0.030072    1.373814
+        0.033831    1.394631
+        Name: Xs, dtype: float64
 
-        if (BraggEdges_Xs["E"] > energy_sup).any():
-            raise ValueError("Energy superior bonds not properly introduce")
-        else:
-            bound_sup = pd.DataFrame([[energy_sup, 0.0]],
-                                     columns=["E", "Xs"])
-            BraggEdges_Xs = pd.concat([BraggEdges_Xs, bound_sup],
-                                      axis=0,
-                                      ignore_index=True)
-        xs = BraggEdges_Xs.set_index("E")
+        >>> UO2.get_XsCoh(energyCut, T).round(6).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+        E
+        0.000664    0.000000
+        0.001329    0.000000
+        0.001993    3.049294
+        0.002658    2.327955
+        0.003322    1.862364
+        0.003987    1.551970
+        0.005316    6.029025
+        0.005980    5.359133
+        0.006645    4.823220
+        0.007309    5.678797
+        Name: Xs, dtype: float64
+        """
+        # Get the Bragg Edges
+        BraggEdgesXs = self.get_BraggEdges(*args, energyCut, **kwargs)
+
+        # Extract the energy and cross-section information and convert to a Series
+        xs = BraggEdgesXs.loc[:, ["E", "Xs"]].set_index("E").iloc[::, 0]
+
+        # Filter out data where energy exceeds the cut-off
+        xs = xs[xs.index <= energyCut]
+
+        # Sum the data if there are duplicate energy values
         if xs.index.has_duplicates:
-            xs = xs.groupby(by="E").sum()
-        xs["Xs"] = np.cumsum(xs["Xs"]) / xs.index.values
-        xs = pd.concat([xs] * len(self.atoms), axis=1)
-        xs.columns = pd.MultiIndex.from_product(
-            [self.atoms.apply(lambda x: x.zam).values, [2]],
-            names=["ZAM", "MT"])
-        # Optional argument:
+            xs = xs.groupby(level=0).sum()
+
+        # Calculate the cumulative sum of the cross-sections and normalize by energy
+        xs = xs.cumsum() / xs.index.values
+
+        # Save the data to a file if a filename is provided
         if file_Xs:
-            xs.to_csv(file_Xs,
-                      sep='\t',
-                      float_format="%20.10e")
+            xs.to_csv(file_Xs, sep='\t', float_format="%20.10e")
+
         return xs
 
 
-def numba_hkl_data(d_min: float,
-                   rec_vecs: np.ndarray,
-                   Bfac: pd.Series,
-                   pos: pd.Series,
-                   csl: pd.Series,
-                   preferred_orientation: pd.Series,
+def numba_hkl_data(d_min: float, rec_vecs: np.ndarray, Bfac: pd.Series,
+                   pos: pd.Series, csl: pd.Series, preferred_orientation: pd.Series,
                    precision: list) -> pd.DataFrame:
     """
     Obtain hkl data for the solid in a certain temperature and for a neutron

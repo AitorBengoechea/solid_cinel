@@ -64,8 +64,7 @@ class Atom:
         self.A = A
         self.Z = Z
         self.atom_mass = atom_mass
-        self.b = {"b_coh": b_coh,
-                  "b_incoh": b_incoh}
+        self.b = {"b_coh": b_coh, "b_incoh": b_incoh}
 
     @property
     def name(self) -> str:
@@ -80,12 +79,8 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert Al.name == "Al27"
@@ -105,12 +100,8 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert Al.zam == 130270
@@ -131,12 +122,8 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert np.double(Al.boundXs).round(6) == np.double(1.503081)
@@ -156,12 +143,8 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert np.double(Al.boundIncXs).round(6) == np.double(0.008235)
@@ -181,12 +164,8 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Atom(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert np.double(Al.freeXs).round(6) == np.double(1.396702)
@@ -263,17 +242,14 @@ class Molecule(Atom):
         Example
         -------
         Object initialization:
-        >>> A = 27
-        >>> Z = 13
-        >>> atomic_mass_Al27 = 26.98153433356103
-        >>> b_coh_Al27  = 3.449
-        >>> b_incoh_Al27 = 0.256
-        >>> Al = Molecule(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27, name="Al")
+        Object initialization:
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Molecule(A, Z, atomic_mass, b_coh, b_incoh, name="Al")
 
         Test the results:
         >>> assert Al.name == "Al"
         >>> assert Al.atoms["Al27"].name == "Al27"
-        >>> Al = Molecule(A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+        >>> Al = Molecule(A, Z, atomic_mass, b_coh, b_incoh)
         >>> assert Al.name == "Al27"
         """
         return self._name

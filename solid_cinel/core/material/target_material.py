@@ -728,34 +728,34 @@ class TargetMat(Solid):
         >>> energyCut = 2.301
         >>> Al.get_XsCoh(energyCut, T).round(6).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
         E
-        0.003759    1.429108
-        0.005012    1.762248
-        0.010024    1.353373
-        0.013783    1.555654
-        0.015036    1.591791
-        0.020048    1.271960
-        0.023807    1.306647
-        0.025060    1.457593
-        0.030072    1.373814
-        0.033831    1.394631
+        0.003759    1.428610
+        0.005012    1.761554
+        0.010024    1.352587
+        0.013783    1.554352
+        0.015036    1.590366
+        0.020048    1.270746
+        0.023807    1.305106
+        0.025060    1.455627
+        0.030072    1.371732
+        0.033831    1.392236
         Name: Xs, dtype: float64
 
         >>> UO2.get_XsCoh(energyCut, T).round(6).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
         E
         0.000664    0.000000
         0.001329    0.000000
-        0.001993    3.049294
-        0.002658    2.327955
-        0.003322    1.862364
-        0.003987    1.551970
-        0.005316    6.029025
-        0.005980    5.359133
-        0.006645    4.823220
-        0.007309    5.678797
+        0.001993    3.049080
+        0.002658    2.327766
+        0.003322    1.862213
+        0.003987    1.551844
+        0.005316    6.027579
+        0.005980    5.357848
+        0.006645    4.822063
+        0.007309    5.677412
         Name: Xs, dtype: float64
         """
         # Get the Bragg Edges
-        BraggEdgesXs = self.get_BraggEdges(*args, energyCut, **kwargs)
+        BraggEdgesXs = self.get_BraggEdges(energyCut, *args, **kwargs)
 
         # Extract the energy and cross-section information and convert to a Series
         xs = BraggEdgesXs.loc[:, ["E", "Xs"]].set_index("E").iloc[::, 0]

@@ -615,14 +615,15 @@ class Xs:
             raise ValueError("invalid algorithm")
         return np.array(results).reshape(len(Tnew), -1)
 
-    def calc_T(self, T: float, *args, inplace: bool = False, **kwargs):
+    def calc_T(self, T: [float, Iterable], *args, inplace: bool = False,
+               **kwargs):
         """
         Calculate the elastic scattering cross section at temperature T using
         the selected algorithm.
 
         Parameters
         ----------
-        T : float
+        T : Union[float, Iterable[float]]
             Temperature in K
         algorithm : str, optional
             The algorith to use for the calculation. The options are:
@@ -818,7 +819,7 @@ class Xs:
                  
 
     @classmethod
-    def from_sigma1(cls, T: float, M: float, xs0Kshort: pd.Series,
+    def from_sigma1(cls, T: [float, Iterable], M: float, xs0Kshort: pd.Series,
                     xs0Kcomplete: pd.Series = None, inplace: bool = False):
         """
         Calculate the elastic scattering cross section for a nucleus with mass
@@ -826,7 +827,7 @@ class Xs:
 
         Parameters
         ----------
-        T: float
+        T: Union[float, Iterable[float]]
             The temperature in K
         M: float
             The mass of the nucleus in amu
@@ -874,8 +875,8 @@ class Xs:
         return xs.calc_T(T, algorithm="sigma1", inplace=inplace)
 
     @classmethod
-    def from_alpha0(cls, T: float, M: float, xs0Kshort: pd.Series, *args,
-                    xs0Kcomplete: pd.Series = None, inplace: bool = False,
+    def from_alpha0(cls, T: [float, Iterable], M: float, xs0Kshort: pd.Series,
+                    *args, xs0Kcomplete: pd.Series = None, inplace: bool = False,
                     **kwargs):
         """
         Calculate the elastic scattering cross section for a nucleus with mass
@@ -883,7 +884,7 @@ class Xs:
 
         Parameters
         ----------
-        T: float
+        T: Union[float, Iterable[float]]
             The temperature in K
         M: float
             The mass of the nucleus in amu

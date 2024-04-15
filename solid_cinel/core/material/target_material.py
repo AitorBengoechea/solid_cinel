@@ -24,8 +24,8 @@ h = const["reduced Planck constant in eV s"][0]
 m_to_eV = const["atomic mass unit-electron volt relationship"][0]
 mn_to_MeV = const["neutron mass energy equivalent in MeV"][0]
 kb = const["Boltzmann constant in eV/K"][0]
-Bfac_unit_change = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
-Bragg_unit_change = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
+BfacUnitChange = (4 * c ** 2 * pi **2) * h ** 2 / (m_to_eV * kb)
+BraggUnitChange = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
 
 class TargetMat(Solid):
@@ -186,7 +186,7 @@ class TargetMat(Solid):
             self.compute_pdos(pdosDict)
         elif self.pdos is None:
             raise ValueError("The pdosDict must be defined or initialized in the object.")
-        Bfact = Bfac_unit_change * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
+        Bfact = BfacUnitChange * self.pdos.apply(lambda x: x.fix_T(T).DebyeWallerCoeff)
         Bfact /= T * self.atoms.apply(lambda x: x.atom_mass)
         return Bfact * 1.0e20 if anstrom else Bfact
 
@@ -467,7 +467,7 @@ class TargetMat(Solid):
 
         """
         d = data.loc[:, "d"]
-        angle_value = np.clip(1 - pi ** 2 * Bragg_unit_change / (d ** 2 * energyCut),
+        angle_value = np.clip(1 - pi ** 2 * BraggUnitChange / (d ** 2 * energyCut),
                               -1, 1)
         data["theta"] = np.rad2deg(np.arccos(angle_value))
         return data
@@ -542,7 +542,7 @@ class TargetMat(Solid):
         if "PDDF" not in data.columns:
             TargetMat.get_pddf(data)
         data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
-        data["Xs"] *= Bragg_unit_change * pi ** 2 / (unit_cell_vol * atom_number)
+        data["Xs"] *= BraggUnitChange * pi ** 2 / (unit_cell_vol * atom_number)
         if threshold:
             data["Xs"][data["Xs"] < threshold] = 0.0
         return data
@@ -643,7 +643,7 @@ class TargetMat(Solid):
         self._get_pddf(data, kwargs.pop("kind", None), kwargs.pop("pddf_val", None))
 
         # Get Bragg Edges:
-        data["E"] = pi ** 2 * Bragg_unit_change / (2 * data["d"] ** 2)
+        data["E"] = pi ** 2 * BraggUnitChange / (2 * data["d"] ** 2)
         data.sort_values(by=["E"], inplace=True)
 
         # Optional argument:

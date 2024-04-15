@@ -618,8 +618,7 @@ class ScatFuncDD:
         Tpdos = pdos.fix_T(T)
         DebyeWallerCoeff = Tpdos.DebyeWallerCoeff
         if nphonon:
-            warnings.warn(
-                "Is posible that the expansion order is not enough to get the correct results")
+            warnings.warn("Is posible that the expansion order is not enough to get the correct results")
         else:
             alphaMax = get_alphaFromEout(Eout, Ein, M, T, mu.min())
             nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, order_max)

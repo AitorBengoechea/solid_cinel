@@ -167,7 +167,9 @@ def interp_xnewParallel(xnew: np.ndarray, xnewShape: tuple,
     """
     yinterp = np.zeros(xnewShape)
     for n in prange(xnewShape[0]):
-        yinterp[n] += np.interp(xnew[n], x, y)
+        if xnew[n] < x[0] or xnew[n] > x[-1]:
+            continue
+        yinterp[n] = np.interp(xnew[n], x, y)
     return yinterp
 
 @nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
@@ -197,7 +199,7 @@ def interp_multyParallel(xnew: np.ndarray, x: np.ndarray, y: np.ndarray):
         yinterp[n] += np.interp(xnew, x, y[n])
     return yinterp
 def interpolation(data: pd.Series, xnew: Iterable,
-                  values: bool = False, parallel=False,
+                  values: bool = False, parallel: bool = False,
                   **kwargs) -> [np.ndarray, pd.Series]:
     """
     Interpolate the data over new energy grid structure.
@@ -210,6 +212,8 @@ def interpolation(data: pd.Series, xnew: Iterable,
         new energy grid
     values: bool
         If True, the function returns a numpy array instead a pd.Series
+    parallel: bool
+        If True, the function uses parallel interpolation
     kind: "str"
         Specifies the kind of interpolation as a string or as an integer
         specifying the order of the spline interpolator to use. The string has
@@ -246,7 +250,7 @@ def interpolation(data: pd.Series, xnew: Iterable,
     dtype: float64
     """
     xnewShape = xnew.shape
-    if parallel or xnewShape[0] > 100:
+    if parallel and xnewShape[0] > 100:
         yinterp = interp_xnewParallel(xnew, xnewShape, data.index.values, data.values)
     else:
         yinterp = reshape_differential(data, xnew, **kwargs)

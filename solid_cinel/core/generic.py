@@ -40,14 +40,18 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
     >>> integrate(f)
     7.5
     """
+    # Get the values and the index of the series
     y = series.values
     x = series.index.values
+
+    # Integrate the function
     if kind == "trapezoidal":
         y_norm = sp.integrate.trapezoid(y, x=x)
     elif kind == "simpson":
         y_norm = sp.integrate.simpson(y, x=x)
     else:
         raise ValueError("kind is not properly introduced")
+
     return y_norm
 
 @nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
@@ -245,11 +249,14 @@ def interpolation(data: pd.Series, xnew: Iterable,
     4.5    4.5
     dtype: float64
     """
+    # Interpolate the data
     xnewShape = xnew.shape
     if parallel or xnewShape[0] > 100:
         yinterp = interp_xnewParallel(xnew, xnewShape, data.index.values, data.values)
     else:
         yinterp = reshape_differential(data, xnew, **kwargs)
+
+    # Return the interpolated values as a numpy array or a pd.Series
     if values or len(xnewShape) == 2:
         return yinterp
     else:

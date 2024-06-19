@@ -972,10 +972,10 @@ class Sab:
         """
         alpha = self.alpha.data
         if alphaNew > alpha.max():
-            raise SyntaxError("alpha out of range(alpha_max = "
+            raise SyntaxError(r"alpha out of range($\alpha_{max}=$"
                               + str(alpha.max()) + ")")
         elif alphaNew < alpha.min():
-            raise SyntaxError("alpha out of range (alpha_min = "
+            raise SyntaxError(r"alpha out of range($\alpha_{min}=$"
                               + str(alpha.min()) + ")")
         elif alphaNew in alpha:
             return self.data.loc[alphaNew]

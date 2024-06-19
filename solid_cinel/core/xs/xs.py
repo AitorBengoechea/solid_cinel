@@ -73,11 +73,18 @@ class Xs:
         165.85470   11.753670
         200.79510   15.734840
         """
+        # Set the mass of the nucleus
         self.M = M
+
+        # Set the temperature
         temperatures = self.check_T(temperatures)
+
+        # Set the data style and erase the duplicated columns
         data_frame = pd.DataFrame(*args, **kwargs)
         data_frame.columns = pd.Index(temperatures, name="T")
         self.data = data_frame.loc[:, ~data_frame.columns.duplicated()]
+
+        # Set the 0K scattering function with all the data
         self.get_xs0Kcomp(xs0Kcomplete)
 
     @property
@@ -103,9 +110,12 @@ class Xs:
             The scattering function data
 
         """
+        # Set the data style
         xs_ = pd.DataFrame(xs).sort_index(axis=0).sort_index(axis=1)
         xs_.index.name = "Ein"
         xs_.columns.name = "T"
+
+        # save the data
         self._data = xs_
 
     def update_data(self, xsT: pd.DataFrame, inplace: bool, axis: int = 1):
@@ -136,6 +146,8 @@ class Xs:
                 dataNew[xsT.name] = xsT
         else:
             dataNew = pd.concat([self.data, xsT], axis=axis)
+
+        # Update the data in the object or return a new object
         if inplace:
             self.data = dataNew.sort_index(axis=axis)
         else:
@@ -173,7 +185,7 @@ class Xs:
         -------
         Union[float, Iterable[float]]
             The incident energy in eV
-        """ 
+        """
         if isinstance(Ein, (int, float)):
             Ein = pd.Index([Ein])
         elif hasattr(Ein, "__len__"):
@@ -337,8 +349,11 @@ class Xs:
         pd.Series, pd.DataFrame
             The output data in the corresponding format
         """
+        # Check the temperature and incident energy
         T_ = self.data.columns if T is None else pd.Index(self.check_T(T), name="T")
         Ein_ = self.data.index if Ein is None else pd.Index(self.check_T(Ein), name="Ein")
+
+        # Return the output data
         if len(T_) == 1:
             return pd.Series(data.squeeze(), index=Ein_, name=T_[0])
         elif len(Ein_) == 1:
@@ -456,8 +471,13 @@ class Xs:
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
         array([  9.084969, 461.718705])
         """
+        # Get the alpha0 model DXS in a matrix
         dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
+
+        # Calculate the integral for each incident energy
         dxsIntegral = trapz_parallel(dxs.values, dxs.columns.values)
+
+        # For the pdos model, the cross section is divided by the zero expansion
         if kwargs.get("model", "fgm") != "pdos":
             return dxsIntegral
         else:
@@ -482,7 +502,10 @@ class Xs:
         list
             The elastic scattering cross section in barns for the new
         """
+        # Get the incident energy and temperature combinations
         EinTcomb = self.get_EinTcomb(Tnew, EinGrid)
+
+        # Calculate the cross section using dask
         bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count()) \
                 .map(lambda x: self._calc_sigma1(*x, self.xs0Kcomplete, self.M))
         return bag.compute()
@@ -534,8 +557,12 @@ class Xs:
             temperatures. Each value is the incident introduced by the user or
             the default.
         """
+        # Update the arguments
         args = (self.xs0Kcomplete, self.M) + args
+
+        # Get the incident energy in the appropriate format
         Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
+
         # Calculation:
         if len(Ein.shape) == 1:
             return [Xs._calc_alpha0(T, Ein, *args, **kwargs)
@@ -709,12 +736,18 @@ class Xs:
         6.670000  1269.792131  649.526642  461.718705
         7.000000    19.825115   19.941105   20.060625
         """
+        # Get the new temperatures to calculate
         Tnew = self.get_Tcalc(T)
+
+        # Check if the temperatures are already calculated
         if Tnew.empty:
             warnings.warn("All the temperatures are already calculated")
             return self
+
+        # Calculate the cross section for the new temperatures
         xsTValues = self._compute(Tnew, *args, **kwargs).T
         xsT = self.get_output(xsTValues, T=Tnew)
+
         return self.update_data(xsT, inplace)
 
     def calc_Ein(self, Ein: [float, np.ndarray], *args, inplace: bool = False,
@@ -802,18 +835,29 @@ class Xs:
         6.670000  1269.792131  664.556512  455.670534
         7.000000    19.825115   19.893739   20.039076
         """
+        # Get the new incident energies to calculate
         EinGrid = self.get_Eincalc(Ein)
         if EinGrid.size == 0:
             warnings.warn("All the incident energies are already calculated")
             return self
+
+        # Drop the 0K data
         temp = self.data.columns.drop([0])
-        # Interpolation of 0K data, Necessary for calculation
+
+        # Calculate the cross section for the new incident energies
         xsEin = self.interp_Ein(EinGrid, T=0).to_frame()
+
+        # Calculate the cross section for the new incident energies
         if temp.empty:
             return Xs(self.M, 0, xsEin, xs0Kcomplete=self.xs0Kcomplete)
+
+        # Compute the calculation
         xsEinValuesCalc = self._compute(temp, *args, EinGrid=EinGrid,
                                         **kwargs).T
+
+        # Get the output data in the appropriate format
         xsEinCalc = self.get_output(xsEinValuesCalc, Ein=EinGrid, T=temp)
+
         return self.update_data(xsEin.join(xsEinCalc), inplace, axis=0)
                  
 
@@ -953,6 +997,7 @@ class Xs:
         """
         # Initialize the class
         xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
+
         # Get cls attributes using the available information
         return xs.calc_T(T, *args, algorithm="alpha0", inplace=inplace, **kwargs)
 
@@ -1006,10 +1051,12 @@ class Xs:
         3.0  8.783659  8.784881  8.784565
         4.5  8.143778  8.144254  8.144288
         """
+        # Get the new incident energies to calculate
         Ein = np.unique(Ein)
         def interpolate_row(x):
             return interpolation(x, Ein, kind=kind, bounds_error=bounds_error)
 
+        # Interpolate the data
         if T is None:
             xsInterp = self.data.apply(interpolate_row)
             return self.get_output(xsInterp, Ein=Ein)
@@ -1054,8 +1101,12 @@ class Xs:
          0.5  1.903825  1.954028  2.004237  2.054452  2.104671
          0.9  1.900524  1.950660  2.000847  2.051083  2.101362
         """
+        # Calculate the incident energy matrix
         EinValues = calc_4PCFEin(Ein, Eout, mu, M)
+
+        # Get the output data in the appropriate format
         mu_, Eout_ = pd.Index(mu, name="mu"), pd.Index(Eout, name="Eout")
+
         return pd.DataFrame(EinValues, index=mu_, columns=Eout_)
 
     def get_4PCFxs(self, Ein: float, T: float, Eout: np.ndarray,
@@ -1134,8 +1185,12 @@ class Xs:
         60     9.104621  9.094390  9.084082  9.073504  9.062880
         30     9.105234  9.095019  9.084725  9.074162  9.063533
         """
+        # Get the cosine of the angle
         mu = np.sort(np.cos(np.deg2rad(theta)))
+
+        # Get the temperature grid for the 4PCF model:
         T4PCF = T * (1 + mu) / 2
+
         # Get the incident energy grid:
         Ein4PCF = self.get_4PCFEin(Ein, Eout, mu, self.M).set_axis(T4PCF, axis=0)
         Eout, mu = pd.Index(Eout, name="Eout"), pd.Index(mu, name="mu")
@@ -1166,7 +1221,6 @@ class Xs:
                                          **kwargs)
             xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
-
 
 
 @nb.jit(nopython=True, nogil=True)

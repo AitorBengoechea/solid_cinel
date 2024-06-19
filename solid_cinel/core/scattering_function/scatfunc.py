@@ -136,10 +136,6 @@ class ScatFunc:
         threshold: 'float', optional
             Minimun value to take into account in the creation of tauN
             functions
-        tauToFile: 'bool', optional
-            Save tauN functions to file. The default is False.
-        binary: 'bool', optional
-            Save tauN functions to binary file. The default is False.
 
         Returns
         -------
@@ -721,10 +717,6 @@ class TransferFunc:
         threshold: 'float', optional
             Minimun value to take into account in the creation of tauN
             functions
-        tauToFile: 'bool', optional
-            Save tauN functions to file. The default is False.
-        binary: 'bool', optional
-            Save tauN functions to binary file. The default is False.
 
         Returns
         -------

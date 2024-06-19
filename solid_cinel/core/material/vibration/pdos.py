@@ -86,15 +86,18 @@ class Tpdos:
         Test the results:
         >>> assert integrate(p.data) == 1.0
         """
+        # Define the data style in the pd.Series
         data_ = pd.Series(rhoData, name="rho")
         data_.index.name = "beta"
 
+        # Check the data properties
         if not len(data_.shape) == 1:
             raise TypeError("Rho must have one dimension")
 
         if not data_.index.is_monotonic_increasing:
             raise SyntaxError("beta grid is not monotonically increasing")
 
+        # Normalize the data
         self._data = data_ / integrate(data_)
 
     @property
@@ -265,6 +268,8 @@ class Tpdos:
         Name: P, dtype: float64
         """
         rhoValues, rhoBeta = self.data.values, self.data.index
+
+        # Check the initial point of the input DOS:
         if abs(rhoBeta[0]) > threshold:
             raise ValueError("Initial point of input DOS is not zero")
         P_values = np.zeros(len(rhoValues))
@@ -274,6 +279,7 @@ class Tpdos:
 
         # Rest of P values calculation:
         P_values[1:] = 0.5 * rhoValues[1:] / rhoBeta[1:] / np.sinh(0.5 * rhoBeta[1:])
+
         return pd.Series(P_values, index=rhoBeta, name="P")
 
     @property
@@ -383,10 +389,17 @@ class Tpdos:
         4.177627    0.018020
         Name: 1, dtype: float64
         """
+        # Get the P function data:
         P, beta = self.P, self.beta.data
+
+        # Calculate the tau1 function:
         tau1 = P * np.exp(0.5 * beta) / self.DebyeWallerCoeff
+
+        # Check the normalization condition:
         if integrate(tau1 * (1 + np.exp(-beta))) < 1.e-5:
             raise ValueError("Tau function for 1 phonon expansion doesnt satisfy the normalization condition")
+
+        # Define the style of the tau1 function:
         tau1.name = 1
         tau1.index.name = "beta"
         return tau1
@@ -428,13 +441,22 @@ class Tpdos:
         4  0.649349  0.669368  0.608380  0.476611  0.305529
         5  0.572522  0.608795  0.572271  0.475181  0.348585
         """
+        # Get the tau1 function values:
         tau1Values, beta = self.tau1.values, self.beta.data
+
+        # Calculate the tauN function:
         tauN = get_tauNfunc(tau1Values, beta, nphonon, threshold)
+
+
         if values:
+            # Return the values in a np.array
             return tauN
         else:
+            # Define the style of the tauN function dataframe:
             tauN = pd.DataFrame(tauN, columns=get_tauNbeta(beta, tauN.shape[1]))
             tauN.index += 1
+
+            # Check the normalization condition:
             if check:
                 # tau1 is not included in the check:
                 integrals_value = tauN.apply(integrate, axis=1).iloc[1::]
@@ -567,15 +589,18 @@ class Epdos:
         Test the results:
         >>> assert integrate(p.data) == 1.0
         """
+        # Define the data style in the pd.Series
         data_ = pd.Series(rhoData, name="rho")
         data_.index.name = "dE"
 
+        # Check the data properties
         if not len(data_.shape) == 1:
             raise TypeError("Rho must have one dimension")
 
         if not data_.index.is_monotonic_increasing:
             raise SyntaxError("dE grid is not monotonically increasing")
 
+        # Normalize the data
         self._data = data_ / integrate(data_)
 
     @classmethod
@@ -861,17 +886,22 @@ class Npdos:
         "pd.DataFrame"
             Data of the pdos objects in a DataFrame format.
         """
+        # Get the data of the pdos objects:
         data = pd.DataFrame({key: pdos.to_Epdos.data
                              for key, pdos in self.instance.items()})
+
+        # Define the style of the dataframe:
         data.columns.name = "T"
         data.index.name = "dE"
         data.sort_index(axis=0, inplace=True)
         data.sort_index(axis=1, inplace=True)
+
+        # Interpolate the data if there are NaN values in the data
         if np.any(data.isna()):
-            # Interpolate the data if there are NaN values in the data
             data.interpolate(method="linear", axis=0, inplace=True)
             # Fill the limit values with 0
             data.fillna(0, inplace=True)
+
         return data
 
     @staticmethod
@@ -985,6 +1015,7 @@ class Npdos:
 
         # Create Tpdos objects based on the grid type
         method = Tpdos.from_dE_file if grid == "dE" else Tpdos.from_file
+
         return cls({T: method(T, file, *args) for file, T in zip(file_, T_)})
 
     @classmethod
@@ -1022,15 +1053,19 @@ class Npdos:
         0.0016  0.343320  0.397844  0.462783  0.604724
         >>> os.chdir(wd)
         """
+        # Get the files in the directory:
         files = os.listdir(pathToDirectory)
         if pathToDirectory[-1] != "/":
             pathToDirectory = "".join([pathToDirectory, "/"])
+
+        # Create a dictionary with the temperature and the file path:
         file_dict = {}
         for file in files:
             # Get the floats and the int:
             match = re.search(r'\d+(\.\d+)?', file)
             if match:
                 file_dict[float(match.group())] = "".join([pathToDirectory, file])
+
         return cls.from_file(file_dict.keys(), file_dict.values(), **kwargs)
 
     @classmethod
@@ -1074,11 +1109,16 @@ class Npdos:
         0.074269    0.028346
         Name: rho, dtype: float64
         """
+        # Check the input values
         T_ = np.array(cls.check_list(T))
         Ntemp = len(T_)
+
+        # dE and intervalE must have the same length
         intervalE_ = np.array(cls.check_list(intervalE))
         if len(rho.shape) == 2 and rho.shape[0] != len(intervalE_):
             raise ValueError("The number of rho and intervalE must be the same")
+
+        # Create the Npdos object
         if Ntemp >= 2 and len(intervalE_) == 1:
             # Dont use zero temperature:
             T_ = T_[T_ != 0]
@@ -1142,13 +1182,19 @@ class Npdos:
 
         >>> os.chdir(wd)
         """
+        # Check the input values to get the new T values
         Tnew_ = self.get_Tnew(Tnew)
+
+        # If there are no new temperatures to calculate, return the data
         if Tnew_.empty:
             Textract = self.check_list(Tnew)
             pdosExtract = {T: self.instance[T] for T in Textract}
             return pdosExtract[Tnew] if len(Textract) == 1 else pdosExtract
+
+        # Compute the spline interpolation if it is not computed
         if self.interp_spline is None:
             self.compute_spline()
+
         # Get the index values from the data
         dE = self.data.index.values
 
@@ -1159,6 +1205,8 @@ class Npdos:
         # Compute the Tpdos object for the Tnew temperature
         intepolated_Tpdos = {T: Epdos(interpolated_T[:, i], index=dE).get_Tpdos(T)
                              for i, T in enumerate(Tnew_)}
+
+        # Update the data if inplace is True
         if inplace:
             self.instance.update(intepolated_Tpdos)
         else:

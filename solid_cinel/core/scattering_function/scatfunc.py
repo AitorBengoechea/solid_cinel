@@ -16,9 +16,6 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from typing import Iterable
 from math import sqrt, pi
-from scipy.stats import entropy, wasserstein_distance
-from scipy.spatial.distance import euclidean
-from scipy.spatial import distance
 import warnings
 
 # constants
@@ -26,337 +23,7 @@ kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
 
-class ScatFuncSD:
-    """
-    Single Differencial (angle or Outgoing energy) scattering function base
-    class.
-    """
-
-    def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
-        """
-        Initialize the ScatFuncSD class.
-
-        Parameters
-        ----------
-        Ein : float
-            The neutron incident energy in eV
-        T : float
-            Temperature of the material in K
-        M : float
-            Mass of the material in amu
-        args : Iterable, (N,)
-            The scattering function data for the pd.Series
-        kwargs : dict
-            Optional arguments for the construction of the pd.Series
-        """
-        # Atributes of the scattering function (Change in these parameters will
-        # change the scattering function):
-        self.Ein = Ein
-        self.T = T
-        self.M = M
-        # The scattering function data:
-        self.data = pd.Series(*args, **kwargs)
-
-    @property
-    def data(self) -> pd.Series:
-        """
-        Scattering function data.
-
-        Returns
-        -------
-        pd.Series
-            The scattering function data
-        """
-        return self._data
-
-    @data.setter
-    def data(self, pdf: Iterable):
-        """
-        Set the scattering function data and check the normalization.
-
-        Parameters
-        ----------
-        pdf : pd.Series
-            The scattering function data
-
-        """
-        pdf_ = pd.Series(pdf).sort_index()
-        # Erase the rows with all zeros
-        pdf_ = pdf_[pdf_ != 0]
-        norm = integrate(pdf_)
-        if abs(norm - 1) >= 0.1 and self.Ein >= 0.005:
-            raise ValueError(f"The scattering function is not normalized ({norm} < 0.9)")
-        elif abs(norm - 1) >= 0.01:
-            warnings.warn("Normalizaton not satisfied with 1% accuracy")
-        pdf_.index.name = "Eout"
-        self._data = pdf_
-
-    @classmethod
-    def from_sigma1(cls, Ein: float, M: float, T: float, Eout: np.array):
-        """
-        Calculate the scattering function using Maxwellian velocity distribution
-        and angular integration
-        .. math::
-            S(E, E^\prime, M, T) = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
-
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            Mass of the material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-
-        Returns
-        -------
-        ScatFuncSD
-            The scattering function for the given temperature, incident energy
-            and mass using Maxwellian velocity distribution and angular
-            integration
-
-        Examples
-        --------
-        # Generate Broadening test results:
-        >>> Ein = 36.68723
-        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> pdf = ScatFuncSD.from_sigma1(Ein, M, T, Eout)
-        >>> pdf.data.iloc[::100]
-        Eout
-        35.953485    8.937086e-15
-        36.100381    1.841784e-09
-        36.247277    2.425252e-05
-        36.394173    2.074937e-02
-        36.541069    1.172637e+00
-        36.687964    4.449812e+00
-        36.834860    1.152331e+00
-        36.981756    2.069367e-02
-        37.128652    2.618312e-05
-        37.275548    2.371152e-09
-        dtype: float64
-        """
-        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-        return cls(Ein, T, M, sigma1(Eout_, Ein, T, M), index=Eout_)
-
-    @classmethod
-    def from_alpha0(cls, Ein: float, M: float, T: float, Eout: np.array,
-                    *args, model: str = "fgm", **kwargs):
-        """
-        Generate the single differential scattering function from gressier
-        recoil energy
-
-        Parameters
-        ----------
-        Ein: float
-            The incident energy of the neutron in eV
-        M: float
-            The mass of the target material in amu
-        T: float
-            Temperature of the material in K
-        Eout: np.array
-            The neutron outgoing energy grid in eV
-        model: str
-            The model used to generate the S(alpha, beta) table. The available
-            models are:
-                - "pdos": Phonon expansion model
-                - "fgm" : Free Gas Model (Default)
-                - "sct" : Short Collision Time model
-
-        Parameters for SCT model
-        ------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-        twt: 'float', optional
-            twt for the effective temperature. For solid is 1.
-
-        Parameters for PDOS model
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        ScatFuncSD
-            Single differential scattering function using S(alpha, -beta) table
-            based on the gressier recoil energy
-
-        Examples
-        --------
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncSD.from_alpha0(Ein, M, T, Eout, model="fgm").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000000
-        6.9050    0.005971
-        7.0439    1.180445
-        7.2000    5.102312
-        7.3157    0.709375
-        7.4480    0.003059
-        dtype: float64
-
-        >>> ScatFuncSD.from_alpha0(Ein, M, T, Eout, pdos, model="sct").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000000
-        6.9050    0.006103
-        7.0439    1.184746
-        7.2000    5.094991
-        7.3157    0.709907
-        7.4480    0.003103
-        dtype: float64
-
-        >>> ScatFuncSD.from_alpha0(Ein, M, T, Eout, pdos, model="pdos").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000003
-        6.9050    0.008817
-        7.0439    1.168504
-        7.2000    5.145645
-        7.3157    0.698297
-        7.4480    0.003581
-        dtype: float64
-        """
-        beta = Beta.from_default(T)
-        sab = Sab.from_alpha0(Ein, T, M, beta, *args, model=model,
-                              **kwargs).full
-        EoutCalc = Ein + sab.index.values * kb * T
-        scatfunc = np.interp(Eout, EoutCalc, sab.values)
-        scatfunc /= kb * T
-        return cls(Ein, T, M, scatfunc, index=Eout)
-
-    @staticmethod
-    def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
-                   model: str = "fgm", **kwargs) -> pd.DataFrame:
-
-        """
-        Calculate the alpha0 scattering function.
-
-        Parameters
-        ----------
-        EinGrid: np.ndarray
-            The incident energy grid in eV
-        M: float
-            The mass of the target material in amu
-        T: float
-            Temperature of the material in K
-        model: str
-            The model used to generate the S(alpha, beta) table. The available
-            models are:
-                - "pdos": Phonon expansion model
-                - "fgm" : Free Gas Model (Default)
-                - "sct" : Short Collision Time model
-        display: bool
-            If True, return a pd.DataFrame for visualization.
-            If False, return a xp.ndarray for computation.
-
-        Parameters for SCT model
-        ------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-        twt: 'float', optional
-            twt for the effective temperature. For solid is 1.
-
-        Parameters for PDOS model
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        pd.DataFrame
-            The alpha0 scattering function
-
-        Examples
-        --------
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> index = pd.Index(Ein, name="Ein")
-        >>> T = 300
-        >>> M = 238.05077040419212
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncSD.get_alpha0(Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
-        beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
-        Ein
-        6.7554   0.153967   0.269409   0.158014   0.031065        0.0
-        6.9050   0.156781   0.266477   0.155477   0.031139        0.0
-        7.0439   0.159258   0.263776   0.153185   0.031192        0.0
-        7.2000   0.161892   0.260769   0.150679   0.031233        0.0
-        7.3157   0.163744   0.258559   0.148868   0.031253        0.0
-        7.4480   0.165761   0.256053   0.146842   0.031264        0.0
-        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
-        beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
-        Ein
-        6.7554   0.153590   0.264466   0.156371   0.030960        0.0
-        6.9050   0.156257   0.261604   0.153885   0.031015        0.0
-        7.0439   0.158601   0.258970   0.151640   0.031051        0.0
-        7.2000   0.161088   0.256037   0.149185   0.031075        0.0
-        7.3157   0.162834   0.253884   0.147411   0.031082        0.0
-        7.4480   0.164732   0.251443   0.145427   0.031080        0.0
-        >>> ScatFuncSD.get_alpha0(Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
-        beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
-        Ein
-        6.7554   0.111171   0.257399   0.201964   0.047321   0.000699
-        6.9050   0.114250   0.256102   0.198472   0.047219   0.000738
-        7.0439   0.117031   0.254833   0.195325   0.047108   0.000774
-        7.2000   0.120064   0.253339   0.191893   0.046964   0.000815
-        7.3157   0.122248   0.252190   0.189417   0.046847   0.000846
-        7.4480   0.124680   0.250838   0.186655   0.046702   0.000881
-        """
-        Ein = np.unique(EinGrid) if hasattr(EinGrid, '__len__') else np.array([EinGrid])
-        # Scattering function calculation
-        alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
-        scatfunc = Sab.from_model(alpha, beta, T, *args,
-                   model=model, **kwargs).full
-        # Erase the columns with all zeros
-        scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
-        return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
-
-    @property
-    def cdf(self) -> pd.Series:
-        """
-        Cumulative distribution function of the scattering function.
-
-        Returns
-        -------
-        pd.Series
-            Cumulative distribution function of the scattering function
-        """
-        cdf = self.data.cumsum()
-        return cdf / cdf.iloc[-1]
-
-
-
-class ScatFuncDD:
+class ScatFunc:
     """
     Double Differencial (angle, Outgoing energy) scattering function base
     class.
@@ -364,7 +31,7 @@ class ScatFuncDD:
 
     def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
         """
-        Initialize the ScatFuncSD class.
+        Initialize the TransferFunc class.
 
         Parameters
         ----------
@@ -476,7 +143,7 @@ class ScatFuncDD:
 
         Returns
         -------
-        ScatFuncSD
+        TransferFunc
             Double differential scattering scattering function
 
         Examples
@@ -488,7 +155,7 @@ class ScatFuncDD:
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
 
         # Using the Free Gas Model:
-        >>> ScatFuncDD.from_model(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
@@ -506,7 +173,7 @@ class ScatFuncDD:
         # Using the Short Collision Time model:
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncDD.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
+        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
@@ -531,7 +198,7 @@ class ScatFuncDD:
         >>> M = 238.05077040419212
         >>> theta = np.array([40, 80, 120, 160])
 
-        >>> ScatFuncDD.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
+        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -551,9 +218,7 @@ class ScatFuncDD:
     def from_pdos(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                   mu: np.ndarray, pdos: Pdos, nphonon: int = None,
                   decimal: float = 1.0e-6,
-                  order_max: int = 5000, threshold: float = 0.0,
-                  tauToFile: bool = False,
-                  binary: bool = False):
+                  order_max: int = 5000, threshold: float = 0.0):
         """
         Generate the double differential scattering function from a
         S(alpha, -beta) table based on Phonon expansion model.
@@ -586,7 +251,7 @@ class ScatFuncDD:
 
         Returns
         -------
-        ScatFuncDD
+        ScatFunc
             Double differential scattering function from a S(alpha, -beta) table
             based on Phonon expansion model.
 
@@ -602,7 +267,7 @@ class ScatFuncDD:
         >>> theta = np.array([40, 80, 120, 160])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncDD.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[::, Eout_test].round(6)
+        >>> ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -650,7 +315,7 @@ class ScatFuncDD:
 
         Returns
         -------
-        ScatFuncDD
+        ScatFunc
             Double differential scattering function from a S(alpha, -beta) table
             based on Short Collision Time model
 
@@ -664,7 +329,7 @@ class ScatFuncDD:
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFuncDD.from_sct(Ein, M, T, Eout, mu, pdos).data.round(6)
+        >>> ScatFunc.from_sct(Ein, M, T, Eout, mu, pdos).data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
@@ -707,7 +372,7 @@ class ScatFuncDD:
 
         Returns
         -------
-        ScatFuncDD
+        ScatFunc
             Double differential scattering function from a S(alpha, -beta) table
             based on Free Gas Model
 
@@ -719,7 +384,7 @@ class ScatFuncDD:
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> mu = np.cos(np.deg2rad(theta))
-        >>> ScatFuncDD.from_fgm(Ein, M, T, Eout, mu).data.round(6)
+        >>> ScatFunc.from_fgm(Ein, M, T, Eout, mu).data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
@@ -767,7 +432,7 @@ class ScatFuncDD:
 
         Returns
         -------
-        ScatFuncSD
+        TransferFunc
             Double differential scattering function
 
         Examples
@@ -786,7 +451,7 @@ class ScatFuncDD:
         >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu.min()), DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
         >>> tauNbeta = get_tauNbeta(pdos.beta.data, tauN.shape[1])
-        >>> ScatFuncDD.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff).data.loc[::, Eout_test].round(6)
+        >>> ScatFunc.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -811,16 +476,15 @@ class ScatFuncDD:
         cdf = self.data.cumsum(axis=0).cumsum(axis=1)
         return cdf / cdf.iloc[-1, -1]
 
+class TransferFunc:
+    """
+    Single Differencial (angle or Outgoing energy) scattering function base
+    class.
+    """
 
-class ScatFunc(ScatFuncSD, ScatFuncDD):
-    """
-    Scattering function class
-    """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
         """
-        Initialize the scattering function class. Depending on the shape of the
-        scattering function, the class will be initialized as a ScatFuncSD or
-        ScatFuncDD class.
+        Initialize the TransferFunc class.
 
         Parameters
         ----------
@@ -830,40 +494,83 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
             Temperature of the material in K
         M : float
             Mass of the material in amu
-        args : Iterable, (N,) or (N, M)
-            The scattering function data for the pd.DataFrame or pd.Series
+        args : Iterable, (N,)
+            The scattering function data for the pd.Series
         kwargs : dict
-            Optional arguments for the construction of the pd.DataFrame
-            pd.Series
+            Optional arguments for the construction of the pd.Series
+        """
+        # Atributes of the scattering function (Change in these parameters will
+        # change the scattering function):
+        self.Ein = Ein
+        self.T = T
+        self.M = M
+        # The scattering function data:
+        self.data = pd.Series(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.Series:
+        """
+        Scattering function data.
+
+        Returns
+        -------
+        pd.Series
+            The scattering function data
+        """
+        return self._data
+
+    @data.setter
+    def data(self, pdf: Iterable):
+        """
+        Set the scattering function data and check the normalization.
+
+        Parameters
+        ----------
+        pdf : pd.Series
+            The scattering function data
+
+        """
+        pdf_ = pd.Series(pdf).sort_index()
+        # Erase the rows with all zeros
+        pdf_ = pdf_[pdf_ != 0]
+        pdf_.index.name = "Eout"
+        self._data = pdf_
+
+    @classmethod
+    def from_sigma1(cls, Ein: float, M: float, T: float, Eout: np.array):
+        """
+        Calculate the scattering function using Maxwellian velocity distribution
+        and angular integration
+        .. math::
+            S(E, E^\prime, M, T) = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+
+        Returns
+        -------
+        TransferFunc
+            The scattering function for the given temperature, incident energy
+            and mass using Maxwellian velocity distribution and angular
+            integration
 
         Examples
         --------
-        Initilization of a scattering function for a pd.DataFrame:
-        >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, model="fgm").data.round(6)
-        Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
-        mu
-        -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
-        -8.660254e-01  0.074800  0.591841  1.360299   1.032095  0.376520  0.052584
-        -7.071068e-01  0.049539  0.515196  1.379332   1.109853  0.392419  0.049014
-        -5.000000e-01  0.024994  0.404827  1.387900   1.228207  0.412767  0.043015
-        -2.588190e-01  0.008241  0.268643  1.360778   1.399190  0.433942  0.033969
-         6.123234e-17  0.001317  0.132279  1.255634   1.643445  0.447804  0.022111
-         2.588190e-01  0.000054  0.036774  1.013814   1.998435  0.436944  0.009862
-         5.000000e-01  0.000000  0.002991  0.600838   2.539266  0.368245  0.001932
-         7.071068e-01  0.000000  0.000010  0.155387   3.441598  0.204433  0.000045
-         8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
-         9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
-
+        # Generate Broadening test results:
         >>> Ein = 36.68723
         >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> ScatFunc.from_sigma1(Ein, M, T, Eout).data.iloc[::100]
+        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
+        >>> pdf.data.iloc[::100]
         Eout
         35.953485    8.937086e-15
         36.100381    1.841784e-09
@@ -877,195 +584,357 @@ class ScatFunc(ScatFuncSD, ScatFuncDD):
         37.275548    2.371152e-09
         dtype: float64
         """
-        if len(args) == 1 and isinstance(args[0], (ScatFuncSD, ScatFuncDD)):
-            self.instance = args[0]
-        elif len(args[-1].shape) == 1:
-            self.instance = ScatFuncSD(*args, **kwargs)
-        elif len(args[-1].shape) == 2:
-            self.instance = ScatFuncDD(*args, **kwargs)
-        else:
-            raise ValueError("Invalid input")
+        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
+        return cls(Ein, T, M, sigma1(Eout_, Ein, T, M), index=Eout_)
 
     @classmethod
-    def from_model(cls, Ein: float, M: float, T: float, Eout: np.array,
-                 theta: [np.ndarray, float], *args, model: str = "fgm", **kwargs):
-        if hasattr(theta, '__len__'):
-            scatfunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta,
-                                             *args, model=model, **kwargs)
-        else:
-            scatfunc = ScatFuncSD.from_theta(Ein, M, T, Eout, theta,
-                                             *args, model=model, **kwargs)
-        return cls(scatfunc)
-
-    # called when an attribute is not found:
-    def __getattr__(self, name):
-        # assume it is implemented by self.instance
-        return self.instance.__getattribute__(name)
-
-    def convolve(self, xs: [pd.Series, pd.DataFrame, np.ndarray],
-                 Exs: np.array = None,
-                 integral: bool = False) -> [pd.DataFrame, pd.Series, float]:
+    def from_theta(cls, Ein: float, M: float, T: float, Eout: np.array,
+                   theta: float, *args, model: str = "fgm", **kwargs):
         """
-        Convolve the scattering function with a cross section. If the cross
-        section is a matrix, the scattering function is convolved directly
-        with xs. On the other hand, if the cross section is a pd.Series, the
-        cross section is linearly interpolated to the energy grid of the
-        scattering function or the provided energy grid Exs.
+        Generate the single differential scattering function from a
+        S(alpha, -beta) table.
 
         Parameters
         ----------
-        xs : pd.Series or pd.DataFrame or np.ndarray, (N,) or (M, N) or (M, N)
-            Cross section to convolve with the scattering function. If a
-            pd.DataFrame is provided, the scattering function is convolved with
-            the xs directly.
-        Exs : np.array, optional, (N,) or (M, N)
-            Displazed Energy grid of the cross section. If not provided, the
-            energy grid of the scattering function is used.
-        integral : bool, optional
-            If True, the integral value of the doppler broadening is returned.
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        theta : float
+            The angle of the scattering in degrees
+        model : str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        nphonon: 'int', optional
+            Phonon expansion order. The default is None and the order is
+            calculated using the get_expansionOrder function.
+        decimal: 'float', optional
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int', optional
+            Maximun expansion order. The default is 5000.
+        threshold: 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions
+        tauToFile: 'bool', optional
+            Save tauN functions to file. The default is False.
+        binary: 'bool', optional
+            Save tauN functions to binary file. The default is False.
 
         Returns
         -------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("scatfunc.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs_0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
+        TransferFunc
+            Double differential scattering scattering function
 
-        # Generate 1D Scattering function:
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([7.10, 7.15, 7.2, 7.25, 7.3157])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = 15
+
+        # Using the Free Gas Model:
+        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        Eout
+        7.1000     0.000015
+        7.1500     0.425542
+        7.2000    10.563289
+        7.2500     0.244883
+        7.3157     0.000000
+        dtype: float64
+
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
+        Eout
+        7.1000     0.000016
+        7.1500     0.429564
+        7.2000    10.545191
+        7.2500     0.247675
+        7.3157     0.000000
+        dtype: float64
+
+        # Using the Phonon expansion model:
+        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.round(6)
+        Eout
+        7.1000     0.003594
+        7.1500     0.518264
+        7.2000    11.484652
+        7.2500     0.292131
+        7.3157     0.000200
+        dtype: float64
+        """
+        scatFunc = ScatFunc.from_model(Ein, M, T, Eout, [theta],  *args, model=model, **kwargs).data
+        return cls(Ein, T, M, scatFunc.iloc[0].values, index=scatFunc.columns)
+
+    @classmethod
+    def from_alpha0(cls, Ein: float, M: float, T: float, Eout: np.array,
+                    *args, model: str = "fgm", **kwargs):
+        """
+        Generate the single differential scattering function from gressier
+        recoil energy
+
+        Parameters
+        ----------
+        Ein: float
+            The incident energy of the neutron in eV
+        M: float
+            The mass of the target material in amu
+        T: float
+            Temperature of the material in K
+        Eout: np.array
+            The neutron outgoing energy grid in eV
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        TransferFunc
+            Single differential scattering function using S(alpha, -beta) table
+            based on the gressier recoil energy
+
+        Examples
+        --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> TransferFunc.from_alpha0(Ein, M, T, Eout, model="fgm").data.loc[Eout_test].round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.005971
+        7.0439    1.180445
+        7.2000    5.102312
+        7.3157    0.709375
+        7.4480    0.003059
+        dtype: float64
+
+        >>> TransferFunc.from_alpha0(Ein, M, T, Eout, pdos, model="sct").data.loc[Eout_test].round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.006103
+        7.0439    1.184746
+        7.2000    5.094991
+        7.3157    0.709907
+        7.4480    0.003103
+        dtype: float64
+
+        >>> TransferFunc.from_alpha0(Ein, M, T, Eout, pdos, model="pdos").data.loc[Eout_test].round(6)
+        Eout
+        6.7554    0.000003
+        6.9050    0.008817
+        7.0439    1.168504
+        7.2000    5.145645
+        7.3157    0.698297
+        7.4480    0.003581
+        dtype: float64
+        """
+        beta = Beta.from_default(T)
+        sab = Sab.from_alpha0(Ein, T, M, beta, *args, model=model,
+                              **kwargs).full
+        EoutCalc = Ein + sab.index.values * kb * T
+        scatfunc = np.interp(Eout, EoutCalc, sab.values)
+        scatfunc /= kb * T
+        return cls(Ein, T, M, scatfunc, index=Eout)
+
+    @staticmethod
+    def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
+                   model: str = "fgm", **kwargs) -> pd.DataFrame:
+
+        """
+        Calculate the alpha0 scattering function.
+
+        Parameters
+        ----------
+        EinGrid: np.ndarray
+            The incident energy grid in eV
+        M: float
+            The mass of the target material in amu
+        T: float
+            Temperature of the material in K
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+        display: bool
+            If True, return a pd.DataFrame for visualization.
+            If False, return a xp.ndarray for computation.
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        pd.DataFrame
+            The alpha0 scattering function
+
+        Examples
+        --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> index = pd.Index(Ein, name="Ein")
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> TransferFunc.get_alpha0(Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
+        beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
+        Ein
+        6.7554   0.153967   0.269409   0.158014   0.031065        0.0
+        6.9050   0.156781   0.266477   0.155477   0.031139        0.0
+        7.0439   0.159258   0.263776   0.153185   0.031192        0.0
+        7.2000   0.161892   0.260769   0.150679   0.031233        0.0
+        7.3157   0.163744   0.258559   0.148868   0.031253        0.0
+        7.4480   0.165761   0.256053   0.146842   0.031264        0.0
+        >>> TransferFunc.get_alpha0(Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
+        beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
+        Ein
+        6.7554   0.153590   0.264466   0.156371   0.030960        0.0
+        6.9050   0.156257   0.261604   0.153885   0.031015        0.0
+        7.0439   0.158601   0.258970   0.151640   0.031051        0.0
+        7.2000   0.161088   0.256037   0.149185   0.031075        0.0
+        7.3157   0.162834   0.253884   0.147411   0.031082        0.0
+        7.4480   0.164732   0.251443   0.145427   0.031080        0.0
+        >>> TransferFunc.get_alpha0(Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
+        beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
+        Ein
+        6.7554   0.111171   0.257399   0.201964   0.047321   0.000699
+        6.9050   0.114250   0.256102   0.198472   0.047219   0.000738
+        7.0439   0.117031   0.254833   0.195325   0.047108   0.000774
+        7.2000   0.120064   0.253339   0.191893   0.046964   0.000815
+        7.3157   0.122248   0.252190   0.189417   0.046847   0.000846
+        7.4480   0.124680   0.250838   0.186655   0.046702   0.000881
+        """
+        Ein = np.unique(EinGrid) if hasattr(EinGrid, '__len__') else np.array([EinGrid])
+        # Scattering function calculation
+        alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
+        scatfunc = Sab.from_model(alpha, beta, T, *args,
+                   model=model, **kwargs).full
+        # Erase the columns with all zeros
+        scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
+        return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
+
+
+    @property
+    def norm(self) -> float:
+        """
+        Normalization of the scattering function.
+
+        Returns
+        -------
+        float
+            Normalization of the transference function
+
+        Examples
+        --------
+        # Generate Broadening test results:
         >>> Ein = 36.68723
         >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> scattering_function = ScatFunc.from_sigma1(Ein, M, T, Eout)
-        >>> scattering_function.convolve(xs_0K).iloc[::100]
-        Eout
-        35.953485    7.227742e-14
-        36.100381    3.567348e-08
-        36.247277    1.191135e-03
-        36.394173    3.113927e+00
-        36.541069    9.254287e+02
-        36.687964    1.079050e+05
-        36.834860    1.182981e+03
-        36.981756    6.837390e+00
-        37.128652    4.644441e-03
-        37.275548    2.789231e-07
-        dtype: float64
-
-        >>> round(scattering_function.convolve(xs_0K, integral=True), 2)
-        7905.42
-
-        # Convolve with 0K displaced cross section:
-        >>> Eout_move = Eout + kb * T
-        >>> scattering_function.convolve(xs_0K, Exs=Eout_move).iloc[::100]
-        Eout
-        35.953485    8.426475e-14
-        36.100381    4.174107e-08
-        36.247277    1.423077e-03
-        36.394173    3.936983e+00
-        36.541069    1.422147e+03
-        36.687964    5.107707e+04
-        36.834860    9.047164e+02
-        36.981756    5.986015e+00
-        37.128652    4.271668e-03
-        37.275548    2.629969e-07
-        dtype: float64
-
-        >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
-        7605.61
-
-        # Generate 2D Scattering function:
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
-        >>> T = 1000
-        >>> theta = np.arange(0, 180, 1)[1::]
-        >>> scattering_function = ScatFunc.from_model(Ein, M, T, Eout, theta)
-        >>> scattering_function.convolve(xs_0K).iloc[::18, ::200].round(6)
-        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -0.999848  1.845717  12.094245  23.732354  15.005372  3.265822
-        -0.945519  1.696431  11.865713  24.032880  15.196201  3.210537
-        -0.798636  1.312725  11.171664  24.885947  15.737882  3.040859
-        -0.573576  0.799665   9.866638  26.318562  16.647563  2.715775
-        -0.292372  0.330178   7.768991  28.345006  17.934350  2.179578
-         0.017452  0.066314   4.869372  30.864798  19.534647  1.412050
-         0.325568  0.002865   1.834191  33.286657  21.073911  0.566000
-         0.601815  0.000002   0.178412  33.109271  20.967417  0.063077
-         0.819152  0.000000   0.000129  21.693622  13.741224  0.000068
-         0.956305  0.000000   0.000000   0.381820   0.241879  0.000000
-
-        # Convolve with 0K cross section and get integral value:
-        >>> round(scattering_function.convolve(xs_0K, integral=True), 2)
-        9.07
-
-        # Compare with Sigma1 algorithm:
-        >>> round(ScatFunc.from_sigma1(Ein, M, T, Eout).convolve(xs_0K, integral=True), 2)
-        9.09
-
-        # Use a displaced xs for the convolution (1D desplacement):
-        >>> Eout_move = Eout + kb * T
-        >>> scattering_function.convolve(xs_0K, Exs=Eout_move).iloc[::18, ::200].round(6)
-        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -0.999848  1.842263  12.070931  23.685592  14.975245  3.259065
-        -0.945519  1.693256  11.842839  23.985526  15.165691  3.203895
-        -0.798636  1.310268  11.150128  24.836912  15.706284  3.034568
-        -0.573576  0.798169   9.847618  26.266704  16.614139  2.710156
-        -0.292372  0.329561   7.754014  28.289155  17.898342  2.175069
-         0.017452  0.066190   4.859985  30.803983  19.495427  1.409129
-         0.325568  0.002859   1.830655  33.221070  21.031600  0.564829
-         0.601815  0.000002   0.178068  33.044033  20.925319  0.062947
-         0.819152  0.000000   0.000129  21.650877  13.713635  0.000068
-         0.956305  0.000000   0.000000   0.381067   0.241393  0.000000
-
-        >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
-        9.05
-
-        # Use a displaced xs for the convolution (2D desplacement):
-        >>> Eout_move = Eout + np.outer(np.cos(np.deg2rad(theta)), np.sqrt(Eout)/M)
-        >>> scattering_function.convolve(xs_0K, Exs=Eout_move).iloc[::18, ::200].round(6)
-        Eout        1.80000    1.88008    1.96016    2.04024   2.12032
-        mu
-        -0.999848  1.845492  12.092687  23.729226  15.003274  3.265355
-        -0.945519  1.696235  11.864267  24.029885  15.194192  3.210104
-        -0.798636  1.312597  11.170515  24.883327  15.736124  3.040513
-        -0.573576  0.799609   9.865909  26.316572  16.646228  2.715553
-        -0.292372  0.330167   7.768698  28.343913  17.933617  2.179487
-         0.017452  0.066314   4.869383  30.864869  19.534695  1.412054
-         0.325568  0.002865   1.834268  33.288086  21.074870  0.566026
-         0.601815  0.000002   0.178426  33.111897  20.969181  0.063083
-         0.819152  0.000000   0.000129  21.695964  13.742798  0.000068
-         0.956305  0.000000   0.000000   0.381868   0.241911  0.000000
-        >>> round(scattering_function.convolve(xs_0K, Exs=Eout_move, integral=True), 2)
-        9.07
+        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
+        >>> round(pdf.norm, 6)
+        1.000001
         """
-        # Create the xs matrix for the double differential scattering function:
-        if len(xs.shape) == 1:
-            if Exs is not None:
-                E = Exs.copy()
-            elif self.data.index.name == "mu":
-                E = self.data.columns.values
-            else:
-                E = self.data.index.values
-            xs_reshaped = interpolation(xs, E, values=True)
+        return integrate(self.data)
 
-        elif len(xs.shape) == 2:
-            xs_reshaped = xs.values if isinstance(xs, pd.DataFrame) else xs
-        else:
-            raise ValueError("xs must be 1D or 2D")
+    @property
+    def pdf(self) -> pd.Series:
+        """
+        Probability density function of the scattering function.
 
-        # Convolve the scattering function with the cross section values matrix:
-        scatfuncConvol = self.data * xs_reshaped
+        Returns
+        -------
+        pd.Series
+            Probability density function of the scattering function
+        """
+        return self.data / self.norm
+    @property
+    def cdf(self) -> pd.Series:
+        """
+        Cumulative distribution function of the scattering function.
 
-        # Return the data in the chosen format:
-        if integral and self.data.index.name == "mu":
-            return integrate(scatfuncConvol.apply(integrate))
-        elif integral:
-            return integrate(scatfuncConvol)
-        else:
-            return scatfuncConvol
+        Returns
+        -------
+        pd.Series
+            Cumulative distribution function of the scattering function
+        """
+        cdf = self.data.cumsum()
+        return cdf / cdf.iloc[-1]
 
 
 @nb.jit(nopython=True, nogil=True)
@@ -1546,129 +1415,3 @@ def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
     EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
     # Interpolation for avoiding numerical fluctuations:
     return np.interp(Eout, EoutCalc, scatFuncValues)
-
-
-def totalVariationDistance(p: np.ndarray, q: np.ndarray) -> float:
-    """
-    Total Variation Distance between two probability distributions.
-
-    Parameters
-    ----------
-    p : np.ndarray, (N,)
-        Probability distribution.
-    q : np.ndarray, (N,)
-        Probability distribution.
-
-    Returns
-    -------
-    float
-        Total Variation Distance.
-    """
-    return 0.5 * np.sum(np.abs(p - q))
-
-
-def hellingerDistance(p: np.ndarray, q: np.ndarray) -> float:
-    """
-    Hellinger Distance between two probability distributions.
-
-    Parameters
-    ----------
-    p : np.ndarray, (N,)
-        Probability distribution.
-    q : np.ndarray, (N,)
-        Probability distribution.
-
-    Returns
-    -------
-    float
-        Hellinger Distance.
-    """
-    return euclidean(np.sqrt(p), np.sqrt(q)) / np.sqrt(2)
-
-
-def bhattacharyyaDistance(p: np.ndarray, q: np.ndarray, Eout: np.ndarray) -> float:
-    """
-    Bhattacharyya Distance between two probability distributions.
-
-    Parameters
-    ----------
-    p : np.ndarray, (N,)
-        Probability distribution.
-    q : np.ndarray, (N,)
-        Probability distribution.
-    Eout : np.ndarray, (N,)
-        Energy grid.
-
-    Returns
-    -------
-    float
-        Bhattacharyya Distance for continous distribution.
-    """
-    BC = np.trapz(np.sqrt(p * q), x=Eout)
-    return -np.log(BC)
-
-
-def mu_fitCalc(scatfunc: pd.DataFrame, sigma1_pdf: pd.Series, Ein: float) -> pd.DataFrame:
-    """
-    Calculate the angle from the scattering function that best fits the
-    sigma1_pdf. The distributions from the scattering function are shifted
-    using the maximun position of the scattering function and the incident
-    energy distance. For the calculation, several distances are used:
-        - KL divergence
-        - Jensen-Shannon divergence
-        - Earth Mover's Distance
-        - Total Variation Distance
-        - Hellinger Distance
-        - Bhattacharyya Distance
-        - Maximun position distance
-
-    Parameters
-    ----------
-    scatfunc : pd.DataFrame, (N, M)
-        Scattering function distribution for each angle.
-    sigma1_pdf : pd.Series, (M, )
-        Sigma1 distribution.
-    Ein : float
-        Incident energy.
-
-    Returns
-    -------
-    mu_fit : pd.Series, (7, )
-        Best fit angle for each distance calculation.
-
-    Examples
-    --------
-    >>> Ein = 7.2
-    >>> T = 1000
-    >>> M = 238.05077040419212
-    >>> Eout = np.linspace(Ein * 0.9, Ein * 1.1, 3000)
-    >>> sigma1 = ScatFunc.from_sigma1(Ein, M, T, Eout).data
-    >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-    >>> ddScatFunc = ScatFuncDD.from_model(Ein, M, T, Eout, theta).data
-    >>> mu_fitCalc(ddScatFunc, sigma1, Ein).round(2)
-    KL               0.5
-    JS               0.5
-    EMD              0.5
-    TVD              0.5
-    Hellinger        0.5
-    Bhattacharyya    0.5
-    max_pos          0.5
-    dtype: float64
-    """
-    Eout = scatfunc.columns.values
-    scatfunc_norm = scatfunc.apply(lambda x: x / integrate(x), axis=1)
-    def get_distances(angular_scatfunc):
-        angular_recoil = Ein - angular_scatfunc.idxmax()
-        scatfunc_shift = np.interp(Eout, Eout + angular_recoil,
-                                   angular_scatfunc.values)
-        return pd.Series({
-            "KL": entropy(scatfunc_shift, sigma1_pdf),
-            "JS": distance.jensenshannon(scatfunc_shift, sigma1_pdf),
-            "EMD": wasserstein_distance(scatfunc_shift, sigma1_pdf),
-            "TVD": totalVariationDistance(scatfunc_shift, sigma1_pdf),
-            "Hellinger": hellingerDistance(scatfunc_shift, sigma1_pdf),
-            "Bhattacharyya": bhattacharyyaDistance(scatfunc_shift,
-                                                    sigma1_pdf, Eout),
-            "max_pos": abs(scatfunc_shift.max() - sigma1_pdf.max()),
-        })
-    return scatfunc_norm.apply(get_distances, axis=1).idxmin()

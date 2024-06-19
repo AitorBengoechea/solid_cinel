@@ -70,10 +70,7 @@ def tauNconvol(expBeta: np.ndarray, deltaBeta: np.ndarray, tau1: np.ndarray,
         # tauNminus1(-(beta-beta^prime))
         k = i - j
         if abs(k) < NtauNminus1:
-            if k >= 0:
-                convol_j += tauNminus1[k]
-            else:
-                convol_j += tauNminus1[-k] * expBeta[-k]
+            convol_j += tauNminus1[k] if k >= 0 else tauNminus1[-k] * expBeta[-k]
 
         # tauNminus1(-(beta+beta^prime))
         l = i + j

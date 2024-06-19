@@ -100,11 +100,20 @@ class Alpha:
                1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
                9.5985550e+00, 3.0013001e+01])
         """
+        # Calculate the constant AkT
         AkT = M * kb * T / m
+
+        # Calculate the minimum alpha value
         min_alpha = min_E / 4 / AkT
+
+        # Calculate the maximum alpha value
         max_alpha = 4 * thermal_threshold / AkT
+
+        # Generate the alpha grid
         alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
                                  num=num_grid)
+
+        # Scale the alpha grid
         if scale:
             return cls(alpha_grid).scale(T, **kwargs)
         else:
@@ -150,12 +159,15 @@ class Alpha:
         >>> Alpha.from_parameters(Eout, Ein, T, M, theta).data.round(6)
         array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
+        # Check if the input parameters are iterable
         Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
         Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
         T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
-        mu = np.cos(theta * np.pi / 180) if hasattr(theta,
-                                                    '__len__') else np.cos(
-            np.array([theta]) * np.pi / 180)
+
+        # Calculate the cosine of the scattering angle
+        mu = np.cos(theta * np.pi / 180)
+        mu = mu if hasattr(mu, '__len__') else np.array([mu])
+
         return cls(get_alpha(Eout_, Ein_, T_, M, mu))
 
     @classmethod
@@ -329,20 +341,29 @@ class Alpha:
         0.105605    45.0
         Name: mu, dtype: float64
         """
+        # Get the alpha values
         alpha = self.data
+
+        # Calculate the mass ratio
         A = M / m
 
+        # Calculate the beta values
         beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        E_prima = beta.get_Eout(T, Ein).values
 
-        if len(E_prima) > len(alpha):
-            E_prima = E_prima[:len(alpha)]
-        elif len(E_prima) < len(alpha):
-            alpha = alpha[:len(E_prima)]
+        # Calculate the outgoing energy grid
+        Eout = beta.get_Eout(T, Ein).values
 
-        mu = E_prima + Ein - alpha * A * kb * T
-        mu /= 2 * np.sqrt(E_prima * Ein)
+        # Cut the alpha and Eout values if they have different lengths
+        if len(Eout) > len(alpha):
+            E_prima = Eout[:len(alpha)]
+        elif len(Eout) < len(alpha):
+            alpha = alpha[:len(Eout)]
+
+        # Calculate the cosine of the scattering angle
+        mu = Eout + Ein - alpha * A * kb * T
+        mu /= 2 * np.sqrt(Eout * Ein)
         mu = np.arccos(mu[abs(mu) <= 1])
+
         return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
 
     def scale(self, T: float, therm: float = 0.0253):
@@ -411,8 +432,7 @@ class Alpha:
         >>> alpha_grid.expansionOrder(debye_waller, 1.0e-6, 5000)
         798
         """
-        return get_expansionOrder(self.data.max(), DebyeWallerCoeff, decimal,
-                                   orderMax)
+        return get_expansionOrder(self.data.max(), DebyeWallerCoeff, decimal, orderMax)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -678,11 +698,16 @@ def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     >>> get_expansionOrder(alphaMat, debye_waller, decimal, orderMax)
     1320
     """
-    alpha_max = alpha if isinstance(alpha, (int, float)) else alpha.max()
-    alphaCumsum = get_alphaMulCumsum(alpha_max, DebyeWallerCoeff, orderMax)
-    n_min = np.argmax((1 - alphaCumsum) <= decimal)
-    if n_min > 0:
-        return n_min
+    # Get the maximun alpha value
+    alphaMax = alpha if isinstance(alpha, (int, float)) else alpha.max()
+
+    # Get the cumulative sum of the alpha values
+    alphaCumsum = get_alphaMulCumsum(alphaMax, DebyeWallerCoeff, orderMax)
+
+    # Check the decimal precision
+    nMin = np.argmax((1 - alphaCumsum) <= decimal)
+    if nMin > 0:
+        return nMin
     else:
         # If the decimal precision is not reached, the difference between the
         # cumulative sum of the alpha values will identify the order of the
@@ -711,12 +736,17 @@ def checkDiff(alphaCumsum: np.ndarray, decimal: float, orderMax: int) -> int:
     n: 'int'
         Expansion order.
     """
-    alphaCumsum_diff = np.diff(alphaCumsum)
-    n = alphaCumsum_diff == 0.0
+    # Check the difference between the cumulative sum of the alpha values
+    alphaCumsumDiff = np.diff(alphaCumsum)
+    n = alphaCumsumDiff == 0.0
+
+    # If the difference is zero, the expansion order is the firts value
     if n.any():
         return np.argmax(n)
     else:
-        n = alphaCumsum_diff <= decimal
+        # If the difference is not zero, the expansion order is compare with
+        # the decimal precision
+        n = alphaCumsumDiff <= decimal
         return np.argmax(n) if n.any() else orderMax
 
 

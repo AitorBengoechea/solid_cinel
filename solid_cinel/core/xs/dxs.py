@@ -305,7 +305,7 @@ class Dxs:
         7.2000    21.126578
         7.2500     0.489767
         7.3157     0.000000
-        dtype: float64
+        Name: 15, dtype: float64
         """
         # Get the transfer function:
         transferFunc = TransferFunc.from_theta(Ein, M, T, Eout, theta, *args,

@@ -13,7 +13,7 @@ from solid_cinel.core.scattering_function.beta import get_beta, Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder, Alpha
 from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import save_tau, get_tauNbeta
+from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from typing import Iterable
 from math import sqrt, pi
 from scipy.stats import entropy, wasserstein_distance
@@ -583,10 +583,6 @@ class ScatFuncDD:
         threshold: 'float', optional
             Minimun value to take into account in the creation of tauN
             functions
-        tauToFile: 'bool', optional
-            Save tauN functions to file. The default is False.
-        binary: 'bool', optional
-            Save tauN functions to binary file. The default is False.
 
         Returns
         -------
@@ -624,7 +620,6 @@ class ScatFuncDD:
             alphaMax = get_alphaFromEout(Eout, Ein, M, T, mu.min())
             nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, order_max)
         tauN = Tpdos.tauN(nphonon, threshold, values=True)
-        save_tau(tauN, nphonon, T, tauToFile, binary)
         tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
         return cls.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta,
                             DebyeWallerCoeff)

@@ -6,7 +6,7 @@ Python file for working with S(alpha, -beta) matrixs.
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential, interp_multyParallel
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import get_tauNfunc, save_tau, gpu_available, get_tauNbeta
+from solid_cinel.core.material.vibration.tau import get_tauNfunc, gpu_available, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.scattering_function.alpha import Alpha
 from typing import Iterable, Union
@@ -353,10 +353,6 @@ class Sab:
             1.0e-6.
         order_max : 'int', optional
             Maximum expansion order. The default is 5000.
-        tau_to_file : 'bool', optional
-            Save the tauN functions into a file. The default is False.
-        binary : 'bool', optional
-            Save the tauN functions into a binary file. The default is False.
 
         Returns
         -------
@@ -404,7 +400,6 @@ class Sab:
         # Get the parameters for calculation:
         tauN = cls.pdos.tauN(nphonon, threshold=kwargs.get("threshold", 0.0), values=True)
         tauNbeta = get_tauNbeta(cls.pdos.beta.data, tauN.shape[1])
-        save_tau(tauN, nphonon, T, kwargs.get("tau_to_file", False), kwargs.get("binary", False))
         S_values = phonon_expansion(alpha_.data, beta_.data,
                                     nphonon,
                                     tauN, tauNbeta,

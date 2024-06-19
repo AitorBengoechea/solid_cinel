@@ -305,36 +305,6 @@ def get_tauNfunc(tau1: np.ndarray, beta: np.ndarray,
     return tauNfunc[::, :column_max]
 
 
-def save_tau(tauN: np.ndarray, nphonon: int, T: float, tauToFile: bool,
-             binary: bool) -> None:
-    """
-    Save the tauN values in a file or in a binary file.
-
-    Parameters
-    ----------
-    tauN: np.ndarray, (Z, T)
-        tauN values for all the row T. Z is the number of the phonon expansion
-        order and T is the number of the beta grid
-    nphonon: int
-        Phonon expansion order
-    T: float
-        Target temperature value for the caculation of tauN
-    tauToFile: bool
-        If True, save the tauN values in a file. If False, don't save the tauN
-        values in a file. Default is False
-    binary: bool
-        If True, save the tauN values in a binary file. If False, save the tauN
-        values in a txt file. Default is False.
-    """
-    name = f"tau_{nphonon}_{T}"
-    if tauToFile:
-        os.makedirs("tau", exist_ok=True)
-        np.savetxt(f"tau/{name}.txt", tauN, delimiter="\t", fmt="%.14f")
-    if binary:
-        os.makedirs("tau/binary", exist_ok=True)
-        with h5py.File(f"tau/binary/{name}.h5", "w") as f:
-            f.create_dataset("tau", data=tauN)
-
 @nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
 def get_tauNbeta(tau1beta: np.ndarray, Nbeta=int):
     """

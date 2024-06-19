@@ -138,8 +138,10 @@ class Dxs:
         """
         # Get the transfer function:
         transferFunc = TransferFunc.from_sigma1(Ein, M, T, Eout).data
+
         # Get the differential cross section:
         dxs = transferFunc * cls.interp_xs0K(xs0K, Eout)
+
         return cls(Ein, T, M, dxs)
 
     @classmethod
@@ -222,13 +224,17 @@ class Dxs:
         # Calculate alpha0 values from the scattering function:
         alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
                                      model= model, **kwargs).alpha0
+
         # Get the transfer function:
         transferFunc = TransferFunc.from_alpha(alpha0, Ein, M, T, Eout, *args,
                                                model=model, **kwargs).data
+
         # Get the recoil energy:
         recoil = alpha0 * kb * T
+
         # Get the differential cross section:
         dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
+
         return cls(Ein, T, M, dxs)
 
     @classmethod
@@ -310,11 +316,14 @@ class Dxs:
         # Get the transfer function:
         transferFunc = TransferFunc.from_theta(Ein, M, T, Eout, theta, *args,
                                                 model= model, **kwargs).data
+
         # Get the recoil energy:
         recoil = get_alphaFromEout(Ein, T, M, Eout, np.cos(np.deg2rad(theta)))
         recoil *= kb * T
+
         # Get the differential cross section:
         dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
+
         return cls(Ein, T, M, dxs)
 
     @classmethod
@@ -424,6 +433,7 @@ class Dxs:
         # Calculate the scattering function:
         scatFunc = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
                                      model= model, **kwargs)
+
         # Get the recoil energy if needed:
         if recoil:
             alphaRecoil = get_alphaMat(Eout, Ein, T, M, mu) * kb * T
@@ -432,6 +442,7 @@ class Dxs:
         else:
             transferFunc = scatFunc.to_transferFunc.data
             dxs = transferFunc * cls.interp_xs0K(xs0K, Eout)
+
         return cls(Ein, T, M, dxs)
 
     @staticmethod
@@ -624,10 +635,16 @@ class Dxs:
         >>> round(dxs.prob["Ein=Eout"], 6)
         0.004179
         """
+        # Get the integral value:
         integral = self.integral
+
+        # Get the outgoig energy grid:
         Eout = self.data.index.values
+
+        # Get the upscattering and downscattering probabilities:
         up = integrate(self.data.loc[Eout > self.Ein]) / integral
         down = integrate(self.data.loc[Eout < self.Ein]) / integral
+
         return {"upscattering": up,  "downscattering": down, "Ein=Eout": 1.0 - up - down}
 
     @property
@@ -737,13 +754,17 @@ class Dxs:
         dtype: float64
         """
         # copy data to avoid changing the original data:
-        dxs = self.data
+        dxs = self.data.copy()
+
         # Check the dx:
         dx_ = check_dx(self.data, dx, 0)
+
+        # Shift the data:
         if isinstance(dx, float) or isinstance(dx, int):
             dxs = reshift(dxs, dx_)
         else:
             dxs.loc[dx_.index] = reshift(dxs.loc[dx_.index], dx_)
+
         return Dxs(self.Ein, self.T, self.M, dxs)
 
 

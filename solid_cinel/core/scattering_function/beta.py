@@ -412,7 +412,7 @@ class Beta:
 
 @nb.jit(nopython=True, cache=True)
 def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
-             T: float) -> np.ndarray:
+             T: float, abs: bool = True) -> np.ndarray:
     """
     Get the positive beta values from the parameters of the function:
     .. math::
@@ -433,7 +433,10 @@ def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
         Array containing all posible beta values for the input parameters.
     """
     beta = (Eout - Ein) / (kb * T)
-    return np.unique(np.absolute(beta))
+    if abs:
+        return np.unique(np.absolute(beta))
+    else:
+        return np.unique(beta)
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_absBeta(T: float) -> np.ndarray:

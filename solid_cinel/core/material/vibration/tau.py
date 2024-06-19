@@ -203,8 +203,13 @@ def calc_tauNfunc_cpu(tauNfunc: np.ndarray, tau1: np.ndarray,
     tauNfunc: 'np.ndarray', (N * nphonon, nphonon)
         All Tau(-beta) function values for n expansion.
     """
+    # Copy the tau1 data for the firts iteraction:
     tauNminus1 = tau1.copy()
+
+    # Get -beta exponential values:
     expBeta = np.exp(- beta)
+
+    # Calculate the tauN(-beta) function values for all n > 1
     for n in range(1, nphonon):
         # Save the length of the tauN function:
         tauN = np.zeros(NtauN)

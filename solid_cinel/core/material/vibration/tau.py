@@ -62,7 +62,10 @@ def tauNconvol(expBeta: np.ndarray, deltaBeta: np.ndarray, tau1: np.ndarray,
     convol: float
         Convolution value.
     """
+    # Get the integration limit position
     trapz_limit = Ntau1 - 1
+
+    # Initialize the convolution:
     convol = 0.
     for j in range(1, Ntau1):
         convol_j = 0.
@@ -83,6 +86,7 @@ def tauNconvol(expBeta: np.ndarray, deltaBeta: np.ndarray, tau1: np.ndarray,
 
         # trapezoidal integration
         convol += tau1[j] * deltaBeta[j] * convol_j
+
     return convol
     
 

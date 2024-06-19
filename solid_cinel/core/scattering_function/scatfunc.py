@@ -464,6 +464,90 @@ class ScatFunc:
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
     @property
+    def to_transferFunc(self):
+        """
+        Return the TransferFunc object.
+
+        Returns
+        -------
+        TransferFunc
+            The TransferFunc object
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> scatfunc = ScatFunc.from_fgm(Ein, M, T, Eout, mu)
+        >>> scatfunc.to_transferFunc.data.round(6)
+        Eout
+        6.7554    0.031423
+        6.9050    0.404638
+        7.0439    1.888728
+        7.2000    4.340047
+        7.3157    0.688071
+        7.4480    0.045257
+        dtype: float64
+        """
+        return TransferFunc(self.Ein, self.T, self.M, self.data.apply(integrate))
+    @property
+    def alpha0(self) -> float:
+        """
+        The alpha0 parameter of the scattering function.
+
+        Returns
+        -------
+        float
+            The alpha0 parameter of the scattering function
+
+        Examples
+        --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([40, 80, 120, 160])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> round(ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6)
+        0.328006
+        """
+        scatfunc = self.data
+        alphaMat = get_alphaMat(scatfunc.columns.values, self.Ein, self.T, self.M,
+                                scatfunc.index.values)
+        return integrate((scatfunc * alphaMat).apply(integrate)) / 2
+
+    @property
+    def norm(self) -> float:
+        """
+        Normalization of the scattering function.
+
+        Returns
+        -------
+        float
+            Normalization of the scattering function
+        """
+        return integrate(self.data.apply(integrate))
+
+    @property
+    def pdf(self) -> pd.DataFrame:
+        """
+        Probability density function of the scattering function.
+
+        Returns
+        -------
+        pd.Series
+            Probability density function of the scattering function
+        """
+        return self.data / self.norm
+
+    @property
     def cdf(self) -> pd.DataFrame:
         """
         Cumulative distribution function of the scattering function.
@@ -591,7 +675,7 @@ class TransferFunc:
     def from_theta(cls, Ein: float, M: float, T: float, Eout: np.array,
                    theta: float, *args, model: str = "fgm", **kwargs):
         """
-        Generate the single differential scattering function from a
+        Generate the Transfer function from a
         S(alpha, -beta) table.
 
         Parameters
@@ -658,10 +742,10 @@ class TransferFunc:
         # Using the Free Gas Model:
         >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout
-        7.1000     0.000015
-        7.1500     0.425542
-        7.2000    10.563289
-        7.2500     0.244883
+        7.1000     0.000030
+        7.1500     0.851083
+        7.2000    21.126578
+        7.2500     0.489767
         7.3157     0.000000
         dtype: float64
 
@@ -669,31 +753,92 @@ class TransferFunc:
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout
-        7.1000     0.000016
-        7.1500     0.429564
-        7.2000    10.545191
-        7.2500     0.247675
+        7.1000     0.000031
+        7.1500     0.859129
+        7.2000    21.090382
+        7.2500     0.495350
         7.3157     0.000000
         dtype: float64
 
         # Using the Phonon expansion model:
         >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.round(6)
         Eout
-        7.1000     0.003594
-        7.1500     0.518264
-        7.2000    11.484652
-        7.2500     0.292131
-        7.3157     0.000200
+        7.1000     0.007187
+        7.1500     1.036528
+        7.2000    22.969304
+        7.2500     0.584262
+        7.3157     0.000400
         dtype: float64
         """
         scatFunc = ScatFunc.from_model(Ein, M, T, Eout, [theta],  *args, model=model, **kwargs).data
+        # Erase angular normalization
+        scatFunc *= 2
         return cls(Ein, T, M, scatFunc.iloc[0].values, index=scatFunc.columns)
 
+    @classmethod
+    def from_alpha(cls, alpha: float, Ein: float, M: float, T: float, Eout: np.array,
+                   *args, model: str = "fgm", **kwargs):
+        """
+        Generate the Transfer function from S(alpha, -beta) tables.
+
+        Parameters
+        ----------
+        alpha: float
+            The alpha parameter of the scattering function
+        Ein: float
+            The incident energy of the neutron in eV
+        M: float
+            The mass of the target material in amu
+        T: float
+            Temperature of the material in K
+        Eout: np.array
+            The neutron outgoing energy grid in eV
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        TransferFunc
+            Transfer function using S(alpha, -beta) tables
+        """
+        sab = Sab.from_model(alpha, Beta.from_default(T), *args, model=model,
+                              **kwargs).full
+        EoutCalc = Ein + sab.index.values * kb * T
+        scatfunc = np.interp(Eout, EoutCalc, sab.values)
+        scatfunc /= kb * T
+        return cls(Ein, T, M, scatfunc, index=Eout)
     @classmethod
     def from_alpha0(cls, Ein: float, M: float, T: float, Eout: np.array,
                     *args, model: str = "fgm", **kwargs):
         """
-        Generate the single differential scattering function from gressier
+        Generate the Transfer function from gressier
         recoil energy
 
         Parameters
@@ -739,7 +884,7 @@ class TransferFunc:
         Returns
         -------
         TransferFunc
-            Single differential scattering function using S(alpha, -beta) table
+            Transfer function using S(alpha, -beta) table
             based on the gressier recoil energy
 
         Examples

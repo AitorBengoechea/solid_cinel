@@ -153,6 +153,28 @@ class Xs:
         else:
             return Xs(self.M, dataNew.columns, dataNew)
 
+    def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]):
+        """
+        Get the 0K scattering function with all the data
+
+        Parameters
+        ----------
+        xs0Kcomplete: pd.Series
+            The 0K scattering function with all the data
+
+        Returns
+        -------
+        pd.Series
+            The 0K scattering function with all the data
+        """
+        if xs0Kcomplete is None:
+            if 0 in self.data.columns:
+                self.xs0Kcomplete = self.data.loc[::, 0]
+            else:
+                raise ValueError("0K data not found")
+        else:
+            self.xs0Kcomplete = xs0Kcomplete
+
     @staticmethod
     def check_InputValues(input: [float, Iterable[float]]) -> Iterable:
         """
@@ -304,28 +326,37 @@ class Xs:
         Tnew = pd.Index(self.check_InputValues(temperatures))
         return self.data.columns.intersection(Tnew)
 
-
-    def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]) -> pd.Series:
+    def get_output(self, data: [list, np.ndarray], T: Iterable = None,
+                   Ein: Iterable = None) -> [pd.Series, pd.DataFrame]:
         """
-        Get the 0K scattering function with all the data
-
+        Get the output data
         Parameters
         ----------
-        xs0Kcomplete: pd.Series
-            The 0K scattering function with all the data
+        data: list, np.ndarray
+            The output data
+        T: Iterable, None
+            The new temperatures calculated temperatures
+        Ein: Iterable, None
+            The new incident energies calculated
 
         Returns
         -------
-        pd.Series
-            The 0K scattering function with all the data
+        pd.Series, pd.DataFrame
+            The output data in the corresponding format
         """
-        if xs0Kcomplete is None:
-            if 0 in self.data.columns:
-                self.xs0Kcomplete = self.data.loc[::, 0]
-            else:
-                raise ValueError("0K data not found")
+        # Check the temperature and incident energy
+        T_ = self.data.columns if T is None else pd.Index(
+            self.check_InputValues(T), name="T")
+        Ein_ = self.data.index if Ein is None else pd.Index(
+            self.check_InputValues(Ein), name="Ein")
+
+        # Return the output data
+        if len(T_) == 1:
+            return pd.Series(data.squeeze(), index=Ein_, name=T_[0])
+        elif len(Ein_) == 1:
+            return pd.Series(data.squeeze(), index=T_, name=Ein_[0])
         else:
-            self.xs0Kcomplete = xs0Kcomplete
+            return pd.DataFrame(data, index=Ein_, columns=T_)
 
     def get_EinTcomb(self, Tnew: Iterable, EinGrid: Iterable = None) -> list:
         """
@@ -374,75 +405,35 @@ class Xs:
         else:
             return [(T, Ein) for T in Tnew for Ein in self.data.index]
 
-    def get_output(self, data: [list, np.ndarray], T: Iterable = None,
-                   Ein: Iterable = None) -> [pd.Series, pd.DataFrame]:
+    def _compute_sigma1(self, Tnew: Iterable, EinGrid: [Iterable, None]) -> list:
         """
-        Get the output data
-        Parameters
-        ----------
-        data: list, np.ndarray
-            The output data
-        T: Iterable, None
-            The new temperatures calculated temperatures
-        Ein: Iterable, None
-            The new incident energies calculated
-
-        Returns
-        -------
-        pd.Series, pd.DataFrame
-            The output data in the corresponding format
-        """
-        # Check the temperature and incident energy
-        T_ = self.data.columns if T is None else pd.Index(self.check_InputValues(T), name="T")
-        Ein_ = self.data.index if Ein is None else pd.Index(self.check_InputValues(Ein), name="Ein")
-
-        # Return the output data
-        if len(T_) == 1:
-            return pd.Series(data.squeeze(), index=Ein_, name=T_[0])
-        elif len(Ein_) == 1:
-            return pd.Series(data.squeeze(), index=T_, name=Ein_[0])
-        else:
-            return pd.DataFrame(data, index=Ein_, columns=T_)
-
-    @staticmethod
-    def _calc_sigma1(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        incident energy Ein
+        Calculate the elastic scattering cross section at new temperatures using
+        sigma1 method from Njoy
 
         Parameters
         ----------
-        T: float
-            The temperature in K
-        Ein: float
-            The incident energy in eV
-        xs0K: pd.Series
-            The 0K scattering function
-        M: float
-            The mass of the nucleus in amu
+        Tnew: Iterable
+            The new temperatures to calculate
+        EinGrid: Iterable, None
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
 
         Returns
         -------
-        pd.Series
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> Ein = 2.0
-        >>> round(Xs._calc_sigma1(T, Ein, xs0K, M), 6)
-        9.086237
+        list
+            The elastic scattering cross section in barns for the new
         """
-        Eout = default_Eout(Ein)
-        return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
+        # Get the temperature and the incident energy combinations: (T, Ein)
+        EinTcomb = self.get_EinTcomb(Tnew, EinGrid)
+
+        # Create a Dask bag from the list of (T, Ein) combinations.
+        bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count())
+
+        # Calculate xs using SIGMA1 to each element in the bag using the `map` function.
+        bag = bag.map(lambda x: Dxs.from_sigma1(self.xs0Kcomplete, x[1], self.M, x[0], default_Eout(x[1])).integral)
+
+        # Trigger the parallel computation and collect the results into a list.
+        return bag.compute()
 
     @staticmethod
     def _calc_alpha0(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
@@ -526,32 +517,6 @@ class Xs:
         else:
             alpha = Alpha.from_recoil(EinGrid, T, M)
             return dxsIntegral / alpha.get_expansPorcen(args[0], T)
-
-    def _compute_sigma1(self, Tnew: Iterable, EinGrid: [Iterable, None]) -> list:
-        """
-        Calculate the elastic scattering cross section at new temperatures using
-        sigma1 method from Njoy
-
-        Parameters
-        ----------
-        Tnew: Iterable
-            The new temperatures to calculate
-        EinGrid: Iterable, None
-            The incident energy grid in eV. If not provided, it will be taken
-            from the class attribute.
-
-        Returns
-        -------
-        list
-            The elastic scattering cross section in barns for the new
-        """
-        # Get the incident energy and temperature combinations
-        EinTcomb = self.get_EinTcomb(Tnew, EinGrid)
-
-        # Calculate the cross section using dask
-        bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count()) \
-                .map(lambda x: self._calc_sigma1(*x, self.xs0Kcomplete, self.M))
-        return bag.compute()
 
     def _compute_alpha0(self, Tnew: Iterable, EinGrid: [Iterable, None], *args,
                         **kwargs) -> list:

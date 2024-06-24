@@ -569,7 +569,7 @@ class Xs:
         args = (self.xs0Kcomplete, self.M) + args
 
         # Get the incident energy in the appropriate format
-        Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
+        Ein = np.array(EinGrid) if hasattr(EinGrid, "__len__") else self.data.index.values
 
         # Calculation:
         if len(Ein.shape) == 1:

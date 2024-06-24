@@ -928,90 +928,6 @@ class Xs:
         xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
         return xs.calc_T(T, algorithm="sigma1", inplace=inplace)
 
-    @classmethod
-    def from_alpha0(cls, T: float, M: float, xs0Kshort: pd.Series, *args,
-                    xs0Kcomplete: pd.Series = None, inplace: bool = False,
-                    **kwargs):
-        """
-        Calculate the elastic scattering cross section for a nucleus with mass
-        M at temperature T > 0 using the alpha0 model.
-
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        M: float
-            The mass of the nucleus in amu
-        xs0Kshort: pd.Series
-            The 0K scattering function with the incident energy grid to use. It
-            is recommended to use a short grid to avoid the doppler broadening
-            of all the Ein.
-        xs0Kcomplete: pd.Series, optional
-            The 0K scattering function with all the data. If not provided, it
-            will be taken from the class attribute.
-        inplace: bool, optional
-            If True, the data is stored in the class attribute, otherwise it
-            is returned
-        kwargs: dict
-            The parameters for the alpha0 model
-
-        Returns
-        -------
-        Xs
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = [300, 100]
-        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
-        >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs.from_alpha0(T, M, xsSmall, model="fgm", xs0Kcomplete=xs0K).data
-        T                 0           100         300
-        Ein
-        0.065625     9.411657    9.411657    9.411657
-        2.000000     9.085342    9.085305    9.085279
-        4.000000     8.481975    8.481958    8.481895
-        5.000000     7.805580    7.805221    7.804852
-        6.670000  1269.792131  665.465406  457.021623
-        7.000000    19.825115   19.896286   20.045315
-
-        >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="sct", xs0Kcomplete=xs0K).data
-        T                 0           100         300
-        Ein
-        0.065625     9.411657    9.223204    9.399438
-        2.000000     9.085342    8.627450    9.023790
-        4.000000     8.481975    8.110563    8.419166
-        5.000000     7.805580    7.495224    7.747221
-        6.670000  1269.792131  606.491313  449.805325
-        7.000000    19.825115   19.325343   19.925829
-
-        >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="pdos", xs0Kcomplete=xs0K).data
-        T                 0           100         300
-        Ein
-        0.065625     9.411657    9.412832    9.411996
-        2.000000     9.085342    9.085596    9.084969
-        4.000000     8.481975    8.482253    8.481713
-        5.000000     7.805580    7.805930    7.804704
-        6.670000  1269.792131  649.526642  461.718705
-        7.000000    19.825115   19.941105   20.060625
-        """
-        # Initialize the class
-        xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
-
-        # Get cls attributes using the available information
-        return xs.calc_T(T, *args, algorithm="alpha0", inplace=inplace, **kwargs)
-
     def interp_Ein(self, Ein: [float, np.ndarray], T: [float, Iterable] = None,
                    kind: str = "slinear", bounds_error: bool = True) -> [pd.Series, pd.DataFrame]:
         """
@@ -1078,8 +994,12 @@ class Xs:
         # Get the new incident energies to calculate
         Ein = np.unique(Ein)
 
-        # Select the temperatures to interpolate and the xs data:
+        # Select the temperatures to interpolate:
         Tinterp = self.data.columns if T is None else self.get_Tinterp(T)
+        if Tinterp.empty:
+            raise ValueError("The temperatures are not in the object")
+
+        # Get the xs data to interpolate:
         xsInterpData = self.data.loc[::, Tinterp]
 
         # Interpolate the data

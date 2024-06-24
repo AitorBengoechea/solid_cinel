@@ -754,6 +754,8 @@ class Xs:
 
         # Calculate the cross section for the new temperatures
         xsTValues = self._compute(Tnew, *args, **kwargs).T
+
+        # Get the output data in the corresponding format
         xsT = self.get_output(xsTValues, T=Tnew)
 
         return self.update_data(xsT, inplace)
@@ -812,6 +814,7 @@ class Xs:
         66.436310    85.621850    90.534332   114.828045
         80.731840    39.201520    40.746929    29.811032
         89.051940     9.208071     9.213771     9.226450
+
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="sct").data
@@ -844,7 +847,7 @@ class Xs:
         7.000000    19.825115   19.893739   20.039076
         """
         # Get the new incident energies to calculate
-        EinGrid = self.get_Eincalc(Ein)
+        EinGrid = self.get_EinCalc(Ein)
         if EinGrid.size == 0:
             warnings.warn("All the incident energies are already calculated")
             return self
@@ -1012,12 +1015,22 @@ class Xs:
     def interp_Ein(self, Ein: [float, np.ndarray], T: [float, Iterable] = None,
                    kind: str = "slinear", bounds_error: bool = True) -> [pd.Series, pd.DataFrame]:
         """
-        Interpolate Xs objet to a new Ein
+        Interpolate Xs objet to a new Ein. If T is provided, the interpolation
+        is done for the selected temperatures.
 
         Parameters
         ----------
         Ein: float, np.ndarray
             New Ein grid
+        T: float, Iterable, optional
+            The temperatures to interpolate. If not provided, all the
+            temperatures are interpolated.
+        kind: str, optional
+            The kind of interpolation to use. The options are:
+            - "linear": Linear interpolation
+            - "slinear": Spline interpolation of first degree
+            - "quadratic": Quadratic interpolation
+            - "cubic": Cubic interpolation
 
         Returns
         -------
@@ -1038,40 +1051,42 @@ class Xs:
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs.from_sigma1(T, M, xsSmall, xs0Kcomplete=xs0K)
+        >>> xs.interp_Ein([3.0, 4.5])
+        T         0         100       300
+        Ein
+        3.0  8.783659  8.784881  8.784565
+        4.5  8.143778  8.144254  8.144288
+
         >>> xs.interp_Ein([3.0], T=0)
         Ein
         3.0    8.783659
         Name: 0, dtype: float64
+
         >>> xs.interp_Ein([3.0, 4.5], T=100)
         Ein
         3.0    8.784881
         4.5    8.144254
         Name: 100, dtype: float64
+
         >>> xs.interp_Ein([3.0])
         T
         0      8.783659
         100    8.784881
         300    8.784565
         Name: 3.0, dtype: float64
-        >>> xs.interp_Ein([3.0, 4.5])
-        T         0         100       300
-        Ein
-        3.0  8.783659  8.784881  8.784565
-        4.5  8.143778  8.144254  8.144288
         """
         # Get the new incident energies to calculate
         Ein = np.unique(Ein)
-        def interpolate_row(x):
-            return interpolation(x, Ein, kind=kind, bounds_error=bounds_error)
+
+        # Select the temperatures to interpolate and the xs data:
+        Tinterp = self.data.columns if T is None else self.get_Tinterp(T)
+        xsInterpData = self.data.loc[::, Tinterp]
 
         # Interpolate the data
-        if T is None:
-            xsInterp = self.data.apply(interpolate_row)
-            return self.get_output(xsInterp, Ein=Ein)
-        else:
-            Tinterp = self.get_Tinterp(T)
-            xsInterp = self.data.loc[::, Tinterp].apply(interpolate_row)
-            return self.get_output(xsInterp, Ein=Ein, T=Tinterp)
+        xsInterp = xsInterpData.apply(lambda xsT: interpolation(xsT, Ein, kind=kind, bounds_error=bounds_error))
+
+        # Get the output data in the appropriate format
+        return self.get_output(xsInterp, T=T, Ein=Ein)
 
     @staticmethod
     def get_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> pd.DataFrame:

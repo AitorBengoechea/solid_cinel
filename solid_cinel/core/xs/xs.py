@@ -77,7 +77,7 @@ class Xs:
         self.M = M
 
         # Set the temperature
-        temperatures = self.check_T(temperatures)
+        temperatures = self.check_InputValues(temperatures)
 
         # Set the data style and erase the duplicated columns
         data_frame = pd.DataFrame(*args, **kwargs)
@@ -154,25 +154,7 @@ class Xs:
             return Xs(self.M, dataNew.columns, dataNew)
 
     @staticmethod
-    def check_T(temperatures: Union[float, Iterable[float]]) -> Iterable:
-        """
-        Check the temperature input
-
-        Parameters
-        ----------
-        temperatures: Union[float, Iterable[float]]
-            The temperature in K
-
-        Returns
-        -------
-        Union[float, Iterable[float]]
-            The temperature in K
-        """
-        if isinstance(temperatures, (int, float)):
-            temperatures = [temperatures]
-        return temperatures
-
-    def get_Eincalc(self, Ein: [float, Iterable[float]]):
+    def check_InputValues(input: [float, Iterable[float]]) -> Iterable:
         """
         Check the incident energy input
 
@@ -186,13 +168,43 @@ class Xs:
         Union[float, Iterable[float]]
             The incident energy in eV
         """
-        if isinstance(Ein, (int, float)):
-            Ein = pd.Index([Ein])
-        elif hasattr(Ein, "__len__"):
-            Ein = pd.Index(Ein)
-        elif not all(isinstance(e, (int, float)) for e in Ein):
-            raise TypeError("All incident energies must be int or float")
-        return Ein.difference(self.data.index).values
+        if hasattr(input, "__len__"):
+            return input
+        elif isinstance(input, (int, float)):
+            return [input]
+        elif not all(isinstance(e, (int, float)) for e in input):
+            raise TypeError("All input values must be int or float")
+
+    def get_EinCalc(self, Ein: [float, Iterable[float]]) -> pd.Index:
+        """
+        Check the incident energy input
+
+        Parameters
+        ----------
+        Ein: Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Returns
+        -------
+        Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> Ein = [1.0, 3.0]
+        >>> Xs(M, 0, xs0K).get_EinCalc(Ein)
+        Float64Index([3.0], dtype='float64')
+        """
+        EinNew = pd.Index(self.check_InputValues(Ein))
+        return EinNew.difference(self.data.index)
 
     def get_Tcalc(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
         """
@@ -220,10 +232,41 @@ class Xs:
         >>> M = 238.05077040419212
         >>> T = 300
         >>> Xs(M, 0, xs0K).get_Tcalc(T)
-        Index([300], dtype='int64')
+        Int64Index([300], dtype='int64')
         """
-        Tnew = pd.Index(self.check_T(temperatures))
+        Tnew = pd.Index(self.check_InputValues(temperatures))
         return Tnew.difference(self.data.columns)
+
+    def get_EinInterp(self, Ein: [float, Iterable[float]]) -> pd.Index:
+        """
+        Get from the new incident energies, the energies already in the object
+
+        Parameters
+        ----------
+        Ein: Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Returns
+        -------
+        Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> Ein = [1.0, 3.0]
+        >>> Xs(M, 0, xs0K).get_EinInterp(Ein)
+        Float64Index([1.0], dtype='float64')
+        """
+        EinNew = pd.Index(self.check_InputValues(Ein))
+        return self.data.index.intersection(EinNew)
 
     def get_Tinterp(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
         """
@@ -256,9 +299,9 @@ class Xs:
         >>> M = 238.05077040419212
         >>> T = [0, 300]
         >>> Xs(M, 0, xs0K).get_Tinterp(T)
-        Index([0], dtype='int64')
+        Int64Index([0], dtype='int64')
         """
-        Tnew = pd.Index(self.check_T(temperatures))
+        Tnew = pd.Index(self.check_InputValues(temperatures))
         return self.data.columns.intersection(Tnew)
 
 
@@ -350,8 +393,8 @@ class Xs:
             The output data in the corresponding format
         """
         # Check the temperature and incident energy
-        T_ = self.data.columns if T is None else pd.Index(self.check_T(T), name="T")
-        Ein_ = self.data.index if Ein is None else pd.Index(self.check_T(Ein), name="Ein")
+        T_ = self.data.columns if T is None else pd.Index(self.check_InputValues(T), name="T")
+        Ein_ = self.data.index if Ein is None else pd.Index(self.check_InputValues(Ein), name="Ein")
 
         # Return the output data
         if len(T_) == 1:
@@ -859,7 +902,7 @@ class Xs:
         xsEinCalc = self.get_output(xsEinValuesCalc, Ein=EinGrid, T=temp)
 
         return self.update_data(xsEin.join(xsEinCalc), inplace, axis=0)
-                 
+
 
     @classmethod
     def from_sigma1(cls, T: float, M: float, xs0Kshort: pd.Series,

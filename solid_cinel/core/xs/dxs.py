@@ -140,7 +140,7 @@ class Dxs:
         transferFunc = TransferFunc.from_sigma1(Ein, M, T, Eout).data
 
         # Get the differential cross section:
-        dxs = transferFunc * cls.interp_xs0K(xs0K, Eout)
+        dxs = transferFunc * cls.interp_xs0K(xs0K, transferFunc.index.values)
 
         return cls(Ein, T, M, dxs)
 

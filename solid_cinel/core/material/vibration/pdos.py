@@ -500,8 +500,8 @@ class Tpdos:
         0.0032    0.657892
         Name: rho, dtype: float64
         """
-        dE_index = pd.Index(self.beta.get_dE(self.T).round(10), name="dE")
-        return Epdos(self.data.values.copy(), index=dE_index.round(20))
+        dE_indexValues = self.beta.get_dE(self.T).round(20)
+        return Epdos(self.data.values.copy(), index=pd.Index(dE_indexValues.round(10), name="dE"))
 
 
 class Epdos:
@@ -947,11 +947,11 @@ class Npdos:
         >>> folder = "../../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> npdos.get_Tnew([300])
-        Index([], dtype='int64')
+        Int64Index([], dtype='int64')
         >>> npdos.get_Tnew(200)
-        Index([200], dtype='int64')
+        Int64Index([200], dtype='int64')
         >>> npdos.get_Tnew([600, 200])
-        Index([200, 600], dtype='int64')
+        Int64Index([200, 600], dtype='int64')
         """
         Tnew = pd.Index(self.check_list(temperatures))
         return Tnew.difference(self.data.columns).sort_values()

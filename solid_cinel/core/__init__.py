@@ -1,5 +1,4 @@
 from .cinematic import *
-from .material import *
 from .scattering_function import *
 from .material import *
 from .xs import *

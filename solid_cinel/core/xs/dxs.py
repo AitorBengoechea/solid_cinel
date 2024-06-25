@@ -223,6 +223,24 @@ class Dxs:
         2.12032     0.311053
         2.16036     0.005082
         dtype: float64
+
+        # Using the Short Collision Time model:
+        >>> from solid_cinel.core.material.vibration import Pdos
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> Dxs.from_alpha(xs0K, alpha, Ein, M, T, Eout, pdos, model="sct").data.iloc[::100]
+        Eout
+        1.80000     0.000312
+        1.84004     0.035241
+        1.88008     1.320349
+        1.92012    16.416150
+        1.96016    67.719720
+        2.00020    92.676130
+        2.04024    42.007690
+        2.08028     6.317055
+        2.12032     0.315203
+        2.16036     0.005216
+        dtype: float64
         """
         # Get the transfer function:
         transferFunc = TransferFunc.from_alpha(alpha, Ein, M, T, Eout, *args,
@@ -314,13 +332,46 @@ class Dxs:
         2.12032     0.306710
         2.16036     0.004950
         dtype: float64
+
+        # Using the Short Collision Time model:
+        >>> from solid_cinel.core.material.vibration import Pdos
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::100]
+        Eout
+        1.80000     0.000299
+        1.84004     0.034323
+        1.88008     1.301847
+        1.92012    16.328835
+        1.96016    67.714845
+        2.00020    92.831027
+        2.04024    42.003188
+        2.08028     6.283015
+        2.12032     0.310753
+        2.16036     0.005079
+        dtype: float64
+
+        # Using the Phonon Density of States model:
+        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos").data.iloc[::100]
+        Eout
+        1.80000     0.005152
+        1.84004     0.112088
+        1.88008     1.741582
+        1.92012    15.942947
+        1.96016    66.211564
+        2.00020    95.747483
+        2.04024    41.058942
+        2.08028     6.141493
+        2.12032     0.418065
+        2.16036     0.016800
+        dtype: float64
         """
         # Calculate alpha0 values from the scattering function:
         alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
-                                     model= model, **kwargs).alpha0
+                                     model=model, **kwargs).alpha0
 
         # Get dxs based on the alpha0:
-        return cls.from_alpha(xs0K, alpha0, Ein, M, T, Eout, theta, *args, model= model, **kwargs)
+        return cls.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, model=model, **kwargs)
 
     @classmethod
     def from_theta(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -512,6 +563,41 @@ class Dxs:
         2.08028    10.971388
         2.12032     2.919831
         2.16036     0.643487
+        dtype: float64
+
+        # Using the Short Collision Time model:
+        >>> from solid_cinel.core.material.vibration import Pdos
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
+        >>> dxs.data.iloc[::100]
+        Eout
+        1.80000     0.776211
+        1.84004     3.249951
+        1.88008    10.476815
+        1.92012    26.585995
+        1.96016    54.453402
+        2.00020    91.615111
+        2.04024    34.517809
+        2.08028    11.011204
+        2.12032     2.940973
+        2.16036     0.650950
+        dtype: float64
+
+        # Using the Phonon Density of States model:
+        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos")
+        >>> dxs.data.iloc[::100]
+        Eout
+        1.80000     1.171084
+        1.84004     3.942164
+        1.88008    11.189753
+        1.92012    26.706945
+        1.96016    53.726842
+        2.00020    80.755420
+        2.04024    34.121072
+        2.08028    10.825798
+        2.12032     2.897511
+        2.16036     0.652177
         dtype: float64
         """
         mu = np.cos(np.deg2rad(theta))

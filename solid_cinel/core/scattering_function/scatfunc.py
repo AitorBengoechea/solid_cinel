@@ -641,9 +641,6 @@ class TransferFunc:
         """
         pdf_ = pd.Series(pdf).sort_index()
 
-        # Erase the rows with all zeros
-        pdf_ = pdf_[pdf_ != 0]
-
         # Set index name:
         pdf_.index.name = "Eout"
 

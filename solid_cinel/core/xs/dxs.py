@@ -145,6 +145,98 @@ class Dxs:
         return cls(Ein, T, M, dxs)
 
     @classmethod
+    def from_alpha(cls, xs0K: pd.Series, alpha: float, Ein: float, M: float,
+                   T: float, Eout: np.ndarray, *args, model: str = "fgm", **kwargs):
+        """
+        Generate the Differential xs for elastic scattering from the
+        S(alpha, beta) tables distribution
+
+        Parameters
+        ----------
+        xs0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        model : str
+            The model used to calculate the S(alpha, beta) distribution. The available models are:
+                - "fgm": Free Gas Model (default)
+                - "sct": Short Collision Time
+                - "pdos": Phonon Density of States
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        Dxs
+            Differential cross section for elastic scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> M = 238.05077040419212
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> alpha = Ein / (kb * T) / M
+
+        # alpha0 algorithm:
+        >>> Dxs.from_alpha(xs0K, alpha, Ein, M, T, Eout, model="fgm").data.iloc[::100]
+        Eout
+        1.80000     0.000299
+        1.84004     0.034346
+        1.88008     1.303107
+        1.92012    16.344437
+        1.96016    67.757179
+        2.00020    92.829654
+        2.04024    42.029652
+        2.08028     6.289029
+        2.12032     0.311053
+        2.16036     0.005082
+        dtype: float64
+        """
+        # Get the transfer function:
+        transferFunc = TransferFunc.from_alpha(alpha, Ein, M, T, Eout, *args,
+                                               model=model, **kwargs).data
+
+        # Get the recoil energy:
+        recoil = alpha * kb * T
+
+        # Get the differential cross section:
+        dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
+
+        return cls(Ein, T, M, dxs)
+
+    @classmethod
     def from_alpha0(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
                    theta: np.ndarray, *args, model: str = "fgm", **kwargs):
         """
@@ -165,6 +257,8 @@ class Dxs:
             Temperature of the material in K
         Eout : np.ndarray, (N,)
             The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
         model : str
             The model used to calculate the S(alpha, beta) distribution. The available models are:
                 - "fgm": Free Gas Model (default)
@@ -225,17 +319,8 @@ class Dxs:
         alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
                                      model= model, **kwargs).alpha0
 
-        # Get the transfer function:
-        transferFunc = TransferFunc.from_alpha(alpha0, Ein, M, T, Eout, *args,
-                                               model=model, **kwargs).data
-
-        # Get the recoil energy:
-        recoil = alpha0 * kb * T
-
-        # Get the differential cross section:
-        dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
-
-        return cls(Ein, T, M, dxs)
+        # Get dxs based on the alpha0:
+        return cls.from_alpha(xs0K, alpha0, Ein, M, T, Eout, theta, *args, model= model, **kwargs)
 
     @classmethod
     def from_theta(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,

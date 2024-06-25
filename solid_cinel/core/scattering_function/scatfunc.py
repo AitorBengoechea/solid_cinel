@@ -856,10 +856,51 @@ class TransferFunc:
         -------
         TransferFunc
             Transfer function using S(alpha, -beta) tables
+
+        Examples
+        --------
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> alpha = Ein / M / (kb * T)
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> TransferFunc.from_alpha(alpha, Ein, M, T, Eout, model="fgm").data.loc[Eout_test].round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.006646
+        7.0439    1.209391
+        7.2000    5.061384
+        7.3157    0.716275
+        7.4480    0.003292
+        dtype: float64
+
+        >>> TransferFunc.from_alpha(alpha, Ein, M, T, Eout, pdos, model="sct").data.loc[Eout_test].round(6)
+        Eout
+        6.7554    0.000000
+        6.9050    0.006791
+        7.0439    1.213667
+        7.2000    5.054144
+        7.3157    0.716771
+        7.4480    0.003338
+        dtype: float64
+
+        >>> TransferFunc.from_alpha(alpha, Ein, M, T, Eout, pdos, model="pdos").data.loc[Eout_test].round(6)
+        Eout
+        6.7554    0.000003
+        6.9050    0.009647
+        7.0439    1.196693
+        7.2000    5.103854
+        7.3157    0.705293
+        7.4480    0.003823
+        dtype: float64
         """
         # Get the S(alpha, -beta) values to the given alpha:
-        sab = Sab.from_model(alpha, Beta.from_default(T), *args, model=model,
-                              **kwargs).full
+        sab = Sab.from_model(alpha, Beta.from_default(T), T, *args,
+                             model=model, **kwargs).full
 
         # Interpolate to the outgoing energy grid:
         EoutCalc = Ein + sab.index.values * kb * T

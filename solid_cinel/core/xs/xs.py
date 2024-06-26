@@ -9,6 +9,7 @@ import numba as nb
 from numba import prange
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
+from solid_cinel.core.scattering_function.scatfunc import ScatFunc
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.generic import interpolation, trapz_parallel
@@ -349,16 +350,9 @@ class Xs:
             self.check_InputValues(T), name="T")
         Ein_ = self.data.index if Ein is None else pd.Index(
             self.check_InputValues(Ein), name="Ein")
+        return pd.DataFrame(data, index=Ein_, columns=T_)
 
-        # Return the output data
-        if len(T_) == 1:
-            return pd.Series(data.squeeze(), index=Ein_, name=T_[0])
-        elif len(Ein_) == 1:
-            return pd.Series(data.squeeze(), index=T_, name=Ein_[0])
-        else:
-            return pd.DataFrame(data, index=Ein_, columns=T_)
-
-    def get_EinTcomb(self, Tnew: Iterable, EinGrid: Iterable = None) -> list:
+    def get_EinTcomb(self, Tnew: Iterable, EinGrid: Iterable) -> list:
         """
         Get the incident energy and temperature combinations
 
@@ -387,23 +381,17 @@ class Xs:
         >>> M = 238.05077040419212
         >>> xs = Xs(M, 0, xs0K.iloc[0:10000:5000], xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
-        >>> xs.get_EinTcomb(Tnew)
-        [(300, 1e-05), (300, 97.56808), (100, 1e-05), (100, 97.56808)]
-
         >>> xs.get_EinTcomb(Tnew, np.array([1, 2, 3]))
         [(300, 1), (300, 2), (300, 3), (100, 1), (100, 2), (100, 3)]
 
         >>> xs.get_EinTcomb(Tnew, np.array([[1, 2], [3, 4]]))
         [(300, 1), (300, 2), (100, 3), (100, 4)]
         """
-        if hasattr(EinGrid, "__len__"):
-            if len(EinGrid.shape) == 2:
-                N, M = EinGrid.shape[0], EinGrid.shape[1]
-                return [(Tnew[i], EinGrid[i, j]) for i in range(N) for j in range(M)]
-            else:
-                return [(T, Ein) for T in Tnew for Ein in EinGrid]
+        if len(EinGrid.shape) == 2:
+            N, M = EinGrid.shape[0], EinGrid.shape[1]
+            return [(Tnew[i], EinGrid[i, j]) for i in range(N) for j in range(M)]
         else:
-            return [(T, Ein) for T in Tnew for Ein in self.data.index]
+            return [(T, Ein) for T in Tnew for Ein in EinGrid]
 
     def _compute_sigma1(self, Tnew: Iterable, EinGrid: [Iterable, None]) -> list:
         """
@@ -437,7 +425,8 @@ class Xs:
 
     @staticmethod
     def _calc_alpha0(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
-                     *args, **kwargs) -> np.ndarray:
+                     *args, theta: np.ndarray = np.arange(1, 181, 40),
+                     **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -452,6 +441,8 @@ class Xs:
             The mass of the nucleus in amu
         T: float
             The temperature in K
+        theta: np.ndarray
+            The scattering angle in degrees. The default is np.arange(0, 181, 1).
         model: str, optional
             The model to use for the calculation. The options are:
             - "fgm": Use the free gas model (default)
@@ -499,26 +490,35 @@ class Xs:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, model="fgm").round(6)
-        array([  9.085279, 457.021623])
+        array([  9.085972, 466.29523 ])
+
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
-        array([  9.02379 , 449.805325])
+        array([  9.024954, 458.934423])
+
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
-        array([  9.084969, 461.718705])
+        array([  8.602954, 469.614362])
         """
-        # Get the alpha0 model DXS in a matrix
-        dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
+        # Generate the resutls for each incident energy
+        dxsIntegral = []
 
         # Calculate the integral for each incident energy
-        dxsIntegral = trapz_parallel(dxs.values, dxs.columns.values)
+        for Ein in EinGrid:
+            # Generate the outgoing energy grid
+            Eout = default_Eout(Ein)
 
-        # For the pdos model, the cross section is divided by the zero expansion
-        if kwargs.get("model", "fgm") != "pdos":
-            return dxsIntegral
-        else:
-            alpha = Alpha.from_recoil(EinGrid, T, M)
-            return dxsIntegral / alpha.get_expansPorcen(args[0], T)
+            # Calculate the alpha0
+            alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).alpha0
 
-    def _compute_alpha0(self, Tnew: Iterable, EinGrid: [Iterable, None], *args,
+            # Calculate the differential cross section for the outgoing energy
+            dxs = Dxs.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs)
+
+            # Append the integral to the list
+            dxsIntegral.append(dxs.integral)
+
+        # Return the results in the corresponding format
+        return np.array(dxsIntegral)
+
+    def _compute_alpha0(self, Tnew: Iterable, EinGrid: Iterable, *args,
                         **kwargs) -> list:
         """
         Calculate the elastic scattering cross section at new temperatures using
@@ -568,18 +568,15 @@ class Xs:
         # Update the arguments
         args = (self.xs0Kcomplete, self.M) + args
 
-        # Get the incident energy in the appropriate format
-        Ein = np.array(EinGrid) if hasattr(EinGrid, "__len__") else self.data.index.values
-
         # Calculation:
-        if len(Ein.shape) == 1:
-            return [Xs._calc_alpha0(T, Ein, *args, **kwargs)
+        if len(EinGrid.shape) == 1:
+            return [Xs._calc_alpha0(T, EinGrid, *args, **kwargs)
                     for T in Tnew]
         else:
-            return [Xs._calc_alpha0(Tnew[i], Ein[i], *args, **kwargs)
+            return [Xs._calc_alpha0(Tnew[i], EinGrid[i], *args, **kwargs)
                     for i in range(len(Tnew))]
 
-    def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
+    def _compute(self, Tnew: Iterable, EinGrid: Iterable, *args,
                  algorithm: str = "sigma1", **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at new temperatures using
@@ -620,34 +617,37 @@ class Xs:
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
-        >>> pd.DataFrame(xs._compute(Tnew, algorithm="sigma1"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="sigma1"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.086237  455.670534
         100  9.086957  664.556512
 
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> pd.DataFrame(xs._compute(Tnew, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
                  2.00        6.67
-        300  9.085279  457.021623
-        100  9.085305  665.465406
+        300  9.085972  466.295230
+        100  9.086873  677.372091
 
-        >>> pd.DataFrame(xs._compute(Tnew, pdos, algorithm="alpha0", model="sct"), index=Tnew, columns=EinGrid)
-                2.00        6.67
-        300  9.02379  449.805325
-        100  8.62745  606.491313
-
-        >>> pd.DataFrame(xs._compute(Tnew, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="sct"), index=Tnew, columns=EinGrid)
                  2.00        6.67
-        300  9.084969  461.718705
-        100  9.085596  649.526642
+        300  9.024954  458.934423
+        100  8.627295  617.394144
+
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
+                 2.00        6.67
+        300  8.602954  469.614362
+        100  5.835051  646.772904
         """
+        # Calculate the cross section for the new temperatures
         if algorithm == "sigma1":
             results = self._compute_sigma1(Tnew, EinGrid)
         elif algorithm == "alpha0":
             results = self._compute_alpha0(Tnew, EinGrid, *args, **kwargs)
         else:
             raise ValueError("invalid algorithm")
+
+        # Return the results in the corresponding format
         return np.array(results).reshape(len(Tnew), -1)
 
     def calc_T(self, T: float, *args, inplace: bool = False, **kwargs):
@@ -687,7 +687,7 @@ class Xs:
         >>> M = 238.05077040419212
         >>> T = [300, 100]
         >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K)
-        >>> xs.calc_T(T).data
+        >>> xs.calc_T(T, algorithm="sigma1").data
         T                  0            100          300
         Ein
         0.065625      9.411657     9.414734     9.419595
@@ -704,32 +704,32 @@ class Xs:
         >>> xs.calc_T(T, algorithm="alpha0", model="fgm").data
         T                  0            100          300
         Ein
-        0.065625      9.411657     9.411657     9.411657
-        6.717251    172.623200   282.491968   325.018633
-        11.367190     9.198383     9.198445     9.198459
-        20.912000  1893.389000  3261.783019  2646.416609
-        35.640580     0.974924     1.041483     1.180847
-        44.877660    14.089820    14.090097    14.090536
-        63.498800     5.773424     5.770805     5.765055
-        66.436310    85.621850    90.540391   114.812318
-        80.731840    39.201520    40.786065    29.838959
-        89.051940     9.208071     9.213753     9.226470
+        0.065625      9.411657     9.412320     9.411831
+        6.717251    172.623200   278.178203   325.588730
+        11.367190     9.198383     9.199947     9.200645
+        20.912000  1893.389000  3274.086386  2690.559966
+        35.640580     0.974924     1.037600     1.168565
+        44.877660    14.089820    14.090086    14.091851
+        63.498800     5.773424     5.770993     5.765728
+        66.436310    85.621850    90.209469   111.366833
+        80.731840    39.201520    41.482284    30.336060
+        89.051940     9.208071     9.213134     9.226037
 
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="sct").data
         T                  0            100          300
         Ein
-        0.065625      9.411657     9.223204     9.399438
-        6.717251    172.623200   299.146745   324.077689
-        11.367190     9.198383     9.011181     9.140079
-        20.912000  1893.389000  3174.309442  2617.259713
-        35.640580     0.974924     1.055881     1.178177
-        44.877660    14.089820    14.081661    14.068601
-        63.498800     5.773424     5.769416     5.761173
-        66.436310    85.621850    92.373607   117.360900
-        80.731840    39.201520    37.876184    29.529631
-        89.051940     9.208071     9.216752     9.224587
+        0.065625      9.411657     9.210666     9.393819
+        6.717251    172.623200   295.321974   324.819419
+        11.367190     9.198383     8.999700     9.140974
+        20.912000  1893.389000  3197.899528  2661.682276
+        35.640580     0.974924     1.049857     1.165092
+        44.877660    14.089820    14.079088    14.067462
+        63.498800     5.773424     5.769429     5.761258
+        66.436310    85.621850    91.882519   113.576108
+        80.731840    39.201520    38.528703    30.019105
+        89.051940     9.208071     9.215956     9.223668
 
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
@@ -737,12 +737,12 @@ class Xs:
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.412832    9.411996
-        2.000000     9.085342    9.085596    9.084969
-        4.000000     8.481975    8.482253    8.481713
-        5.000000     7.805580    7.805930    7.804704
-        6.670000  1269.792131  649.526642  461.718705
-        7.000000    19.825115   19.941105   20.060625
+        0.065625     9.411657    0.033061    0.224653
+        2.000000     9.085342    5.835051    8.602954
+        4.000000     8.481975    7.538804    8.460237
+        5.000000     7.805580    7.316357    7.801128
+        6.670000  1269.792131  646.772904  469.614362
+        7.000000    19.825115   19.541023   20.052674
         """
         # Get the new temperatures to calculate
         Tnew = self.get_Tcalc(T)
@@ -753,7 +753,7 @@ class Xs:
             return self
 
         # Calculate the cross section for the new temperatures
-        xsTValues = self._compute(Tnew, *args, **kwargs).T
+        xsTValues = self._compute(Tnew, self.data.index, *args, **kwargs).T
 
         # Get the output data in the corresponding format
         xsT = self.get_output(xsTValues, T=Tnew)
@@ -798,13 +798,29 @@ class Xs:
         >>> M = 238.05077040419212
         >>> T = [300, 100]
         >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K).calc_T(T)
+        >>> xs.calc_Ein(1.0, algorithm="sigma1").data
+        T                  0            100          300
+        Ein
+        0.065625      9.411657     9.414734     9.419595
+        1.000000     32.338500    32.349216    32.349415
+        6.717251    172.623200   282.096835   323.919192
+        11.367190     9.198383     9.198416     9.199371
+        20.912000  1893.389000  3257.315536  2639.268058
+        35.640580     0.974924     1.042582     1.184656
+        44.877660    14.089820    14.090012    14.090359
+        63.498800     5.773424     5.770605     5.764487
+        66.436310    85.621850    90.534332   114.828045
+        80.731840    39.201520    40.746929    29.811032
+        89.051940     9.208071     9.213771     9.226450
+
+        # Several incident energies:
         >>> Ein = [1.0, 2.0]
         >>> xs.calc_Ein(Ein, algorithm="alpha0", model="fgm").data
         T                  0            100          300
         Ein
         0.065625      9.411657     9.414734     9.419595
-        1.000000     32.338500    32.338500    32.338500
-        2.000000     56.875590    56.875590    56.875594
+        1.000000     32.338500    32.344886    32.341134
+        2.000000     56.875590    56.885412    56.879960
         6.717251    172.623200   282.096835   323.919192
         11.367190     9.198383     9.198416     9.199371
         20.912000  1893.389000  3257.315536  2639.268058
@@ -821,8 +837,8 @@ class Xs:
         T                  0            100          300
         Ein
         0.065625      9.411657     9.414734     9.419595
-        1.000000     32.338500    30.728900    32.152847
-        2.000000     56.875590    53.981171    56.485189
+        1.000000     32.338500    30.743719    32.156524
+        2.000000     56.875590    53.981044    56.492670
         6.717251    172.623200   282.096835   323.919192
         11.367190     9.198383     9.198416     9.199371
         20.912000  1893.389000  3257.315536  2639.268058
@@ -833,14 +849,16 @@ class Xs:
         80.731840    39.201520    40.746929    29.811032
         89.051940     9.208071     9.213771     9.226450
 
-        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> EinGrid = np.array([0.065625, 3.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K).calc_T(T)
-        >>> xs.calc_Ein(EinGrid, pdos, algorithm="alpha0", model="pdos").data
+        >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
         0.065625     9.411657    9.414734    9.419595
-        2.000000     9.085342    9.086957    9.086237
+        1.000000     9.230553    3.175678    6.956761
+        2.000000     9.036729    5.803824    8.556977
+        3.000000     8.842906    8.844076    8.843855
         4.000000     8.481975    8.482804    8.482893
         5.000000     7.805580    7.805703    7.805682
         6.670000  1269.792131  664.556512  455.670534
@@ -856,77 +874,22 @@ class Xs:
         temp = self.data.columns.drop([0])
 
         # Calculate the cross section for the new incident energies
-        xsEin = self.interp_Ein(EinGrid, T=0).to_frame()
+        xsEin = self.interp_Ein(EinGrid, T=0)
 
-        # Calculate the cross section for the new incident energies
+        # Interpolate the 0K data to the new incident energies:
         if temp.empty:
             return Xs(self.M, 0, xsEin, xs0Kcomplete=self.xs0Kcomplete)
 
         # Compute the calculation
-        xsEinValuesCalc = self._compute(temp, *args, EinGrid=EinGrid,
-                                        **kwargs).T
+        xsEinValuesCalc = self._compute(temp, EinGrid,  *args, **kwargs).T
 
         # Get the output data in the appropriate format
         xsEinCalc = self.get_output(xsEinValuesCalc, Ein=EinGrid, T=temp)
 
-        return self.update_data(xsEin.join(xsEinCalc), inplace, axis=0)
+        # concat the data
+        xsCalc = pd.concat([xsEin, xsEinCalc], axis=1)
 
-
-    @classmethod
-    def from_sigma1(cls, T: float, M: float, xs0Kshort: pd.Series,
-                    xs0Kcomplete: pd.Series = None, inplace: bool = False):
-        """
-        Calculate the elastic scattering cross section for a nucleus with mass
-        M at temperature T > 0.
-
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        M: float
-            The mass of the nucleus in amu
-        xs0Kshort: pd.Series
-            The 0K scattering function with the incident energy grid to use. It
-            is recommended to use a short grid to avoid the doppler broadening
-            of all the Ein.
-        xs0Kcomplete: pd.Series, optional
-            The 0K scattering function with all the data. If not provided, it
-            will be taken from the class attribute.
-
-        Returns
-        -------
-        Xs
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> xs0Kshort = xs0K.iloc[0:10000:1000]
-        >>> Xs.from_sigma1(T, M, xs0Kshort, xs0Kcomplete=xs0K).data
-        T                 0           300
-        Ein
-        0.00001      9.420892   36.244119
-        11.23650     9.239644    9.240652
-        34.70286     1.146785    1.147109
-        58.18538     9.794358    9.793941
-        80.66597     1.639337   23.581216
-        97.56808     4.895060    4.891338
-        116.82090  457.760100  931.532221
-        145.67660   39.688900   13.281879
-        165.85470   11.753670   12.634276
-        200.79510   15.734840   15.733460
-        """
-        # Initialize the class
-        xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
-        return xs.calc_T(T, algorithm="sigma1", inplace=inplace)
+        return self.update_data(xsCalc, inplace, axis=0)
 
     def interp_Ein(self, Ein: [float, np.ndarray], T: [float, Iterable] = None,
                    kind: str = "slinear", bounds_error: bool = True) -> [pd.Series, pd.DataFrame]:
@@ -966,7 +929,7 @@ class Xs:
         >>> T = [300, 100]
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs.from_sigma1(T, M, xsSmall, xs0Kcomplete=xs0K)
+        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K).calc_T(T)
         >>> xs.interp_Ein([3.0, 4.5])
         T         0         100       300
         Ein
@@ -974,22 +937,20 @@ class Xs:
         4.5  8.143778  8.144254  8.144288
 
         >>> xs.interp_Ein([3.0], T=0)
+        T           0
         Ein
-        3.0    8.783659
-        Name: 0, dtype: float64
+        3.0  8.783659
 
         >>> xs.interp_Ein([3.0, 4.5], T=100)
+        T         100
         Ein
-        3.0    8.784881
-        4.5    8.144254
-        Name: 100, dtype: float64
+        3.0  8.784881
+        4.5  8.144254
 
         >>> xs.interp_Ein([3.0])
-        T
-        0      8.783659
-        100    8.784881
-        300    8.784565
-        Name: 3.0, dtype: float64
+        T         0         100       300
+        Ein
+        3.0  8.783659  8.784881  8.784565
         """
         # Get the new incident energies to calculate
         Ein = np.unique(Ein)
@@ -1102,10 +1063,11 @@ class Xs:
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    9.103218  9.092984  9.082649  9.072035  9.061417
-        90     9.104080  9.093848  9.083530  9.072931  9.062312
-        60     9.104940  9.094711  9.084406  9.073827  9.063206
-        30     9.105556  9.095340  9.085045  9.074480  9.063851
+        120    9.105038  9.094818  9.084497  9.073897  9.063295
+        90     9.105296  9.095061  9.084744  9.074144  9.063526
+        60     9.105840  9.095607  9.085300  9.074717  9.064094
+        30     9.106301  9.096081  9.085785  9.075215  9.064583
+
         >>> mu = np.cos(np.deg2rad(theta))
         >>> T4PCF = T * (1 + mu) / 2
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
@@ -1114,19 +1076,19 @@ class Xs:
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    8.425340  8.418329  8.411313  8.404110  8.396966
-        90     8.866466  8.856143  8.845790  8.835213  8.824658
-        60     8.994640  8.984093  8.973497  8.962657  8.951797
-        30     9.035009  9.024508  9.013946  9.003133  8.992270
+        120    8.421971  8.414644  8.407319  8.399813  8.392374
+        90     8.868318  8.857919  8.847491  8.836837  8.826207
+        60     8.996254  8.985686  8.975071  8.964208  8.953327
+        30     9.036288  9.025780  9.015211  9.004388  8.993517
 
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    9.104000  9.093744  9.083411  9.072788  9.062147
-        90     9.103939  9.093695  9.083370  9.072767  9.062137
-        60     9.104621  9.094390  9.084082  9.073504  9.062880
-        30     9.105234  9.095019  9.084725  9.074162  9.063533
+        120    4.877076  4.976241  5.082816  5.177156  5.265810
+        90     6.893454  6.979544  7.058797  7.136817  7.202696
+        60     7.985702  8.045719  8.094413  8.147071  8.185316
+        30     8.426736  8.469297  8.500190  8.536056  8.558696
         """
         # Get the cosine of the angle
         mu = np.sort(np.cos(np.deg2rad(theta)))
@@ -1159,9 +1121,8 @@ class Xs:
         if Tcalc.empty:
             xsCalc = None
         else:
-            xsCalcValues = self._compute(Tcalc, *args,
-                                         EinGrid=Ein4PCF.loc[Tcalc].values,
-                                         **kwargs)
+            xsCalcValues = self._compute(Tcalc, Ein4PCF.loc[Tcalc].values,
+                                         *args, **kwargs)
             xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
 
@@ -1204,17 +1165,17 @@ def default_Eout(Ein: float) -> np.ndarray:
                              0.99 * Ein,
                              2000)
     EoutMid = np.linspace(0.99 * Ein,
-                              Ein * 1.01,
+                          Ein * 1.01,
                               3000)
     if Ein * 2 < 5.0:
         EoutGreat = np.logspace(np.log10(Ein * 1.01),
-                                 np.log10(5.0),
+                                np.log10(5.0),
                                  2000)
     else:
         EoutGreat = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(2 * Ein),
                                  2000)
-    return np.sort(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
+    return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 
 @nb.jit(nopython=True, nogil=True, parallel=True)

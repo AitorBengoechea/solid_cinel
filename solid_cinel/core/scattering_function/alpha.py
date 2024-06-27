@@ -114,11 +114,8 @@ class Alpha:
         alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
                                  num=num_grid)
 
-        # Scale the alpha grid
-        if scale:
-            return cls(alpha_grid).scale(T, **kwargs)
-        else:
-            return cls(alpha_grid)
+        # Scale the alpha grid if the scale option is True
+        return cls(alpha_grid).scale(T, **kwargs) if scale else cls(alpha_grid)
 
     @classmethod
     def from_parameters(cls, Eout: Union[Iterable, float],
@@ -160,16 +157,10 @@ class Alpha:
         >>> Alpha.from_parameters(Eout, Ein, T, M, theta).data.round(6)
         array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
-        # Check if the input parameters are iterable
-        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-        Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
-        T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
-
         # Calculate the cosine of the scattering angle
         mu = np.cos(theta * np.pi / 180)
-        mu = mu if hasattr(mu, '__len__') else np.array([mu])
 
-        return cls(get_alpha(Eout_, Ein_, T_, M, mu))
+        return cls(get_alpha(Eout, Ein, T, M, mu))
 
     @classmethod
     def from_recoil(cls, Ein: [int, float, np.ndarray] , T: float,
@@ -398,8 +389,7 @@ class Alpha:
         """
         return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
-    def expansionOrder(self, DebyeWallerCoeff: float, decimal: float,
-                        orderMax: int) -> int:
+    def expansionOrder(self, DebyeWallerCoeff: float, decimal: float, orderMax: int) -> int:
         """
         Get the expansion order for the phonon expansion method using the maximun
         alpha value and the decimal precision.
@@ -489,9 +479,8 @@ def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
     return get_alphaRecoil(Eout, Ein, M, mu) / (kb * T)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
-              mu: np.ndarray) -> np.ndarray:
+@nb.vectorize(['float64(float64, float64, float64, float64, float64)'], nopython=True, target='parallel')
+def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
     """
     Get all the posible alpha values from the parameters of the function:
     .. math::
@@ -515,12 +504,7 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     'np.ndarray', (N + M + Z + K,)
         Array containing all posible alpha values for the input parameters.
     """
-    alpha = np.zeros((len(T), len(Ein), len(mu), len(Eout)))
-    for i in prange(len(T)):
-        for j in prange(len(Ein)):
-            for ll in prange(len(mu)):
-                    alpha[i, j, ll, :] += get_alphaFromEout(Eout, Ein[j], T[i], M, mu[ll])
-    return np.unique(alpha.ravel())
+    return get_alphaFromEout(Eout, Ein, T, M, mu)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -572,13 +556,13 @@ def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
     """
     n = len(mu)
     alphaMat = np.zeros((n, len(Eout)))
-    for i in range(n):
+    for i in prange(n):
         alphaMat[i] += get_alphaFromEout(Eout, Ein, T, M, mu[i])
     return alphaMat
 
+
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float,
-                       orderMax: int) -> np.ndarray:
+def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> np.ndarray:
     """
     Get the alpha multiplication for the phonon expansion cumulative sum for
     the given alpha value and Debye Waller coefficient and the maximun order
@@ -638,7 +622,7 @@ def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float,
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
-                        decimal: int, orderMax: int) -> int:
+                       decimal: int, orderMax: int) -> int:
     """
     Get the expansion order for the phonon expansion method using the maximun
     alpha value and the decimal precision.
@@ -707,13 +691,11 @@ def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
 
     # Check the decimal precision
     nMin = np.argmax((1 - alphaCumsum) <= decimal)
-    if nMin > 0:
-        return nMin
-    else:
-        # If the decimal precision is not reached, the difference between the
-        # cumulative sum of the alpha values will identify the order of the
-        # expansion.
-        return checkDiff(alphaCumsum, decimal, orderMax)
+
+    # If the decimal precision is not reached, the difference between the
+    # cumulative sum of the alpha values will identify the order of the
+    # expansion.
+    return nMin if nMin > 0 else checkDiff(alphaCumsum, decimal, orderMax)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -782,8 +764,7 @@ def get_gressierRecoil(Ein: [int, float, np.ndarray] , T: float,
     return m / (m + M) * (Ein - 3 / 2 * kb * T)
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray],
-                   M: float) -> np.ndarray:
+def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray], M: float) -> np.ndarray:
     """
     Get the recoil energy for a given incident energy, temperature and mass.
 
@@ -819,9 +800,9 @@ def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray],
     """
     recoil_mat = np.zeros(Ein.shape)
     if isinstance(T, (int, float)):
-        for i in range(Ein.shape[0]):
+        for i in prange(Ein.shape[0]):
             recoil_mat[i] += get_gressierRecoil(Ein[i], T, M)
     else:
-        for i in range(Ein.shape[0]):
+        for i in prange(Ein.shape[0]):
             recoil_mat[i] += get_gressierRecoil(Ein[i], T[i], M)
     return recoil_mat

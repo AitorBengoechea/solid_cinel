@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import TransferFunc, ScatFunc
-from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_alphaFromEout, get_alphaMat
+from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_alpha, get_alphaMat
 from solid_cinel.core.generic import integrate, reshift, interpolation
 import os
 from typing import Iterable
@@ -454,7 +454,7 @@ class Dxs:
                                                 model= model, **kwargs).data
 
         # Get the recoil energy:
-        recoil = get_alphaFromEout(Ein, T, M, Eout, np.cos(np.deg2rad(theta)))
+        recoil = get_alpha(Ein, T, M, Eout, np.cos(np.deg2rad(theta)))
         recoil *= kb * T
 
         # Get the differential cross section:
@@ -640,103 +640,6 @@ class Dxs:
             return interpolation(xs0K, Eout, values=True)
         else:
             return interpolation(xs0K, Eout + recoil, values=True)
-
-
-
-    @staticmethod
-    def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
-                   **kwargs) -> pd.DataFrame:
-        """
-        Get the Dxs function for the 0K cross section
-
-        Parameters
-        ----------
-        xs0K : pd.Series, (Z,)
-            0K xs data for the given material in barns
-        Ein: np.ndarray
-            The incident energy grid in eV
-        M: float
-            The mass of the target material in amu
-        T: float
-            Temperature of the material in K
-
-        Parameters for SCT model
-        ------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-        twt: 'float', optional
-            twt for the effective temperature. For solid is 1.
-
-        Parameters for PDOS model
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        pd.DataFrame
-            The alpha0 scattering function
-
-        Examples
-        --------
-        >>> from solid_cinel.core.material.vibration import Pdos
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> index = pd.Index(Ein, name="Ein")
-        >>> T = 300
-        >>> M = 238.05077040419212
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
-        beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
-        Ein
-        6.7554  28.734670  20.108117   7.358406   1.078944        0.0
-        6.9050   4.650556   6.747923   3.490777   0.636176        0.0
-        7.0439   3.129387   4.835731   2.650856   0.514044        0.0
-        7.2000   2.566863   3.985399   2.229881   0.449221        0.0
-        7.3157   2.361360   3.634402   2.044991   0.420547        0.0
-        7.4480   2.216768   3.362471   1.896636   0.397744        0.0
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
-        beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
-        Ein
-        6.7554  28.821334  19.787290   7.292477   1.076292        0.0
-        6.9050   4.638501   6.628216   3.456548   0.633850        0.0
-        7.0439   3.117428   4.748840   2.624669   0.511817        0.0
-        7.2000   2.554504   3.913638   2.208039   0.446993        0.0
-        7.3157   2.348490   3.569032   2.025162   0.418284        0.0
-        7.4480   2.203177   3.302152   1.878482   0.395426        0.0
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
-        beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
-        Ein
-        6.7554  28.922999  22.199127  10.213472   1.734711   0.018831
-        6.9050   3.532269   6.685214   4.562669   0.982888   0.013663
-        7.0439   2.338940   4.737526   3.419771   0.784096   0.012083
-        7.2000   1.920413   3.901155   2.858675   0.679510   0.011346
-        7.3157   1.773443   3.563735   2.614582   0.633089   0.011108
-        7.4480   1.674328   3.306635   2.419227   0.596052   0.011008
-        """
-        scatfunc = TransferFunc.get_alpha0(Ein, M, T, *args, **kwargs)
-        EinGrid = Ein + (scatfunc.columns.values * kb * T)[:, np.newaxis]
-        EinGrid += get_gressierRecoil(Ein, T, M)
-        return scatfunc * interpolation(xs0K, EinGrid.T, parallel=True)
 
     @property
     def integral(self) -> float:

@@ -6,15 +6,16 @@ Python file for working with scattering functions.
 import numpy as np
 import pandas as pd
 import numba as nb
+from numba import vectorize
 from scipy.constants import physical_constants as const
-from solid_cinel.core.generic import integrate, interpolation, interp_multyParallel
+from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder, Alpha
 from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from typing import Iterable
-from math import sqrt, pi
+from math import sqrt, pi, exp
 import warnings
 
 # constants
@@ -695,10 +696,7 @@ class TransferFunc:
         37.275548    2.371152e-09
         dtype: float64
         """
-        # Outgoing energy grid in the appropriate format:
-        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-
-        return cls(Ein, T, M, sigma1(Eout_, Ein, T, M), index=Eout_)
+        return cls(Ein, T, M, sigma1(Eout, Ein, T, M), index=Eout)
 
     @classmethod
     def from_theta(cls, Ein: float, M: float, T: float, Eout: np.array,
@@ -1159,8 +1157,8 @@ class TransferFunc:
         return cdf / cdf.iloc[-1]
 
 
-@nb.jit(nopython=True, nogil=True)
-def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
+@vectorize(['float64(float64, float64, float64, float64)'], target='parallel', nopython=True)
+def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     Sigma1 function for Energy differential scattering function
     ..math::
@@ -1188,7 +1186,8 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
     >>> T = 1000
     >>> M = 238.05077040419212
-    >>> pd.Series(sigma1(Eout, Ein, T, M), index=Eout).round(6)
+    >>> transferFunc = sigma1(Eout, Ein, T, M)
+    >>> pd.Series(transferFunc, index=Eout).round(6)
     6.7554    0.000000
     6.9050    0.001153
     7.0439    0.522804
@@ -1197,16 +1196,20 @@ def sigma1(Eout: np.array, Ein: float, T: float, M: float) -> np.array:
     7.4480    0.017808
     dtype: float64
     """
+    # Define teh constants:
+    AkbT = M / (m * kb * T)
+
     # Get the negative exponetiial part:
-    expNegative = np.exp(
-        - M / (m * kb * T) * (sqrt(Ein) - np.sqrt(Eout)) ** 2)
+    expNegative = exp(- AkbT * (sqrt(Ein) - sqrt(Eout)) ** 2)
+
     # Get the positive exponetiial part:
-    expPositive = np.exp(
-        - M / (m * kb * T) * (sqrt(Ein) + np.sqrt(Eout)) ** 2)
+    expPositive = exp(- AkbT * (sqrt(Ein) + sqrt(Eout)) ** 2)
+
     # Calculate the scattering function:
-    scatfunc = 0.5 * (expNegative - expPositive) * np.sqrt(Eout) / Ein
-    scatfunc *= sqrt(M / (pi * m * kb * T))
-    return scatfunc
+    transferFunc = 0.5 * (expNegative - expPositive)
+    transferFunc *= sqrt(AkbT / pi) * sqrt(Eout) / Ein
+
+    return transferFunc
 
 
 @nb.jit(nopython=True)
@@ -1357,162 +1360,6 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 
-@nb.jit(nopython=True, nogil=True)
-def scatFuncValuesAlphaVec(Sab_mat: np.ndarray, beta: np.ndarray, Ein: float,
-                           T: float, M: float) -> (np.ndarray, np.ndarray):
-    """
-    Generate the scattering function values from a S(alpha, -beta) table based on
-    the phonon expansion model for a single angle
-
-    Parameters
-    ----------
-    Sab_mat : 'np.ndarray', (N,)
-        S(alpha, -beta) matrix values.
-    beta: 'np.ndarray', (N,)
-        Minus beta grid values.
-    Ein : 'float'
-        Incident energy in eV.
-    T : 'float'
-        Temperature in K.
-    M : 'float'
-        Mass of the target nucleus in amu.
-
-    Returns
-    -------
-    'np.ndarray', (N, 2)
-        Scattering function values for a single angle for tauN expansion.
-
-    Examples
-    --------
-    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-    >>> Ein = 7.2
-    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-    >>> T = 1000
-    >>> M = 238.05077040419212
-    >>> mu = np.cos(np.deg2rad([120]))
-    >>> beta = get_beta(Eout, Ein, T)
-    >>> alpha_mat = get_alphaFromEout(beta * kb * T + Ein, Ein, T, M, mu)
-    >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-    >>> nphonon = get_expansionOrder(alpha_mat, DebyeWallerCoeff, 1.0e-6, 5000)
-    >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
-    >>> tau1beta = pdos.beta.data
-    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
-    >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
-    >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
-    >>> pd.Series(scatFuncValues, index=EoutCalc).iloc[::200].round(6)
-    6.755400    0.036933
-    6.894059    0.381006
-    6.991813    1.027908
-    7.060847    1.470584
-    7.129778    1.569324
-    7.199108    1.238803
-    7.268142    0.716554
-    7.337073    0.307374
-    7.406107    0.098213
-    7.501782    0.012632
-    7.640440    0.000258
-    dtype: float64
-    """
-    # Scattering function values calculation:
-    scatFuncValues = np.concatenate((Sab_mat[::-1], Sab_mat[1::] * np.exp(-beta[1:])))
-
-    # Eout calculation
-    EoutCalc = Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T
-
-    # Ensure the Eout values are positive:
-    positiveMask = EoutCalc > 0
-    EoutCalc = EoutCalc[positiveMask]
-
-    # Normalization constant
-    norm = normFactor(EoutCalc, Ein, T, M)
-
-    return EoutCalc, scatFuncValues[positiveMask] * norm
-
-@nb.jit(nopython=True, nogil=True)
-def scatFuncValuesAlphaMat(sabValues: np.ndarray, beta: np.ndarray, Ein: float,
-                           T: float, M: float) -> (np.ndarray, np.ndarray):
-    """
-    Generate the scattering function from a S(alpha, -beta) table based on
-    the phonon expansion model. The scattering function is calculated for all
-    the angles and the outgoing energy grid is calculated based on the beta
-    grid.
-
-    Parameters
-    ----------
-    sabValues: 'np.ndarray', (Z, N)
-        S(alpha, -beta) for the selected alpha and beta.
-    beta: 'np.ndarray', (N,)
-        beta grid values.
-    Ein: 'float'
-        Incident energy in eV.
-    T: 'float'
-        Temperature in K.
-    M: 'float'
-        Mass of the target in amu.
-
-    Returns
-    -------
-    EoutCalc: 'np.ndarray', (N,)
-        Outgoing energy grid in eV.
-    scatFuncValues: 'np.ndarray', (Z, N)
-        Scattering function values for all the angles and Eout calculation.
-
-    Examples
-    --------
-    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-    >>> Ein = 7.2
-    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-    >>> T = 1000
-    >>> M = 238.05077040419212
-    >>> mu = np.cos(np.deg2rad([120]))
-    >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-    >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu), DebyeWallerCoeff, 1.0e-6, 5000)
-    >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
-    >>> tau1beta = pdos.beta.data
-    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> beta = get_beta(Eout, Ein, T)
-    >>> alpha_mat = get_alphaMat(beta * kb * T + Ein, Ein, T, M, mu)
-    >>> tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
-    >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
-    >>> EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
-    >>> pd.DataFrame(scatFuncValues, index=[120], columns=EoutCalc).T.iloc[::200].round(6)
-                   120
-    6.755400  0.036933
-    6.894059  0.381006
-    6.991813  1.027907
-    7.060847  1.470583
-    7.129778  1.569324
-    7.199108  1.238803
-    7.268142  0.716554
-    7.337073  0.307374
-    7.406107  0.098213
-    7.501782  0.012632
-    7.640440  0.000258
-    """
-    # Full Scattering function values calculation:
-    scatFuncValues = np.concatenate(
-        (sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)
-
-    # Eout calculation
-    EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
-
-    # Ensure the Eout values are positive:
-    positiveMask = EoutCalc > 0
-    EoutCalc = EoutCalc[positiveMask]
-
-    # Normalization constant
-    norm = normFactor(EoutCalc, Ein, T, M)
-
-    return EoutCalc, scatFuncValues[::, positiveMask] * norm
-
-
 @nb.jit(nopython=True)
 def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
                     mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
@@ -1574,102 +1421,31 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     # Get the beta grid:
     beta = get_beta(Eout, Ein, T)
 
+    # Eout calculation
+    EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
+
+    # Ensure the Eout values are positive:
+    positiveMask = EoutCalc > 0
+    EoutCalc = EoutCalc[positiveMask]
+
     # Get the number of phonon expansion:
     nphonon = tauN.shape[0]
 
     # Interpolation of tauN functions to reduce the number of calculations:
     tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
 
-    # Get the outgoing energy grid based on the beta grid:
+    # Get the alpha matrix for the scattering function with the maximun outgoing energy:
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
-
-    # Get the alpha matrix for the scattering function calculation:
     alphaMat = get_alphaMat(Eout_, Ein, T, M, mu)
 
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
     sabValues = get_SabClm(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)
-    EoutCalc, scatFuncValues = scatFuncValuesAlphaMat(sabValues, beta, Ein, T, M)
+
+    # Full Scattering function values calculation:
+    scatFuncValues = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]
+
+    # Normalization constant
+    scatFuncValues *= normFactor(EoutCalc, Ein, T, M)
 
     # Interpolation for avoiding numerical fluctuations:
     return interp_multyParallel(Eout, EoutCalc, scatFuncValues)
-
-
-@nb.jit(nopython=True)
-def get_ScatFuncClmRow(Ein: float, M: float, T: float, Eout: np.ndarray,
-                       mu: float, tauN: np.ndarray, tauNbeta: np.ndarray,
-                       DebyeWallerCoeff: float) -> np.ndarray:
-    """
-    Generate the scattering function from a S(alpha, -beta) table based on
-    the phonon expansion model.
-
-    Parameters
-    ----------
-    Ein : float
-        The incident energy of the neutron in eV
-    M : float
-        The mass of the target material in amu
-    T : float
-        Temperature of the material in K
-    Eout : np.ndarray, (N,)
-        The neutron outgoing energy grid in eV
-    mu : float
-        Cosine of the scattering angle
-    tauN : 'np.ndarray', (M, T)
-        all tau n functions in one array.
-    tauNbeta : 'np.ndarray', (M,)
-        Space between beta grid points of tau n functions.
-    DebyeWallerCoeff : float
-        Debye Waller coefficient
-
-    Returns
-    -------
-    S_diag : 'np.ndarray', (N,)
-        Scattering function values for a single angle.
-
-    Examples
-    --------
-    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-    >>> Ein = 7.2
-    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-    >>> T = 1000
-    >>> M = 238.05077040419212
-    >>> mu = np.cos(np.deg2rad(120))
-    >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-    >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu), DebyeWallerCoeff, 1.0e-6, 5000)
-    >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
-    >>> tau1beta = pdos.beta.data
-    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> sd_pdf = get_ScatFuncClmRow(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
-    >>> pd.Series(sd_pdf, index=Eout).loc[Eout_test].round(6)
-    6.7554    0.034510
-    6.9050    0.426488
-    7.0439    1.383081
-    7.2000    1.262613
-    7.3157    0.415630
-    7.4480    0.042074
-    dtype: float64
-    """
-    # Get the beta grid:
-    beta = get_beta(Eout, Ein, T)
-
-    # Get the number of phonon expansion:
-    nphonon = tauN.shape[0]
-
-    # Interpolation of tauN functions to reduce the number of calculations:
-    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
-
-    # Get the outgoing energy grid based on the beta grid:
-    Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
-
-    # Get the alpha matrix for the scattering function calculation:
-    alpha = get_alphaFromEout(Eout_, Ein, T, M, mu)
-
-    # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = get_SabClm(alpha, nphonon, tauNinterp, DebyeWallerCoeff)
-    EoutCalc, scatFuncValues = scatFuncValuesAlphaVec(sabValues, beta, Ein, T, M)
-
-    # Interpolation for avoiding numerical fluctuations:
-    return np.interp(Eout, EoutCalc, scatFuncValues)

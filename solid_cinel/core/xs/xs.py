@@ -6,7 +6,7 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange
+from numba import prange, vectorize
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc
@@ -509,11 +509,8 @@ class Xs:
             # Calculate the alpha0
             alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).alpha0
 
-            # Calculate the differential cross section for the outgoing energy
-            dxs = Dxs.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs)
-
-            # Append the integral to the list
-            dxsIntegral.append(dxs.integral)
+            # Calculate integral of the differential cross section for the outgoing energy
+            dxsIntegral.append(Dxs.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs).integral)
 
         # Return the results in the corresponding format
         return np.array(dxsIntegral)
@@ -1053,7 +1050,9 @@ class Xs:
         T4PCF = T * (1 + mu) / 2
 
         # Get the incident energy grid:
-        Ein4PCF = EinMat4PCF(Ein, Eout, mu, self.M).set_axis(T4PCF, axis=0)
+        Ein4PCF = EinMat4PCF(Ein, Eout, mu[::, np.newaxis], self.M)
+
+        # Get the output data in the appropriate format
         Eout, mu = pd.Index(Eout, name="Eout"), pd.Index(mu, name="mu")
 
         # Get the temperatures:
@@ -1065,20 +1064,17 @@ class Xs:
         else:
             kind = kwargs.pop("kind", "slinear")
             bounds = kwargs.pop("bounds_error", True)
-            xsInterpValues = self.interp_Ein(Ein4PCF.loc[Tinterp], T=Tinterp,
-                                             kind=kind, bounds_error=bounds)
+            xsInterpValues = self.interp_Ein(Ein4PCF[np.isin(T4PCF, Tinterp)], T=Tinterp, kind=kind, bounds_error=bounds)
+            # Reshape the data row wise if there are several interpolated temperatures:
             if len(Tinterp) > 1:
-                # Reshape the data row wise:
-                xsInterpValues = {T: xsInterpValues.loc[Ein4PCF.loc[T], T]
-                                  for T in Tinterp}
+                xsInterpValues = {T: xsInterpValues.loc[Ein4PCF[T4PCF == T], T] for T in Tinterp}
             xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout, axis=1)
 
         # Calculation
         if Tcalc.empty:
             xsCalc = None
         else:
-            xsCalcValues = self._compute(Tcalc, Ein4PCF.loc[Tcalc].values,
-                                         *args, **kwargs)
+            xsCalcValues = self._compute(Tcalc, Ein4PCF[np.isin(T4PCF, Tcalc)], *args, **kwargs)
             xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
 
@@ -1134,38 +1130,9 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 
-
-
-@nb.jit(nopython=True, nogil=True)
-def EinArnoRow(Ein: float, Eout: np.ndarray, mu: float,
-               M: float) -> np.ndarray:
-    """
-    Get the incident energy row for the arno model.
-
-    Parameters
-    ----------
-    Ein: float
-        The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
-        The neutron outgoing energy grid in eV
-    mu: float
-        The cosine of the neutron outgoing angle in degrees radians (0, 180]
-    M: float
-        Mass of the material in amu
-
-    Returns
-    -------
-    EinArnoRow: np.ndarray, (Z,)
-        Incident energy row for the arno model
-    """
-    muEinArno = (Eout + Ein) / 2 - Ein * mu * m / M
-    muEinArno += 0.5 * get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)
-    return muEinArno
-
-
-@nb.jit(nopython=True, nogil=True, parallel=True)
-def calc_EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                    M: float) -> np.ndarray:
+@vectorize(["float64(float64, float64, float64, float64)"], nopython=True, target="parallel")
+def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                    M: float) -> float:
     """
     Get the incident energy matrix for 4PCF model.
 
@@ -1173,43 +1140,17 @@ def calc_EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     ----------
     Ein: float
         The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
+    Eout: float
         The neutron outgoing energy grid in eV
-    mu: np.ndarray, (M,)
+    mu: float
         The cosine of the neutron outgoing angle
     M: float
         Mass of the material in amu
 
     Returns
     -------
-    Ein4PCF: np.ndarray, (M, Z)
+    Ein4PCF: float
         Incident energy matrix for 4PCF model
-    """
-    Nmu = len(mu)
-    Ein4PCF = np.zeros((Nmu, len(Eout)))
-    for i in prange(Nmu):
-        Ein4PCF[i, :] += EinArnoRow(Ein, Eout, mu[i], M)
-    return Ein4PCF
-
-def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> pd.DataFrame:
-    """
-    Get the incident energy matrix for the arno model.
-
-    Parameters
-    ----------
-    Ein: float
-        The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
-        The neutron outgoing energy grid in eV
-    mu: np.ndarray, (M,)
-        The neutron outgoing angle grid in degrees (0, 180]
-    M: float
-        Mass of the material in amu
-
-    Returns
-    -------
-    EinArno: np.ndarray, (M, Z)
-        Incident energy matrix for the arno model
 
     Examples
     --------
@@ -1217,7 +1158,8 @@ def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> pd.Dat
     >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
     >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.9])
     >>> M = 238.05077040419212
-    >>> EinMat4PCF(Ein, Eout, mu, M)
+    >>> values = EinMat4PCF(Ein, Eout, mu[::, np.newaxis], M)
+    >>> pd.DataFrame(values, index=pd.Index(mu, name="mu"), columns=pd.Index(Eout, name="Eout"))
         Eout       1.8       1.9       2.0       2.1       2.2
         mu
         -1.0  1.916519  1.966736  2.016949  2.067159  2.117367
@@ -1225,10 +1167,6 @@ def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> pd.Dat
          0.0  1.908051  1.958263  2.008474  2.058686  2.108898
          0.5  1.903825  1.954028  2.004237  2.054452  2.104671
          0.9  1.900524  1.950660  2.000847  2.051083  2.101362
-        """
-    # Calculate the incident energy matrix
-    EinValues = calc_EinMat4PCF(Ein, Eout, mu, M)
-
-    # Get the output data in the appropriate format
-    mu_, Eout_ = pd.Index(mu, name="mu"), pd.Index(Eout, name="Eout")
-    return pd.DataFrame(EinValues, index=mu_, columns=Eout_)
+    """
+    EinArno = (Eout + Ein + get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)) / 2
+    return EinArno - Ein * mu * m / M

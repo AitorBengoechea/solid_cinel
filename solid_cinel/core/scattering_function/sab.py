@@ -13,7 +13,8 @@ from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
-from math import pi
+from numba import vectorize
+from math import pi, sqrt
 from numba import prange
 import warnings
 try:
@@ -1336,8 +1337,7 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
 
 
 @nb.jit(nopython=True, nogil=True)
-def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float,
-                    ws: float) -> np.ndarray:
+def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float, ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time for a single
     alpha value
@@ -1365,8 +1365,7 @@ def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float,
 
 
 @nb.jit(nopython=True, nogil=True, parallel=True)
-def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
-               ws: float) -> np.ndarray:
+def get_SabSct(alpha: float, beta: float, Tratio: float, ws: float) -> float:
     """
     Generate S(alpha, beta) matrix using Short Collision Time:
     .. math::

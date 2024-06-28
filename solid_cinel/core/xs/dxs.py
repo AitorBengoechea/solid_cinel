@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import ScatFunc, Beta
-from solid_cinel.core.scattering_function.alpha import get_gressierRecoil
+from solid_cinel.core.scattering_function import TransferFunc, ScatFunc
+from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_alpha, get_alphaMat
 from solid_cinel.core.generic import integrate, reshift, interpolation
 import os
 from typing import Iterable
@@ -25,7 +25,7 @@ class Dxs:
     """
     Class for the differential cross section for elastic scattering
     """
-    def __init__(self, Ein: float, T: float, M: float, algorithm: str, *args, **kwargs):
+    def __init__(self, Ein: float, T: float, M: float, *args, **kwargs):
         """
         Class for the Double differential cross section for elastic scattering
 
@@ -42,15 +42,6 @@ class Dxs:
             energy grid of the scattering function is used.
         theta : np.ndarray, (M,)
             The neutron outgoing angle grid in degrees (0, 180]
-        algorithm : 'str'
-            The algorithm to use for the double differencial doppler broadened
-            elastic cross section. The available algorithms are:
-                - "sigma1": sigma1 algorithm from NJOY2016 manual
-                - "sab": S(alpha, -beta) tables for ddxs
-                - "dopush": From the chosen S(alpha, -beta) model, the
-                            distribution more similar to sigma1 is chosen and a
-                            recoil energy
-                - "courcelle": Fourier double-Laplace transform of a 4-point
         kwargs : dict
             Extra parameters for the selected algorithm
         """
@@ -59,7 +50,6 @@ class Dxs:
         self.Ein = Ein
         self.T = T
         self.M = M
-        self.algorithm = algorithm
         # The dxs data:
         self.data = pd.Series(*args, **kwargs)
 
@@ -122,7 +112,9 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -146,24 +138,27 @@ class Dxs:
         2.16036     0.020645
         dtype: float64
         """
-        scatfunction = ScatFunc.from_sigma1(Ein, M, T, Eout)
-        return cls(Ein, T, M, "sigma1", scatfunction.convolve(xs0K))
+        # Get the transfer function:
+        transferFunc = TransferFunc.from_sigma1(Ein, M, T, Eout).data
+
+        # Get the differential cross section:
+        dxs = transferFunc * cls.interp_xs0K(xs0K, transferFunc.index.values)
+
+        return cls(Ein, T, M, dxs)
 
     @classmethod
-    def from_alpha0(cls, xs0K: pd.Series, Ein: float, M: float, T: float,
-                    Eout: np.ndarray, *args, **kwargs):
+    def from_alpha(cls, xs0K: pd.Series, alpha: float, Ein: float, M: float,
+                   T: float, Eout: np.ndarray, *args, model: str = "fgm", **kwargs):
         """
-        Generate the Differential xs for elastic scattering from the most similar distribution of the S(alpha, -beta)
-        tables and sigma1 algorithm
-        ..math::
-            \frac{d\sigma_T(E)}{dE^\prime} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+        Generate the Differential xs for elastic scattering from the
+        S(alpha, beta) tables distribution
 
-        Parameters for fgm, sct and pdos models
-        ----------------------------------------
+        Parameters
+        ----------
         xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
         Ein : float
-        The incident energy of the neutron in eV
+            The incident energy of the neutron in eV
         M : float
             Mass of the material in amu
         T : float
@@ -197,60 +192,220 @@ class Dxs:
 
         Returns
         -------
+        Dxs
+            Differential cross section for elastic scattering
+
         Examples
         --------
         # 0K xs data for U238:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
         >>> T = 1000
         >>> Ein = 2.0
+        >>> M = 238.05077040419212
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> alpha = Ein / (kb * T) / M
+
+        # alpha0 algorithm:
+        >>> Dxs.from_alpha(xs0K, alpha, Ein, M, T, Eout, model="fgm").data.iloc[::100]
+        Eout
+        1.80000     0.000299
+        1.84004     0.034346
+        1.88008     1.303107
+        1.92012    16.344437
+        1.96016    67.757179
+        2.00020    92.829654
+        2.04024    42.029652
+        2.08028     6.289029
+        2.12032     0.311053
+        2.16036     0.005082
+        dtype: float64
+
+        # Using the Short Collision Time model:
+        >>> from solid_cinel.core.material.vibration import Pdos
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> Dxs.from_alpha(xs0K, alpha, Ein, M, T, Eout, pdos, model="sct").data.iloc[::100]
+        Eout
+        1.80000     0.000312
+        1.84004     0.035241
+        1.88008     1.320349
+        1.92012    16.416150
+        1.96016    67.719720
+        2.00020    92.676130
+        2.04024    42.007690
+        2.08028     6.317055
+        2.12032     0.315203
+        2.16036     0.005216
+        dtype: float64
+        """
+        # Get the transfer function:
+        transferFunc = TransferFunc.from_alpha(alpha, Ein, M, T, Eout, *args,
+                                               model=model, **kwargs).data
+
+        # Get the recoil energy:
+        recoil = alpha * kb * T
+
+        # Get the differential cross section:
+        dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
+
+        return cls(Ein, T, M, dxs)
+
+    @classmethod
+    def from_alpha0(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
+                   theta: np.ndarray, *args, model: str = "fgm", **kwargs):
+        """
+        Generate the Differential xs for elastic scattering from the most similar distribution of the S(alpha, -beta)
+        tables and sigma1 algorithm
+        ..math::
+            \frac{d\sigma_T(E)}{dE^\prime} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
+
+        Parameters for fgm, sct and pdos models
+        ----------------------------------------
+        xs0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+        The incident energy of the neutron in eV
+        M : float
+            Mass of the material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray, (M,)
+            The neutron outgoing angle grid in degrees (0, 180]
+        model : str
+            The model used to calculate the S(alpha, beta) distribution. The available models are:
+                - "fgm": Free Gas Model (default)
+                - "sct": Short Collision Time
+                - "pdos": Phonon Density of States
+
+        Parameters for sct
+        ------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+
+        Parameters for pdos
+        -------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        decimal: 'float'
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int'
+            Maximun expansion order. The default is 5000.
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> theta = np.arange(1, 180, 1)
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
 
         # alpha0 algorithm:
-        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, model="fgm").data.iloc[::100]
+        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::100]
         Eout
-        1.80000     0.000127
-        1.84004     0.020090
-        1.88008     0.977898
-        1.92012    14.653507
-        1.96016    67.580929
-        2.00020    95.914649
-        2.04024    41.890462
-        2.08028     5.630375
-        2.12032     0.232929
-        2.16036     0.002964
+        1.80000     0.000287
+        1.84004     0.033460
+        1.88008     1.285044
+        1.92012    16.258397
+        1.96016    67.751989
+        2.00020    92.982545
+        2.04024    42.024971
+        2.08028     6.255488
+        2.12032     0.306710
+        2.16036     0.004950
+        dtype: float64
+
+        # Using the Short Collision Time model:
+        >>> from solid_cinel.core.material.vibration import Pdos
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::100]
+        Eout
+        1.80000     0.000299
+        1.84004     0.034323
+        1.88008     1.301847
+        1.92012    16.328835
+        1.96016    67.714845
+        2.00020    92.831027
+        2.04024    42.003188
+        2.08028     6.283015
+        2.12032     0.310753
+        2.16036     0.005079
+        dtype: float64
+
+        # Using the Phonon Density of States model:
+        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos").data.iloc[::100]
+        Eout
+        1.80000     0.005152
+        1.84004     0.112088
+        1.88008     1.741582
+        1.92012    15.942947
+        1.96016    66.211564
+        2.00020    95.747483
+        2.04024    41.058942
+        2.08028     6.141493
+        2.12032     0.418065
+        2.16036     0.016800
         dtype: float64
         """
-        scatfunction = ScatFunc.from_alpha0(Ein, M, T, Eout, *args, **kwargs)
-        recoil = get_gressierRecoil(Ein, T, M)
-        if Ein + recoil <= 0:
-            raise ValueError("The incident energy is lower than the recoil energy")
-        else:
-            EoutShift = Eout + recoil
-        return cls(Ein, T, M, "alpha0", scatfunction.convolve(xs0K, Exs=EoutShift))
+        # Calculate alpha0 values from the scattering function:
+        alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
+                                     model=model, **kwargs).alpha0
 
-    @staticmethod
-    def get_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float, *args,
-                   **kwargs) -> pd.DataFrame:
+        # Get dxs based on the alpha0:
+        return cls.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, model=model, **kwargs)
+
+    @classmethod
+    def from_theta(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
+                   theta: float, *args, model: str = "fgm", **kwargs):
         """
-        Get the Dxs function for the 0K cross section
+        Generate the Differential xs for elastic scattering from the scattering
+        function angle distribution
 
         Parameters
         ----------
         xs0K : pd.Series, (Z,)
             0K xs data for the given material in barns
-        Ein: np.ndarray
-            The incident energy grid in eV
-        M: float
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
             The mass of the target material in amu
-        T: float
+        T : float
             Temperature of the material in K
+        Eout : np.array
+            The neutron outgoing energy grid in eV
+        theta : float
+            The angle of the scattering in degrees
+        model : str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
 
         Parameters for SCT model
         ------------------------
@@ -265,70 +420,234 @@ class Dxs:
         -------------------------
         pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
+        nphonon: 'int', optional
+            Phonon expansion order. The default is None and the order is
+            calculated using the get_expansionOrder function.
+        decimal: 'float', optional
             Decimal precision for the calculation of the expansion order.
             The default is 1.0e-6.
-        order_max: 'int'
+        order_max: 'int', optional
             Maximun expansion order. The default is 5000.
+        threshold: 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions
 
         Returns
         -------
-        pd.DataFrame
-            The alpha0 scattering function
+        TransferFunc
+            Double differential scattering scattering function
 
         Examples
         --------
-        >>> from solid_cinel.core.material.vibration import Pdos
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> Ein = 7.2
+        >>> Eout = np.array([7.10, 7.15, 7.2, 7.25, 7.3157])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = 15
 
+        # Using the Free Gas Model:
+        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        Eout
+        7.1000     0.000030
+        7.1500     0.851083
+        7.2000    21.126578
+        7.2500     0.489767
+        7.3157     0.000000
+        Name: 15, dtype: float64
+        """
+        # Get the transfer function:
+        transferFunc = TransferFunc.from_theta(Ein, M, T, Eout, theta, *args,
+                                                model= model, **kwargs).data
+
+        # Get the recoil energy:
+        recoil = get_alpha(Ein, T, M, Eout, np.cos(np.deg2rad(theta)))
+        recoil *= kb * T
+
+        # Get the differential cross section:
+        dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
+
+        return cls(Ein, T, M, dxs)
+
+    @classmethod
+    def from_sab(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
+                 theta: np.ndarray, *args, model: str = "fgm", recoil: bool = True,
+                 **kwargs):
+        """
+        Generate the Differential xs for elastic scattering from the scattering
+        function angle distribution
+
+        Parameters
+        ----------
+        xs0K : pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float
+            The mass of the target material in amu
+        T : float
+            Temperature of the material in K
+        Eout : np.ndarray
+            The neutron outgoing energy grid in eV
+        theta : np.ndarray
+            Grid of angle of the scattering angle
+        model: str
+            The model used to generate the S(alpha, beta) table. The available
+            models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model (Default)
+                - "sct" : Short Collision Time model
+
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        nphonon: 'int', optional
+            Phonon expansion order. The default is None and the order is
+            calculated using the get_expansionOrder function.
+        decimal: 'float', optional
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max: 'int', optional
+            Maximun expansion order. The default is 5000.
+        threshold: 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions
+
+        Examples
+        --------
         # 0K xs data for U238:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
-        >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> index = pd.Index(Ein, name="Ein")
-        >>> T = 300
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> theta = np.arange(1, 180, 1)
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
-        beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
-        Ein
-        6.7554  28.734670  20.108117   7.358406   1.078944        0.0
-        6.9050   4.650556   6.747923   3.490777   0.636176        0.0
-        7.0439   3.129387   4.835731   2.650856   0.514044        0.0
-        7.2000   2.566863   3.985399   2.229881   0.449221        0.0
-        7.3157   2.361360   3.634402   2.044991   0.420547        0.0
-        7.4480   2.216768   3.362471   1.896636   0.397744        0.0
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
-        beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
-        Ein
-        6.7554  28.821334  19.787290   7.292477   1.076292        0.0
-        6.9050   4.638501   6.628216   3.456548   0.633850        0.0
-        7.0439   3.117428   4.748840   2.624669   0.511817        0.0
-        7.2000   2.554504   3.913638   2.208039   0.446993        0.0
-        7.3157   2.348490   3.569032   2.025162   0.418284        0.0
-        7.4480   2.203177   3.302152   1.878482   0.395426        0.0
-        >>> Dxs.get_alpha0(xs0K, Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
-        beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
-        Ein
-        6.7554  28.922999  22.199127  10.213472   1.734711   0.018831
-        6.9050   3.532269   6.685214   4.562669   0.982888   0.013663
-        7.0439   2.338940   4.737526   3.419771   0.784096   0.012083
-        7.2000   1.920413   3.901155   2.858675   0.679510   0.011346
-        7.3157   1.773443   3.563735   2.614582   0.633089   0.011108
-        7.4480   1.674328   3.306635   2.419227   0.596052   0.011008
+
+        # Using the Free Gas Model(NO RECOIL):
+        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm", recoil=False)
+        >>> dxs.data.iloc[::100]
+        Eout
+        1.80000     0.768794
+        1.84004     3.231998
+        1.88008    10.451361
+        1.92012    26.580672
+        1.96016    54.522950
+        2.00020    91.812241
+        2.04024    34.506930
+        2.08028    10.974592
+        2.12032     2.920481
+        2.16036     0.643604
+        dtype: float64
+
+
+        # Using the Free Gas Model(RECOIL):
+        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm")
+        >>> dxs.data.iloc[::100]
+        Eout
+        1.80000     0.768710
+        1.84004     3.231537
+        1.88008    10.449309
+        1.92012    26.573581
+        1.96016    54.502864
+        2.00020    91.763488
+        2.04024    34.493443
+        2.08028    10.971388
+        2.12032     2.919831
+        2.16036     0.643487
+        dtype: float64
+
+        # Using the Short Collision Time model:
+        >>> from solid_cinel.core.material.vibration import Pdos
+        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
+        >>> dxs.data.iloc[::100]
+        Eout
+        1.80000     0.776211
+        1.84004     3.249951
+        1.88008    10.476815
+        1.92012    26.585995
+        1.96016    54.453402
+        2.00020    91.615111
+        2.04024    34.517809
+        2.08028    11.011204
+        2.12032     2.940973
+        2.16036     0.650950
+        dtype: float64
+
+        # Using the Phonon Density of States model:
+        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos")
+        >>> dxs.data.iloc[::100]
+        Eout
+        1.80000     1.171084
+        1.84004     3.942164
+        1.88008    11.189753
+        1.92012    26.706945
+        1.96016    53.726842
+        2.00020    80.755420
+        2.04024    34.121072
+        2.08028    10.825798
+        2.12032     2.897511
+        2.16036     0.652177
+        dtype: float64
         """
-        scatfunc = ScatFunc.get_alpha0(Ein, M, T, *args, **kwargs)
-        EinGrid = Ein + (scatfunc.columns.values * kb * T)[:, np.newaxis]
-        EinGrid += get_gressierRecoil(Ein, T, M)
-        return scatfunc * interpolation(xs0K, EinGrid.T, parallel=True)
+        mu = np.cos(np.deg2rad(theta))
+        # Calculate the scattering function:
+        scatFunc = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
+                                     model= model, **kwargs)
+
+        # Get the recoil energy if needed:
+        if recoil:
+            alphaRecoil = get_alphaMat(Eout, Ein, T, M, mu) * kb * T
+            xs0Kinterp = cls.interp_xs0K(xs0K, Eout, recoil=alphaRecoil)
+            dxs = (scatFunc.data * xs0Kinterp).apply(integrate)
+        else:
+            transferFunc = scatFunc.to_transferFunc.data
+            dxs = transferFunc * cls.interp_xs0K(xs0K, Eout)
+
+        return cls(Ein, T, M, dxs)
+
+    @staticmethod
+    def interp_xs0K(xs0K: pd.Series, Eout: np.ndarray,
+                    recoil: [None, int, float] = None) -> np.ndarray:
+        """
+        Interpolate the 0K cross section to the given Eout grid
+
+        Parameters
+        ----------
+        xs0K: pd.Series, (Z,)
+            0K xs data for the given material in barns
+        Eout: np.ndarray, (N,)
+            The neutron outgoing energy grid in eV
+        recoil: int, float, optional
+            The recoil energy of the target material in eV. The default is None.
+
+        Returns
+        -------
+        np.ndarray
+            The interpolated 0K cross section
+        """
+        if recoil is None:
+            return interpolation(xs0K, Eout, values=True)
+        else:
+            return interpolation(xs0K, Eout + recoil, values=True)
 
     @property
     def integral(self) -> float:
@@ -346,7 +665,9 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -356,12 +677,12 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # SIGMA1 algorithm:
-        >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
+        >>> float(round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
         9.09
 
         # DOPUSH algorithm:
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> round(Dxs.from_alpha0(xs0K, Ein, M, T, Eout, model="fgm").integral, 2)
+        >>> float(round(Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2))
         9.09
         """
         return integrate(self.data)
@@ -382,7 +703,9 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -391,17 +714,23 @@ class Dxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
-        >>> round(dxs.prob["upscattering"], 6)
+        >>> float(round(dxs.prob["upscattering"], 6))
         0.505184
-        >>> round(dxs.prob["downscattering"], 6)
+        >>> float(round(dxs.prob["downscattering"], 6))
         0.490636
-        >>> round(dxs.prob["Ein=Eout"], 6)
+        >>> float(round(dxs.prob["Ein=Eout"], 6))
         0.004179
         """
+        # Get the integral value:
         integral = self.integral
+
+        # Get the outgoig energy grid:
         Eout = self.data.index.values
+
+        # Get the upscattering and downscattering probabilities:
         up = integrate(self.data.loc[Eout > self.Ein]) / integral
         down = integrate(self.data.loc[Eout < self.Ein]) / integral
+
         return {"upscattering": up,  "downscattering": down, "Ein=Eout": 1.0 - up - down}
 
     @property
@@ -420,7 +749,9 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -470,7 +801,9 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -511,14 +844,18 @@ class Dxs:
         dtype: float64
         """
         # copy data to avoid changing the original data:
-        dxs = self.data
+        dxs = self.data.copy()
+
         # Check the dx:
         dx_ = check_dx(self.data, dx, 0)
+
+        # Shift the data:
         if isinstance(dx, float) or isinstance(dx, int):
             dxs = reshift(dxs, dx_)
         else:
             dxs.loc[dx_.index] = reshift(dxs.loc[dx_.index], dx_)
-        return Dxs(self.Ein, self.T, self.M, self.algorithm, dxs)
+
+        return Dxs(self.Ein, self.T, self.M, dxs)
 
 
 def check_dx(data: [pd.DataFrame, pd.Series],

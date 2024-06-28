@@ -158,16 +158,22 @@ class Beta:
         array([  0.      ,   0.515756,   1.031513,   1.547269,   2.063025,
                  2.578782,   3.094538,  12.280683,  48.735922, 193.408635])
         """
+        # Get the first half of the grid:
         mid_beta = mid_E / (kb * T)
-        max_beta = thermal_threshold / (kb * T)
         first_half = np.linspace(0, mid_beta,
                                  num=int(num_grid * 0.6),
                                  endpoint=False)
+
+        # Get the second half of the grid:
+        max_beta = thermal_threshold / (kb * T)
         second_half = np.logspace(np.log10(mid_beta), np.log10(max_beta),
                                   num=int(num_grid * 0.4),
                                   endpoint=True)
+
+        # Concatenate the two halfs to get the full grid:
         beta_grid = np.concatenate((first_half, second_half))
 
+        # Scale the grid if needed:
         if scale:
             return cls(beta_grid).scale(T, **kwargs)
         else:
@@ -361,19 +367,25 @@ class Beta:
          0.036699    0.333710
         Name: Eout, dtype: float64
         """
+        # Get the dE grid:
         dE = pd.Series(self.get_dE(T), index=pd.Index(self.data, name="beta"))
         dE.name = "Eout"
 
+        # Get the upscattering energy grid:
         Eout_positive = Ein + dE
         if side == "upscattering":
             return Eout_positive
 
+        # Get the downscattering energy grid:
         Eout_negative = Ein - dE
         Eout_negative.index *= -1
+
+        # Remove the negative downscattering grid values:
         Eout_negative = Eout_negative[Eout_negative >= 0]
         if side == "downscattering":
             return Eout_negative
 
+        # Concatenate the two sides:
         if side == "full":
             Eout = pd.concat([Eout_negative.iloc[1::], Eout_positive]).sort_index()
             return Eout
@@ -412,7 +424,7 @@ class Beta:
 
 @nb.jit(nopython=True, cache=True)
 def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
-             T: float) -> np.ndarray:
+             T: float, abs: bool = True) -> np.ndarray:
     """
     Get the positive beta values from the parameters of the function:
     .. math::
@@ -432,8 +444,14 @@ def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
     'np.ndarray', (N,)
         Array containing all posible beta values for the input parameters.
     """
+    # Get the beta values:
     beta = (Eout - Ein) / (kb * T)
-    return np.unique(np.absolute(beta))
+
+    # Return the absolute values if needed:
+    if abs:
+        return np.unique(np.absolute(beta))
+    else:
+        return np.unique(beta)
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_absBeta(T: float) -> np.ndarray:
@@ -450,10 +468,14 @@ def default_absBeta(T: float) -> np.ndarray:
     beta: np.ndarray
         Beta grid
     """
+    # Get the first half of the grid:
     betaMid = 0.08 / (kb * T)
-    betaMax = 5.0 / (kb * T)
     betaSmall = np.linspace(0, betaMid,2000)
+
+    # Get the second half of the grid:
+    betaMax = 5.0 / (kb * T)
     beta_great = np.logspace(np.log10(betaMid), np.log10(betaMax), 1000)
+
     return np.concatenate((betaSmall, beta_great[1::]))
 
 

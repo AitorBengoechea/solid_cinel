@@ -13,6 +13,7 @@ import pandas as pd
 import numba as nb
 from numba import prange
 
+# constants
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
@@ -100,15 +101,21 @@ class Alpha:
                1.0041300e-01, 3.1397500e-01, 9.8174500e-01, 3.0697450e+00,
                9.5985550e+00, 3.0013001e+01])
         """
+        # Calculate the constant AkT
         AkT = M * kb * T / m
+
+        # Calculate the minimum alpha value
         min_alpha = min_E / 4 / AkT
+
+        # Calculate the maximum alpha value
         max_alpha = 4 * thermal_threshold / AkT
+
+        # Generate the alpha grid
         alpha_grid = np.logspace(np.log10(min_alpha), np.log10(max_alpha),
                                  num=num_grid)
-        if scale:
-            return cls(alpha_grid).scale(T, **kwargs)
-        else:
-            return cls(alpha_grid)
+
+        # Scale the alpha grid if the scale option is True
+        return cls(alpha_grid).scale(T, **kwargs) if scale else cls(alpha_grid)
 
     @classmethod
     def from_parameters(cls, Eout: Union[Iterable, float],
@@ -150,13 +157,10 @@ class Alpha:
         >>> Alpha.from_parameters(Eout, Ein, T, M, theta).data.round(6)
         array([0.001835, 0.001837, 0.001839, 0.001842, 0.001845])
         """
-        Eout_ = np.array(Eout) if hasattr(Eout, '__len__') else np.array([Eout])
-        Ein_ = np.array(Ein) if hasattr(Ein, '__len__') else np.array([Ein])
-        T_ = np.array(T) if hasattr(T, '__len__') else np.array([T])
-        mu = np.cos(theta * np.pi / 180) if hasattr(theta,
-                                                    '__len__') else np.cos(
-            np.array([theta]) * np.pi / 180)
-        return cls(get_alpha(Eout_, Ein_, T_, M, mu))
+        # Calculate the cosine of the scattering angle
+        mu = np.cos(theta * np.pi / 180)
+
+        return cls(get_alpha(Eout, Ein, T, M, mu))
 
     @classmethod
     def from_recoil(cls, Ein: [int, float, np.ndarray] , T: float,
@@ -329,20 +333,29 @@ class Alpha:
         0.105605    45.0
         Name: mu, dtype: float64
         """
+        # Get the alpha values
         alpha = self.data
+
+        # Calculate the mass ratio
         A = M / m
 
+        # Calculate the beta values
         beta = beta_grid if isinstance(beta_grid, Beta) else Beta(beta_grid)
-        E_prima = beta.get_Eout(T, Ein).values
 
-        if len(E_prima) > len(alpha):
-            E_prima = E_prima[:len(alpha)]
-        elif len(E_prima) < len(alpha):
-            alpha = alpha[:len(E_prima)]
+        # Calculate the outgoing energy grid
+        Eout = beta.get_Eout(T, Ein).values
 
-        mu = E_prima + Ein - alpha * A * kb * T
-        mu /= 2 * np.sqrt(E_prima * Ein)
+        # Cut the alpha and Eout values if they have different lengths
+        if len(Eout) > len(alpha):
+            E_prima = Eout[:len(alpha)]
+        elif len(Eout) < len(alpha):
+            alpha = alpha[:len(Eout)]
+
+        # Calculate the cosine of the scattering angle
+        mu = Eout + Ein - alpha * A * kb * T
+        mu /= 2 * np.sqrt(Eout * Ein)
         mu = np.arccos(mu[abs(mu) <= 1])
+
         return pd.Series(mu, index=Alpha(alpha[:len(mu)]).to_index, name="mu")
 
     def scale(self, T: float, therm: float = 0.0253):
@@ -376,8 +389,7 @@ class Alpha:
         """
         return Alpha(Beta(self.data).scale(T, therm=therm).data)
 
-    def expansionOrder(self, DebyeWallerCoeff: float, decimal: float,
-                        orderMax: int) -> int:
+    def expansionOrder(self, DebyeWallerCoeff: float, decimal: float, orderMax: int) -> int:
         """
         Get the expansion order for the phonon expansion method using the maximun
         alpha value and the decimal precision.
@@ -411,8 +423,7 @@ class Alpha:
         >>> alpha_grid.expansionOrder(debye_waller, 1.0e-6, 5000)
         798
         """
-        return get_expansionOrder(self.data.max(), DebyeWallerCoeff, decimal,
-                                   orderMax)
+        return get_expansionOrder(self.data.max(), DebyeWallerCoeff, decimal, orderMax)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -468,9 +479,8 @@ def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
     return get_alphaRecoil(Eout, Ein, M, mu) / (kb * T)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True, parallel=True)
-def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
-              mu: np.ndarray) -> np.ndarray:
+@nb.vectorize(['float64(float64, float64, float64, float64, float64)'], nopython=True, target='parallel')
+def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
     """
     Get all the posible alpha values from the parameters of the function:
     .. math::
@@ -494,12 +504,7 @@ def get_alpha(Eout: np.ndarray, Ein: np.ndarray, T: np.ndarray, M: np.ndarray,
     'np.ndarray', (N + M + Z + K,)
         Array containing all posible alpha values for the input parameters.
     """
-    alpha = np.zeros((len(T), len(Ein), len(mu), len(Eout)))
-    for i in prange(len(T)):
-        for j in prange(len(Ein)):
-            for ll in prange(len(mu)):
-                    alpha[i, j, ll, :] += get_alphaFromEout(Eout, Ein[j], T[i], M, mu[ll])
-    return np.unique(alpha.ravel())
+    return get_alphaFromEout(Eout, Ein, T, M, mu)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -551,13 +556,13 @@ def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
     """
     n = len(mu)
     alphaMat = np.zeros((n, len(Eout)))
-    for i in range(n):
+    for i in prange(n):
         alphaMat[i] += get_alphaFromEout(Eout, Ein, T, M, mu[i])
     return alphaMat
 
+
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float,
-                       orderMax: int) -> np.ndarray:
+def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> np.ndarray:
     """
     Get the alpha multiplication for the phonon expansion cumulative sum for
     the given alpha value and Debye Waller coefficient and the maximun order
@@ -617,7 +622,7 @@ def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float,
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
-                        decimal: int, orderMax: int) -> int:
+                       decimal: int, orderMax: int) -> int:
     """
     Get the expansion order for the phonon expansion method using the maximun
     alpha value and the decimal precision.
@@ -678,16 +683,19 @@ def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     >>> get_expansionOrder(alphaMat, debye_waller, decimal, orderMax)
     1320
     """
-    alpha_max = alpha if isinstance(alpha, (int, float)) else alpha.max()
-    alphaCumsum = get_alphaMulCumsum(alpha_max, DebyeWallerCoeff, orderMax)
-    n_min = np.argmax((1 - alphaCumsum) <= decimal)
-    if n_min > 0:
-        return n_min
-    else:
-        # If the decimal precision is not reached, the difference between the
-        # cumulative sum of the alpha values will identify the order of the
-        # expansion.
-        return checkDiff(alphaCumsum, decimal, orderMax)
+    # Get the maximun alpha value
+    alphaMax = alpha if isinstance(alpha, (int, float)) else alpha.max()
+
+    # Get the cumulative sum of the alpha values
+    alphaCumsum = get_alphaMulCumsum(alphaMax, DebyeWallerCoeff, orderMax)
+
+    # Check the decimal precision
+    nMin = np.argmax((1 - alphaCumsum) <= decimal)
+
+    # If the decimal precision is not reached, the difference between the
+    # cumulative sum of the alpha values will identify the order of the
+    # expansion.
+    return nMin if nMin > 0 else checkDiff(alphaCumsum, decimal, orderMax)
 
 
 @nb.jit(nopython=True, nogil=False, cache=True)
@@ -711,12 +719,17 @@ def checkDiff(alphaCumsum: np.ndarray, decimal: float, orderMax: int) -> int:
     n: 'int'
         Expansion order.
     """
-    alphaCumsum_diff = np.diff(alphaCumsum)
-    n = alphaCumsum_diff == 0.0
+    # Check the difference between the cumulative sum of the alpha values
+    alphaCumsumDiff = np.diff(alphaCumsum)
+    n = alphaCumsumDiff == 0.0
+
+    # If the difference is zero, the expansion order is the firts value
     if n.any():
         return np.argmax(n)
     else:
-        n = alphaCumsum_diff <= decimal
+        # If the difference is not zero, the expansion order is compare with
+        # the decimal precision
+        n = alphaCumsumDiff <= decimal
         return np.argmax(n) if n.any() else orderMax
 
 
@@ -751,8 +764,7 @@ def get_gressierRecoil(Ein: [int, float, np.ndarray] , T: float,
     return m / (m + M) * (Ein - 3 / 2 * kb * T)
 
 @nb.jit(nopython=True, nogil=False, cache=True)
-def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray],
-                   M: float) -> np.ndarray:
+def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray], M: float) -> np.ndarray:
     """
     Get the recoil energy for a given incident energy, temperature and mass.
 
@@ -788,9 +800,9 @@ def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray],
     """
     recoil_mat = np.zeros(Ein.shape)
     if isinstance(T, (int, float)):
-        for i in range(Ein.shape[0]):
+        for i in prange(Ein.shape[0]):
             recoil_mat[i] += get_gressierRecoil(Ein[i], T, M)
     else:
-        for i in range(Ein.shape[0]):
+        for i in prange(Ein.shape[0]):
             recoil_mat[i] += get_gressierRecoil(Ein[i], T[i], M)
     return recoil_mat

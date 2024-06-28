@@ -6,13 +6,14 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange
+from numba import vectorize
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
+from solid_cinel.core.scattering_function.scatfunc import ScatFunc
 from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.generic import interpolation, trapz_parallel
-from solid_cinel.core.scattering_function.alpha import Alpha, get_alphaRecoil
+from solid_cinel.core.generic import interpolation
+from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
 import warnings
 import os
 import dask.bag as db
@@ -54,7 +55,9 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
@@ -73,11 +76,18 @@ class Xs:
         165.85470   11.753670
         200.79510   15.734840
         """
+        # Set the mass of the nucleus
         self.M = M
-        temperatures = self.check_T(temperatures)
+
+        # Set the temperature
+        temperatures = self.check_InputValues(temperatures)
+
+        # Set the data style and erase the duplicated columns
         data_frame = pd.DataFrame(*args, **kwargs)
         data_frame.columns = pd.Index(temperatures, name="T")
         self.data = data_frame.loc[:, ~data_frame.columns.duplicated()]
+
+        # Set the 0K scattering function with all the data
         self.get_xs0Kcomp(xs0Kcomplete)
 
     @property
@@ -103,9 +113,12 @@ class Xs:
             The scattering function data
 
         """
+        # Set the data style
         xs_ = pd.DataFrame(xs).sort_index(axis=0).sort_index(axis=1)
         xs_.index.name = "Ein"
         xs_.columns.name = "T"
+
+        # save the data
         self._data = xs_
 
     def update_data(self, xsT: pd.DataFrame, inplace: bool, axis: int = 1):
@@ -136,31 +149,37 @@ class Xs:
                 dataNew[xsT.name] = xsT
         else:
             dataNew = pd.concat([self.data, xsT], axis=axis)
+
+        # Update the data in the object or return a new object
         if inplace:
             self.data = dataNew.sort_index(axis=axis)
         else:
             return Xs(self.M, dataNew.columns, dataNew)
 
-    @staticmethod
-    def check_T(temperatures: Union[float, Iterable[float]]) -> Iterable:
+    def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]):
         """
-        Check the temperature input
+        Get the 0K scattering function with all the data
 
         Parameters
         ----------
-        temperatures: Union[float, Iterable[float]]
-            The temperature in K
+        xs0Kcomplete: pd.Series
+            The 0K scattering function with all the data
 
         Returns
         -------
-        Union[float, Iterable[float]]
-            The temperature in K
+        pd.Series
+            The 0K scattering function with all the data
         """
-        if isinstance(temperatures, (int, float)):
-            temperatures = [temperatures]
-        return temperatures
+        if xs0Kcomplete is None:
+            if 0 in self.data.columns:
+                self.xs0Kcomplete = self.data.loc[::, 0]
+            else:
+                raise ValueError("0K data not found")
+        else:
+            self.xs0Kcomplete = xs0Kcomplete
 
-    def get_Eincalc(self, Ein: [float, Iterable[float]]):
+    @staticmethod
+    def check_InputValues(input: [float, Iterable[float]]) -> Iterable:
         """
         Check the incident energy input
 
@@ -173,14 +192,45 @@ class Xs:
         -------
         Union[float, Iterable[float]]
             The incident energy in eV
-        """ 
-        if isinstance(Ein, (int, float)):
-            Ein = pd.Index([Ein])
-        elif hasattr(Ein, "__len__"):
-            Ein = pd.Index(Ein)
-        elif not all(isinstance(e, (int, float)) for e in Ein):
-            raise TypeError("All incident energies must be int or float")
-        return Ein.difference(self.data.index).values
+        """
+        if hasattr(input, "__len__"):
+            return input
+        elif isinstance(input, (int, float)):
+            return [input]
+        elif not all(isinstance(e, (int, float)) for e in input):
+            raise TypeError("All input values must be int or float")
+
+    def get_EinCalc(self, Ein: [float, Iterable[float]]) -> pd.Index:
+        """
+        Check the incident energy input
+
+        Parameters
+        ----------
+        Ein: Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Returns
+        -------
+        Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> Ein = [1.0, 3.0]
+        >>> assert Xs(M, 0, xs0K).get_EinCalc(Ein) == pd.Index([3.0])
+        """
+        EinNew = pd.Index(self.check_InputValues(Ein))
+        return EinNew.difference(self.data.index)
 
     def get_Tcalc(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
         """
@@ -202,16 +252,49 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> Xs(M, 0, xs0K).get_Tcalc(T)
-        Index([300], dtype='int64')
+        >>> assert Xs(M, 0, xs0K).get_Tcalc(T) == pd.Index([300])
         """
-        Tnew = pd.Index(self.check_T(temperatures))
+        Tnew = pd.Index(self.check_InputValues(temperatures))
         return Tnew.difference(self.data.columns)
+
+    def get_EinInterp(self, Ein: [float, Iterable[float]]) -> pd.Index:
+        """
+        Get from the new incident energies, the energies already in the object
+
+        Parameters
+        ----------
+        Ein: Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Returns
+        -------
+        Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> os.chdir(wd)
+
+        >>> M = 238.05077040419212
+        >>> Ein = [1.0, 3.0]
+        >>> assert Xs(M, 0, xs0K).get_EinInterp(Ein) == pd.Index([1.0])
+        """
+        EinNew = pd.Index(self.check_InputValues(Ein))
+        return self.data.index.intersection(EinNew)
 
     def get_Tinterp(self, temperatures: Union[float, Iterable[float]]) -> pd.Index:
         """
@@ -238,41 +321,44 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = [0, 300]
-        >>> Xs(M, 0, xs0K).get_Tinterp(T)
-        Index([0], dtype='int64')
+        >>> assert Xs(M, 0, xs0K).get_Tinterp(T) == pd.Index([0])
         """
-        Tnew = pd.Index(self.check_T(temperatures))
+        Tnew = pd.Index(self.check_InputValues(temperatures))
         return self.data.columns.intersection(Tnew)
 
-
-    def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]) -> pd.Series:
+    def get_output(self, data: [list, np.ndarray], T: Iterable = None,
+                   Ein: Iterable = None) -> [pd.Series, pd.DataFrame]:
         """
-        Get the 0K scattering function with all the data
-
+        Get the output data
         Parameters
         ----------
-        xs0Kcomplete: pd.Series
-            The 0K scattering function with all the data
+        data: list, np.ndarray
+            The output data
+        T: Iterable, None
+            The new temperatures calculated temperatures
+        Ein: Iterable, None
+            The new incident energies calculated
 
         Returns
         -------
-        pd.Series
-            The 0K scattering function with all the data
+        pd.Series, pd.DataFrame
+            The output data in the corresponding format
         """
-        if xs0Kcomplete is None:
-            if 0 in self.data.columns:
-                self.xs0Kcomplete = self.data.loc[::, 0]
-            else:
-                raise ValueError("0K data not found")
-        else:
-            self.xs0Kcomplete = xs0Kcomplete
+        # Check the temperature and incident energy
+        T_ = self.data.columns if T is None else pd.Index(
+            self.check_InputValues(T), name="T")
+        Ein_ = self.data.index if Ein is None else pd.Index(
+            self.check_InputValues(Ein), name="Ein")
+        return pd.DataFrame(data, index=Ein_, columns=T_)
 
-    def get_EinTcomb(self, Tnew: Iterable, EinGrid: Iterable = None) -> list:
+    def get_EinTcomb(self, Tnew: Iterable, EinGrid: Iterable) -> list:
         """
         Get the incident energy and temperature combinations
 
@@ -295,100 +381,69 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> xs = Xs(M, 0, xs0K.iloc[0:10000:5000], xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
-        >>> xs.get_EinTcomb(Tnew)
-        [(300, 1e-05), (300, 97.56808), (100, 1e-05), (100, 97.56808)]
-
-        >>> xs.get_EinTcomb(Tnew, np.array([1, 2, 3]))
-        [(300, 1), (300, 2), (300, 3), (100, 1), (100, 2), (100, 3)]
-
-        >>> xs.get_EinTcomb(Tnew, np.array([[1, 2], [3, 4]]))
-        [(300, 1), (300, 2), (100, 3), (100, 4)]
+        >>> pd.Series(xs.get_EinTcomb(Tnew, np.array([1, 2, 3])))
+        0    (300, 1)
+        1    (300, 2)
+        2    (300, 3)
+        3    (100, 1)
+        4    (100, 2)
+        5    (100, 3)
+        dtype: object
+        >>> pd.Series(xs.get_EinTcomb(Tnew, np.array([[1, 2], [3, 4]])))
+        0    (300, 1)
+        1    (300, 2)
+        2    (100, 3)
+        3    (100, 4)
+        dtype: object
         """
-        if hasattr(EinGrid, "__len__"):
-            if len(EinGrid.shape) == 2:
-                N, M = EinGrid.shape[0], EinGrid.shape[1]
-                return [(Tnew[i], EinGrid[i, j]) for i in range(N) for j in range(M)]
-            else:
-                return [(T, Ein) for T in Tnew for Ein in EinGrid]
+        if len(EinGrid.shape) == 2:
+            N, M = EinGrid.shape[0], EinGrid.shape[1]
+            return [(Tnew[i], EinGrid[i, j]) for i in range(N) for j in range(M)]
         else:
-            return [(T, Ein) for T in Tnew for Ein in self.data.index]
+            return [(T, Ein) for T in Tnew for Ein in EinGrid]
 
-    def get_output(self, data: [list, np.ndarray], T: Iterable = None,
-                   Ein: Iterable = None) -> [pd.Series, pd.DataFrame]:
+    def _compute_sigma1(self, Tnew: Iterable, EinGrid: [Iterable, None]) -> list:
         """
-        Get the output data
-        Parameters
-        ----------
-        data: list, np.ndarray
-            The output data
-        T: Iterable, None
-            The new temperatures calculated temperatures
-        Ein: Iterable, None
-            The new incident energies calculated
-
-        Returns
-        -------
-        pd.Series, pd.DataFrame
-            The output data in the corresponding format
-        """
-        T_ = self.data.columns if T is None else pd.Index(self.check_T(T), name="T")
-        Ein_ = self.data.index if Ein is None else pd.Index(self.check_T(Ein), name="Ein")
-        if len(T_) == 1:
-            return pd.Series(data.squeeze(), index=Ein_, name=T_[0])
-        elif len(Ein_) == 1:
-            return pd.Series(data.squeeze(), index=T_, name=Ein_[0])
-        else:
-            return pd.DataFrame(data, index=Ein_, columns=T_)
-
-    @staticmethod
-    def _calc_sigma1(T: float, Ein: float, xs0K: pd.Series, M: float) -> float:
-        """
-        Calculate the elastic scattering cross section at temperature T and
-        incident energy Ein
+        Calculate the elastic scattering cross section at new temperatures using
+        sigma1 method from Njoy
 
         Parameters
         ----------
-        T: float
-            The temperature in K
-        Ein: float
-            The incident energy in eV
-        xs0K: pd.Series
-            The 0K scattering function
-        M: float
-            The mass of the nucleus in amu
+        Tnew: Iterable
+            The new temperatures to calculate
+        EinGrid: Iterable, None
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
 
         Returns
         -------
-        pd.Series
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> Ein = 2.0
-        >>> round(Xs._calc_sigma1(T, Ein, xs0K, M), 6)
-        9.086237
+        list
+            The elastic scattering cross section in barns for the new
         """
-        Eout = default_Eout(Ein)
-        return Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
+        # Get the temperature and the incident energy combinations: (T, Ein)
+        EinTcomb = self.get_EinTcomb(Tnew, EinGrid)
+
+        # Create a Dask bag from the list of (T, Ein) combinations.
+        bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count())
+
+        # Calculate xs using SIGMA1 to each element in the bag using the `map` function.
+        bag = bag.map(lambda x: Dxs.from_sigma1(self.xs0Kcomplete, x[1], self.M, x[0], default_Eout(x[1])).integral)
+
+        # Trigger the parallel computation and collect the results into a list.
+        return bag.compute()
 
     @staticmethod
     def _calc_alpha0(T: float, EinGrid: np.ndarray, xs0K: pd.Series, M: float,
-                     *args, **kwargs) -> np.ndarray:
+                     *args, theta: np.ndarray = np.arange(1, 181, 40),
+                     **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at temperature T and
         incident energy Ein using alpha0 model
@@ -403,6 +458,8 @@ class Xs:
             The mass of the nucleus in amu
         T: float
             The temperature in K
+        theta: np.ndarray
+            The scattering angle in degrees. The default is np.arange(0, 181, 1).
         model: str, optional
             The model to use for the calculation. The options are:
             - "fgm": Use the free gas model (default)
@@ -439,7 +496,9 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
@@ -450,44 +509,32 @@ class Xs:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, model="fgm").round(6)
-        array([  9.085279, 457.021623])
+        array([  9.085972, 466.29523 ])
+
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
-        array([  9.02379 , 449.805325])
+        array([  9.024954, 458.934423])
+
         >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
-        array([  9.084969, 461.718705])
+        array([  8.602954, 469.614362])
         """
-        dxs = Dxs.get_alpha0(xs0K, EinGrid, M, T, *args, **kwargs)
-        dxsIntegral = trapz_parallel(dxs.values, dxs.columns.values)
-        if kwargs.get("model", "fgm") != "pdos":
-            return dxsIntegral
-        else:
-            alpha = Alpha.from_recoil(EinGrid, T, M)
-            return dxsIntegral / alpha.get_expansPorcen(args[0], T)
+        # Generate the resutls for each incident energy
+        dxsIntegral = []
 
-    def _compute_sigma1(self, Tnew: Iterable, EinGrid: [Iterable, None]) -> list:
-        """
-        Calculate the elastic scattering cross section at new temperatures using
-        sigma1 method from Njoy
+        # Calculate the integral for each incident energy
+        for Ein in EinGrid:
+            # Generate the outgoing energy grid
+            Eout = default_Eout(Ein)
 
-        Parameters
-        ----------
-        Tnew: Iterable
-            The new temperatures to calculate
-        EinGrid: Iterable, None
-            The incident energy grid in eV. If not provided, it will be taken
-            from the class attribute.
+            # Calculate the alpha0
+            alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).alpha0
 
-        Returns
-        -------
-        list
-            The elastic scattering cross section in barns for the new
-        """
-        EinTcomb = self.get_EinTcomb(Tnew, EinGrid)
-        bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count()) \
-                .map(lambda x: self._calc_sigma1(*x, self.xs0Kcomplete, self.M))
-        return bag.compute()
+            # Calculate integral of the differential cross section for the outgoing energy
+            dxsIntegral.append(Dxs.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs).integral)
 
-    def _compute_alpha0(self, Tnew: Iterable, EinGrid: [Iterable, None], *args,
+        # Return the results in the corresponding format
+        return np.array(dxsIntegral)
+
+    def _compute_alpha0(self, Tnew: Iterable, EinGrid: Iterable, *args,
                         **kwargs) -> list:
         """
         Calculate the elastic scattering cross section at new temperatures using
@@ -534,17 +581,18 @@ class Xs:
             temperatures. Each value is the incident introduced by the user or
             the default.
         """
+        # Update the arguments
         args = (self.xs0Kcomplete, self.M) + args
-        Ein = EinGrid if hasattr(EinGrid, "__len__") else self.data.index.values
+
         # Calculation:
-        if len(Ein.shape) == 1:
-            return [Xs._calc_alpha0(T, Ein, *args, **kwargs)
+        if len(EinGrid.shape) == 1:
+            return [Xs._calc_alpha0(T, EinGrid, *args, **kwargs)
                     for T in Tnew]
         else:
-            return [Xs._calc_alpha0(Tnew[i], Ein[i], *args, **kwargs)
+            return [Xs._calc_alpha0(Tnew[i], EinGrid[i], *args, **kwargs)
                     for i in range(len(Tnew))]
 
-    def _compute(self, Tnew: Iterable, *args, EinGrid: Iterable = None,
+    def _compute(self, Tnew: Iterable, EinGrid: Iterable, *args,
                  algorithm: str = "sigma1", **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at new temperatures using
@@ -577,7 +625,9 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
@@ -585,34 +635,37 @@ class Xs:
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
-        >>> pd.DataFrame(xs._compute(Tnew, algorithm="sigma1"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="sigma1"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.086237  455.670534
         100  9.086957  664.556512
 
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> pd.DataFrame(xs._compute(Tnew, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
                  2.00        6.67
-        300  9.085279  457.021623
-        100  9.085305  665.465406
+        300  9.085972  466.295230
+        100  9.086873  677.372091
 
-        >>> pd.DataFrame(xs._compute(Tnew, pdos, algorithm="alpha0", model="sct"), index=Tnew, columns=EinGrid)
-                2.00        6.67
-        300  9.02379  449.805325
-        100  8.62745  606.491313
-
-        >>> pd.DataFrame(xs._compute(Tnew, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="sct"), index=Tnew, columns=EinGrid)
                  2.00        6.67
-        300  9.084969  461.718705
-        100  9.085596  649.526642
+        300  9.024954  458.934423
+        100  8.627295  617.394144
+
+        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
+                 2.00        6.67
+        300  8.602954  469.614362
+        100  5.835051  646.772904
         """
+        # Calculate the cross section for the new temperatures
         if algorithm == "sigma1":
             results = self._compute_sigma1(Tnew, EinGrid)
         elif algorithm == "alpha0":
             results = self._compute_alpha0(Tnew, EinGrid, *args, **kwargs)
         else:
             raise ValueError("invalid algorithm")
+
+        # Return the results in the corresponding format
         return np.array(results).reshape(len(Tnew), -1)
 
     def calc_T(self, T: float, *args, inplace: bool = False, **kwargs):
@@ -646,13 +699,15 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = [300, 100]
         >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K)
-        >>> xs.calc_T(T).data
+        >>> xs.calc_T(T, algorithm="sigma1").data
         T                  0            100          300
         Ein
         0.065625      9.411657     9.414734     9.419595
@@ -669,32 +724,32 @@ class Xs:
         >>> xs.calc_T(T, algorithm="alpha0", model="fgm").data
         T                  0            100          300
         Ein
-        0.065625      9.411657     9.411657     9.411657
-        6.717251    172.623200   282.491968   325.018633
-        11.367190     9.198383     9.198445     9.198459
-        20.912000  1893.389000  3261.783019  2646.416609
-        35.640580     0.974924     1.041483     1.180847
-        44.877660    14.089820    14.090097    14.090536
-        63.498800     5.773424     5.770805     5.765055
-        66.436310    85.621850    90.540391   114.812318
-        80.731840    39.201520    40.786065    29.838959
-        89.051940     9.208071     9.213753     9.226470
+        0.065625      9.411657     9.412320     9.411831
+        6.717251    172.623200   278.178203   325.588730
+        11.367190     9.198383     9.199947     9.200645
+        20.912000  1893.389000  3274.086386  2690.559966
+        35.640580     0.974924     1.037600     1.168565
+        44.877660    14.089820    14.090086    14.091851
+        63.498800     5.773424     5.770993     5.765728
+        66.436310    85.621850    90.209469   111.366833
+        80.731840    39.201520    41.482284    30.336060
+        89.051940     9.208071     9.213134     9.226037
 
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="sct").data
         T                  0            100          300
         Ein
-        0.065625      9.411657     9.223204     9.399438
-        6.717251    172.623200   299.146745   324.077689
-        11.367190     9.198383     9.011181     9.140079
-        20.912000  1893.389000  3174.309442  2617.259713
-        35.640580     0.974924     1.055881     1.178177
-        44.877660    14.089820    14.081661    14.068601
-        63.498800     5.773424     5.769416     5.761173
-        66.436310    85.621850    92.373607   117.360900
-        80.731840    39.201520    37.876184    29.529631
-        89.051940     9.208071     9.216752     9.224587
+        0.065625      9.411657     9.210666     9.393819
+        6.717251    172.623200   295.321974   324.819419
+        11.367190     9.198383     8.999700     9.140974
+        20.912000  1893.389000  3197.899528  2661.682276
+        35.640580     0.974924     1.049857     1.165092
+        44.877660    14.089820    14.079088    14.067462
+        63.498800     5.773424     5.769429     5.761258
+        66.436310    85.621850    91.882519   113.576108
+        80.731840    39.201520    38.528703    30.019105
+        89.051940     9.208071     9.215956     9.223668
 
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
@@ -702,19 +757,27 @@ class Xs:
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
-        0.065625     9.411657    9.412832    9.411996
-        2.000000     9.085342    9.085596    9.084969
-        4.000000     8.481975    8.482253    8.481713
-        5.000000     7.805580    7.805930    7.804704
-        6.670000  1269.792131  649.526642  461.718705
-        7.000000    19.825115   19.941105   20.060625
+        0.065625     9.411657    0.033061    0.224653
+        2.000000     9.085342    5.835051    8.602954
+        4.000000     8.481975    7.538804    8.460237
+        5.000000     7.805580    7.316357    7.801128
+        6.670000  1269.792131  646.772904  469.614362
+        7.000000    19.825115   19.541023   20.052674
         """
+        # Get the new temperatures to calculate
         Tnew = self.get_Tcalc(T)
+
+        # Check if the temperatures are already calculated
         if Tnew.empty:
             warnings.warn("All the temperatures are already calculated")
             return self
-        xsTValues = self._compute(Tnew, *args, **kwargs).T
+
+        # Calculate the cross section for the new temperatures
+        xsTValues = self._compute(Tnew, self.data.index, *args, **kwargs).T
+
+        # Get the output data in the corresponding format
         xsT = self.get_output(xsTValues, T=Tnew)
+
         return self.update_data(xsT, inplace)
 
     def calc_Ein(self, Ein: [float, np.ndarray], *args, inplace: bool = False,
@@ -749,19 +812,19 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = [300, 100]
         >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K).calc_T(T)
-        >>> Ein = [1.0, 2.0]
-        >>> xs.calc_Ein(Ein, algorithm="alpha0", model="fgm").data
+        >>> xs.calc_Ein(1.0, algorithm="sigma1").data
         T                  0            100          300
         Ein
         0.065625      9.411657     9.414734     9.419595
-        1.000000     32.338500    32.338500    32.338500
-        2.000000     56.875590    56.875590    56.875594
+        1.000000     32.338500    32.349216    32.349415
         6.717251    172.623200   282.096835   323.919192
         11.367190     9.198383     9.198416     9.199371
         20.912000  1893.389000  3257.315536  2639.268058
@@ -771,14 +834,33 @@ class Xs:
         66.436310    85.621850    90.534332   114.828045
         80.731840    39.201520    40.746929    29.811032
         89.051940     9.208071     9.213771     9.226450
+
+        # Several incident energies:
+        >>> Ein = [1.0, 2.0]
+        >>> xs.calc_Ein(Ein, algorithm="alpha0", model="fgm").data
+        T                  0            100          300
+        Ein
+        0.065625      9.411657     9.414734     9.419595
+        1.000000     32.338500    32.344886    32.341134
+        2.000000     56.875590    56.885412    56.879960
+        6.717251    172.623200   282.096835   323.919192
+        11.367190     9.198383     9.198416     9.199371
+        20.912000  1893.389000  3257.315536  2639.268058
+        35.640580     0.974924     1.042582     1.184656
+        44.877660    14.089820    14.090012    14.090359
+        63.498800     5.773424     5.770605     5.764487
+        66.436310    85.621850    90.534332   114.828045
+        80.731840    39.201520    40.746929    29.811032
+        89.051940     9.208071     9.213771     9.226450
+
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="sct").data
         T                  0            100          300
         Ein
         0.065625      9.411657     9.414734     9.419595
-        1.000000     32.338500    30.728900    32.152847
-        2.000000     56.875590    53.981171    56.485189
+        1.000000     32.338500    30.743719    32.156524
+        2.000000     56.875590    53.981044    56.492670
         6.717251    172.623200   282.096835   323.919192
         11.367190     9.198383     9.198416     9.199371
         20.912000  1893.389000  3257.315536  2639.268058
@@ -789,182 +871,67 @@ class Xs:
         80.731840    39.201520    40.746929    29.811032
         89.051940     9.208071     9.213771     9.226450
 
-        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> EinGrid = np.array([0.065625, 3.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
         >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K).calc_T(T)
-        >>> xs.calc_Ein(EinGrid, pdos, algorithm="alpha0", model="pdos").data
+        >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
         0.065625     9.411657    9.414734    9.419595
-        2.000000     9.085342    9.086957    9.086237
+        1.000000     9.230553    3.175678    6.956761
+        2.000000     9.036729    5.803824    8.556977
+        3.000000     8.842906    8.844076    8.843855
         4.000000     8.481975    8.482804    8.482893
         5.000000     7.805580    7.805703    7.805682
         6.670000  1269.792131  664.556512  455.670534
         7.000000    19.825115   19.893739   20.039076
         """
-        EinGrid = self.get_Eincalc(Ein)
+        # Get the new incident energies to calculate
+        EinGrid = self.get_EinCalc(Ein)
         if EinGrid.size == 0:
             warnings.warn("All the incident energies are already calculated")
             return self
+
+        # Drop the 0K data
         temp = self.data.columns.drop([0])
-        # Interpolation of 0K data, Necessary for calculation
-        xsEin = self.interp_Ein(EinGrid, T=0).to_frame()
+
+        # Calculate the cross section for the new incident energies
+        xsEin = self.interp_Ein(EinGrid, T=0)
+
+        # Interpolate the 0K data to the new incident energies:
         if temp.empty:
             return Xs(self.M, 0, xsEin, xs0Kcomplete=self.xs0Kcomplete)
-        xsEinValuesCalc = self._compute(temp, *args, EinGrid=EinGrid,
-                                        **kwargs).T
+
+        # Compute the calculation
+        xsEinValuesCalc = self._compute(temp, EinGrid,  *args, **kwargs).T
+
+        # Get the output data in the appropriate format
         xsEinCalc = self.get_output(xsEinValuesCalc, Ein=EinGrid, T=temp)
-        return self.update_data(xsEin.join(xsEinCalc), inplace, axis=0)
-                 
 
-    @classmethod
-    def from_sigma1(cls, T: float, M: float, xs0Kshort: pd.Series,
-                    xs0Kcomplete: pd.Series = None, inplace: bool = False):
-        """
-        Calculate the elastic scattering cross section for a nucleus with mass
-        M at temperature T > 0.
+        # concat the data
+        xsCalc = pd.concat([xsEin, xsEinCalc], axis=1)
 
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        M: float
-            The mass of the nucleus in amu
-        xs0Kshort: pd.Series
-            The 0K scattering function with the incident energy grid to use. It
-            is recommended to use a short grid to avoid the doppler broadening
-            of all the Ein.
-        xs0Kcomplete: pd.Series, optional
-            The 0K scattering function with all the data. If not provided, it
-            will be taken from the class attribute.
-
-        Returns
-        -------
-        Xs
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> xs0Kshort = xs0K.iloc[0:10000:1000]
-        >>> Xs.from_sigma1(T, M, xs0Kshort, xs0Kcomplete=xs0K).data
-        T                 0           300
-        Ein
-        0.00001      9.420892   36.244119
-        11.23650     9.239644    9.240652
-        34.70286     1.146785    1.147109
-        58.18538     9.794358    9.793941
-        80.66597     1.639337   23.581216
-        97.56808     4.895060    4.891338
-        116.82090  457.760100  931.532221
-        145.67660   39.688900   13.281879
-        165.85470   11.753670   12.634276
-        200.79510   15.734840   15.733460
-        """
-        # Initialize the class
-        xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
-        return xs.calc_T(T, algorithm="sigma1", inplace=inplace)
-
-    @classmethod
-    def from_alpha0(cls, T: float, M: float, xs0Kshort: pd.Series, *args,
-                    xs0Kcomplete: pd.Series = None, inplace: bool = False,
-                    **kwargs):
-        """
-        Calculate the elastic scattering cross section for a nucleus with mass
-        M at temperature T > 0 using the alpha0 model.
-
-        Parameters
-        ----------
-        T: float
-            The temperature in K
-        M: float
-            The mass of the nucleus in amu
-        xs0Kshort: pd.Series
-            The 0K scattering function with the incident energy grid to use. It
-            is recommended to use a short grid to avoid the doppler broadening
-            of all the Ein.
-        xs0Kcomplete: pd.Series, optional
-            The 0K scattering function with all the data. If not provided, it
-            will be taken from the class attribute.
-        inplace: bool, optional
-            If True, the data is stored in the class attribute, otherwise it
-            is returned
-        kwargs: dict
-            The parameters for the alpha0 model
-
-        Returns
-        -------
-        Xs
-            The elastic scattering cross section in barns
-
-        Examples
-        --------
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
-        >>> os.chdir(wd)
-
-        >>> M = 238.05077040419212
-        >>> T = [300, 100]
-        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
-        >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs.from_alpha0(T, M, xsSmall, model="fgm", xs0Kcomplete=xs0K).data
-        T                 0           100         300
-        Ein
-        0.065625     9.411657    9.411657    9.411657
-        2.000000     9.085342    9.085305    9.085279
-        4.000000     8.481975    8.481958    8.481895
-        5.000000     7.805580    7.805221    7.804852
-        6.670000  1269.792131  665.465406  457.021623
-        7.000000    19.825115   19.896286   20.045315
-
-        >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="sct", xs0Kcomplete=xs0K).data
-        T                 0           100         300
-        Ein
-        0.065625     9.411657    9.223204    9.399438
-        2.000000     9.085342    8.627450    9.023790
-        4.000000     8.481975    8.110563    8.419166
-        5.000000     7.805580    7.495224    7.747221
-        6.670000  1269.792131  606.491313  449.805325
-        7.000000    19.825115   19.325343   19.925829
-
-        >>> Xs.from_alpha0(T, M, xsSmall, pdos, model="pdos", xs0Kcomplete=xs0K).data
-        T                 0           100         300
-        Ein
-        0.065625     9.411657    9.412832    9.411996
-        2.000000     9.085342    9.085596    9.084969
-        4.000000     8.481975    8.482253    8.481713
-        5.000000     7.805580    7.805930    7.804704
-        6.670000  1269.792131  649.526642  461.718705
-        7.000000    19.825115   19.941105   20.060625
-        """
-        # Initialize the class
-        xs = cls(M, 0, xs0Kshort, xs0Kcomplete=xs0Kcomplete)
-        # Get cls attributes using the available information
-        return xs.calc_T(T, *args, algorithm="alpha0", inplace=inplace, **kwargs)
+        return self.update_data(xsCalc, inplace, axis=0)
 
     def interp_Ein(self, Ein: [float, np.ndarray], T: [float, Iterable] = None,
                    kind: str = "slinear", bounds_error: bool = True) -> [pd.Series, pd.DataFrame]:
         """
-        Interpolate Xs objet to a new Ein
+        Interpolate Xs objet to a new Ein. If T is provided, the interpolation
+        is done for the selected temperatures.
 
         Parameters
         ----------
         Ein: float, np.ndarray
             New Ein grid
+        T: float, Iterable, optional
+            The temperatures to interpolate. If not provided, all the
+            temperatures are interpolated.
+        kind: str, optional
+            The kind of interpolation to use. The options are:
+            - "linear": Linear interpolation
+            - "slinear": Spline interpolation of first degree
+            - "quadratic": Quadratic interpolation
+            - "cubic": Cubic interpolation
 
         Returns
         -------
@@ -977,86 +944,54 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = [300, 100]
         >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
         >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs.from_sigma1(T, M, xsSmall, xs0Kcomplete=xs0K)
-        >>> xs.interp_Ein([3.0], T=0)
-        Ein
-        3.0    8.783659
-        Name: 0, dtype: float64
-        >>> xs.interp_Ein([3.0, 4.5], T=100)
-        Ein
-        3.0    8.784881
-        4.5    8.144254
-        Name: 100, dtype: float64
-        >>> xs.interp_Ein([3.0])
-        T
-        0      8.783659
-        100    8.784881
-        300    8.784565
-        Name: 3.0, dtype: float64
+        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K).calc_T(T)
         >>> xs.interp_Ein([3.0, 4.5])
         T         0         100       300
         Ein
         3.0  8.783659  8.784881  8.784565
         4.5  8.143778  8.144254  8.144288
+
+        >>> xs.interp_Ein([3.0], T=0)
+        T           0
+        Ein
+        3.0  8.783659
+
+        >>> xs.interp_Ein([3.0, 4.5], T=100)
+        T         100
+        Ein
+        3.0  8.784881
+        4.5  8.144254
+
+        >>> xs.interp_Ein([3.0])
+        T         0         100       300
+        Ein
+        3.0  8.783659  8.784881  8.784565
         """
+        # Get the new incident energies to calculate
         Ein = np.unique(Ein)
-        def interpolate_row(x):
-            return interpolation(x, Ein, kind=kind, bounds_error=bounds_error)
 
-        if T is None:
-            xsInterp = self.data.apply(interpolate_row)
-            return self.get_output(xsInterp, Ein=Ein)
-        else:
-            Tinterp = self.get_Tinterp(T)
-            xsInterp = self.data.loc[::, Tinterp].apply(interpolate_row)
-            return self.get_output(xsInterp, Ein=Ein, T=Tinterp)
+        # Select the temperatures to interpolate:
+        Tinterp = self.data.columns if T is None else self.get_Tinterp(T)
+        if Tinterp.empty:
+            raise ValueError("The temperatures are not in the object")
 
-    @staticmethod
-    def get_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> pd.DataFrame:
-        """
-        Get the incident energy matrix for the arno model.
+        # Get the xs data to interpolate:
+        xsInterpData = self.data.loc[::, Tinterp]
 
-        Parameters
-        ----------
-        Ein: float
-            The incident energy of the neutron in eV
-        Eout: np.ndarray, (Z,)
-            The neutron outgoing energy grid in eV
-        mu: np.ndarray, (M,)
-            The neutron outgoing angle grid in degrees (0, 180]
-        M: float
-            Mass of the material in amu
+        # Interpolate the data
+        xsInterp = xsInterpData.apply(lambda xsT: interpolation(xsT, Ein, kind=kind, bounds_error=bounds_error))
 
-        Returns
-        -------
-        EinArno: np.ndarray, (M, Z)
-            Incident energy matrix for the arno model
-
-        Examples
-        --------
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
-        >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.9])
-        >>> M = 238.05077040419212
-        >>> Xs.get_4PCFEin(Ein, Eout, mu, M)
-        Eout       1.8       1.9       2.0       2.1       2.2
-        mu
-        -1.0  1.916519  1.966736  2.016949  2.067159  2.117367
-        -0.5  1.912284  1.962499  2.012712  2.062923  2.113132
-         0.0  1.908051  1.958263  2.008474  2.058686  2.108898
-         0.5  1.903825  1.954028  2.004237  2.054452  2.104671
-         0.9  1.900524  1.950660  2.000847  2.051083  2.101362
-        """
-        EinValues = calc_4PCFEin(Ein, Eout, mu, M)
-        mu_, Eout_ = pd.Index(mu, name="mu"), pd.Index(Eout, name="Eout")
-        return pd.DataFrame(EinValues, index=mu_, columns=Eout_)
+        # Get the output data in the appropriate format
+        return self.get_output(xsInterp, T=T, Ein=Ein)
 
     def get_4PCFxs(self, Ein: float, T: float, Eout: np.ndarray,
                    theta: np.ndarray, *args, **kwargs) -> pd.DataFrame:
@@ -1085,7 +1020,9 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
@@ -1108,10 +1045,11 @@ class Xs:
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    9.103218  9.092984  9.082649  9.072035  9.061417
-        90     9.104080  9.093848  9.083530  9.072931  9.062312
-        60     9.104940  9.094711  9.084406  9.073827  9.063206
-        30     9.105556  9.095340  9.085045  9.074480  9.063851
+        120    9.105038  9.094818  9.084497  9.073897  9.063295
+        90     9.105296  9.095061  9.084744  9.074144  9.063526
+        60     9.105840  9.095607  9.085300  9.074717  9.064094
+        30     9.106301  9.096081  9.085785  9.075215  9.064583
+
         >>> mu = np.cos(np.deg2rad(theta))
         >>> T4PCF = T * (1 + mu) / 2
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
@@ -1120,24 +1058,30 @@ class Xs:
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    8.425340  8.418329  8.411313  8.404110  8.396966
-        90     8.866466  8.856143  8.845790  8.835213  8.824658
-        60     8.994640  8.984093  8.973497  8.962657  8.951797
-        30     9.035009  9.024508  9.013946  9.003133  8.992270
+        120    8.421971  8.414644  8.407319  8.399813  8.392374
+        90     8.868318  8.857919  8.847491  8.836837  8.826207
+        60     8.996254  8.985686  8.975071  8.964208  8.953327
+        30     9.036288  9.025780  9.015211  9.004388  8.993517
 
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    9.104000  9.093744  9.083411  9.072788  9.062147
-        90     9.103939  9.093695  9.083370  9.072767  9.062137
-        60     9.104621  9.094390  9.084082  9.073504  9.062880
-        30     9.105234  9.095019  9.084725  9.074162  9.063533
+        120    4.877076  4.976241  5.082816  5.177156  5.265810
+        90     6.893454  6.979544  7.058797  7.136817  7.202696
+        60     7.985702  8.045719  8.094413  8.147071  8.185316
+        30     8.426736  8.469297  8.500190  8.536056  8.558696
         """
+        # Get the cosine of the angle
         mu = np.sort(np.cos(np.deg2rad(theta)))
+
+        # Get the temperature grid for the 4PCF model:
         T4PCF = T * (1 + mu) / 2
+
         # Get the incident energy grid:
-        Ein4PCF = self.get_4PCFEin(Ein, Eout, mu, self.M).set_axis(T4PCF, axis=0)
+        Ein4PCF = EinMat4PCF(Ein, Eout, mu[::, np.newaxis], self.M)
+
+        # Get the output data in the appropriate format
         Eout, mu = pd.Index(Eout, name="Eout"), pd.Index(mu, name="mu")
 
         # Get the temperatures:
@@ -1149,24 +1093,19 @@ class Xs:
         else:
             kind = kwargs.pop("kind", "slinear")
             bounds = kwargs.pop("bounds_error", True)
-            xsInterpValues = self.interp_Ein(Ein4PCF.loc[Tinterp], T=Tinterp,
-                                             kind=kind, bounds_error=bounds)
+            xsInterpValues = self.interp_Ein(Ein4PCF[np.isin(T4PCF, Tinterp)], T=Tinterp, kind=kind, bounds_error=bounds)
+            # Reshape the data row wise if there are several interpolated temperatures:
             if len(Tinterp) > 1:
-                # Reshape the data row wise:
-                xsInterpValues = {T: xsInterpValues.loc[Ein4PCF.loc[T], T]
-                                  for T in Tinterp}
+                xsInterpValues = {T: xsInterpValues.loc[Ein4PCF[T4PCF == T], T] for T in Tinterp}
             xsInterp = pd.DataFrame(xsInterpValues).T.set_axis(Eout, axis=1)
 
         # Calculation
         if Tcalc.empty:
             xsCalc = None
         else:
-            xsCalcValues = self._compute(Tcalc, *args,
-                                         EinGrid=Ein4PCF.loc[Tcalc].values,
-                                         **kwargs)
+            xsCalcValues = self._compute(Tcalc, Ein4PCF[np.isin(T4PCF, Tcalc)], *args, **kwargs)
             xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
-
 
 
 @nb.jit(nopython=True, nogil=True)
@@ -1192,7 +1131,9 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+    >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+    >>> xs0K.index.name = "E"
+    >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
     >>> os.chdir(wd)
 
     # Generate Broadening test results:
@@ -1200,29 +1141,29 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> Ein = 2.0
     >>> Eout = default_Eout(Ein)
     >>> M = 238.05077040419212
-    >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
+    >>> float(round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
     9.09
     """
     EoutSmall = np.linspace(0,
                              0.99 * Ein,
                              2000)
     EoutMid = np.linspace(0.99 * Ein,
-                              Ein * 1.01,
+                          Ein * 1.01,
                               3000)
     if Ein * 2 < 5.0:
         EoutGreat = np.logspace(np.log10(Ein * 1.01),
-                                 np.log10(5.0),
+                                np.log10(5.0),
                                  2000)
     else:
         EoutGreat = np.logspace(np.log10(Ein * 1.01),
                                  np.log10(2 * Ein),
                                  2000)
-    return np.sort(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
+    return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 
-@nb.jit(nopython=True, nogil=True, parallel=True)
-def calc_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                 M: float) -> np.ndarray:
+@vectorize(["float64(float64, float64, float64, float64)"], nopython=True, target="parallel")
+def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+                    M: float) -> float:
     """
     Get the incident energy matrix for 4PCF model.
 
@@ -1230,47 +1171,33 @@ def calc_4PCFEin(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     ----------
     Ein: float
         The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
+    Eout: float
         The neutron outgoing energy grid in eV
-    mu: np.ndarray, (M,)
+    mu: float
         The cosine of the neutron outgoing angle
     M: float
         Mass of the material in amu
 
     Returns
     -------
-    Ein4PCF: np.ndarray, (M, Z)
+    Ein4PCF: float
         Incident energy matrix for 4PCF model
+
+    Examples
+    --------
+    >>> Ein = 2.0
+    >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
+    >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.9])
+    >>> M = 238.05077040419212
+    >>> values = EinMat4PCF(Ein, Eout, mu[::, np.newaxis], M)
+    >>> pd.DataFrame(values, index=pd.Index(mu, name="mu"), columns=pd.Index(Eout, name="Eout"))
+        Eout       1.8       1.9       2.0       2.1       2.2
+        mu
+        -1.0  1.916519  1.966736  2.016949  2.067159  2.117367
+        -0.5  1.912284  1.962499  2.012712  2.062923  2.113132
+         0.0  1.908051  1.958263  2.008474  2.058686  2.108898
+         0.5  1.903825  1.954028  2.004237  2.054452  2.104671
+         0.9  1.900524  1.950660  2.000847  2.051083  2.101362
     """
-    Nmu = len(mu)
-    Ein4PCF = np.zeros((Nmu, len(Eout)))
-    for i in prange(Nmu):
-        Ein4PCF[i, :] += EinArnoRow(Ein, Eout, mu[i], M)
-    return Ein4PCF
-
-
-@nb.jit(nopython=True, nogil=True)
-def EinArnoRow(Ein: float, Eout: np.ndarray, mu: float,
-               M: float) -> np.ndarray:
-    """
-    Get the incident energy row for the arno model.
-
-    Parameters
-    ----------
-    Ein: float
-        The incident energy of the neutron in eV
-    Eout: np.ndarray, (Z,)
-        The neutron outgoing energy grid in eV
-    mu: float
-        The cosine of the neutron outgoing angle in degrees radians (0, 180]
-    M: float
-        Mass of the material in amu
-
-    Returns
-    -------
-    EinArnoRow: np.ndarray, (Z,)
-        Incident energy row for the arno model
-    """
-    muEinArno = (Eout + Ein) / 2 - Ein * mu * m / M
-    muEinArno += 0.5 * get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)
-    return muEinArno
+    EinArno = (Eout + Ein + get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)) / 2
+    return EinArno - Ein * mu * m / M

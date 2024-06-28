@@ -1018,10 +1018,10 @@ class Sab:
 
         Check the contrains:
         >>> debyeWeller = pdos.DebyeWallerCoeff(T)
-        >>> round(integrate(alphaVec.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debyeWeller * alphaNew)), 6)
+        >>> float(round(integrate(alphaVec.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debyeWeller * alphaNew)), 6))
         1.006052
 
-        >>> round(integrate(alphaVec.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6)
+        >>> float(round(integrate(alphaVec.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6))
         0.000131
         """
         # Check if the new alpha values are already in the S(alpha, -beta) matrix:
@@ -1140,7 +1140,7 @@ def _SumRule(x: pd.Series) -> float:
     >>> beta_grid = Beta.generate_grid(300)
     >>> alpha = Alpha.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha, beta_grid).data
-    >>> _SumRule(s.iloc[1, ::]).round(6)
+    >>> float(_SumRule(s.iloc[1, ::]).round(6))
     0.001087
     """
     beta = x.index.values
@@ -1166,7 +1166,7 @@ def _norm(x: pd.Series) -> float:
     >>> beta_grid = Beta.generate_grid(300)
     >>> alpha = Alpha.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha, beta_grid).data
-    >>> _norm(s.iloc[0, ::]).round(6)
+    >>> float(_norm(s.iloc[0, ::]).round(6))
     1.0
     """
     beta = x.index.values

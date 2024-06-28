@@ -163,11 +163,11 @@ class TargetMat(Solid):
 
         Test the results:
         >>> T = 20
-        >>> Al.get_Bfact(T, pdosAl27)["Al27"].round(6)
+        >>> float(Al.get_Bfact(T, pdosAl27)["Al27"].round(6))
         0.274871
 
         >>> T = 80
-        >>> Al.get_Bfact(T, pdosAl27)["Al27"].round(6)
+        >>> float(Al.get_Bfact(T, pdosAl27)["Al27"].round(6))
         0.337081
 
         >>> T = 296

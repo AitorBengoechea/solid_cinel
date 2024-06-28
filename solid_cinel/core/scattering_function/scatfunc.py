@@ -535,7 +535,7 @@ class ScatFunc:
         >>> theta = np.array([40, 80, 120, 160])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> round(ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6)
+        >>> float(round(ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
         0.328006
         """
         # Get the scattering fucntion:
@@ -1127,7 +1127,7 @@ class TransferFunc:
         >>> M = 238.05077040419212
         >>> T = 300
         >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
-        >>> round(pdf.norm, 6)
+        >>> float(round(pdf.norm, 6))
         1.000001
         """
         return integrate(self.data)

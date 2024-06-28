@@ -37,7 +37,7 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
     Example
     -------
     >>> f = pd.Series([1, 2, 4], index=[1, 2, 4])
-    >>> integrate(f)
+    >>> float(integrate(f))
     7.5
     """
     # Get the values and the index of the series

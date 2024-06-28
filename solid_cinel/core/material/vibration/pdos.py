@@ -304,9 +304,9 @@ class Tpdos:
         Example
         -------
         Object initialization:
-        >>> Tpdos.from_dE(20, rho_in_energy, interv_in_energy).Teff.round(4)
+        >>> float(Tpdos.from_dE(20, rho_in_energy, interv_in_energy).Teff.round(4))
         149.1699
-        >>> Tpdos.from_dE(80, rho_in_energy, interv_in_energy).Teff.round(4)
+        >>> float(Tpdos.from_dE(80, rho_in_energy, interv_in_energy).Teff.round(4))
         159.1632
         """
         P = self.P
@@ -340,10 +340,10 @@ class Tpdos:
         Examples
         --------
         Object initialization:
-        >>> Tpdos.from_dE(20, rho_in_energy, interv_in_energy).DebyeWallerCoeff.round(6)
+        >>> float(Tpdos.from_dE(20, rho_in_energy, interv_in_energy).DebyeWallerCoeff.round(6))
         0.077454
 
-        >>> Tpdos.from_dE(80, rho_in_energy, interv_in_energy).DebyeWallerCoeff.round(6)
+        >>> float(Tpdos.from_dE(80, rho_in_energy, interv_in_energy).DebyeWallerCoeff.round(6))
         0.379937
         """
         P = self.P
@@ -755,7 +755,7 @@ class Epdos:
         Object initialization:
         >>> T = 20
         >>> pdos = Epdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> pdos.Teff(T).round(4)
+        >>> float(pdos.Teff(T).round(4))
         149.1699
         """
         return self.get_Tpdos(T).Teff
@@ -778,7 +778,7 @@ class Epdos:
         Examples
         --------
         Object initialization:
-        >>> Epdos.from_dE(rho_in_energy, interv_in_energy).DebyeWallerCoeff(20).round(6)
+        >>> float(Epdos.from_dE(rho_in_energy, interv_in_energy).DebyeWallerCoeff(20).round(6))
         0.077454
         """
         return self.get_Tpdos(T).DebyeWallerCoeff
@@ -946,8 +946,7 @@ class Npdos:
         >>> os.chdir(__file__.replace("pdos.py", ""))
         >>> folder = "../../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
-        >>> npdos.get_Tnew([300])
-        Int64Index([], dtype='int64')
+        >>> assert npdos.get_Tnew([300]).empty == True
         >>> npdos.get_Tnew(200)
         Int64Index([200], dtype='int64')
         >>> npdos.get_Tnew([600, 200])

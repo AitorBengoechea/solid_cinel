@@ -947,10 +947,8 @@ class Npdos:
         >>> folder = "../../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> assert npdos.get_Tnew([300]).empty == True
-        >>> npdos.get_Tnew(200).values
-        array([200], dtype=int64)
-        >>> npdos.get_Tnew([600, 200]).values
-        array([200, 600], dtype=int64)
+        >>> assert npdos.get_Tnew(200) == pd.Index([200])
+        >>> assert (npdos.get_Tnew([600, 200]) == pd.Index([200, 600])).all()
         """
         Tnew = pd.Index(self.check_list(temperatures))
         return Tnew.difference(self.data.columns).sort_values()

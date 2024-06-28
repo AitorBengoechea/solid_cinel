@@ -227,8 +227,7 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> Ein = [1.0, 3.0]
-        >>> Xs(M, 0, xs0K).get_EinCalc(Ein).values
-        array([3.])
+        >>> assert Xs(M, 0, xs0K).get_EinCalc(Ein) == pd.Index([3.0])
         """
         EinNew = pd.Index(self.check_InputValues(Ein))
         return EinNew.difference(self.data.index)
@@ -260,8 +259,7 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> Xs(M, 0, xs0K).get_Tcalc(T).values
-        array([300], dtype=int64)
+        >>> assert Xs(M, 0, xs0K).get_Tcalc(T) == pd.Index([300])
         """
         Tnew = pd.Index(self.check_InputValues(temperatures))
         return Tnew.difference(self.data.columns)
@@ -293,8 +291,7 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> Ein = [1.0, 3.0]
-        >>> Xs(M, 0, xs0K).get_EinInterp(Ein).values
-         array([1.])
+        >>> assert Xs(M, 0, xs0K).get_EinInterp(Ein) == pd.Index([1.0])
         """
         EinNew = pd.Index(self.check_InputValues(Ein))
         return self.data.index.intersection(EinNew)
@@ -331,8 +328,7 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> T = [0, 300]
-        >>> Xs(M, 0, xs0K).get_Tinterp(T).values
-        array([0], dtype=int64)
+        >>> assert Xs(M, 0, xs0K).get_Tinterp(T) == pd.Index([0])
         """
         Tnew = pd.Index(self.check_InputValues(temperatures))
         return self.data.columns.intersection(Tnew)
@@ -393,11 +389,20 @@ class Xs:
         >>> M = 238.05077040419212
         >>> xs = Xs(M, 0, xs0K.iloc[0:10000:5000], xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
-        >>> xs.get_EinTcomb(Tnew, np.array([1, 2, 3]))
-        [(300, 1), (300, 2), (300, 3), (100, 1), (100, 2), (100, 3)]
-
-        >>> xs.get_EinTcomb(Tnew, np.array([[1, 2], [3, 4]]))
-        [(300, 1), (300, 2), (100, 3), (100, 4)]
+        >>> pd.Series(xs.get_EinTcomb(Tnew, np.array([1, 2, 3])))
+        0    (300, 1)
+        1    (300, 2)
+        2    (300, 3)
+        3    (100, 1)
+        4    (100, 2)
+        5    (100, 3)
+        dtype: object
+        >>> pd.Series(xs.get_EinTcomb(Tnew, np.array([[1, 2], [3, 4]])))
+        0    (300, 1)
+        1    (300, 2)
+        2    (100, 3)
+        3    (100, 4)
+        dtype: object
         """
         if len(EinGrid.shape) == 2:
             N, M = EinGrid.shape[0], EinGrid.shape[1]

@@ -1,7 +1,7 @@
 import pytest
 import os
 import pandas as pd
-from solid_cinel.core.xs.xs_mat import default_Eout
+from solid_cinel.core.xs.xs import default_Eout
 from solid_cinel.core.xs.dxs import Dxs
 
 

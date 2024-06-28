@@ -112,7 +112,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -201,7 +201,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -312,7 +312,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -528,7 +528,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -665,7 +665,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -677,12 +677,12 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # SIGMA1 algorithm:
-        >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
+        >>> float(round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
         9.09
 
         # DOPUSH algorithm:
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> round(Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2)
+        >>> float(round(Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2))
         9.09
         """
         return integrate(self.data)
@@ -703,7 +703,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -714,11 +714,11 @@ class Dxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
         >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
-        >>> round(dxs.prob["upscattering"], 6)
+        >>> float(round(dxs.prob["upscattering"], 6))
         0.505184
-        >>> round(dxs.prob["downscattering"], 6)
+        >>> float(round(dxs.prob["downscattering"], 6))
         0.490636
-        >>> round(dxs.prob["Ein=Eout"], 6)
+        >>> float(round(dxs.prob["Ein=Eout"], 6))
         0.004179
         """
         # Get the integral value:
@@ -749,7 +749,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -801,7 +801,7 @@ class Dxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)

@@ -6,7 +6,7 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange, vectorize
+from numba import vectorize
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc
@@ -55,7 +55,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -220,15 +220,15 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> Ein = [1.0, 3.0]
-        >>> Xs(M, 0, xs0K).get_EinCalc(Ein)
-        Float64Index([3.0], dtype='float64')
+        >>> Xs(M, 0, xs0K).get_EinCalc(Ein).values
+        array([3.])
         """
         EinNew = pd.Index(self.check_InputValues(Ein))
         return EinNew.difference(self.data.index)
@@ -253,15 +253,15 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = 300
-        >>> Xs(M, 0, xs0K).get_Tcalc(T)
-        Int64Index([300], dtype='int64')
+        >>> Xs(M, 0, xs0K).get_Tcalc(T).values
+        array([300], dtype=int64)
         """
         Tnew = pd.Index(self.check_InputValues(temperatures))
         return Tnew.difference(self.data.columns)
@@ -286,15 +286,15 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> Ein = [1.0, 3.0]
-        >>> Xs(M, 0, xs0K).get_EinInterp(Ein)
-        Float64Index([1.0], dtype='float64')
+        >>> Xs(M, 0, xs0K).get_EinInterp(Ein).values
+         array([1.])
         """
         EinNew = pd.Index(self.check_InputValues(Ein))
         return self.data.index.intersection(EinNew)
@@ -324,15 +324,15 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = [0, 300]
-        >>> Xs(M, 0, xs0K).get_Tinterp(T)
-        Int64Index([0], dtype='int64')
+        >>> Xs(M, 0, xs0K).get_Tinterp(T).values
+        array([0], dtype=int64)
         """
         Tnew = pd.Index(self.check_InputValues(temperatures))
         return self.data.columns.intersection(Tnew)
@@ -385,7 +385,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -491,7 +491,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -620,7 +620,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -694,7 +694,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -807,7 +807,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -939,7 +939,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -1015,7 +1015,7 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
         >>> xs0K.index.name = "E"
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
@@ -1126,7 +1126,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+    >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
     >>> xs0K.index.name = "E"
     >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
     >>> os.chdir(wd)
@@ -1136,7 +1136,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> Ein = 2.0
     >>> Eout = default_Eout(Ein)
     >>> M = 238.05077040419212
-    >>> round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2)
+    >>> float(round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
     9.09
     """
     EoutSmall = np.linspace(0,

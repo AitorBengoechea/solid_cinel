@@ -176,7 +176,7 @@ class Tpdos:
         "Epdos"
             Rho normalize object.
         """
-        df = pd.read_csv(file, delim_whitespace=True, header=header,
+        df = pd.read_csv(file, sep='\s+', header=header,
                          index_col=index_col,
                          usecols=usecols, engine=engine).iloc[::, 0]
         df.index.name = "dE"
@@ -686,7 +686,7 @@ class Epdos:
         Name: rho, dtype: float64
         >>> os.chdir(wd)
         """
-        df = pd.read_csv(file, delim_whitespace=True, header=header,
+        df = pd.read_csv(file, sep='\s+', header=header,
                          index_col=index_col,
                          usecols=usecols, engine=engine).iloc[::, 0]
         df.index.name = "dE"
@@ -947,10 +947,10 @@ class Npdos:
         >>> folder = "../../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> assert npdos.get_Tnew([300]).empty == True
-        >>> npdos.get_Tnew(200)
-        Int64Index([200], dtype='int64')
-        >>> npdos.get_Tnew([600, 200])
-        Int64Index([200, 600], dtype='int64')
+        >>> npdos.get_Tnew(200).values
+        array([200], dtype=int64)
+        >>> npdos.get_Tnew([600, 200]).values
+        array([200, 600], dtype=int64)
         """
         Tnew = pd.Index(self.check_list(temperatures))
         return Tnew.difference(self.data.columns).sort_values()

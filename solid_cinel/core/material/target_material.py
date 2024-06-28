@@ -544,7 +544,7 @@ class TargetMat(Solid):
         data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
         data["Xs"] *= Bragg_unit_change * pi ** 2 / (unit_cell_vol * atom_number)
         if threshold:
-            data["Xs"][data["Xs"] < threshold] = 0.0
+            data.loc[data["Xs"] < threshold, "Xs"] = 0.0
         return data
 
     def get_BraggEdges(self, *args, xs: bool = True, file_BraggEdges: str = None,

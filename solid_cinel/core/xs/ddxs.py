@@ -127,7 +127,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Get the Xs object:
@@ -252,7 +254,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Get the Xs object:
@@ -446,7 +450,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -484,7 +490,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -518,7 +526,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -554,7 +564,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -599,7 +611,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -649,7 +663,9 @@ class DDxs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("ddxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_hdf("u238.0.2", key="elastic")
+        >>> xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
+        >>> xs0K.index.name = "E"
+        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:

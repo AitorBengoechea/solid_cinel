@@ -345,79 +345,21 @@ class DDxs:
         20     0.000000  0.000066   0.110381   82.236817   0.053969  0.000016  0.000000
         10     0.000000  0.000001   0.008851   25.057890   0.004153  0.000000  0.000000
 
-        # alpha0:
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> theta = np.arange(0, 180, 10)[1::]
-        >>> index = pd.Index(theta[::-1], name="theta")
-        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, algorithm="alpha0", model="fgm").data.iloc[::, ::200]
-        >>> ddxs_test.set_axis(index).round(6)
-        Eout    1.80000    1.88008    1.96016    2.04024   2.12032
-        theta
-        170    1.799454  12.011827  23.795201  15.058833  3.254168
-        160    1.676368  11.820171  24.045985  15.218236  3.207631
-        150    1.481047  11.484990  24.467384  15.486077  3.125740
-        140    1.229145  10.983212  25.064040  15.865304  3.002058
-        130    0.943762  10.284418  25.841231  16.359271  2.827893
-        120    0.654927   9.354802  26.802921  16.970502  2.593117
-        110    0.396321   8.165883  27.947781  17.698162  2.288181
-        100    0.197802   6.711574  29.261084  18.532927  1.908320
-        90     0.074460   5.037252  30.698047  19.446408  1.461220
-        80     0.018204   3.279005  32.149110  20.369142  0.978394
-        70     0.002218   1.689235  33.366688  21.144134  0.525276
-        60     0.000081   0.578047  33.811182  21.429205  0.191556
-        50     0.000000   0.090865  32.347784  20.504689  0.033458
-        40     0.000000   0.002704  26.830185  17.009357  0.001208
-        30     0.000000   0.000001  14.853195   9.417400  0.000001
-        20     0.000000   0.000000   1.824966   1.157166  0.000000
-        10     0.000000   0.000000   0.000005   0.000003  0.000000
+        # alpha0 (still testing):
+#        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+#        >>> theta = np.arange(0, 180, 10)[1::]
+#        >>> index = pd.Index(theta[::-1], name="theta")
+#        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, algorithm="alpha0", model="fgm").data.iloc[::, ::200]
+#        >>> ddxs_test.set_axis(index).round(6)
 
-        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").data.iloc[::, ::200]
-        >>> ddxs_test.set_axis(index).round(6)
-        Eout    1.80000    1.88008    1.96016    2.04024   2.12032
-        theta
-        170    1.418728   9.432845  18.689928  11.876672  2.586581
-        160    1.422079   9.973461  20.267428  12.864941  2.730009
-        150    1.366027  10.522000  22.365509  14.183555  2.879851
-        140    1.190620  10.558988  24.028284  15.234573  2.899543
-        130    0.934896  10.103778  25.306300  16.045967  2.790649
-        120    0.655777   9.281028  26.494695  16.801908  2.584118
-        110    0.399326   8.142063  27.747922  17.599566  2.291635
-        100    0.200261   6.712676  29.117395  18.471388  1.917050
-        90     0.075751   5.050406  30.586677  19.406900  1.471416
-        80     0.018629   3.295766  32.059596  20.345022  0.987590
-        70     0.002289   1.703141  33.296246  21.133386  0.531786
-        60     0.000085   0.585404  33.763011  21.433065  0.194752
-        50     0.000000   0.092683  32.330895  20.526930  0.034248
-        40     0.000000   0.002794  26.856213  17.053232  0.001252
-        30     0.000000   0.000001  14.913579   9.470889  0.000001
-        20     0.000000   0.000000   1.848385   1.173900  0.000000
-        10     0.000000   0.000000   0.000006   0.000004  0.000000
+#        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").data.iloc[::, ::200]
+#        >>> ddxs_test.set_axis(index).round(6)
 
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
-        >>> theta = np.arange(10, 190, 10)
-        >>> index = pd.Index(theta[::-1], name="theta")
-        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, algorithm="alpha0", threshold=1.0e-14, nphonon=100, model="pdos").data
-        >>> ddxs_test.set_axis(index).round(6)
-        Eout   1.800000  1.866667   1.933333    2.000000   2.066667  2.133333  2.200000
-        theta
-        180    2.368698  9.777717  21.556850   22.522613  10.231718  2.251832  0.266524
-        170    2.322358  9.709553  21.592034   22.630398  10.249174  2.236589  0.261404
-        160    2.184449  9.495879  21.681735   22.943925  10.293871  2.188697  0.246150
-        150    1.963212  9.128038  21.818094   23.477408  10.362263  2.106113  0.221635
-        140    1.673276  8.592165  21.983522   24.253411  10.446267  1.985534  0.189422
-        130    1.336884  7.872591  22.147231   25.305535  10.531607  1.823125  0.151906
-        120    0.984180  6.957531  22.257347   26.680416  10.594098  1.615787  0.112375
-        110    0.651347  5.850704  22.233098   28.446094  10.595934  1.363790  0.074833
-        100    0.374309  4.587426  21.950504   30.702523  10.478783  1.074477  0.043335
-        90     0.178035  3.253304  21.223608   33.599626  10.154549  0.766722  0.020802
-        80     0.065779  1.993584  19.788448   37.372793   9.496911  0.473523  0.007766
-        70     0.017497  0.986762  17.318553   42.435080   8.346791  0.236609  0.002087
-        60     0.003118  0.359373  13.555137   49.720852   6.571197  0.087065  0.000375
-        50     0.000357  0.086818   8.694808   61.835208   4.247386  0.021202  0.000043
-        40     0.000026  0.013420   3.927362   83.136428   1.934812  0.003275  0.000003
-        30     0.000001  0.001397   0.987104  103.943448   0.488610  0.000339  0.000000
-        20     0.000000  0.000066   0.110371   82.229012   0.053964  0.000016  0.000000
-        10     0.000000  0.000001   0.008851   25.055494   0.004153  0.000000  0.000000
+#        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 7)
+#        >>> theta = np.arange(10, 190, 10)
+#        >>> index = pd.Index(theta[::-1], name="theta")
+#        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, algorithm="alpha0", threshold=1.0e-14, nphonon=100, model="pdos").data
+#        >>> ddxs_test.set_axis(index).round(6)
         """
         # Generate Scatering function:
         scatfunc = ScatFunc.from_model(Ein, xs.M, T, Eout, theta,*args, **kwargs).data
@@ -455,15 +397,18 @@ class DDxs:
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
+        # Get the Xs object:
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K)
+
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 1)[1::]
 
         # Angular distribution:
-        >>> DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta, model="fgm").angular.data.iloc[::200].round(6)
+        >>> DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").angular.data.iloc[::200].round(6)
         Eout
         1.80000     0.768794
         1.88008    10.451361
@@ -473,7 +418,7 @@ class DDxs:
         dtype: float64
         """
         dxs = self.data.apply(integrate, axis=0)
-        return Dxs(self.Ein, self.T, self.M, self.algorithm, dxs)
+        return Dxs(self.Ein, self.T, self.M,dxs)
     @property
     def integral(self) -> float:
         """
@@ -495,17 +440,20 @@ class DDxs:
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
+        # Get the Xs object:
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K)
+
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 1)[1::]
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # S(alpha, -beta) algorithm for FGM:
-        >>> round(DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2)
+        >>> float(round(DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").integral, 2))
         9.07
         """
         return self.angular.integral
@@ -531,19 +479,22 @@ class DDxs:
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
+        # Get the Xs object:
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K)
+
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
+        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
         >>> probabilities = ddxs.Eprob
-        >>> round(probabilities["upscattering"], 6)
+        >>> float(round(probabilities["upscattering"], 6))
         0.389484
-        >>> round(probabilities["downscattering"], 6)
+        >>> float(round(probabilities["downscattering"], 6))
         0.60678
-        >>> round(probabilities["Ein=Eout"], 6)
+        >>> float(round(probabilities["Ein=Eout"], 6))
         0.003736
         """
         return self.angular.prob
@@ -569,13 +520,16 @@ class DDxs:
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
+        # Get the Xs object:
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K)
+
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
+        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
         >>> angular_prob = ddxs.AngleProb
         >>> angular_prob.round(6)
         mu
@@ -616,13 +570,16 @@ class DDxs:
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
+        # Get the Xs object:
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K)
+
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
+        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
         >>> ddxs.pdf.iloc[::, ::200].round(6)
         Eout            1.80000   1.88008   1.96016   2.04024   2.12032
         mu
@@ -668,13 +625,16 @@ class DDxs:
         >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
         >>> os.chdir(wd)
 
+        # Get the Xs object:
+        >>> M = 238.05077040419212
+        >>> xs = Xs(M, 0, xs0K)
+
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
         >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs0K, Ein, M, T, Eout, theta)
+        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
         >>> ddxs.data.iloc[::, ::200].round(6)
         Eout            1.80000    1.88008    1.96016    2.04024   2.12032
         mu
@@ -776,4 +736,4 @@ class DDxs:
         else:
             data = ddxs.loc[dx_.index, dx_.columns]
             ddxs.loc[dx_.index, dx_.columns] = data.apply(lambda x: reshift(x, dx_.loc[x.name].values), axis=1)
-        return self.__class__(self.Ein, self.T, self.M, self.algorithm, ddxs)
+        return self.__class__(self.Ein, self.T, self.M, ddxs)

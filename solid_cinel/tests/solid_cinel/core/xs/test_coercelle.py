@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.xs.ddxs import DDxs
-from solid_cinel.core.generic import integrate
+from solid_cinel.core.xs.xs import Xs
 
 
 # Global variables for the tests:
@@ -60,17 +60,24 @@ def test_coercelle(model):
 
     # Get 0K data:
     os.chdir("../../../../data/xs/U238/")
-    xs_0K = pd.read_hdf("u238.0.2", key="elastic")
+    xs0K = pd.read_csv("u238.0.2", delim_whitespace=True, header=None, index_col=0, usecols=[0, 1], engine="python").iloc[::, 0]
+    xs0K.index.name = "E"
+    xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
     os.chdir(wd)
+
+    # Get the Xs object:
+    # Get the Xs object:
+    M = 238.05077040419212
+    xs = Xs(M, 0, xs0K)
 
     # Get doppler broadening ddxs:
     Eout = ddxs_test.columns.values
     if model == "sigma1":
-        ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta)
+        ddxs = DDxs.from_4PCF(xs, Ein, T, Eout, theta)
     elif model == "fgm":
-        ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, model=model)
+        ddxs = DDxs.from_4PCF(xs, Ein, T, Eout, theta, model=model)
     elif model == "sct":
-        ddxs = DDxs.from_4PCF(xs_0K, Ein, M, T, Eout, theta, pdos, model=model)
+        ddxs = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, model=model)
 
     # round to 6 decimals:
     ddxs_round = ddxs.data.round(6).values

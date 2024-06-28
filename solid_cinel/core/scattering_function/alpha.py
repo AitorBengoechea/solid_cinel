@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from numba import prange
+from math import exp
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -507,7 +508,7 @@ def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
     return get_alphaFromEout(Eout, Ein, T, M, mu)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True)
 def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
                  mu: np.ndarray) -> np.ndarray:
     """
@@ -548,6 +549,7 @@ def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
     135  0.613158  0.613743  0.614328  0.614913  0.615498
     180  0.718359  0.719044  0.719730  0.720415  0.721100
 
+    # Test for the case of a single angle:
     >>> theta = np.array([90])
     >>> mu = np.cos(np.deg2rad(theta))
     >>> pd.DataFrame(get_alphaMat(Eout, Ein, T, M, mu).round(6), index=theta, columns=Eout)
@@ -558,6 +560,73 @@ def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
     alphaMat = np.zeros((n, len(Eout)))
     for i in prange(n):
         alphaMat[i] += get_alphaFromEout(Eout, Ein, T, M, mu[i])
+    return alphaMat
+
+@nb.jit(nopython=True, nogil=True, cache=True)
+def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
+                    mu: np.ndarray, DebyeWallerCoeff: float, alpha0: float) -> np.ndarray:
+    """
+    Get all the posible alpha modified values from the parameters of the function
+
+    Parameters
+    ----------
+    Eout: 'np.ndarray', (N,)
+        Output energy of the neutron in eV.
+    Ein: 'float'
+        Incidente energy of the neutron in eV.
+    T: 'float'
+        Temperature in K.
+    M: "float"
+        Mass in amu of the scatterer.
+    mu: 'np.ndarray', (K,)
+        Cosine of the scattering angle.
+    DebyeWallerCoeff : float
+        Debye Waller coefficient.
+    alpha0 : float
+        Alpha zero value.
+
+    Returns
+    -------
+    'np.ndarray', (K, N)
+        Array containing all posible modified alpha values for the input
+        parameters.
+
+    Example
+    -------
+    >>> T = 800
+    >>> Ein = 0.33118
+    >>> Eout = np.array([0.331180, 0.331812, 0.332445, 0.333077, 0.333710])
+    >>> M = 26.98153433356103
+    >>> theta = np.array([45, 90, 135, 180])
+    >>> mu = np.cos(np.deg2rad(theta))
+    >>> DebyeWallerCoeff = 7.5
+    >>> alpha0 = Ein / (M / m * kb * T)
+    >>> pd.DataFrame(get_alphaMatMod(Eout, Ein, T, M, mu, DebyeWallerCoeff, alpha0).round(6), index=theta, columns=Eout)
+         0.331180  0.331812  0.332445  0.333077  0.333710
+    45   0.160246  0.160272  0.160298  0.160324  0.160351
+    90   0.226290  0.226379  0.226468  0.226558  0.226647
+    135  0.292334  0.292486  0.292639  0.292791  0.292943
+    180  0.319691  0.319869  0.320047  0.320225  0.320404
+
+    # Test for the case of a single angle:
+    >>> theta = np.array([90])
+    >>> mu = np.cos(np.deg2rad(theta))
+    >>> pd.DataFrame(get_alphaMatMod(Eout, Ein, T, M, mu, DebyeWallerCoeff, alpha0).round(6), index=theta, columns=Eout)
+        0.331180  0.331812  0.332445  0.333077  0.333710
+    90   0.22629  0.226379  0.226468  0.226558  0.226647
+    """
+    # Define the constants for the calculation
+    n = len(mu)
+    AkbT = M / m * kb * T
+    expTerm = exp(-alpha0 * DebyeWallerCoeff)
+    EoutSqrtEin = np.sqrt(Eout * Ein)
+
+    # Crete the alpha matrix filled with alpha capture:
+    alphaMat = np.full((n, len(Eout)), Ein / AkbT)
+
+    # Modify the alpha matrix with outgoing energy and cosine of the scattering angle modification
+    for i in prange(n):
+        alphaMat[i] += (Eout - 2 * mu[i] * EoutSqrtEin) / AkbT * expTerm
     return alphaMat
 
 

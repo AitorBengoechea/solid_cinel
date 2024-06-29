@@ -1304,10 +1304,10 @@ class Pdos:
     def _from(cls, method, *args, **kwargs):
         if len(args) == 0:
             raise TypeError("No arguments provided")
+        elif len(args) == 1:
+            return cls(getattr(Epdos, method)(*args, **kwargs))
         elif isinstance(args[0], (int, float)):
             return cls(getattr(Tpdos, method)(*args, **kwargs))
-        elif len(args) == 2:
-            return cls(getattr(Epdos, method)(*args, **kwargs))
         else:
             return cls(getattr(Npdos, method)(*args, **kwargs))
 

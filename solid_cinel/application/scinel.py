@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-from solid_cinel.application.teffApp import add_TeffArgs, handle_TeffArgs
+from solid_cinel.application.pdosApp import get_PdosArgs, add_TeffArgs, handle_TeffArgs
 from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
 
 # Map keywords to their respective functions
@@ -38,16 +38,16 @@ def add_args(parser: argparse.ArgumentParser, keyword: str):
         raise ValueError(f'Invalid keyword: {keyword}')
 
 
-def handle_args(args: argparse.Namespace, keyword: str) -> np.array:
+def handle_args(keyword: str, args: argparse.Namespace) -> np.array:
     """
     Handle the arguments based on the keyword.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The parsed arguments.
     keyword : str
         The keyword to determine how to handle the arguments.
+    args : argparse.Namespace
+        The parsed arguments.
 
     Returns
     -------
@@ -64,6 +64,33 @@ def handle_args(args: argparse.Namespace, keyword: str) -> np.array:
     else:
         raise ValueError(f'Invalid keyword: {keyword}')
 
+def merge_namespaces(ns1, ns2):
+    """
+    Merge two argparse.Namespace objects.
+
+    Parameters
+    ----------
+    ns1 : argparse.Namespace
+        The first namespace.
+    ns2 : argparse.Namespace
+        The second namespace.
+
+    Returns
+    -------
+    argparse.Namespace
+        The merged namespace.
+    """
+    # Convert namespaces to dictionaries
+    dict1 = vars(ns1)
+    dict2 = vars(ns2)
+
+    # Merge dictionaries
+    merged_dict = {**dict1, **dict2}
+
+    # Convert merged dictionary back to namespace
+    merged_ns = argparse.Namespace(**merged_dict)
+
+    return merged_ns
 
 def get_results(args: argparse.Namespace, remaining_args: list):
     """
@@ -88,11 +115,16 @@ def get_results(args: argparse.Namespace, remaining_args: list):
     # Add the dynamic arguments based on the keyword
     add_args(parserDyn, args.keyword)
 
-    # Parse the rest of the arguments
-    argsDyn = parserDyn.parse_args(remaining_args)
+    # Parse the dynamic arguments and get the remaining arguments for the pdos file
+    argsDyn, pdos_args = parserDyn.parse_known_args(remaining_args)
+
+    # If there are arguments for the pdos file, parse them
+    if len(pdos_args) > 0:
+        argsPdos = get_PdosArgs(pdos_args)
+        argsDyn = merge_namespaces(argsDyn, argsPdos)
 
     # Call the function based on the keyword to handle the dynamic arguments
-    return handle_args(argsDyn, args.keyword)
+    return handle_args(args.keyword, argsDyn)
 
 
 def write_results(results: np.array, keyword: str):

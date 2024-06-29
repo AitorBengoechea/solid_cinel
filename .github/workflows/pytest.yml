@@ -31,3 +31,6 @@ jobs:
         run: python -m pip install . --user
       - name: pytest solid_cinel code core
         run: pytest --cov=solid_cinel solid_cinel/core/
+      - name: pytest solid_cinel code applications
+        run:  python -m unittest solid_cinel/application/test_scinel.py
+

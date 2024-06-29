@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 from solid_cinel.application.teffApp import add_TeffArgs, handle_TeffArgs
+from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
@@ -8,7 +9,10 @@ KEYWORD_TO_FUNCTION_MAP = {
         'add': add_TeffArgs,
         'handle': handle_TeffArgs,
     },
-    # Add other keywords here...
+    "sab": {
+        "add": add_SabArgs,
+        "handle": handle_SabArgs,
+    },
 }
 
 

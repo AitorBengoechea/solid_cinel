@@ -1,6 +1,23 @@
 from setuptools import setup, find_packages
 import multiprocessing
+
+
 requirements = "requirements.txt"
+
+long_description = """
+Accurate representation of thermal neutron scattering in Monte Carlo transport 
+simulations requires that the molecular vibrations of the target material be 
+accounted for. Historically, this has been achieved by precomputing large 
+multidimensional tables that are a function of temperature and the cosine of the 
+scattering angle, as well as incoming and outgoing neutron energy. 
+
+Solid cinel is a Python package for solid state physics and materials science. 
+It is a collection of tools for the analysis of  thermal neutron scattering by 
+the creation of in fly multidimensional tables. It is designed to be easy to use 
+and to provide a high-level interface to the most common tasks in solid state 
+physics. It is built on top of the popular Python packages  pandas, numpy and 
+numba.
+"""
 
 if __name__ == "__main__":
     # Freeze to support parallel compilation when using spawn instead of fork
@@ -10,20 +27,30 @@ if __name__ == "__main__":
         use_scm_version=True,
         setup_requires=['setuptools_scm'],
         description='solid_cinel',
+        long_description=long_description,
+        long_description_content_type='text/markdown',
         url='https://github.com/AitorBengoechea/solid_cinel/',
         author='Aitor Bengoechea',
         author_email='aitorabf@gmail.com',
         classifiers=[
             'Development Status :: Beta',
+            'Operating System :: OS Independent',
             'Programming Language :: Python :: 3',
+            'Intended Audience :: Developers',
+            'Topic :: Software Development :: Libraries :: Python Modules',
         ],
+        keywords='solid_cinel, physics, materials, science',
         packages=find_packages(exclude=["tests"]),
         install_requires=open(requirements).read().splitlines(),
         extras_require={
             'gpu':  ['cupy'],  # general cupy package
         },
+        entry_points={
+            'console_scripts': [
+                'scinel = solid_cinel.application.scinel:main',
+            ],
+        },
         zip_safe=False,
-        # setup_requires=["pytest-runner",],
         tests_require=[
             "pytest",
         ],

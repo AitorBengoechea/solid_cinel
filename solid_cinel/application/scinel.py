@@ -16,7 +16,7 @@ import argparse
 
 import numpy as np
 
-from teff import add_TeffArgs, handle_TeffArgs
+from solid_cinel.application.teff import add_TeffArgs, handle_TeffArgs
 
 def add_args(parser: argparse.ArgumentParser, keyword: str):
     # Call the function based on the keyword to extract the dynamic arguments

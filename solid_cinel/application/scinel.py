@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_PdosArgs, add_TeffArgs, handle_TeffArgs
 from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
+from solid_cinel.application.scatfunctApp import add_ScatFuncArgs, handle_ScatFuncArgs
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
@@ -12,6 +13,10 @@ KEYWORD_TO_FUNCTION_MAP = {
     "sab": {
         "add": add_SabArgs,
         "handle": handle_SabArgs,
+    },
+    "scatfunc": {
+        "add": add_ScatFuncArgs,
+        "handle": handle_ScatFuncArgs,
     },
 }
 

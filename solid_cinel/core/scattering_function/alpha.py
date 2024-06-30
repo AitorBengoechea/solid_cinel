@@ -44,7 +44,7 @@ class Alpha:
         for a scattering atom, temperature and incident neutron energy.
      """
 
-    def __init__(self, array: Iterable):
+    def __init__(self, alpha: Iterable):
         """
         Initialize the Alpha class
 
@@ -53,7 +53,33 @@ class Alpha:
         array : Iterable
             Array of alpha values
         """
-        self.data = np.unique(array)
+        self.data = alpha
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """Dataframe with the S(alpha, -beta) matrix values."""
+        return self._data
+
+    @data.setter
+    def data(self, vector: Iterable):
+        """
+        Construct the S(alpha, -beta) matrix and check if the data achieve the
+        normalization and sum rule constrain.
+
+        Parameters
+        ----------
+        df : 2D iterable, (N, M)
+            Iterable containing the S(alpha, -beta) matrix.
+        """
+        # Sort and define the style of the dataframe:
+        vector_ = np.unique(vector)
+
+        # Alpha constrains:
+        if (vector_ < 0).any():
+            raise ValueError("Alpha values must be positive")
+
+        # save the data:
+        self._data = vector_
 
     @property
     def to_index(self) -> pd.Index:
@@ -192,6 +218,32 @@ class Alpha:
         array([0.118447, 0.155038, 0.36413 , 0.730042, 1.164525])
         """
         return cls(get_gressierRecoil(Ein, T, M) / (kb * T))
+
+    @classmethod
+    def from_file(cls, file_path: str, delimiter: str = None, skiprows: int = 0,
+                  usecols: list = None):
+        """
+        Read a 1D array from a file.
+
+        Parameters
+        ----------
+        file_path : str
+            The path to the file.
+        delimiter : str, optional
+            The string used to separate values in the file.
+        skiprows : int, optional
+            The number of lines to skip at the beginning of the file.
+        usecols : int or sequence, optional
+            Which columns to read, with 0 being the first.
+
+        Returns
+        -------
+        "Alpha"
+            Alpha grid generated for the given combination of the input
+            parameters.
+        """
+        return cls(np.loadtxt(file_path, delimiter=delimiter, skiprows=skiprows,
+                              usecols=usecols))
 
     def get_recoil(self, T: float) -> pd.Series:
         """

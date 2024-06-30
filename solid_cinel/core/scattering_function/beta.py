@@ -273,6 +273,32 @@ class Beta:
         """
         return cls(get_beta(Ein, Eout, T))
 
+    @classmethod
+    def from_file(cls, file_path: str, delimiter: str = None, skiprows: int = 0,
+                  usecols: list = None):
+        """
+        Read a 1D array from a file.
+
+        Parameters
+        ----------
+        file_path : str
+            The path to the file.
+        delimiter : str, optional
+            The string used to separate values in the file.
+        skiprows : int, optional
+            The number of lines to skip at the beginning of the file.
+        usecols : int or sequence, optional
+            Which columns to read, with 0 being the first.
+
+        Returns
+        -------
+        "Alpha"
+            Alpha grid generated for the given combination of the input
+            parameters.
+        """
+        return cls(np.loadtxt(file_path, delimiter=delimiter, skiprows=skiprows,
+                              usecols=usecols))
+
     def get_dE(self, T: float) -> np.ndarray:
         """
         Get the dE from a beta grid:

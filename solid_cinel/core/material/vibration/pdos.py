@@ -179,7 +179,7 @@ class Tpdos:
         df = pd.read_csv(file, sep='\s+', header=header,
                          index_col=index_col,
                          usecols=usecols, engine=engine).iloc[::, 0]
-        df.index.name = "dE"
+        df.index.name = "beta"
         return cls(T, df)
 
     def from_dE_file(T: float, file: str, header=None, index_col=None,
@@ -646,7 +646,7 @@ class Epdos:
 
     @classmethod
     def from_file(cls, file: str, header: [int, list] = None,
-                  index_col: [int, list] = None, usecols: [int, list] = None,
+                  index_col: [int, list] = 0, usecols: [int, list] = [0, 1],
                   engine: str = "python"):
         """
         Extract rho in energy from the introduced file.
@@ -676,7 +676,7 @@ class Epdos:
         >>> os.chdir(__file__.replace("pdos.py", ""))
         >>> os.chdir("../../../data/pdos/")
         >>> file = "interp.300"
-        >>> Epdos.from_file(file, usecols=[0, 1], index_col=0).data.iloc[0:5]
+        >>> Epdos.from_file(file).data.iloc[0:5]
         dE
         0.0000    0.000000
         0.0004    0.041879
@@ -955,8 +955,8 @@ class Npdos:
 
     @classmethod
     def from_file(cls, T: [float, list], file: [str, list],
-                  header: [int, list] = None, index_col: [int, list] = None,
-                  usecols: [int, list] = None, engine: str = "python",
+                  header: [int, list] = None, index_col: [int, list] = 0,
+                  usecols: [int, list] = [0, 1], engine: str = "python",
                   grid: str = "dE"):
         """
         Extract rho in energy from the introduced file and create a Tpdos object
@@ -991,7 +991,7 @@ class Npdos:
         >>> os.chdir(__file__.replace("pdos.py", ""))
         >>> file = "../../../data/pdos/interp.300"
         >>> T = 300
-        >>> Npdos.from_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
+        >>> Npdos.from_file(T, file).data.iloc[0:5]
         T            300
         dE
         0.0000  0.000000
@@ -1116,10 +1116,12 @@ class Npdos:
             Ntemp = len(T_)
 
         # Check the energy interval input
-        intervalE_ = np.array(cls.check_list(intervalE)).reshape(-1, Ntemp)
+        intervalE_ = np.array(cls.check_list(intervalE))
+        if len(intervalE_) == 1:
+            intervalE_ = np.repeat(intervalE_, Ntemp)
 
         # Reshape the rho values:
-        rho_ = np.array(rho).reshape(-1, Ntemp)
+        rho_ = np.repeat(rho[::, np.newaxis], Ntemp, axis=1)
 
         # Create the Npdos object:
         return cls({T_[i]: Tpdos.from_dE(T_[i], rho_[::, i], intervalE_[i]) for i in range(Ntemp)})

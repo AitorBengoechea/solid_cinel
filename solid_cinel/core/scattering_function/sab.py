@@ -993,11 +993,11 @@ class Sab:
         0.000135  0.000502  0.000508  0.000471  0.000466  0.000467
         """
         # New alpha values in the appropriate format:
-        alphaNew_ = alphaNew if hasattr(alphaNew, '__len__') else [alphaNew]
+        alphaNew_ = self.check_alpha(alphaNew)
 
         # Interpolation of the new alpha values:
         alphaVec = []
-        for new_alpha in alphaNew_:
+        for new_alpha in alphaNew_.data:
             alphaVec.append(self._interp_alpha(new_alpha))
 
         # DataFrame construction with the new alpha values:

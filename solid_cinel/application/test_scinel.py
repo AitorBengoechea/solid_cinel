@@ -1,7 +1,12 @@
 import unittest
 import os
 import numpy as np
+
+# Application test:
 from solid_cinel.application.scinel import main
+
+# POO direct application:
+from solid_cinel.core.material.vibration.pdos import Pdos
 
 
 class TestScinel(unittest.TestCase):
@@ -19,7 +24,14 @@ class TestScinel(unittest.TestCase):
         keyword = 'Teff'
         file_dir = os.path.dirname(os.path.abspath(__file__))
         file = os.path.join(file_dir, '../data/pdos/interp.300')
-        expected_result = np.array([T, 317.01138912013226])
+
+        # Create Pdos object for the test:
+        pdos = Pdos.from_file([T], [file])
+
+        # Generate the expected result:
+        expected_result = np.array([T, pdos.fix_T(T).Teff])
+
+        # Check the results
         self.check_results(expected_result, keyword, str(T), file)
 
 if __name__ == '__main__':

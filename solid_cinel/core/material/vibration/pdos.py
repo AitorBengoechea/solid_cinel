@@ -1066,7 +1066,7 @@ class Npdos:
         return cls.from_file(file_dict.keys(), file_dict.values(), **kwargs)
 
     @classmethod
-    def from_dE(cls, T: list, rho: np.ndarray, intervalE: list):
+    def from_dE(cls, T: [float, list], rho: np.ndarray, intervalE: [float, list]):
         """
         Create a Npdos object from a list of Tpdos objects.
 
@@ -1106,25 +1106,24 @@ class Npdos:
         0.074269    0.028346
         Name: rho, dtype: float64
         """
-        # Check the input values
+        # Check the temperature input:
         T_ = np.array(cls.check_list(T))
-        Ntemp = len(T_)
 
-        # dE and intervalE must have the same length
-        intervalE_ = np.array(cls.check_list(intervalE))
-        if len(rho.shape) == 2 and rho.shape[0] != len(intervalE_):
-            raise ValueError("The number of rho and intervalE must be the same")
-
-        # Create the Npdos object
-        if Ntemp >= 2 and len(intervalE_) == 1:
-            # Dont use zero temperature:
-            T_ = T_[T_ != 0]
-            # Use the same intervalE for all the temperatures
-            return cls({T_[i]: Tpdos.from_dE(T_[i], rho, intervalE)
-                        for i in range(len(T_))})
+        # Dont use zero temperature:
+        if 0 in T_:
+            raise ValueError("Zero temperature is not allowed")
         else:
-            return cls({T_[i]: Tpdos.from_dE(T_[i], rho[i], intervalE_[i])
-                        for i in range(Ntemp)})
+            Ntemp = len(T_)
+
+        # Check the energy interval input
+        intervalE_ = np.array(cls.check_list(intervalE)).reshape(-1, Ntemp)
+
+        # Reshape the rho values:
+        rho_ = np.array(rho).reshape(-1, Ntemp)
+
+        # Create the Npdos object:
+        return cls({T_[i]: Tpdos.from_dE(T_[i], rho_[::, i], intervalE_[i]) for i in range(Ntemp)})
+
 
     def compute_spline(self):
         """
@@ -1301,23 +1300,26 @@ class Pdos:
             self.instance = Npdos(*args, **kwargs)
 
     @classmethod
-    def _from(cls, method, *args, **kwargs):
+    def from_dE(cls, *args, **kwargs):
         if len(args) == 0:
             raise TypeError("No arguments provided")
-        elif len(args) == 1:
-            return cls(getattr(Epdos, method)(*args, **kwargs))
         elif isinstance(args[0], (int, float)):
-            return cls(getattr(Tpdos, method)(*args, **kwargs))
+            return cls(getattr(Tpdos, 'from_dE')(*args, **kwargs))
+        elif len(args) == 3:
+            return cls(getattr(Npdos, 'from_dE')(*args, **kwargs))
         else:
-            return cls(getattr(Npdos, method)(*args, **kwargs))
-
-    @classmethod
-    def from_dE(cls, *args, **kwargs):
-        return cls._from('from_dE', *args, **kwargs)
+            return cls(getattr(Epdos, 'from_dE')(*args, **kwargs))
 
     @classmethod
     def from_file(cls, *args, **kwargs):
-        return cls._from('from_file', *args, **kwargs)
+        if len(args) == 0:
+            raise TypeError("No arguments provided")
+        elif len(args) == 1:
+            return cls(getattr(Epdos, 'from_file')(*args, **kwargs))
+        elif isinstance(args[0], (int, float)):
+            return cls(getattr(Tpdos, 'from_file')(*args, **kwargs))
+        else:
+            return cls(getattr(Npdos, 'from_file')(*args, **kwargs))
 
     @classmethod
     def from_directory(cls, *args, **kwargs):

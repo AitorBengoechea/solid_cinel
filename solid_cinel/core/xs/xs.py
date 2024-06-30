@@ -1053,7 +1053,7 @@ class Xs:
         >>> mu = np.cos(np.deg2rad(theta))
         >>> T4PCF = T * (1 + mu) / 2
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-        >>> pdos = Pdos.from_dE(T4PCF, rho_in_energy_U238, interv_in_energy_U238)
+        >>> pdos = Pdos.from_dE(T4PCF[1::], rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta

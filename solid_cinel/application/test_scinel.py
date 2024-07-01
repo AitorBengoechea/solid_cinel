@@ -13,7 +13,22 @@ from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
 from solid_cinel.core.material.vibration.pdos import Pdos
 
 
-def check_results(expected_result, *command_line_args):
+def check_results(expected_result: np.array, *command_line_args) -> None:
+    """
+    Check the results of the command line arguments.
+
+    Parameters
+    ----------
+    expected_result : np.array
+        The expected result.
+    command_line_args : list
+        The command line arguments.
+
+    Returns
+    -------
+    None
+        Pass the test if the results are equal.
+    """
     # Create a parser to simulate the command line arguments
     result = main(*command_line_args, write_to_file=False)
 
@@ -22,7 +37,13 @@ def check_results(expected_result, *command_line_args):
 
 
 class TestScinelSab(unittest.TestCase):
-    def setUp(self):
+    """
+    Test the Sab class terminal application in the solid_cinel package.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables.
+        """
         self.T = 300
         self.keyword = 'sab'
         self.file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +52,10 @@ class TestScinelSab(unittest.TestCase):
         self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
 
-    def test_fgm(self):
+    def test_fgm(self) -> None:
+        """
+        Test the fgm model for the generating S(alpha, -beta) tables.
+        """
         # Generate the expected result:
         expected_result = Sab.from_fgm(self.file_alpha, self.file_beta).data.values
 
@@ -39,7 +63,10 @@ class TestScinelSab(unittest.TestCase):
         check_results(expected_result, self.keyword, 'fgm',
                       self.file_alpha, self.file_beta, str(self.T))
 
-    def test_sct(self):
+    def test_sct(self) -> None:
+        """
+        Test the sct model for the generating S(alpha, -beta) tables.
+        """
         # Generate the expected result:
         expected_result = Sab.from_sct(self.file_alpha, self.file_beta, self.T,
                                        self.pdos).data.values
@@ -48,7 +75,10 @@ class TestScinelSab(unittest.TestCase):
         check_results(expected_result, self.keyword, 'sct',
                       self.file_alpha, self.file_beta, str(self.T), self.file_pdos)
 
-    def test_pdos(self):
+    def test_pdos(self) -> None:
+        """
+        Test the pdos model for the generating S(alpha, -beta) tables.
+        """
         # Generate the expected result:
         expected_result = Sab.from_pdos(self.file_alpha, self.file_beta, self.T,
                                         self.pdos).data.values
@@ -59,8 +89,14 @@ class TestScinelSab(unittest.TestCase):
 
 
 class TestScinelScatFunc(unittest.TestCase):
+    """
+    Test the ScatFunc class terminal application in the solid_cinel package.
+    """
 
-    def setUp(self):
+    def setUp(self) -> None:
+        """
+        Set up the test common variables.
+        """
         self.T = 1000
         self.keyword = 'scatfunc'
         self.file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -73,7 +109,10 @@ class TestScinelScatFunc(unittest.TestCase):
         self.mu = np.cos(np.deg2rad(np.loadtxt(self.file_theta)))
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
 
-    def test_fgm(self):
+    def test_fgm(self) -> None:
+        """
+        Test the fgm model for the generating Van Hove scattering function tables.
+        """
         # Generate the expected result:
         expected_result = ScatFunc.from_fgm(self.Ein, self.M, self.T, self.Eout,
                                             self.mu).data.values
@@ -83,7 +122,10 @@ class TestScinelScatFunc(unittest.TestCase):
                       str(self.Ein), str(self.M), str(self.T), self.file_Eout,
                       self.file_theta)
 
-    def test_sct(self):
+    def test_sct(self) -> None:
+        """
+        Test the sct model for the generating Van Hove scattering function tables.
+        """
         # Generate the expected result:
         expected_result = ScatFunc.from_sct(self.Ein, self.M, self.T, self.Eout,
                                             self.mu, self.pdos).data.values
@@ -93,7 +135,10 @@ class TestScinelScatFunc(unittest.TestCase):
                       str(self.Ein), str(self.M), str(self.T), self.file_Eout,
                       self.file_theta, self.file_pdos)
 
-    def test_pdos(self):
+    def test_pdos(self) -> None:
+        """
+        Test the pdos model for the generating Van Hove scattering function tables.
+        """
         # Generate the expected result:
         expected_result = ScatFunc.from_pdos(self.Ein, self.M, self.T, self.Eout,
                                             self.mu, self.pdos).data.values
@@ -105,7 +150,13 @@ class TestScinelScatFunc(unittest.TestCase):
 
 
 class TestScinelTransferFunc(unittest.TestCase):
-    def setUp(self):
+    """
+    Test the TransferFunc class terminal application in the solid_cinel package.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables.
+        """
         self.T = 1000
         self.keyword = 'scatfunc'
         self.file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -117,7 +168,10 @@ class TestScinelTransferFunc(unittest.TestCase):
         self.Eout = np.loadtxt(self.file_Eout)
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
 
-    def test_fgm(self):
+    def test_fgm(self) -> None:
+        """
+        Test the fgm model for generating transfer function based on an angle.
+        """
         # Generate the expected result:
         model = 'fgm'
         expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
@@ -126,7 +180,10 @@ class TestScinelTransferFunc(unittest.TestCase):
         check_results(expected_result, self.keyword, model,
                       str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta))
 
-    def test_sct(self):
+    def test_sct(self) -> None:
+        """
+        Test the sct model for generating transfer function based on an angle.
+        """
         # Generate the expected result:
         model = 'sct'
         expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
@@ -137,7 +194,10 @@ class TestScinelTransferFunc(unittest.TestCase):
                       str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta),
                       self.file_pdos)
 
-    def test_pdos(self):
+    def test_pdos(self) -> None:
+        """
+        Test the pdos model for generating transfer function based on an angle.
+        """
         # Generate the expected result:
         model = 'pdos'
         expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
@@ -149,15 +209,24 @@ class TestScinelTransferFunc(unittest.TestCase):
                       self.file_pdos)
 
 class TestScinelTeff(unittest.TestCase):
-
-    def setUp(self):
+    """
+    Test the Effective temperature calculation in terminal application in the
+    solid_cinel package.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables
+        """
         self.T = 300
         self.keyword = 'teff'
         self.file_dir = os.path.dirname(os.path.abspath(__file__))
         self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
 
-    def test_teff(self):
+    def test_teff(self) -> None:
+        """
+        Test the effective temperature calculation
+        """
         # Generate the expected result
         expected_result = np.array([self.T, self.pdos.fix_T(self.T).Teff])
 

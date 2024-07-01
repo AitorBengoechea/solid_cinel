@@ -8,7 +8,7 @@ from solid_cinel.core.generic import integrate, reshape_differential, interp_mul
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNfunc, gpu_available, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.scattering_function.alpha import Alpha
+from solid_cinel.core.scattering_function.alpha import Alpha, get_expansionOrder
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -97,6 +97,28 @@ class Sab:
         """
         return Alpha(self.data.index.values)
 
+    @staticmethod
+    def check_alpha(alpha: Union[Alpha, Iterable, str]) -> Alpha:
+        """
+        Generate the Alpha class for the creation of S(alpha, beta) table.
+
+        Parameters
+        ----------
+        alpha : Union[Alpha, Iterable, str]
+            Alpha grid information in different formats.
+
+        Returns
+        -------
+        Alpha
+            Alpha class with the alpha grid information.
+        """
+        if isinstance(alpha, Alpha):
+            return alpha
+        elif isinstance(alpha, str):
+            return Alpha.from_file(alpha)
+        else:
+            return Alpha(alpha)
+
     @property
     def beta(self) -> Beta:
         """
@@ -104,6 +126,56 @@ class Sab:
         matrix
         """
         return Beta(self.data.columns.values)
+
+    @staticmethod
+    def check_beta(beta: Union[Beta, Iterable, str]) -> Beta:
+        """
+        Generate the Beta class for the creation of S(alpha, beta) table.
+
+        Parameters
+        ----------
+        beta : Union[Beta, Iterable, str]
+            Beta grid information in different formats.
+
+        Returns
+        -------
+        Beta
+            Beta class with the beta grid information in absolute values.
+        """
+        # Create the Beta class:
+        if isinstance(beta, Beta):
+            beta_ = beta
+        elif isinstance(beta, str):
+            beta_ = Beta.from_file(beta)
+        else:
+            beta_ = Beta(beta)
+
+        # Check if the beta grid is absolute or not:
+        if beta_.kind == "abs":
+            return beta_
+        else:
+            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
+
+    @classmethod
+    def setup_alpha_beta(cls, alpha: Union[Beta, Iterable, str],
+                          beta: Union[Beta, Iterable, str]) -> [np.array, np.array]:
+        """
+        Setup the Alpha and Beta grids for the calculation of S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        alpha : Union[Beta, Iterable, str]
+            Alpha grid information in different formats.
+        beta : Union[Beta, Iterable, str]
+            Beta grid information in different formats.
+
+        Returns
+        -------
+        np.array, np.array
+            Alpha and Beta grid arrays.
+        """
+        # Get the Alpha and Beta classes:
+        return cls.check_alpha(alpha).data, cls.check_beta(beta).data
 
     @property
     def data(self) -> pd.DataFrame:
@@ -209,8 +281,8 @@ class Sab:
         return Sab_complete if len(Sab_complete.index) > 1 else Sab_complete.iloc[0]
 
     @classmethod
-    def from_fgm(cls, alpha: Union[Alpha, Iterable],
-                 beta: Union[Beta, Iterable], T: float = None, wt: float = 1):
+    def from_fgm(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                 T: float = None, wt: float = 1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
         .. math::
@@ -251,24 +323,17 @@ class Sab:
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        # Get the beta grid in the Beta class:
-        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
-
-        # Get the alpha grid in the Alpha class:
-        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Get the S(alpha, -beta) matrix:
-        if beta_.kind == "abs":
-            S_values = get_SabSct(alpha_.data, - beta_.data, 1.0, wt)
-        else:
-            raise ValueError(
-                "The beta grid contains negative values and the input is the absolute beta grid")
-        return cls(S_values, index=alpha_.data, columns=beta_.data)
+        S_values = get_SabSct(alpha_, - beta_, 1.0, wt)
+
+        return cls(S_values, index=alpha_, columns=beta_)
 
     @classmethod
-    def from_sct(cls, alpha: Union[Alpha, Iterable[int]],
-                 beta: Union[Beta, Iterable[int]], T: float, pdos: Pdos,
-                 ws: float = 1):
+    def from_sct(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                 T: float, pdos: Pdos, ws: float = 1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
         .. math::
@@ -325,24 +390,17 @@ class Sab:
             warnings.warn("The effective temperature is not defined, the ratio will be 1")
             ratio = 1.0
 
-        # Get the beta grid in the Beta class:
-        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
-
-        # Get the alpha grid in the Alpha class:
-        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Get the S(alpha, -beta) matrix:
-        if beta_.kind == "abs":
-            S_values = get_SabSct(alpha_.data, - beta_.data, ratio, ws)
-        else:
-            raise ValueError(
-                "The beta grid contains negative values and the input is the absolute beta grid")
-        return cls(S_values, index=alpha_.data, columns=beta_.data)
+        S_values = get_SabSct(alpha_, - beta_, ratio, ws)
+
+        return cls(S_values, index=alpha_, columns=beta_)
 
     @classmethod
-    def from_pdos(cls, alpha: Union[Alpha, Iterable],
-                  beta: Union[Beta, Iterable], T: float, pdos: Pdos,
-                  nphonon: int = None, **kwargs):
+    def from_pdos(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                  T: float, pdos: Pdos, nphonon: int = None, **kwargs):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -404,17 +462,14 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        # Get the beta grid in the Beta class:
-        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
-
-        # Get the alpha grid in the Alpha class:
-        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos.fix_T(T)
 
         # Get the Debye-Waller coefficient:
-        debye_waller_coeff = cls.pdos.DebyeWallerCoeff
+        DebyeWallerCoeff = cls.pdos.DebyeWallerCoeff
 
         # Get the Expansion order:
         if nphonon:
@@ -422,21 +477,19 @@ class Sab:
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
             order_max = kwargs.get("order_max", 5000)
-            nphonon = alpha_.expansionOrder(debye_waller_coeff, decimal, order_max)
+            nphonon = get_expansionOrder(alpha_, DebyeWallerCoeff, decimal, order_max)
 
         # Get tauN function:
-        tauN = cls.pdos.tauN(nphonon, threshold=kwargs.get("threshold", 0.0), values=True)
+        threshold = kwargs.get("threshold", 0.0)
+        tauN = cls.pdos.tauN(nphonon, threshold=threshold, values=True)
 
         # Get tauN beta grid values:
         tauNbeta = get_tauNbeta(cls.pdos.beta.data, tauN.shape[1])
 
         # Get the S(alpha, -beta) matrix:
-        S_values = phonon_expansion(alpha_.data, beta_.data,
-                                    nphonon,
-                                    tauN, tauNbeta,
-                                    debye_waller_coeff)
+        S_values = phonon_expansion(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
 
-        return cls(S_values, columns=beta_.data, index=alpha_.data)
+        return cls(S_values, columns=beta_, index=alpha_)
 
     @classmethod
     def from_model(cls, *args, model: str = "pdos", **kwargs):
@@ -565,9 +618,8 @@ class Sab:
             return cls.from_pdos(*args, **kwargs)
 
     @classmethod
-    def from_tau(cls, alpha: Union[Alpha, Iterable],
-                 beta: Union[Beta, Iterable], tauN: np.ndarray,
-                 tauNbeta: np.ndarray, DebyeWallerCoeff: float):
+    def from_tau(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float):
         """
         Generate S(alpha, -beta) matrix using tauN functions.
         .. math::
@@ -626,22 +678,16 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        # Get the beta grid in the Beta class:
-        beta_ = beta if isinstance(beta, Beta) else Beta(beta)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
-        # Get the alpha grid in the Alpha class:
-        alpha_ = alpha if isinstance(alpha, Alpha) else Alpha(alpha)
-
-        # # Get the Debye-Waller coefficient:
+        # Get the Debye-Waller coefficient:
         cls.DebyeWallerCoeff = DebyeWallerCoeff
 
         # Get the S(alpha, -beta) matrix:
-        S_values = phonon_expansion(alpha_.data, beta_.data,
-                                    tauN.shape[0],  # nphonon
-                                    tauN, tauNbeta,
-                                    DebyeWallerCoeff)
+        S_values = phonon_expansion(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
 
-        return cls(S_values, columns=beta_.data, index=alpha_.data)
+        return cls(S_values, columns=beta_, index=alpha_)
 
     @classmethod
     def from_alpha0(cls, Ein: [int, float, np.ndarray], T: float, M: float,
@@ -736,8 +782,7 @@ class Sab:
         10.056229  0.007830  0.007881  0.007932  0.007983  0.008034
         """
         alpha = Alpha.from_recoil(Ein, T, M)
-        return cls.from_model(alpha, beta, T, *args, model=model,
-                              **kwargs)
+        return cls.from_model(alpha, beta, T, *args, model=model, **kwargs)
 
     @staticmethod
     def SumRule_check(S: pd.DataFrame) -> None:
@@ -816,8 +861,7 @@ class Sab:
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
-    def interp_beta(self, betaNew: Union[Iterable, float],
-                 add: bool = False) -> pd.DataFrame:
+    def interp_beta(self, betaNew: Union[Iterable, float], add: bool = False) -> pd.DataFrame:
         """
         Quadratic interpolation to get the probability of the new beta value
         for all the alpha existing in the S(alpha, -beta) matrix:
@@ -900,8 +944,7 @@ class Sab:
         else:
             return beta_df
 
-    def interp_alpha(self, alphaNew: Union[Iterable, float],
-                     add: bool = False) -> pd.DataFrame:
+    def interp_alpha(self, alphaNew: Union[Iterable, float], add: bool = False) -> pd.DataFrame:
         """
         Unit base interpolation to get the probability of the new alpha values
         for all the beta existing in the S(alpha, -beta) matrix.
@@ -957,11 +1000,11 @@ class Sab:
         0.000135  0.000502  0.000508  0.000471  0.000466  0.000467
         """
         # New alpha values in the appropriate format:
-        alphaNew_ = alphaNew if hasattr(alphaNew, '__len__') else [alphaNew]
+        alphaNew_ = self.check_alpha(alphaNew)
 
         # Interpolation of the new alpha values:
         alphaVec = []
-        for new_alpha in alphaNew_:
+        for new_alpha in alphaNew_.data:
             alphaVec.append(self._interp_alpha(new_alpha))
 
         # DataFrame construction with the new alpha values:
@@ -1061,8 +1104,8 @@ class Sab:
         return pd.DataFrame(alphaNewVec,
                             columns=pd.Index([alphaNew], name="alpha"))
 
-    def interp_alphaBeta(self, alpha: Union[Iterable, float],
-                         beta: Union[Iterable, float]) -> pd.DataFrame:
+    def interp_alphaBeta(self, alpha: Union[Iterable, float, str],
+                         beta: Union[Iterable, float, str]) -> pd.DataFrame:
         """
         Get intepolated values for the beta and alpha values from the
         S(alpha, beta) matrix. This method take into account the sing of the
@@ -1102,7 +1145,7 @@ class Sab:
         0.000135  0.000503  0.000512  0.000506  0.000488
         """
         # New alpha values in the appropriate format:
-        alpha_ = alpha if hasattr(alpha, '__len__') else [alpha]
+        alpha_ = self.check_alpha(alpha)
 
         # New beta values in the appropriate format:
         beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
@@ -1292,7 +1335,7 @@ def _phonon_expansion_cpu(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarra
     return sabValues
 
 
-def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
+def phonon_expansion(alpha: np.ndarray, beta: np.ndarray,
                      tauN: np.ndarray, tauNbeta: np.ndarray,
                      DebyeWallerCoeff: float) -> np.ndarray:
     """
@@ -1321,6 +1364,9 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray, nphonon: int,
     'xp.ndarray', (N, M)
         S(alpha, -beta) matrix values.
     """
+    # Get the number of phonon expansion:
+    nphonon = tauN.shape[0]
+
     # Interpolation of the tauN functions to avoid extra calculations:
     tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
 

@@ -1,8 +1,7 @@
 import argparse
 import numpy as np
-#from solid_cinel.core.material.scattering_function.beta import Beta
-#from solid_cinel.core.material.scattering_function.alpha import Alpha
-#from solid_cinel.core.scattering_function.sab import Sab
+from solid_cinel.application.pdosApp import get_Pdos
+from solid_cinel.core.scattering_function.sab import Sab
 
 
 
@@ -16,7 +15,14 @@ def add_SabArgs(parser: argparse.ArgumentParser):
     parser : argparse.ArgumentParser
         The argument parser to which the arguments should be added.
     """
-    pass
+    parser.add_argument('model', type=str,
+                        help='Model to use for the calculation of the S(alpha, -beta) table')
+    parser.add_argument('alpha', type=str,
+                        help='alpha grid')
+    parser.add_argument('beta', type=str,
+                        help='beta grid')
+    parser.add_argument('T', type=float,
+                        help='Temperature in Kelvin')
 
 
 def handle_SabArgs(args: argparse.Namespace) -> np.array:
@@ -33,5 +39,17 @@ def handle_SabArgs(args: argparse.Namespace) -> np.array:
     np.array
         An array containing the input temperature and the calculated effective temperature.
     """
-    # Check if dE is provided
-    pass
+    # Validate temperature
+    if args.T < 0:
+        raise ValueError("Temperature must be greater than 0")
+
+    # Get Sab class based on the model
+    if args.model == "pdos":
+        sab = Sab.from_pdos(args.alpha, args.beta, args.T, get_Pdos(args))
+    elif args.model == "sct":
+        sab = Sab.from_sct(args.alpha, args.beta, args.T, get_Pdos(args))
+    else:
+        sab = Sab.from_fgm(args.alpha, args.beta, args.T)
+
+    # Return the values of the S(alpha, -beta) table
+    return sab.data.values

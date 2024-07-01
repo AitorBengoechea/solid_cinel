@@ -13,225 +13,158 @@ from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
 from solid_cinel.core.material.vibration.pdos import Pdos
 
 
-class TestScinel(unittest.TestCase):
+def check_results(expected_result, *command_line_args):
+    # Create a parser to simulate the command line arguments
+    result = main(*command_line_args, write_to_file=False)
 
-    def check_results(self, expected_result, *command_line_args):
-        # Create a parser to simulate the command line arguments
-        result = main(*command_line_args, write_to_file=False)
+    # Check the returned result
+    np.testing.assert_array_equal(result, expected_result)
 
-        # Check the returned result
-        np.testing.assert_array_equal(result, expected_result)
 
-    def test_Teff(self):
-        # Input simulation parameters:
-        keyword = 'Teff'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
+class TestScinelSab(unittest.TestCase):
+    def setUp(self):
+        self.T = 300
+        self.keyword = 'sab'
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
+        self.file_alpha = os.path.join(self.file_dir, 'inputTest/alphaGrid')
+        self.file_beta = os.path.join(self.file_dir, 'inputTest/betaGrid')
+        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
+        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
 
-        # Input simulation parameters
-        T = 300
-        file = os.path.join(file_dir, 'inputTest/interp.300')
-
+    def test_fgm(self):
         # Generate the expected result:
-        pdos = Pdos.from_file([T], [file])
-        expected_result = np.array([T, pdos.fix_T(T).Teff])
+        expected_result = Sab.from_fgm(self.file_alpha, self.file_beta).data.values
 
-        # Check the results
-        self.check_results(expected_result, keyword, str(T), file)
+        # Check the results:
+        check_results(expected_result, self.keyword, 'fgm',
+                      self.file_alpha, self.file_beta, str(self.T))
 
-    def test_Sab_fgm(self):
-        # Input simulation parameters:
-        T = 300
-        keyword = 'sab'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
+    def test_sct(self):
+        # Generate the expected result:
+        expected_result = Sab.from_sct(self.file_alpha, self.file_beta, self.T,
+                                       self.pdos).data.values
 
-        # Input simulation parameters for FGM:
+        # Check the results:
+        check_results(expected_result, self.keyword, 'sct',
+                      self.file_alpha, self.file_beta, str(self.T), self.file_pdos)
+
+    def test_pdos(self):
+        # Generate the expected result:
+        expected_result = Sab.from_pdos(self.file_alpha, self.file_beta, self.T,
+                                        self.pdos).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, 'pdos',
+                      self.file_alpha, self.file_beta, str(self.T), self.file_pdos)
+
+
+class TestScinelScatFunc(unittest.TestCase):
+
+    def setUp(self):
+        self.T = 1000
+        self.keyword = 'scatfunc'
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
+        self.Ein = 7.2
+        self.M = 238.05077040419212
+        self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
+        self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
+        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
+        self.Eout = np.loadtxt(self.file_Eout)
+        self.mu = np.cos(np.deg2rad(np.loadtxt(self.file_theta)))
+        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+
+    def test_fgm(self):
+        # Generate the expected result:
+        expected_result = ScatFunc.from_fgm(self.Ein, self.M, self.T, self.Eout,
+                                            self.mu).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, 'fgm',
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      self.file_theta)
+
+    def test_sct(self):
+        # Generate the expected result:
+        expected_result = ScatFunc.from_sct(self.Ein, self.M, self.T, self.Eout,
+                                            self.mu, self.pdos).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, "sct",
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      self.file_theta, self.file_pdos)
+
+    def test_pdos(self):
+        # Generate the expected result:
+        expected_result = ScatFunc.from_pdos(self.Ein, self.M, self.T, self.Eout,
+                                            self.mu, self.pdos).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, "pdos",
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      self.file_theta, self.file_pdos)
+
+
+class TestScinelTransferFunc(unittest.TestCase):
+    def setUp(self):
+        self.T = 1000
+        self.keyword = 'scatfunc'
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
+        self.Ein = 7.2
+        self.M = 238.05077040419212
+        self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
+        self.theta = 60
+        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
+        self.Eout = np.loadtxt(self.file_Eout)
+        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+
+    def test_fgm(self):
+        # Generate the expected result:
         model = 'fgm'
-        file_alpha = os.path.join(file_dir, 'inputTest/alphaGrid')
-        file_beta = os.path.join(file_dir, 'inputTest/betaGrid')
+        expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
+                                                  model=model).data.values
+        # Check the results:
+        check_results(expected_result, self.keyword, model,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta))
 
+    def test_sct(self):
         # Generate the expected result:
-        expected_result = Sab.from_fgm(file_alpha, file_beta).data.values
+        model = 'sct'
+        expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
+                                                  self.pdos, model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, model,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta),
+                      self.file_pdos)
+
+    def test_pdos(self):
+        # Generate the expected result:
+        model = 'pdos'
+        expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
+                                                  self.pdos, model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, model,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta),
+                      self.file_pdos)
+
+class TestScinelTeff(unittest.TestCase):
+
+    def setUp(self):
+        self.T = 300
+        self.keyword = 'teff'
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
+        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
+        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+
+    def test_teff(self):
+        # Generate the expected result
+        expected_result = np.array([self.T, self.pdos.fix_T(self.T).Teff])
 
         # Check the results
-        self.check_results(expected_result, keyword, model, file_alpha,
-                           file_beta, str(T))
+        check_results(expected_result, 'Teff', str(self.T),
+                      self.file_pdos)
 
-    def test_Sab_sct(self):
-        # Input simulation parameters:
-        T = 300
-        keyword = 'sab'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for Sct:
-        model = 'sct'
-        file_alpha = os.path.join(file_dir, 'inputTest/alphaGrid')
-        file_beta = os.path.join(file_dir, 'inputTest/betaGrid')
-        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
-
-        # Generate the expected result:
-        pdos = Pdos.from_file([T], [file_pdos])
-        expected_result = Sab.from_sct(file_alpha, file_beta, T, pdos).data.values
-
-        # Check the results
-        self.check_results(expected_result, keyword, model, file_alpha,
-                           file_beta, str(T), file_pdos)
-
-    def test_Sab_pdos(self):
-        # Input simulation parameters:
-        T = 300
-        keyword = 'sab'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for Sct:
-        model = 'pdos'
-        file_alpha = os.path.join(file_dir, 'inputTest/alphaGrid')
-        file_beta = os.path.join(file_dir, 'inputTest/betaGrid')
-        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
-
-        # Generate the expected result:
-        pdos = Pdos.from_file([T], [file_pdos])
-        expected_result = Sab.from_pdos(file_alpha, file_beta, T, pdos).data.values
-
-        # Check the results
-        self.check_results(expected_result, keyword, model, file_alpha,
-                           file_beta, str(T), file_pdos)
-
-    def test_ScatFunc_fgm(self):
-        # Input simulation parameters:
-        T = 1000
-        keyword = 'scatfunc'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for FGM:
-        model = 'fgm'
-        Ein = 7.2
-        M = 238.05077040419212
-        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
-        file_theta = os.path.join(file_dir, 'inputTest/thetaGrid')
-
-        # Generate the expected result:
-        mu = np.cos(np.deg2rad(np.loadtxt(file_theta)))
-        Eout = np.loadtxt(file_Eout)
-        expected_result = ScatFunc.from_fgm(Ein, M, T, Eout, mu).data.values
-
-        # Check the results:
-        self.check_results(expected_result, keyword, model, str(Ein), str(M),
-                           str(T), file_Eout, file_theta)
-
-    def test_ScatFunc_sct(self):
-        # Input simulation parameters:
-        T = 1000
-        keyword = 'scatfunc'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for FGM:
-        model = 'sct'
-        Ein = 7.2
-        M = 238.05077040419212
-        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
-        file_theta = os.path.join(file_dir, 'inputTest/thetaGrid')
-        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
-
-        # Generate the expected result:
-        pdos = Pdos.from_file([T], [file_pdos])
-        mu = np.cos(np.deg2rad(np.loadtxt(file_theta)))
-        Eout = np.loadtxt(file_Eout)
-        expected_result = ScatFunc.from_sct(Ein, M, T, Eout, mu, pdos).data.values
-
-        # Check the results:
-        self.check_results(expected_result, keyword, model, str(Ein), str(M),
-                           str(T), file_Eout, file_theta, file_pdos)
-
-    def test_ScatFunc_pdos(self):
-        # Input simulation parameters:
-        T = 1000
-        keyword = 'scatfunc'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for FGM:
-        model = 'pdos'
-        Ein = 7.2
-        M = 238.05077040419212
-        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
-        file_theta = os.path.join(file_dir, 'inputTest/thetaGrid')
-        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
-
-        # Generate the expected result:
-        pdos = Pdos.from_file([T], [file_pdos])
-        mu = np.cos(np.deg2rad(np.loadtxt(file_theta)))
-        Eout = np.loadtxt(file_Eout)
-        expected_result = ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos).data.values
-
-        # Check the results:
-        self.check_results(expected_result, keyword, model, str(Ein), str(M),
-                           str(T), file_Eout, file_theta, file_pdos)
-
-    def test_TransferFunc_fgm(self):
-        # Input simulation parameters:
-        T = 1000
-        keyword = 'scatfunc'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for FGM:
-        model = 'fgm'
-        Ein = 7.2
-        M = 238.05077040419212
-        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
-        theta = 60
-
-        # Generate the expected result:
-        Eout = np.loadtxt(file_Eout)
-        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta, model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, keyword, model, str(Ein), str(M),
-                           str(T), file_Eout, str(theta))
-
-    def test_TransferFunc_sct(self):
-        # Input simulation parameters:
-        T = 1000
-        keyword = 'scatfunc'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for FGM:
-        model = 'sct'
-        Ein = 7.2
-        M = 238.05077040419212
-        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
-        theta = 60
-        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
-
-        # Generate the expected result:
-        Eout = np.loadtxt(file_Eout)
-        pdos = Pdos.from_file([T], [file_pdos])
-        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, keyword, model, str(Ein), str(M),
-                           str(T), file_Eout, str(theta), file_pdos)
-
-    def test_TransferFunc_pdos(self):
-        # Input simulation parameters:
-        T = 1000
-        keyword = 'scatfunc'
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Input simulation parameters for FGM:
-        model = 'pdos'
-        Ein = 7.2
-        M = 238.05077040419212
-        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
-        theta = 60
-        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
-
-        # Generate the expected result:
-        Eout = np.loadtxt(file_Eout)
-        pdos = Pdos.from_file([T], [file_pdos])
-        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, keyword, model, str(Ein), str(M),
-                           str(T), file_Eout, str(theta), file_pdos)
 
 if __name__ == '__main__':
     unittest.main()

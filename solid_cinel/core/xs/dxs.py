@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import TransferFunc, ScatFunc
-from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_alpha, get_alphaMat
+from solid_cinel.core.scattering_function.alpha import get_alpha, get_alphaMat
 from solid_cinel.core.generic import integrate, reshift, interpolation
 import os
 from typing import Iterable

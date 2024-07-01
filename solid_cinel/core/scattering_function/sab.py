@@ -260,8 +260,8 @@ class Sab:
         return Sab_complete if len(Sab_complete.index) > 1 else Sab_complete.iloc[0]
 
     @classmethod
-    def from_fgm(cls, alpha: Union[Alpha, Iterable],
-                 beta: Union[Beta, Iterable], T: float = None, wt: float = 1):
+    def from_fgm(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                 T: float = None, wt: float = 1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
         .. math::
@@ -314,9 +314,8 @@ class Sab:
         return cls(S_values, index=alpha_.data, columns=beta_.data)
 
     @classmethod
-    def from_sct(cls, alpha: Union[Alpha, Iterable[int]],
-                 beta: Union[Beta, Iterable[int]], T: float, pdos: Pdos,
-                 ws: float = 1):
+    def from_sct(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                 T: float, pdos: Pdos, ws: float = 1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
         .. math::
@@ -385,9 +384,8 @@ class Sab:
         return cls(S_values, index=alpha_.data, columns=beta_.data)
 
     @classmethod
-    def from_pdos(cls, alpha: Union[Alpha, Iterable],
-                  beta: Union[Beta, Iterable], T: float, pdos: Pdos,
-                  nphonon: int = None, **kwargs):
+    def from_pdos(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                  T: float, pdos: Pdos, nphonon: int = None, **kwargs):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -607,9 +605,8 @@ class Sab:
             return cls.from_pdos(*args, **kwargs)
 
     @classmethod
-    def from_tau(cls, alpha: Union[Alpha, Iterable],
-                 beta: Union[Beta, Iterable], tauN: np.ndarray,
-                 tauNbeta: np.ndarray, DebyeWallerCoeff: float):
+    def from_tau(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float):
         """
         Generate S(alpha, -beta) matrix using tauN functions.
         .. math::

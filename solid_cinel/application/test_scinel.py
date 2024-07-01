@@ -118,5 +118,53 @@ class TestScinel(unittest.TestCase):
         self.check_results(expected_result, keyword, model, str(Ein), str(M),
                            str(T), file_Eout, file_theta)
 
+    def test_ScatFunc_sct(self):
+        # Input simulation parameters:
+        T = 1000
+        keyword = 'scatfunc'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for FGM:
+        model = 'sct'
+        Ein = 7.2
+        M = 238.05077040419212
+        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
+        file_theta = os.path.join(file_dir, 'inputTest/thetaGrid')
+        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
+
+        # Generate the expected result:
+        pdos = Pdos.from_file([T], [file_pdos])
+        mu = np.cos(np.deg2rad(np.loadtxt(file_theta)))
+        Eout = np.loadtxt(file_Eout)
+        expected_result = ScatFunc.from_sct(Ein, M, T, Eout, mu, pdos).data.values
+
+        # Check the results:
+        self.check_results(expected_result, keyword, model, str(Ein), str(M),
+                           str(T), file_Eout, file_theta, file_pdos)
+
+    def test_ScatFunc_pdos(self):
+        # Input simulation parameters:
+        T = 1000
+        keyword = 'scatfunc'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for FGM:
+        model = 'pdos'
+        Ein = 7.2
+        M = 238.05077040419212
+        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
+        file_theta = os.path.join(file_dir, 'inputTest/thetaGrid')
+        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
+
+        # Generate the expected result:
+        pdos = Pdos.from_file([T], [file_pdos])
+        mu = np.cos(np.deg2rad(np.loadtxt(file_theta)))
+        Eout = np.loadtxt(file_Eout)
+        expected_result = ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos).data.values
+
+        # Check the results:
+        self.check_results(expected_result, keyword, model, str(Ein), str(M),
+                           str(T), file_Eout, file_theta, file_pdos)
+
 if __name__ == '__main__':
     unittest.main()

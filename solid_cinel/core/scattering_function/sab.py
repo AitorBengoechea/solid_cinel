@@ -8,7 +8,7 @@ from solid_cinel.core.generic import integrate, reshape_differential, interp_mul
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNfunc, gpu_available, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.scattering_function.alpha import Alpha
+from solid_cinel.core.scattering_function.alpha import Alpha, get_expansionOrder
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -156,6 +156,27 @@ class Sab:
         else:
             raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
 
+    @classmethod
+    def setup_alpha_beta(cls, alpha: Union[Beta, Iterable, str],
+                          beta: Union[Beta, Iterable, str]) -> [np.array, np.array]:
+        """
+        Setup the Alpha and Beta grids for the calculation of S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        alpha : Union[Beta, Iterable, str]
+            Alpha grid information in different formats.
+        beta : Union[Beta, Iterable, str]
+            Beta grid information in different formats.
+
+        Returns
+        -------
+        np.array, np.array
+            Alpha and Beta grid arrays.
+        """
+        # Get the Alpha and Beta classes:
+        return cls.check_alpha(alpha).data, cls.check_beta(beta).data
+
     @property
     def data(self) -> pd.DataFrame:
         """Dataframe with the S(alpha, -beta) matrix values."""
@@ -302,16 +323,13 @@ class Sab:
         0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
         0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
         """
-        # Get the beta grid in the Beta class:
-        beta_ = cls.check_beta(beta)
-
-        # Get the alpha grid in the Alpha class:
-        alpha_ = cls.check_alpha(alpha)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_.data, - beta_.data, 1.0, wt)
+        S_values = get_SabSct(alpha_, - beta_, 1.0, wt)
 
-        return cls(S_values, index=alpha_.data, columns=beta_.data)
+        return cls(S_values, index=alpha_, columns=beta_)
 
     @classmethod
     def from_sct(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
@@ -372,16 +390,13 @@ class Sab:
             warnings.warn("The effective temperature is not defined, the ratio will be 1")
             ratio = 1.0
 
-        # Get the beta grid in the Beta class:
-        beta_ = cls.check_beta(beta)
-
-        # Get the alpha grid in the Alpha class:
-        alpha_ = cls.check_alpha(alpha)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_.data, - beta_.data, ratio, ws)
+        S_values = get_SabSct(alpha_, - beta_, ratio, ws)
 
-        return cls(S_values, index=alpha_.data, columns=beta_.data)
+        return cls(S_values, index=alpha_, columns=beta_)
 
     @classmethod
     def from_pdos(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
@@ -447,17 +462,14 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        # Get the beta grid in the Beta class:
-        beta_ = cls.check_beta(beta)
-
-        # Get the alpha grid in the Alpha class:
-        alpha_ = cls.check_alpha(alpha)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Save the Phonon Density of States for extrapolation
         cls.pdos = pdos.fix_T(T)
 
         # Get the Debye-Waller coefficient:
-        debye_waller_coeff = cls.pdos.DebyeWallerCoeff
+        DebyeWallerCoeff = cls.pdos.DebyeWallerCoeff
 
         # Get the Expansion order:
         if nphonon:
@@ -465,18 +477,19 @@ class Sab:
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
             order_max = kwargs.get("order_max", 5000)
-            nphonon = alpha_.expansionOrder(debye_waller_coeff, decimal, order_max)
+            nphonon = get_expansionOrder(alpha_, DebyeWallerCoeff, decimal, order_max)
 
         # Get tauN function:
-        tauN = cls.pdos.tauN(nphonon, threshold=kwargs.get("threshold", 0.0), values=True)
+        threshold = kwargs.get("threshold", 0.0)
+        tauN = cls.pdos.tauN(nphonon, threshold=threshold, values=True)
 
         # Get tauN beta grid values:
         tauNbeta = get_tauNbeta(cls.pdos.beta.data, tauN.shape[1])
 
         # Get the S(alpha, -beta) matrix:
-        S_values = phonon_expansion(alpha_.data, beta_.data, tauN, tauNbeta, debye_waller_coeff)
+        S_values = phonon_expansion(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
 
-        return cls(S_values, columns=beta_.data, index=alpha_.data)
+        return cls(S_values, columns=beta_, index=alpha_)
 
     @classmethod
     def from_model(cls, *args, model: str = "pdos", **kwargs):
@@ -665,19 +678,16 @@ class Sab:
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
         """
-        # Get the beta grid in the Beta class:
-        beta_ = cls.check_beta(beta)
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
-        # Get the alpha grid in the Alpha class:
-        alpha_ = cls.check_alpha(alpha)
-
-        # # Get the Debye-Waller coefficient:
+        # Get the Debye-Waller coefficient:
         cls.DebyeWallerCoeff = DebyeWallerCoeff
 
         # Get the S(alpha, -beta) matrix:
-        S_values = phonon_expansion(alpha_.data, beta_.data, tauN, tauNbeta, DebyeWallerCoeff)
+        S_values = phonon_expansion(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
 
-        return cls(S_values, columns=beta_.data, index=alpha_.data)
+        return cls(S_values, columns=beta_, index=alpha_)
 
     @classmethod
     def from_alpha0(cls, Ein: [int, float, np.ndarray], T: float, M: float,

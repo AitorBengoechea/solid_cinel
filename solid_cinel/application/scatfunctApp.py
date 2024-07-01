@@ -4,6 +4,11 @@ from solid_cinel.application.pdosApp import get_Pdos
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
 
 
+def str_or_float(value):
+    try:
+        return float(value)
+    except ValueError:
+        return value
 
 
 def add_ScatFuncArgs(parser: argparse.ArgumentParser):
@@ -25,7 +30,7 @@ def add_ScatFuncArgs(parser: argparse.ArgumentParser):
                         help='temperature in K')
     parser.add_argument('Eout', type=str,
                         help='Grid for the output energy in eV')
-    parser.add_argument('theta', type=[str, float],
+    parser.add_argument('theta', type=str_or_float,
                         help='Grid for the scattering angle in degrees')
 
 
@@ -49,7 +54,7 @@ def handle_ScatFuncArgs(args: argparse.Namespace) -> np.array:
 
     # If theta is a single value, use the TransferFunc class -> 1D array
     # Otherwise, use the ScatFunc class -> 2D array
-    method = TransferFunc.from_theta if isinstance(theta, [int, float]) else ScatFunc.from_model
+    method = TransferFunc.from_theta if isinstance(theta, (int, float)) else ScatFunc.from_model
 
     # Get the extra arguments for Pdos
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
@@ -58,5 +63,5 @@ def handle_ScatFuncArgs(args: argparse.Namespace) -> np.array:
     scatfunc = method(args.Ein, args.M, args.T, Eout, theta, *argsPdos,
                       model=args.model)
 
-    # Return the values of the S(alpha, -beta) table
+    # Return the values of the scattering function
     return scatfunc.data.values

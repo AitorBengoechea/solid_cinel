@@ -98,7 +98,7 @@ class TestScinel(unittest.TestCase):
 
     def test_ScatFunc_fgm(self):
         # Input simulation parameters:
-        T = 300
+        T = 1000
         keyword = 'scatfunc'
         file_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -106,16 +106,17 @@ class TestScinel(unittest.TestCase):
         model = 'fgm'
         Ein = 7.2
         M = 238.05077040419212
-        Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
-        theta = os.path.join(file_dir, 'inputTest/thetaGrid')
+        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
+        file_theta = os.path.join(file_dir, 'inputTest/thetaGrid')
 
         # Generate the expected result:
-        mu = np.cos(np.deg2rad(np.))
+        mu = np.cos(np.deg2rad(np.loadtxt(file_theta)))
+        Eout = np.loadtxt(file_Eout)
+        expected_result = ScatFunc.from_fgm(Ein, M, T, Eout, mu).data.values
 
-        # Generate the expected result:
-        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta).data.values
+        # Check the results:
         self.check_results(expected_result, keyword, model, str(Ein), str(M),
-                           str(T), Eout, theta)
+                           str(T), file_Eout, file_theta)
 
 if __name__ == '__main__':
     unittest.main()

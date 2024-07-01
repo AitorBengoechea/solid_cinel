@@ -166,5 +166,72 @@ class TestScinel(unittest.TestCase):
         self.check_results(expected_result, keyword, model, str(Ein), str(M),
                            str(T), file_Eout, file_theta, file_pdos)
 
+    def test_TransferFunc_fgm(self):
+        # Input simulation parameters:
+        T = 1000
+        keyword = 'scatfunc'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for FGM:
+        model = 'fgm'
+        Ein = 7.2
+        M = 238.05077040419212
+        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
+        theta = 60
+
+        # Generate the expected result:
+        Eout = np.loadtxt(file_Eout)
+        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta, model=model).data.values
+
+        # Check the results:
+        self.check_results(expected_result, keyword, model, str(Ein), str(M),
+                           str(T), file_Eout, str(theta))
+
+    def test_TransferFunc_sct(self):
+        # Input simulation parameters:
+        T = 1000
+        keyword = 'scatfunc'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for FGM:
+        model = 'sct'
+        Ein = 7.2
+        M = 238.05077040419212
+        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
+        theta = 60
+        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
+
+        # Generate the expected result:
+        Eout = np.loadtxt(file_Eout)
+        pdos = Pdos.from_file([T], [file_pdos])
+        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model=model).data.values
+
+        # Check the results:
+        self.check_results(expected_result, keyword, model, str(Ein), str(M),
+                           str(T), file_Eout, str(theta), file_pdos)
+
+    def test_TransferFunc_pdos(self):
+        # Input simulation parameters:
+        T = 1000
+        keyword = 'scatfunc'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for FGM:
+        model = 'pdos'
+        Ein = 7.2
+        M = 238.05077040419212
+        file_Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
+        theta = 60
+        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
+
+        # Generate the expected result:
+        Eout = np.loadtxt(file_Eout)
+        pdos = Pdos.from_file([T], [file_pdos])
+        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model=model).data.values
+
+        # Check the results:
+        self.check_results(expected_result, keyword, model, str(Ein), str(M),
+                           str(T), file_Eout, str(theta), file_pdos)
+
 if __name__ == '__main__':
     unittest.main()

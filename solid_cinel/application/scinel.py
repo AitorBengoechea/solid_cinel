@@ -6,7 +6,7 @@ from solid_cinel.application.scatfunctApp import add_ScatFuncArgs, handle_ScatFu
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
-    'Teff': {
+    'teff': {
         'add': add_TeffArgs,
         'handle': handle_TeffArgs,
     },
@@ -37,8 +37,8 @@ def add_args(parser: argparse.ArgumentParser, keyword: str):
     ValueError
         If the keyword is not found in the KEYWORD_TO_FUNCTION_MAP.
     """
-    if keyword in KEYWORD_TO_FUNCTION_MAP:
-        KEYWORD_TO_FUNCTION_MAP[keyword]['add'](parser)
+    if keyword.lower() in KEYWORD_TO_FUNCTION_MAP:
+        KEYWORD_TO_FUNCTION_MAP[keyword.lower()]['add'](parser)
     else:
         raise ValueError(f'Invalid keyword: {keyword}')
 
@@ -64,8 +64,8 @@ def handle_args(keyword: str, args: argparse.Namespace) -> np.array:
     ValueError
         If the keyword is not found in the KEYWORD_TO_FUNCTION_MAP.
     """
-    if keyword in KEYWORD_TO_FUNCTION_MAP:
-        return KEYWORD_TO_FUNCTION_MAP[keyword]['handle'](args)
+    if keyword.lower() in KEYWORD_TO_FUNCTION_MAP:
+        return KEYWORD_TO_FUNCTION_MAP[keyword.lower()]['handle'](args)
     else:
         raise ValueError(f'Invalid keyword: {keyword}')
 
@@ -93,9 +93,7 @@ def merge_namespaces(ns1, ns2):
     merged_dict = {**dict1, **dict2}
 
     # Convert merged dictionary back to namespace
-    merged_ns = argparse.Namespace(**merged_dict)
-
-    return merged_ns
+    return argparse.Namespace(**merged_dict)
 
 def get_results(args: argparse.Namespace, remaining_args: list):
     """
@@ -147,7 +145,7 @@ def write_results(results: np.array, keyword: str):
     -----
     If the keyword is 'Teff', the results are reshaped into a 2D array with one row.
     """
-    if keyword == 'Teff':
+    if keyword.lower() == 'teff':
         # Reshape your 1D array into a 2D array with one row
         results = results[np.newaxis, ::]
 

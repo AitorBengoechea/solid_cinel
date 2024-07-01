@@ -1,11 +1,15 @@
 import unittest
 import os
 import numpy as np
+import warnings
+warnings.filterwarnings("ignore")
 
 # Application test:
 from solid_cinel.application.scinel import main
 
 # POO direct application:
+from solid_cinel.core.scattering_function.sab import Sab
+from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
 from solid_cinel.core.material.vibration.pdos import Pdos
 
 
@@ -19,20 +23,99 @@ class TestScinel(unittest.TestCase):
         np.testing.assert_array_equal(result, expected_result)
 
     def test_Teff(self):
-        # Test the calculation of the effective temperature
-        T = 300
+        # Input simulation parameters:
         keyword = 'Teff'
         file_dir = os.path.dirname(os.path.abspath(__file__))
-        file = os.path.join(file_dir, '../data/pdos/interp.300')
 
-        # Create Pdos object for the test:
-        pdos = Pdos.from_file([T], [file])
+        # Input simulation parameters
+        T = 300
+        file = os.path.join(file_dir, 'inputTest/interp.300')
 
         # Generate the expected result:
+        pdos = Pdos.from_file([T], [file])
         expected_result = np.array([T, pdos.fix_T(T).Teff])
 
         # Check the results
         self.check_results(expected_result, keyword, str(T), file)
+
+    def test_Sab_fgm(self):
+        # Input simulation parameters:
+        T = 300
+        keyword = 'sab'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for FGM:
+        model = 'fgm'
+        file_alpha = os.path.join(file_dir, 'inputTest/alphaGrid')
+        file_beta = os.path.join(file_dir, 'inputTest/betaGrid')
+
+        # Generate the expected result:
+        expected_result = Sab.from_fgm(file_alpha, file_beta).data.values
+
+        # Check the results
+        self.check_results(expected_result, keyword, model, file_alpha,
+                           file_beta, str(T))
+
+    def test_Sab_sct(self):
+        # Input simulation parameters:
+        T = 300
+        keyword = 'sab'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for Sct:
+        model = 'sct'
+        file_alpha = os.path.join(file_dir, 'inputTest/alphaGrid')
+        file_beta = os.path.join(file_dir, 'inputTest/betaGrid')
+        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
+
+        # Generate the expected result:
+        pdos = Pdos.from_file([T], [file_pdos])
+        expected_result = Sab.from_sct(file_alpha, file_beta, T, pdos).data.values
+
+        # Check the results
+        self.check_results(expected_result, keyword, model, file_alpha,
+                           file_beta, str(T), file_pdos)
+
+    def test_Sab_pdos(self):
+        # Input simulation parameters:
+        T = 300
+        keyword = 'sab'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for Sct:
+        model = 'pdos'
+        file_alpha = os.path.join(file_dir, 'inputTest/alphaGrid')
+        file_beta = os.path.join(file_dir, 'inputTest/betaGrid')
+        file_pdos = os.path.join(file_dir, 'inputTest/interp.300')
+
+        # Generate the expected result:
+        pdos = Pdos.from_file([T], [file_pdos])
+        expected_result = Sab.from_pdos(file_alpha, file_beta, T, pdos).data.values
+
+        # Check the results
+        self.check_results(expected_result, keyword, model, file_alpha,
+                           file_beta, str(T), file_pdos)
+
+    def test_ScatFunc_fgm(self):
+        # Input simulation parameters:
+        T = 300
+        keyword = 'scatfunc'
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Input simulation parameters for FGM:
+        model = 'fgm'
+        Ein = 7.2
+        M = 238.05077040419212
+        Eout = os.path.join(file_dir, 'inputTest/EoutGrid')
+        theta = os.path.join(file_dir, 'inputTest/thetaGrid')
+
+        # Generate the expected result:
+        mu = np.cos(np.deg2rad(np.))
+
+        # Generate the expected result:
+        expected_result = TransferFunc.from_theta(Ein, M, T, Eout, theta).data.values
+        self.check_results(expected_result, keyword, model, str(Ein), str(M),
+                           str(T), Eout, theta)
 
 if __name__ == '__main__':
     unittest.main()

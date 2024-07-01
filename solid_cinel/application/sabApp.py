@@ -21,6 +21,8 @@ def add_SabArgs(parser: argparse.ArgumentParser):
                         help='alpha grid')
     parser.add_argument('beta', type=str,
                         help='beta grid')
+    parser.add_argument('T', type=float,
+                        help='Temperature in Kelvin')
 
 
 def handle_SabArgs(args: argparse.Namespace) -> np.array:
@@ -37,11 +39,17 @@ def handle_SabArgs(args: argparse.Namespace) -> np.array:
     np.array
         An array containing the input temperature and the calculated effective temperature.
     """
+    # Validate temperature
+    if args.T < 0:
+        raise ValueError("Temperature must be greater than 0")
+
     # Get Sab class based on the model
-    if args.model != "fgm":
-        sab = Sab.from_model(args.alpha, args.beta, args.T, get_Pdos(args))
+    if args.model == "pdos":
+        sab = Sab.from_pdos(args.alpha, args.beta, args.T, get_Pdos(args))
+    elif args.model == "sct":
+        sab = Sab.from_sct(args.alpha, args.beta, args.T, get_Pdos(args))
     else:
-        sab = Sab.from_fgm(args.alpha, args.beta)
+        sab = Sab.from_fgm(args.alpha, args.beta, args.T)
 
     # Return the values of the S(alpha, -beta) table
     return sab.data.values

@@ -116,12 +116,27 @@ class TestScinelSab(BaseTestScinel):
         super().setUp()
         self.keyword = 'sab'
 
+    @property
+    def get_fgm_var(self) -> list:
+        """
+        Get the variables for the fgm model.
+        """
+        return [self.file_alpha, self.file_beta]
+
+    @property
+    def get_sct_var(self) -> list:
+        """
+        Get the variables for the sct model.
+        """
+        var_fgm = self.get_fgm_var
+        return var_fgm.extend([self.T, self.file_pdos])
+
     def test_fgm(self) -> None:
         """
         Test the fgm model for the generating S(alpha, -beta) tables.
         """
         # Generate the expected result:
-        expected_result = Sab.from_fgm(self.file_alpha, self.file_beta).data.values
+        expected_result = Sab.from_fgm(*self.get_fgm_var).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, 'fgm', self.file_alpha, self.file_beta]
@@ -134,8 +149,7 @@ class TestScinelSab(BaseTestScinel):
         Test the sct model for the generating S(alpha, -beta) tables.
         """
         # Generate the expected result:
-        expected_result = Sab.from_sct(self.file_alpha, self.file_beta, self.T,
-                                       self.pdos).data.values
+        expected_result = Sab.from_sct(*self.get_sct_var).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, 'sct', self.file_alpha, self.file_beta,
@@ -149,8 +163,7 @@ class TestScinelSab(BaseTestScinel):
         Test the pdos model for the generating S(alpha, -beta) tables.
         """
         # Generate the expected result:
-        expected_result = Sab.from_pdos(self.file_alpha, self.file_beta, self.T,
-                                        self.pdos).data.values
+        expected_result = Sab.from_pdos(*self.get_sct_var).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, 'pdos', self.file_alpha, self.file_beta,
@@ -173,13 +186,27 @@ class TestScinelScatFunc(BaseTestScinel):
         self.keyword = 'scatfunc'
         self.mu = np.cos(np.deg2rad(self.theta))
 
+    @property
+    def get_fgm_var(self) -> list:
+        """
+        Get the variables for the fgm model.
+        """
+        return [self.Ein, self.M, self.T, self.Eout, self.mu]
+
+    @property
+    def get_sct_var(self) -> list:
+        """
+        Get the variables for the sct model.
+        """
+        var_fgm = self.get_fgm_var
+        return var_fgm.extend([self.pdos])
+
     def test_fgm(self) -> None:
         """
         Test the fgm model for the generating Van Hove scattering function tables.
         """
         # Generate the expected result:
-        expected_result = ScatFunc.from_fgm(self.Ein, self.M, self.T, self.Eout,
-                                            self.mu).data.values
+        expected_result = ScatFunc.from_fgm(*self.get_fgm_var).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, 'fgm', self.Ein, self.M, self.T,
@@ -192,8 +219,7 @@ class TestScinelScatFunc(BaseTestScinel):
         Test the sct model for the generating Van Hove scattering function tables.
         """
         # Generate the expected result:
-        expected_result = ScatFunc.from_sct(self.Ein, self.M, self.T, self.Eout,
-                                            self.mu, self.pdos).data.values
+        expected_result = ScatFunc.from_sct(*self.get_sct_var).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, 'sct', self.Ein, self.M, self.T,
@@ -207,8 +233,7 @@ class TestScinelScatFunc(BaseTestScinel):
         Test the pdos model for the generating Van Hove scattering function tables.
         """
         # Generate the expected result:
-        expected_result = ScatFunc.from_pdos(self.Ein, self.M, self.T, self.Eout,
-                                            self.mu, self.pdos).data.values
+        expected_result = ScatFunc.from_pdos(*self.get_sct_var).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, 'pdos', self.Ein, self.M, self.T,
@@ -230,13 +255,28 @@ class TestScinelTransferFunc(BaseTestScinel):
         self.keyword = 'scatfunc'
         self.theta = 60
 
+    @property
+    def get_fgm_var(self) -> list:
+        """
+        Get the variables for the fgm model.
+        """
+        return [self.Ein, self.M, self.T, self.Eout, self.theta]
+
+    @property
+    def get_sct_var(self) -> list:
+        """
+        Get the variables for the sct model.
+        """
+        var_fgm = self.get_fgm_var
+        return var_fgm.extend([self.pdos])
+
     def test_fgm(self) -> None:
         """
         Test the fgm model for generating transfer function based on an angle.
         """
         # Generate the expected result:
         model = 'fgm'
-        expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
+        expected_result = TransferFunc.from_theta(*self.get_fgm_var,
                                                   model=model).data.values
 
         # Command line arguments
@@ -251,8 +291,7 @@ class TestScinelTransferFunc(BaseTestScinel):
         """
         # Generate the expected result:
         model = 'sct'
-        expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
-                                                  self.pdos, model=model).data.values
+        expected_result = TransferFunc.from_theta(*self.get_sct_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
@@ -267,8 +306,7 @@ class TestScinelTransferFunc(BaseTestScinel):
         """
         # Generate the expected result:
         model = 'pdos'
-        expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
-                                                  self.pdos, model=model).data.values
+        expected_result = TransferFunc.from_theta(*self.get_sct_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
@@ -289,6 +327,21 @@ class TestScinelDxs(BaseTestScinel):
         super().setUp()
         self.keyword = 'dxs'
 
+    @property
+    def get_fgm_var(self) -> list:
+        """
+        Get the variables for the fgm model.
+        """
+        return [self.xs0K, self.Ein, self.M, self.T, self.Eout, self.theta]
+
+    @property
+    def get_sct_var(self) -> list:
+        """
+        Get the variables for the sct model.
+        """
+        fgm_var = self.get_fgm_var
+        return fgm_var.extend([self.pdos])
+
     def ModelFgm(self, method, theta: [float, np.array]) -> None:
         """
         Test the FGM model for the generating differential cross section.
@@ -302,8 +355,7 @@ class TestScinelDxs(BaseTestScinel):
         """
         model = 'fgm'
         # Generate the expected result:
-        expected_result = method(self.xs0K, self.Ein, self.M, self.T, self.Eout,
-                                 theta, model=model).data.values
+        expected_result = method(*self.get_fgm_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
@@ -325,8 +377,7 @@ class TestScinelDxs(BaseTestScinel):
         """
         model = 'SCT'
         # Generate the expected result:
-        expected_result = method(self.xs0K, self.Ein, self.M, self.T, self.Eout,
-                                 theta, self.pdos, model=model).data.values
+        expected_result = method(self.get_sct_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
@@ -348,8 +399,7 @@ class TestScinelDxs(BaseTestScinel):
         """
         model = 'pdos'
         # Generate the expected result:
-        expected_result = method(self.xs0K, self.Ein, self.M, self.T, self.Eout,
-                                 theta, self.pdos, model=model).data.values
+        expected_result = method(*self.get_sct_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
@@ -405,6 +455,21 @@ class TestScinelDDxs(BaseTestScinel):
         self.keyword = 'ddxs'
         self.xs = Xs(self.M, 0, self.xs0K)
 
+    @property
+    def get_fgm_var(self) -> list:
+        """
+        Get the variables for the fgm model.
+        """
+        return [self.xs, self.Ein, self.T, self.Eout, self.theta]
+
+    @property
+    def get_sct_var(self) -> list:
+        """
+        Get the variables for the sct model.
+        """
+        var_fgm = self.get_fgm_var
+        return var_fgm.extend([self.pdos])
+
     def ModelFgm(self, algorithm: str, method):
         """
         Test the FGM model for the generating double differential scattering
@@ -419,8 +484,7 @@ class TestScinelDDxs(BaseTestScinel):
         """
         model = "fgm"
         # Generate the expected result:
-        expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
-                                 model=model).data.values
+        expected_result = method(*self.get_fgm_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
@@ -444,8 +508,7 @@ class TestScinelDDxs(BaseTestScinel):
 
         model = "sct"
         # Generate the expected result:
-        expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
-                                 self.pdos, model=model).data.values
+        expected_result = method(*self.get_sct_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
@@ -468,8 +531,7 @@ class TestScinelDDxs(BaseTestScinel):
         """
         model = "pdos"
         # Generate the expected result:
-        expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
-                                 self.pdos, model=model).data.values
+        expected_result = method(*self.get_sct_var, model=model).data.values
 
         # Command line arguments
         command_line_args = [self.keyword, algorithm, model, self.file_xs0K,

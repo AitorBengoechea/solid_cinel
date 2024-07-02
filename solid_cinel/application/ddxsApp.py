@@ -1,7 +1,6 @@
 import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_Pdos
-from solid_cinel.core.xs.dxs import Dxs
 from solid_cinel.core.xs.xs import Xs
 from solid_cinel.core.xs.ddxs import DDxs
 
@@ -50,7 +49,7 @@ def check_algirithm(algorithm: str):
     if algorithm.lower() == "sab":
         return DDxs.from_Sab
     elif algorithm.lower() == "4pcf":
-        return Dxs.from_4PCF
+        return DDxs.from_4PCF
     else:
         raise ValueError(f'Invalid algorithm: {algorithm}')
 

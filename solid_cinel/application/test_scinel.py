@@ -11,7 +11,7 @@ from solid_cinel.application.scinel import main
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.xs import Dxs, Xs
+from solid_cinel.core.xs import Dxs, Xs, DDxs
 
 
 def check_results(expected_result: np.array, *command_line_args) -> None:
@@ -42,7 +42,7 @@ class BaseTestScinel(unittest.TestCase):
         """
         Set up the test common variables.
         """
-        self.T = 1000
+        self.T = 300
         self.file_dir = os.path.dirname(os.path.abspath(__file__))
         self.Ein = 7.2
         self.M = 238.05077040419212
@@ -53,7 +53,7 @@ class BaseTestScinel(unittest.TestCase):
         self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
         self.file_xs0K = os.path.join(self.file_dir, 'inputTest/u238.0.2')
         self.Eout = np.loadtxt(self.file_Eout)
-        self.pdos = Pdos.from_file([300], [self.file_pdos])
+        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
         self.xs0K = Xs.read_xs(self.file_xs0K)
         self.theta = np.loadtxt(self.file_theta)
 
@@ -93,7 +93,6 @@ class TestScinelSab(BaseTestScinel):
         """
         super().setUp()
         self.keyword = 'sab'
-        self.T = 300
 
     def test_fgm(self) -> None:
         """
@@ -332,9 +331,55 @@ class TestScinelDDxs(BaseTestScinel):
         Set up the test common variables.
         """
         super().setUp()
-        self.keyword = 'dxs'
-        self.xs = Xs(self.M, 0, self.xs0K, self.xs0K)
+        self.keyword = 'ddxs'
+        self.xs = Xs(self.M, 0, self.xs0K)
 
+    def fgm(self, algorithm, method):
+        model = "fgm"
+        # Generate the expected result:
+        expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
+                                 model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, algorithm, model,
+                      self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
+                      self.file_Eout, self.file_theta)
+
+    def sct(self, algorithm, method):
+        model = "sct"
+        # Generate the expected result:
+        expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
+                                 self.pdos, model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, algorithm, model,
+                      self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
+                      self.file_Eout, self.file_theta, self.file_pdos)
+
+    def pdos(self, algorithm, method):
+        model = "pdos"
+        # Generate the expected result:
+        expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
+                                 self.pdos, model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, algorithm, model,
+                      self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
+                      self.file_Eout, self.file_theta, self.file_pdos)
+
+    def test_sab(self) -> None:
+        # Define the algorithm and method:
+        algorithm = 'sab'
+        method = DDxs.from_Sab
+
+        # Test FGM:
+        self.fgm(algorithm, method)
+
+        # Test SCT:
+        self.sct(algorithm, method)
+
+        # Test PDOS:
+        self.pdos(algorithm, method)
 
 
 if __name__ == '__main__':

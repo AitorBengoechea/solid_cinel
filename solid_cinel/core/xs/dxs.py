@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import TransferFunc, ScatFunc
-from solid_cinel.core.scattering_function.alpha import get_gressierRecoil, get_alpha, get_alphaMat
+from solid_cinel.core.scattering_function.alpha import get_alpha, get_alphaMat
 from solid_cinel.core.generic import integrate, reshift, interpolation
 import os
 from typing import Iterable
@@ -109,12 +109,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -198,12 +197,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -309,12 +307,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -445,14 +442,22 @@ class Dxs:
         >>> M = 238.05077040419212
         >>> theta = 15
 
+        # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> os.chdir(wd)
+
         # Using the Free Gas Model:
-        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        >>> Dxs.from_theta(xs0K, Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout
-        7.1000     0.000030
-        7.1500     0.851083
-        7.2000    21.126578
-        7.2500     0.489767
-        7.3157     0.000000
+        7.1000      0.000277
+        7.1500      8.291518
+        7.2000    212.369147
+        7.2500      5.032810
+        7.3157      0.000001
         Name: 15, dtype: float64
         """
         # Get the transfer function:
@@ -525,12 +530,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -662,12 +666,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -700,12 +703,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
@@ -746,12 +748,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -798,12 +799,11 @@ class Dxs:
         Examples
         --------
         # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("dxs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:

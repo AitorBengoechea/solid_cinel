@@ -200,7 +200,7 @@ def interp_multyParallel(xnew: np.ndarray, x: np.ndarray, y: np.ndarray):
     for n in prange(Nrow):
         yinterp[n] += np.interp(xnew, x, y[n])
     return yinterp
-def interpolation(data: pd.Series, xnew: Iterable,
+def interpolation(data: pd.Series, xnew: np.array,
                   values: bool = False, parallel=False,
                   **kwargs) -> [np.ndarray, pd.Series]:
     """

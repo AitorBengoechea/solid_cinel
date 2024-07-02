@@ -31,7 +31,7 @@ class Xs:
     Class for the differential cross section for elastic scattering
     """
     def __init__(self, M: float, temperatures: Union[float, Iterable[float]],
-                 *args, xs0Kcomplete: pd.Series = None, **kwargs):
+                 xsSmall: pd.Series, xs0Kcomplete: pd.Series):
         """
         Class for working with Angle integrated scattering xs at different
         temperature.
@@ -55,14 +55,12 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = 0
-        >>> Xs(M, T, xs0K).data.iloc[0:10000:1000]
+        >>> Xs(M, T, xs0K, xs0K).data.iloc[0:10000:1000]
         T                   0
         Ein
         0.00001      9.420892
@@ -76,19 +74,19 @@ class Xs:
         165.85470   11.753670
         200.79510   15.734840
         """
-        # Set the mass of the nucleus
+        # Set the mass of the nucleus in amu
         self.M = M
 
         # Set the temperature
         temperatures = self.check_InputValues(temperatures)
 
-        # Set the data style and erase the duplicated columns
-        data_frame = pd.DataFrame(*args, **kwargs)
-        data_frame.columns = pd.Index(temperatures, name="T")
-        self.data = data_frame.loc[:, ~data_frame.columns.duplicated()]
+        # Force xsSmall to be a DataFrame with temperatures as columns
+        df = pd.DataFrame(xsSmall)
+        df.columns = pd.Index(temperatures, name="T")
+        self.data = df
 
         # Set the 0K scattering function with all the data
-        self.get_xs0Kcomp(xs0Kcomplete)
+        self.xs0Kcomplete = xs0Kcomplete
 
     @property
     def data(self) -> pd.DataFrame:
@@ -119,7 +117,7 @@ class Xs:
         xs_.columns.name = "T"
 
         # save the data
-        self._data = xs_
+        self._data = xs_.loc[:, ~xs_.columns.duplicated()]
 
     def update_data(self, xsT: pd.DataFrame, inplace: bool, axis: int = 1):
         """
@@ -154,29 +152,59 @@ class Xs:
         if inplace:
             self.data = dataNew.sort_index(axis=axis)
         else:
-            return Xs(self.M, dataNew.columns, dataNew)
+            return Xs(self.M, dataNew.columns, dataNew, self.xs0Kcomplete)
 
-    def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]):
+    @staticmethod
+    def read_xs(filename: str, header: [int, list] = None,
+                usecols: [int, list] = [0, 1], index_col: int = 0,
+                engine: str = "python") -> pd.Series:
         """
-        Get the 0K scattering function with all the data
+        Read the xs data from a file
 
         Parameters
         ----------
-        xs0Kcomplete: pd.Series
-            The 0K scattering function with all the data
+        filename: str
+            The filename of the xs data
+        header: int, list, optional
+            The header of the file. The default is None, so no header is used.
+        usecols: int, list, optional
+            The columns to use. The default is [0, 1], so the first two columns
+            are used.
+        index_col: int, optional
+            The index column. The default is 0, so the first column is used as
+            index.
+        engine: str, optional
+            The engine to use. The default is "python".
 
         Returns
         -------
         pd.Series
-            The 0K scattering function with all the data
+            The xs data
         """
-        if xs0Kcomplete is None:
-            if 0 in self.data.columns:
-                self.xs0Kcomplete = self.data.loc[::, 0]
-            else:
-                raise ValueError("0K data not found")
+        # Read the data from the file into a pandas DataFrame
+        xsData = pd.read_csv(filename, sep='\s+', header=header, index_col=index_col,
+                             usecols=usecols, engine=engine).squeeze("columns")
+
+        xsData.index.name = "E"
+        # Ensure not duplicated index and if they are duplicated, take the first
+        xsData = xsData.reset_index().drop_duplicates(subset='E', keep='first')
+
+        return xsData.set_index('E').squeeze("columns")
+
+    @classmethod
+    def from_xs0K(cls, filename: str, M: float, EinSmall: [float, np.array] = None,
+                  **kwargs):
+        # Read the 0K xs data
+        xs0K = cls.read_xs(filename, **kwargs)
+
+        # Interpolate the data if needed for handling smaller incident energies grid
+        if EinSmall is not None:
+            EinSmall_ = np.array(cls.check_InputValues(EinSmall))
+            xs0Ksmall = interpolation(xs0K, EinSmall_)
         else:
-            self.xs0Kcomplete = xs0Kcomplete
+            xs0Ksmall = xs0K.copy()
+
+        return cls(M, 0, xs0Ksmall, xs0K)
 
     @staticmethod
     def check_InputValues(input: [float, Iterable[float]]) -> Iterable:
@@ -216,18 +244,19 @@ class Xs:
 
         Examples
         --------
+        # Define the parameters for the test:
+        >>> M = 238.05077040419212
+        >>> Ein = [1.0, 3.0]
+
         # 0K xs data for U238:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> xs = Xs.from_xs0K("u238.0.2", M, 1.0)
         >>> os.chdir(wd)
 
-        >>> M = 238.05077040419212
-        >>> Ein = [1.0, 3.0]
-        >>> assert Xs(M, 0, xs0K).get_EinCalc(Ein) == pd.Index([3.0])
+        # Check the incident energy
+        >>> assert xs.get_EinCalc(Ein) == pd.Index([3.0])
         """
         EinNew = pd.Index(self.check_InputValues(Ein))
         return EinNew.difference(self.data.index)
@@ -252,14 +281,13 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
         >>> os.chdir(wd)
 
-        >>> M = 238.05077040419212
+
         >>> T = 300
-        >>> assert Xs(M, 0, xs0K).get_Tcalc(T) == pd.Index([300])
+        >>> assert xs.get_Tcalc(T) == pd.Index([T])
         """
         Tnew = pd.Index(self.check_InputValues(temperatures))
         return Tnew.difference(self.data.columns)
@@ -284,14 +312,13 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> Ein = [1.0, 3.0]
-        >>> assert Xs(M, 0, xs0K).get_EinInterp(Ein) == pd.Index([1.0])
+        >>> assert xs.get_EinInterp(Ein) == pd.Index([1.0])
         """
         EinNew = pd.Index(self.check_InputValues(Ein))
         return self.data.index.intersection(EinNew)
@@ -321,14 +348,13 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
         >>> T = [0, 300]
-        >>> assert Xs(M, 0, xs0K).get_Tinterp(T) == pd.Index([0])
+        >>> assert xs.get_Tinterp(T) == pd.Index([0])
         """
         Tnew = pd.Index(self.check_InputValues(temperatures))
         return self.data.columns.intersection(Tnew)
@@ -381,13 +407,11 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
         >>> os.chdir(wd)
 
         >>> M = 238.05077040419212
-        >>> xs = Xs(M, 0, xs0K.iloc[0:10000:5000], xs0Kcomplete=xs0K)
         >>> Tnew = [300, 100]
         >>> pd.Series(xs.get_EinTcomb(Tnew, np.array([1, 2, 3])))
         0    (300, 1)
@@ -496,25 +520,21 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> EinGrid = np.array([2.0, 6.67])
+        >>> xs = Xs.from_xs0K("u238.0.2", M, EinGrid)
         >>> os.chdir(wd)
 
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-        >>> M = 238.05077040419212
-        >>> EinGrid = np.array([2.0, 6.67])
-        >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, model="fgm").round(6)
+        >>> Xs._calc_alpha0(T, EinGrid, xs.xs0Kcomplete, M, model="fgm").round(6)
         array([  9.085972, 466.29523 ])
 
-        >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="sct").round(6)
+        >>> Xs._calc_alpha0(T, EinGrid, xs.xs0Kcomplete, M, pdos, model="sct").round(6)
         array([  9.024954, 458.934423])
 
-        >>> Xs._calc_alpha0(T, EinGrid, xs0K, M, pdos, model="pdos").round(6)
+        >>> Xs._calc_alpha0(T, EinGrid, xs.xs0Kcomplete, M, pdos, model="pdos").round(6)
         array([  8.602954, 469.614362])
         """
         # Generate the resutls for each incident energy
@@ -625,15 +645,11 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
-        >>> os.chdir(wd)
-
         >>> M = 238.05077040419212
         >>> EinGrid = np.array([2.0, 6.67])
-        >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
+        >>> xs = Xs.from_xs0K("u238.0.2", M, EinGrid)
+        >>> os.chdir(wd)
+
         >>> Tnew = [300, 100]
         >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="sigma1"), index=Tnew, columns=EinGrid)
                  2.00        6.67
@@ -699,61 +715,48 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> xs = Xs.from_xs0K("u238.0.2", M, EinGrid)
         >>> os.chdir(wd)
 
-        >>> M = 238.05077040419212
+        # Sigma1:
         >>> T = [300, 100]
-        >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K)
         >>> xs.calc_T(T, algorithm="sigma1").data
-        T                  0            100          300
+        T                 0           100         300
         Ein
-        0.065625      9.411657     9.414734     9.419595
-        6.717251    172.623200   282.096835   323.919192
-        11.367190     9.198383     9.198416     9.199371
-        20.912000  1893.389000  3257.315536  2639.268058
-        35.640580     0.974924     1.042582     1.184656
-        44.877660    14.089820    14.090012    14.090359
-        63.498800     5.773424     5.770605     5.764487
-        66.436310    85.621850    90.534332   114.828045
-        80.731840    39.201520    40.746929    29.811032
-        89.051940     9.208071     9.213771     9.226450
+        0.065625     9.411657    9.414734    9.419595
+        2.000000     9.085342    9.086957    9.086237
+        4.000000     8.481975    8.482804    8.482893
+        5.000000     7.805580    7.805703    7.805682
+        6.670000  1269.792131  664.556512  455.670534
+        7.000000    19.825115   19.893739   20.039076
 
+        # Alpha0 with FGM:
         >>> xs.calc_T(T, algorithm="alpha0", model="fgm").data
-        T                  0            100          300
+        T                 0           100         300
         Ein
-        0.065625      9.411657     9.412320     9.411831
-        6.717251    172.623200   278.178203   325.588730
-        11.367190     9.198383     9.199947     9.200645
-        20.912000  1893.389000  3274.086386  2690.559966
-        35.640580     0.974924     1.037600     1.168565
-        44.877660    14.089820    14.090086    14.091851
-        63.498800     5.773424     5.770993     5.765728
-        66.436310    85.621850    90.209469   111.366833
-        80.731840    39.201520    41.482284    30.336060
-        89.051940     9.208071     9.213134     9.226037
+        0.065625     9.411657    9.412320    9.411831
+        2.000000     9.085342    9.086873    9.085972
+        4.000000     8.481975    8.484021    8.482886
+        5.000000     7.805580    7.807253    7.805968
+        6.670000  1269.792131  677.372091  466.295230
+        7.000000    19.825115   19.897556   20.036626
 
+        # Alpha0 with SCT:
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="sct").data
-        T                  0            100          300
+        T                 0           100         300
         Ein
-        0.065625      9.411657     9.210666     9.393819
-        6.717251    172.623200   295.321974   324.819419
-        11.367190     9.198383     8.999700     9.140974
-        20.912000  1893.389000  3197.899528  2661.682276
-        35.640580     0.974924     1.049857     1.165092
-        44.877660    14.089820    14.079088    14.067462
-        63.498800     5.773424     5.769429     5.761258
-        66.436310    85.621850    91.882519   113.576108
-        80.731840    39.201520    38.528703    30.019105
-        89.051940     9.208071     9.215956     9.223668
+        0.065625     9.411657    9.210666    9.393819
+        2.000000     9.085342    8.627295    9.024954
+        4.000000     8.481975    8.105054    8.420278
+        5.000000     7.805580    7.488588    7.748244
+        6.670000  1269.792131  617.394144  458.934423
+        7.000000    19.825115   19.298819   19.915131
 
-        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
-        >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K)
+        # Alpha0 with PDOS:
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
@@ -812,75 +815,61 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> xs = Xs.from_xs0K("u238.0.2", M, EinGrid)
         >>> os.chdir(wd)
 
-        >>> M = 238.05077040419212
-        >>> T = [300, 100]
-        >>> xs = Xs(M, 0, xs0K.iloc[100:5000:500], xs0Kcomplete=xs0K).calc_T(T)
-        >>> xs.calc_Ein(1.0, algorithm="sigma1").data
-        T                  0            100          300
-        Ein
-        0.065625      9.411657     9.414734     9.419595
-        1.000000     32.338500    32.349216    32.349415
-        6.717251    172.623200   282.096835   323.919192
-        11.367190     9.198383     9.198416     9.199371
-        20.912000  1893.389000  3257.315536  2639.268058
-        35.640580     0.974924     1.042582     1.184656
-        44.877660    14.089820    14.090012    14.090359
-        63.498800     5.773424     5.770605     5.764487
-        66.436310    85.621850    90.534332   114.828045
-        80.731840    39.201520    40.746929    29.811032
-        89.051940     9.208071     9.213771     9.226450
+        # Add several temperatures:
+        >>> xs = xs.calc_T([300, 100])
 
-        # Several incident energies:
+        # Sigma1:
+        >>> xs.calc_Ein(1.0, algorithm="sigma1").data
+        T                 0           100         300
+        Ein
+        0.065625     9.411657    9.414734    9.419595
+        1.000000     9.254035    9.271830    9.270573
+        2.000000     9.085342    9.086957    9.086237
+        4.000000     8.481975    8.482804    8.482893
+        5.000000     7.805580    7.805703    7.805682
+        6.670000  1269.792131  664.556512  455.670534
+        7.000000    19.825115   19.893739   20.039076
+
+
+        # Several incident energies with alpha0 model FGM:
         >>> Ein = [1.0, 2.0]
         >>> xs.calc_Ein(Ein, algorithm="alpha0", model="fgm").data
-        T                  0            100          300
+        T                 0           100         300
         Ein
-        0.065625      9.411657     9.414734     9.419595
-        1.000000     32.338500    32.344886    32.341134
-        2.000000     56.875590    56.885412    56.879960
-        6.717251    172.623200   282.096835   323.919192
-        11.367190     9.198383     9.198416     9.199371
-        20.912000  1893.389000  3257.315536  2639.268058
-        35.640580     0.974924     1.042582     1.184656
-        44.877660    14.089820    14.090012    14.090359
-        63.498800     5.773424     5.770605     5.764487
-        66.436310    85.621850    90.534332   114.828045
-        80.731840    39.201520    40.746929    29.811032
-        89.051940     9.208071     9.213771     9.226450
+        0.065625     9.411657    9.414734    9.419595
+        1.000000     9.254035    9.271237    9.270165
+        2.000000     9.085342    9.086957    9.086237
+        4.000000     8.481975    8.482804    8.482893
+        5.000000     7.805580    7.805703    7.805682
+        6.670000  1269.792131  664.556512  455.670534
+        7.000000    19.825115   19.893739   20.039076
 
+        # With alpha0 model SCT:
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="sct").data
-        T                  0            100          300
+        T                 0           100         300
         Ein
-        0.065625      9.411657     9.414734     9.419595
-        1.000000     32.338500    30.743719    32.156524
-        2.000000     56.875590    53.981044    56.492670
-        6.717251    172.623200   282.096835   323.919192
-        11.367190     9.198383     9.198416     9.199371
-        20.912000  1893.389000  3257.315536  2639.268058
-        35.640580     0.974924     1.042582     1.184656
-        44.877660    14.089820    14.090012    14.090359
-        63.498800     5.773424     5.770605     5.764487
-        66.436310    85.621850    90.534332   114.828045
-        80.731840    39.201520    40.746929    29.811032
-        89.051940     9.208071     9.213771     9.226450
+        0.065625     9.411657    9.414734    9.419595
+        1.000000     9.254035    8.817159    9.218082
+        2.000000     9.085342    9.086957    9.086237
+        4.000000     8.481975    8.482804    8.482893
+        5.000000     7.805580    7.805703    7.805682
+        6.670000  1269.792131  664.556512  455.670534
+        7.000000    19.825115   19.893739   20.039076
 
-        >>> EinGrid = np.array([0.065625, 3.0, 4.0, 5.0, 6.67, 7.0])
-        >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K).calc_T(T)
+        # With alpha0 model pdos:
         >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="pdos").data
         T                 0           100         300
         Ein
         0.065625     9.411657    9.414734    9.419595
-        1.000000     9.230553    3.175678    6.956761
-        2.000000     9.036729    5.803824    8.556977
-        3.000000     8.842906    8.844076    8.843855
+        1.000000     9.254035    3.188988    6.986018
+        2.000000     9.085342    9.086957    9.086237
         4.000000     8.481975    8.482804    8.482893
         5.000000     7.805580    7.805703    7.805682
         6.670000  1269.792131  664.556512  455.670534
@@ -944,16 +933,15 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
+        >>> xs = Xs.from_xs0K("u238.0.2", M, EinGrid)
         >>> os.chdir(wd)
 
-        >>> M = 238.05077040419212
-        >>> T = [300, 100]
-        >>> EinGrid = np.array([0.065625, 2.0, 4.0, 5.0, 6.67, 7.0])
-        >>> xsSmall = interpolation(xs0K, EinGrid)
-        >>> xs = Xs(M, 0, xsSmall, xs0Kcomplete=xs0K).calc_T(T)
+        # Add several temperatures:
+        >>> xs = xs.calc_T([300, 100])
+
+        # Sigma1:
         >>> xs.interp_Ein([3.0, 4.5])
         T         0         100       300
         Ein
@@ -1020,13 +1008,10 @@ class Xs:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-        >>> xs0K.index.name = "E"
-        >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
         >>> os.chdir(wd)
 
-        >>> M = 238.05077040419212
-        >>> xs = Xs(M, 0, xs0K)
         >>> T = 300
         >>> Ein = 2.0
         >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
@@ -1131,9 +1116,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> wd = os.getcwd()
     >>> os.chdir(__file__.replace("xs.py", ""))
     >>> os.chdir("../../data/xs/U238/")
-    >>> xs0K = pd.read_csv("u238.0.2", sep='\s+', header = None, index_col = 0, usecols = [0, 1], engine = "python").iloc[::, 0]
-    >>> xs0K.index.name = "E"
-    >>> xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+    >>> xs0K = Xs.read_xs("u238.0.2")
     >>> os.chdir(wd)
 
     # Generate Broadening test results:

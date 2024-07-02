@@ -21,7 +21,7 @@ def add_ScatFuncArgs(parser: argparse.ArgumentParser):
         The argument parser to which the arguments should be added.
     """
     parser.add_argument('model', type=str,
-                        help='Model to use for the calculation of the S(alpha, -beta) table')
+                        help='Model to use for the calculation of the scattering function')
     parser.add_argument('Ein', type=float,
                         help='incident energy in eV')
     parser.add_argument('M', type=float,
@@ -36,7 +36,7 @@ def add_ScatFuncArgs(parser: argparse.ArgumentParser):
 
 def handle_ScatFuncArgs(args: argparse.Namespace) -> np.array:
     """
-    Handle the arguments for the calculation of the effective temperature.
+    Handle the arguments for the calculation of scattering function.
 
     Parameters
     ----------

@@ -37,7 +37,28 @@ def check_results(expected_result: np.array, *command_line_args) -> None:
     np.testing.assert_array_equal(result, expected_result)
 
 
-class TestScinelTeff(unittest.TestCase):
+class BaseTestScinel(unittest.TestCase):
+    def setUp(self) -> None:
+        """
+        Set up the test common variables.
+        """
+        self.T = 1000
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
+        self.Ein = 7.2
+        self.M = 238.05077040419212
+        self.file_alpha = os.path.join(self.file_dir, 'inputTest/alphaGrid')
+        self.file_beta = os.path.join(self.file_dir, 'inputTest/betaGrid')
+        self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
+        self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
+        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
+        self.file_xs0K = os.path.join(self.file_dir, 'inputTest/u238.0.2')
+        self.Eout = np.loadtxt(self.file_Eout)
+        self.pdos = Pdos.from_file([300], [self.file_pdos])
+        self.xs0K = Xs.read_xs(self.file_xs0K)
+        self.theta = np.loadtxt(self.file_theta)
+
+
+class TestScinelTeff(BaseTestScinel):
     """
     Test the Effective temperature calculation in terminal application in the
     solid_cinel package.
@@ -46,11 +67,9 @@ class TestScinelTeff(unittest.TestCase):
         """
         Set up the test common variables
         """
-        self.T = 300
+        super().setUp()
         self.keyword = 'teff'
-        self.file_dir = os.path.dirname(os.path.abspath(__file__))
-        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
-        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+        self.T = 300
 
     def test_teff(self) -> None:
         """
@@ -64,7 +83,7 @@ class TestScinelTeff(unittest.TestCase):
                       self.file_pdos)
 
 
-class TestScinelSab(unittest.TestCase):
+class TestScinelSab(BaseTestScinel):
     """
     Test the Sab class terminal application in the solid_cinel package.
     """
@@ -72,13 +91,9 @@ class TestScinelSab(unittest.TestCase):
         """
         Set up the test common variables.
         """
-        self.T = 300
+        super().setUp()
         self.keyword = 'sab'
-        self.file_dir = os.path.dirname(os.path.abspath(__file__))
-        self.file_alpha = os.path.join(self.file_dir, 'inputTest/alphaGrid')
-        self.file_beta = os.path.join(self.file_dir, 'inputTest/betaGrid')
-        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
-        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+        self.T = 300
 
     def test_fgm(self) -> None:
         """
@@ -116,7 +131,7 @@ class TestScinelSab(unittest.TestCase):
                       self.file_alpha, self.file_beta, str(self.T), self.file_pdos)
 
 
-class TestScinelScatFunc(unittest.TestCase):
+class TestScinelScatFunc(BaseTestScinel):
     """
     Test the ScatFunc class terminal application in the solid_cinel package.
     """
@@ -125,17 +140,9 @@ class TestScinelScatFunc(unittest.TestCase):
         """
         Set up the test common variables.
         """
-        self.T = 1000
+        super().setUp()
         self.keyword = 'scatfunc'
-        self.file_dir = os.path.dirname(os.path.abspath(__file__))
-        self.Ein = 7.2
-        self.M = 238.05077040419212
-        self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
-        self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
-        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
-        self.Eout = np.loadtxt(self.file_Eout)
-        self.mu = np.cos(np.deg2rad(np.loadtxt(self.file_theta)))
-        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+        self.mu = np.cos(np.deg2rad(self.theta))
 
     def test_fgm(self) -> None:
         """
@@ -177,7 +184,7 @@ class TestScinelScatFunc(unittest.TestCase):
                       self.file_theta, self.file_pdos)
 
 
-class TestScinelTransferFunc(unittest.TestCase):
+class TestScinelTransferFunc(BaseTestScinel):
     """
     Test the TransferFunc class terminal application in the solid_cinel package.
     """
@@ -185,16 +192,9 @@ class TestScinelTransferFunc(unittest.TestCase):
         """
         Set up the test common variables.
         """
-        self.T = 1000
+        super().setUp()
         self.keyword = 'scatfunc'
-        self.file_dir = os.path.dirname(os.path.abspath(__file__))
-        self.Ein = 7.2
-        self.M = 238.05077040419212
-        self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
         self.theta = 60
-        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
-        self.Eout = np.loadtxt(self.file_Eout)
-        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
 
     def test_fgm(self) -> None:
         """
@@ -237,7 +237,7 @@ class TestScinelTransferFunc(unittest.TestCase):
                       self.file_pdos)
 
 
-class TestScinelDxs(unittest.TestCase):
+class TestScinelDxs(BaseTestScinel):
     """
     Test the Dxs class terminal application in the solid_cinel package.
     """
@@ -245,18 +245,8 @@ class TestScinelDxs(unittest.TestCase):
         """
         Set up the test common variables.
         """
-        self.T = 1000
+        super().setUp()
         self.keyword = 'dxs'
-        self.file_dir = os.path.dirname(os.path.abspath(__file__))
-        self.Ein = 7.2
-        self.M = 238.05077040419212
-        self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
-        self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
-        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
-        self.file_xs0K = os.path.join(self.file_dir, 'inputTest/u238.0.2')
-        self.Eout = np.loadtxt(self.file_Eout)
-        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
-        self.xs0K = Xs.read_xs(self.file_xs0K)
 
     def test_fgm(self) -> None:
         """
@@ -274,9 +264,8 @@ class TestScinelDxs(unittest.TestCase):
                       str(theta))
 
         # Generate the expected result for single angle:
-        theta = np.loadtxt(self.file_theta)
         expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
-                                       self.Eout, theta, model=model).data.values
+                                       self.Eout, self.theta, model=model).data.values
 
         # Check the results:
         check_results(expected_result, self.keyword, model, self.file_xs0K,
@@ -300,9 +289,8 @@ class TestScinelDxs(unittest.TestCase):
                       str(theta), self.file_pdos)
 
         # Generate the expected result for single angle:
-        theta = np.loadtxt(self.file_theta)
         expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
-                                       self.Eout, theta, self.pdos,
+                                       self.Eout, self.theta, self.pdos,
                                        model=model).data.values
 
         # Check the results:
@@ -329,13 +317,24 @@ class TestScinelDxs(unittest.TestCase):
         # Generate the expected result for single angle:
         theta = np.loadtxt(self.file_theta)
         expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
-                                       self.Eout, theta, self.pdos,
+                                       self.Eout, self.theta, self.pdos,
                                        model=model).data.values
 
         # Check the results:
         check_results(expected_result, self.keyword, model, self.file_xs0K,
                       str(self.Ein), str(self.M), str(self.T), self.file_Eout,
                       self.file_theta, self.file_pdos)
+
+
+class TestScinelDDxs(BaseTestScinel):
+    def setUp(self) -> None:
+        """
+        Set up the test common variables.
+        """
+        super().setUp()
+        self.keyword = 'dxs'
+        self.xs = Xs(self.M, 0, self.xs0K, self.xs0K)
+
 
 
 if __name__ == '__main__':

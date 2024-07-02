@@ -4,8 +4,6 @@ from solid_cinel.application.pdosApp import get_Pdos
 from solid_cinel.core.scattering_function.sab import Sab
 
 
-
-
 def add_SabArgs(parser: argparse.ArgumentParser):
     """
     Add arguments to the parser for the calculation of the effective temperature.

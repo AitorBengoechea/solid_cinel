@@ -74,6 +74,7 @@ def handle_args(keyword: str, args: argparse.Namespace) -> np.array:
     else:
         raise ValueError(f'Invalid keyword: {keyword}')
 
+
 def merge_namespaces(ns1, ns2):
     """
     Merge two argparse.Namespace objects.
@@ -100,7 +101,7 @@ def merge_namespaces(ns1, ns2):
     # Convert merged dictionary back to namespace
     return argparse.Namespace(**merged_dict)
 
-def get_results(args: argparse.Namespace, remaining_args: list):
+def get_results(args: argparse.Namespace, remaining_args: list) -> np.array:
     """
     Get the results based on the keyword.
 

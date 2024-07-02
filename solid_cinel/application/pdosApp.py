@@ -36,6 +36,7 @@ def get_PdosArgs(pdos_args: list) -> argparse.Namespace:
     """
     return add_PdosArgs().parse_args(pdos_args)
 
+
 def get_Pdos(argsPdos: argparse.Namespace) -> Pdos:
     """
     Get the pdos object based on the arguments.

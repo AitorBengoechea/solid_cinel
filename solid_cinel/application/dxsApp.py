@@ -8,7 +8,7 @@ from solid_cinel.core.xs.xs import Xs
 
 def add_DxsArgs(parser: argparse.ArgumentParser):
     """
-    Add arguments to the parser for the calculation of the effective temperature.
+    Add arguments to the parser for the calculation of the differential cross section.
 
     Parameters
     ----------
@@ -35,7 +35,7 @@ def add_DxsArgs(parser: argparse.ArgumentParser):
 
 def handle_DxsArgs(args: argparse.Namespace) -> np.array:
     """
-    Handle the arguments for the calculation of the effective temperature.
+    Handle the arguments for the calculation of the differential cross section.
 
     Parameters
     ----------

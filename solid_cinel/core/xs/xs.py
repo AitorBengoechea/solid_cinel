@@ -31,7 +31,7 @@ class Xs:
     Class for the differential cross section for elastic scattering
     """
     def __init__(self, M: float, temperatures: Union[float, Iterable[float]],
-                 xsSmall: pd.Series, xs0Kcomplete: pd.Series):
+                 xsSmall: pd.Series, xs0Kcomplete: pd.Series = None):
         """
         Class for working with Angle integrated scattering xs at different
         temperature.
@@ -60,7 +60,7 @@ class Xs:
 
         >>> M = 238.05077040419212
         >>> T = 0
-        >>> Xs(M, T, xs0K, xs0K).data.iloc[0:10000:1000]
+        >>> Xs(M, T, xs0K).data.iloc[0:10000:1000]
         T                   0
         Ein
         0.00001      9.420892
@@ -86,7 +86,7 @@ class Xs:
         self.data = df
 
         # Set the 0K scattering function with all the data
-        self.xs0Kcomplete = xs0Kcomplete
+        self.get_xs0Kcomp(xs0Kcomplete)
 
     @property
     def data(self) -> pd.DataFrame:
@@ -194,6 +194,34 @@ class Xs:
     @classmethod
     def from_xs0K(cls, filename: str, M: float, EinSmall: [float, np.array] = None,
                   **kwargs):
+        """
+        Create a new object from the 0K xs data
+
+        Parameters
+        ----------
+        filename : str
+            The filename of the 0K xs data
+        M : float
+            The mass of the nucleus in amu
+        EinSmall : float, np.array, optional
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
+        header: int, list, optional
+            The header of the file. The default is None, so no header is used.
+        usecols: int, list, optional
+            The columns to use. The default is [0, 1], so the first two columns
+            are used.
+        index_col: int, optional
+            The index column. The default is 0, so the first column is used as
+            index.
+        engine: str, optional
+            The engine to use. The default is "python".
+
+        Returns
+        -------
+        Xs
+            The Xs object based on the 0K xs data
+        """
         # Read the 0K xs data
         xs0K = cls.read_xs(filename, **kwargs)
 
@@ -205,6 +233,28 @@ class Xs:
             xs0Ksmall = xs0K.copy()
 
         return cls(M, 0, xs0Ksmall, xs0K)
+
+    def get_xs0Kcomp(self, xs0Kcomplete: [pd.Series, None]):
+        """
+        Get the 0K scattering function with all the data
+
+        Parameters
+        ----------
+        xs0Kcomplete: pd.Series
+            The 0K scattering function with all the data
+
+        Returns
+        -------
+        pd.Series
+            The 0K scattering function with all the data
+        """
+        if xs0Kcomplete is None:
+            if 0 in self.data.columns:
+                self.xs0Kcomplete = self.data.loc[::, 0]
+            else:
+                raise ValueError("0K data not found")
+        else:
+            self.xs0Kcomplete = xs0Kcomplete
 
     @staticmethod
     def check_InputValues(input: [float, Iterable[float]]) -> Iterable:

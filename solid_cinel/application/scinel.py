@@ -4,6 +4,7 @@ from solid_cinel.application.pdosApp import get_PdosArgs, add_TeffArgs, handle_T
 from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
 from solid_cinel.application.scatfunctApp import add_ScatFuncArgs, handle_ScatFuncArgs
 from solid_cinel.application.dxsApp import add_DxsArgs, handle_DxsArgs
+from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
@@ -22,6 +23,10 @@ KEYWORD_TO_FUNCTION_MAP = {
     "dxs": {
         "add": add_DxsArgs,
         "handle": handle_DxsArgs,
+    },
+    "ddxs": {
+        "add": add_DDxsArgs,
+        "handle": handle_DDxsArgs,
     },
 }
 
@@ -74,6 +79,7 @@ def handle_args(keyword: str, args: argparse.Namespace) -> np.array:
     else:
         raise ValueError(f'Invalid keyword: {keyword}')
 
+
 def merge_namespaces(ns1, ns2):
     """
     Merge two argparse.Namespace objects.
@@ -100,7 +106,7 @@ def merge_namespaces(ns1, ns2):
     # Convert merged dictionary back to namespace
     return argparse.Namespace(**merged_dict)
 
-def get_results(args: argparse.Namespace, remaining_args: list):
+def get_results(args: argparse.Namespace, remaining_args: list) -> np.array:
     """
     Get the results based on the keyword.
 

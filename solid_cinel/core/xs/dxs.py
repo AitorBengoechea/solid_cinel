@@ -442,14 +442,22 @@ class Dxs:
         >>> M = 238.05077040419212
         >>> theta = 15
 
+        # 0K xs data for U238:
+        >>> from solid_cinel.core.xs.xs import Xs
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> os.chdir(wd)
+
         # Using the Free Gas Model:
-        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        >>> Dxs.from_theta(xs0K, Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout
-        7.1000     0.000030
-        7.1500     0.851083
-        7.2000    21.126578
-        7.2500     0.489767
-        7.3157     0.000000
+        7.1000      0.000277
+        7.1500      8.291518
+        7.2000    212.369147
+        7.2500      5.032810
+        7.3157      0.000001
         Name: 15, dtype: float64
         """
         # Get the transfer function:

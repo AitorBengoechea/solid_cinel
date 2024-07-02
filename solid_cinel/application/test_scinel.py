@@ -432,13 +432,13 @@ class TestScinelDxs(BaseTestScinel):
             The scattering angle.
         """
         # Test FGM:
-        self.model(method, "fgm", theta)
+        self.modelTest(method, "fgm", theta)
 
         # Test SCT:
-        self.model(method, "sct", theta)
+        self.modelTest(method, "sct", theta)
 
         # Test PDOS:
-        self.model(method, "pdos", theta)
+        self.modelTest(method, "pdos", theta)
 
     def test_SingleAngle(self) -> None:
         """

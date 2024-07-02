@@ -14,29 +14,6 @@ from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.xs import Dxs, Xs, DDxs
 
 
-def check_results(expected_result: np.array, *command_line_args) -> None:
-    """
-    Check the results of the command line arguments.
-
-    Parameters
-    ----------
-    expected_result : np.array
-        The expected result.
-    command_line_args : list
-        The command line arguments.
-
-    Returns
-    -------
-    None
-        Pass the test if the results are equal.
-    """
-    # Create a parser to simulate the command line arguments
-    result = main(*command_line_args, write_to_file=False)
-
-    # Check the returned result
-    np.testing.assert_array_equal(result, expected_result)
-
-
 class BaseTestScinel(unittest.TestCase):
     def setUp(self) -> None:
         """
@@ -56,6 +33,49 @@ class BaseTestScinel(unittest.TestCase):
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
         self.xs0K = Xs.read_xs(self.file_xs0K)
         self.theta = np.loadtxt(self.file_theta)
+
+    @staticmethod
+    def check_command_line_args(*command_line_args) -> list:
+        """
+        Check the command line arguments and convert them to string if needed.
+
+        Parameters
+        ----------
+        command_line_args : list
+            The command line arguments.
+
+        Returns
+        -------
+        list
+            The list of command line arguments converted to string.
+        """
+        return [str(arg) if not isinstance(arg, str) else arg for arg in
+                command_line_args]
+
+    def check_results(self, expected_result: np.array, *command_line_args) -> None:
+        """
+        Check the results of the command line arguments.
+
+        Parameters
+        ----------
+        expected_result : np.array
+            The expected result.
+        command_line_args : list
+            The command line arguments.
+
+        Returns
+        -------
+        None
+            Pass the test if the results are equal.
+        """
+        # Convert the command line arguments to string
+        command_line_args = self.check_command_line_args(*command_line_args)
+
+        # Create a parser to simulate the command line arguments
+        result = main(*command_line_args, write_to_file=False)
+
+        # Check the returned result
+        np.testing.assert_array_equal(result, expected_result)
 
 
 class TestScinelTeff(BaseTestScinel):
@@ -78,9 +98,11 @@ class TestScinelTeff(BaseTestScinel):
         # Generate the expected result
         expected_result = np.array([self.T, self.pdos.fix_T(self.T).Teff])
 
+        # Command line arguments
+        command_line_args = [self.keyword, self.T, self.file_pdos]
+
         # Check the results
-        check_results(expected_result, 'Teff', str(self.T),
-                      self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
 
 class TestScinelSab(BaseTestScinel):
@@ -101,9 +123,11 @@ class TestScinelSab(BaseTestScinel):
         # Generate the expected result:
         expected_result = Sab.from_fgm(self.file_alpha, self.file_beta).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, 'fgm', self.file_alpha, self.file_beta]
+
         # Check the results:
-        check_results(expected_result, self.keyword, 'fgm',
-                      self.file_alpha, self.file_beta, str(self.T))
+        self.check_results(expected_result, *command_line_args)
 
     def test_sct(self) -> None:
         """
@@ -113,9 +137,12 @@ class TestScinelSab(BaseTestScinel):
         expected_result = Sab.from_sct(self.file_alpha, self.file_beta, self.T,
                                        self.pdos).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, 'sct', self.file_alpha, self.file_beta,
+                             self.T, self.file_pdos]
+
         # Check the results:
-        check_results(expected_result, self.keyword, 'sct',
-                      self.file_alpha, self.file_beta, str(self.T), self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
     def test_pdos(self) -> None:
         """
@@ -125,9 +152,12 @@ class TestScinelSab(BaseTestScinel):
         expected_result = Sab.from_pdos(self.file_alpha, self.file_beta, self.T,
                                         self.pdos).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, 'pdos', self.file_alpha, self.file_beta,
+                             self.T, self.file_pdos]
+
         # Check the results:
-        check_results(expected_result, self.keyword, 'pdos',
-                      self.file_alpha, self.file_beta, str(self.T), self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
 
 class TestScinelScatFunc(BaseTestScinel):
@@ -151,10 +181,11 @@ class TestScinelScatFunc(BaseTestScinel):
         expected_result = ScatFunc.from_fgm(self.Ein, self.M, self.T, self.Eout,
                                             self.mu).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, 'fgm', self.Ein, self.M, self.T,
+                             self.file_Eout, self.file_theta]
         # Check the results:
-        check_results(expected_result, self.keyword, 'fgm',
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      self.file_theta)
+        self.check_results(expected_result, *command_line_args)
 
     def test_sct(self) -> None:
         """
@@ -164,10 +195,12 @@ class TestScinelScatFunc(BaseTestScinel):
         expected_result = ScatFunc.from_sct(self.Ein, self.M, self.T, self.Eout,
                                             self.mu, self.pdos).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, 'sct', self.Ein, self.M, self.T,
+                             self.file_Eout, self.file_theta, self.file_pdos]
+
         # Check the results:
-        check_results(expected_result, self.keyword, "sct",
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      self.file_theta, self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
     def test_pdos(self) -> None:
         """
@@ -177,10 +210,12 @@ class TestScinelScatFunc(BaseTestScinel):
         expected_result = ScatFunc.from_pdos(self.Ein, self.M, self.T, self.Eout,
                                             self.mu, self.pdos).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, 'pdos', self.Ein, self.M, self.T,
+                             self.file_Eout, self.file_theta, self.file_pdos]
+
         # Check the results:
-        check_results(expected_result, self.keyword, "pdos",
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      self.file_theta, self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
 
 class TestScinelTransferFunc(BaseTestScinel):
@@ -203,9 +238,12 @@ class TestScinelTransferFunc(BaseTestScinel):
         model = 'fgm'
         expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
                                                   model=model).data.values
+
+        # Command line arguments
+        command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
+                             self.file_Eout, self.theta]
         # Check the results:
-        check_results(expected_result, self.keyword, model,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta))
+        self.check_results(expected_result, *command_line_args)
 
     def test_sct(self) -> None:
         """
@@ -216,10 +254,12 @@ class TestScinelTransferFunc(BaseTestScinel):
         expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
                                                   self.pdos, model=model).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
+                             self.file_Eout, self.theta, self.file_pdos]
+
         # Check the results:
-        check_results(expected_result, self.keyword, model,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta),
-                      self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
     def test_pdos(self) -> None:
         """
@@ -230,10 +270,12 @@ class TestScinelTransferFunc(BaseTestScinel):
         expected_result = TransferFunc.from_theta(self.Ein, self.M, self.T, self.Eout, self.theta,
                                                   self.pdos, model=model).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
+                             self.file_Eout, self.theta, self.file_pdos]
+
         # Check the results:
-        check_results(expected_result, self.keyword, model,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta),
-                      self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
 
 class TestScinelDxs(BaseTestScinel):
@@ -247,85 +289,114 @@ class TestScinelDxs(BaseTestScinel):
         super().setUp()
         self.keyword = 'dxs'
 
-    def test_fgm(self) -> None:
+    def ModelFgm(self, method, theta: [float, np.array]) -> None:
         """
-        Test the fgm model for the generating differential cross section.
+        Test the FGM model for the generating differential cross section.
+
+        Parameters
+        ----------
+        method : method
+            The method to use for the calculation.
+        theta : [float, np.array]
+            The scattering angle.
         """
         model = 'fgm'
-        # Generate the expected result for single angle:
-        theta = 60
-        expected_result = Dxs.from_theta(self.xs0K, self.Ein, self.M, self.T,
-                                         self.Eout, theta, model=model).data.values
+        # Generate the expected result:
+        expected_result = method(self.xs0K, self.Ein, self.M, self.T, self.Eout,
+                                 theta, model=model).data.values
+
+        # Command line arguments
+        command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
+                             self.M, self.T, self.file_Eout, theta]
 
         # Check the results:
-        check_results(expected_result, self.keyword, model, self.file_xs0K,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      str(theta))
+        self.check_results(expected_result, *command_line_args)
 
-        # Generate the expected result for single angle:
-        expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
-                                       self.Eout, self.theta, model=model).data.values
-
-        # Check the results:
-        check_results(expected_result, self.keyword, model, self.file_xs0K,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      self.file_theta)
-
-    def test_sct(self) -> None:
+    def ModelSct(self, method, theta: [float, np.array]) -> None:
         """
-        Test the sct model for the generating differential cross section.
+        Test the SCT model for the generating differential cross section.
+
+        Parameters
+        ----------
+        method : method
+            The method to use for the calculation.
+        theta : [float, np.array]
+            The scattering angle.
         """
         model = 'SCT'
-        # Generate the expected result for single angle:
-        theta = 60
-        expected_result = Dxs.from_theta(self.xs0K, self.Ein, self.M, self.T,
-                                         self.Eout, theta, self.pdos,
-                                         model=model).data.values
+        # Generate the expected result:
+        expected_result = method(self.xs0K, self.Ein, self.M, self.T, self.Eout,
+                                 theta, self.pdos, model=model).data.values
+
+        # Command line arguments
+        command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
+                             self.M, self.T, self.file_Eout, theta, self.file_pdos]
 
         # Check the results:
-        check_results(expected_result, self.keyword, model, self.file_xs0K,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      str(theta), self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
-        # Generate the expected result for single angle:
-        expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
-                                       self.Eout, self.theta, self.pdos,
-                                       model=model).data.values
-
-        # Check the results:
-        check_results(expected_result, self.keyword, model, self.file_xs0K,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      self.file_theta, self.file_pdos)
-
-    def test_pdos(self) -> None:
+    def ModelPdos(self, method, theta: [float, np.array]) -> None:
         """
-        Test the pdos model for the generating differential cross section.
+        Test the PDOS model for the generating differential cross section.
+
+        Parameters
+        ----------
+        method : method
+            The method to use for the calculation.
+        theta : [float, np.array]
+            The scattering angle.
         """
         model = 'pdos'
-        # Generate the expected result for single angle:
-        theta = 60
-        expected_result = Dxs.from_theta(self.xs0K, self.Ein, self.M, self.T,
-                                         self.Eout, theta, self.pdos,
-                                         model=model).data.values
+        # Generate the expected result:
+        expected_result = method(self.xs0K, self.Ein, self.M, self.T, self.Eout,
+                                 theta, self.pdos, model=model).data.values
+
+        # Command line arguments
+        command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
+                             self.M, self.T, self.file_Eout, theta, self.file_pdos]
 
         # Check the results:
-        check_results(expected_result, self.keyword, model, self.file_xs0K,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      str(theta), self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
-        # Generate the expected result for single angle:
-        theta = np.loadtxt(self.file_theta)
-        expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
-                                       self.Eout, self.theta, self.pdos,
-                                       model=model).data.values
+    def Modeltest(self, method, theta: [float, np.array]) -> None:
+        """
+        Test the differential cross section calculation.
 
-        # Check the results:
-        check_results(expected_result, self.keyword, model, self.file_xs0K,
-                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
-                      self.file_theta, self.file_pdos)
+        Parameters
+        ----------
+        method : method
+            The method to use for the calculation.
+        theta : [float, np.array]
+            The scattering angle.
+        """
+        # Test FGM:
+        self.ModelFgm(method, theta)
+
+        # Test SCT:
+        self.ModelSct(method, theta)
+
+        # Test PDOS:
+        self.ModelPdos(method, theta)
+
+    def test_SingleAngle(self) -> None:
+        """
+        Test the fgm model for the generating differential cross section for a
+        single angle.
+        """
+        self.Modeltest(Dxs.from_theta, 60)
+
+    def test_MultipleAngles(self) -> None:
+        """
+        Test the fgm model for the generating differential cross section for
+        multiple angles.
+        """
+        self.Modeltest(Dxs.from_sab, self.theta)
 
 
 class TestScinelDDxs(BaseTestScinel):
+    """
+    Test the DDxs class terminal application in the solid_cinel package.
+    """
     def setUp(self) -> None:
         """
         Set up the test common variables.
@@ -334,44 +405,91 @@ class TestScinelDDxs(BaseTestScinel):
         self.keyword = 'ddxs'
         self.xs = Xs(self.M, 0, self.xs0K)
 
-    def ModelFgm(self, algorithm, method):
+    def ModelFgm(self, algorithm: str, method):
+        """
+        Test the FGM model for the generating double differential scattering
+        cross section.
+
+        Parameters
+        ----------
+        algorithm : str
+            The algorithm to use for the calculation.
+        method : method
+            The method to use for the calculation.
+        """
         model = "fgm"
         # Generate the expected result:
         expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
                                  model=model).data.values
 
-        # Check the results:
-        check_results(expected_result, self.keyword, algorithm, model,
-                      self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
-                      self.file_Eout, self.file_theta)
+        # Command line arguments
+        command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
+                             self.Ein, self.M, self.T, self.file_Eout, self.file_theta]
 
-    def ModelSct(self, algorithm, method):
+        # Check the results:
+        self.check_results(expected_result, *command_line_args)
+
+    def ModelSct(self, algorithm: str, method) -> None:
+        """
+        Test the SCT model for the generating double differential scattering
+        cross section.
+
+        Parameters
+        ----------
+        algorithm : str
+            The algorithm to use for the calculation.
+        method : method
+            The method to use for the calculation.
+        """
+
         model = "sct"
         # Generate the expected result:
         expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
                                  self.pdos, model=model).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
+                             self.Ein, self.M, self.T, self.file_Eout, self.file_theta,
+                             self.file_pdos]
         # Check the results:
-        check_results(expected_result, self.keyword, algorithm, model,
-                      self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
-                      self.file_Eout, self.file_theta, self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
-    def ModelPdos(self, algorithm, method):
+    def ModelPdos(self, algorithm: str, method) -> None:
+        """
+        Test the PDOS model for the generating double differential scattering
+        cross section.
+
+        Parameters
+        ----------
+        algorithm : str
+            The algorithm to use for the calculation.
+        method : method
+            The method to use for the calculation.
+        """
         model = "pdos"
         # Generate the expected result:
         expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
                                  self.pdos, model=model).data.values
 
+        # Command line arguments
+        command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
+                             self.Ein, self.M, self.T, self.file_Eout, self.file_theta,
+                             self.file_pdos]
+
         # Check the results:
-        check_results(expected_result, self.keyword, algorithm, model,
-                      self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
-                      self.file_Eout, self.file_theta, self.file_pdos)
+        self.check_results(expected_result, *command_line_args)
 
-    def test_sab(self) -> None:
-        # Define the algorithm and method:
-        algorithm = 'sab'
-        method = DDxs.from_Sab
+    def Modeltest(self, algorithm: str, method) -> None:
+        """
+        Test the double differential scattering cross section calculation.
 
+        Parameters
+        ----------
+        algorithm : str
+            The algorithm to use for the calculation.
+        method : method
+            The method to use for the calculation.
+        """
         # Test FGM:
         self.ModelFgm(algorithm, method)
 
@@ -380,6 +498,20 @@ class TestScinelDDxs(BaseTestScinel):
 
         # Test PDOS:
         self.ModelPdos(algorithm, method)
+
+    def test_sab(self) -> None:
+        """
+        Test the SAB algorithm for the generating double differential scattering
+        cross section.
+        """
+        self.Modeltest('sab', DDxs.from_Sab)
+
+    def test_4pcf(self) -> None:
+        """
+        Test the 4PCF algorithm for the generating double differential scattering
+        cross section.
+        """
+        self.Modeltest('4pcf', DDxs.from_4PCF)
 
 
 if __name__ == '__main__':

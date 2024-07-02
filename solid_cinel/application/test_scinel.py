@@ -121,15 +121,31 @@ class TestScinelSab(BaseTestScinel):
         """
         Get the variables for the fgm model.
         """
-        return [self.file_alpha, self.file_beta]
+        return [self.file_alpha, self.file_beta, self.T]
 
     @property
     def get_sct_var(self) -> list:
         """
         Get the variables for the sct model.
         """
-        var_fgm = self.get_fgm_var
-        return var_fgm.extend([self.T, self.file_pdos])
+        return self.get_fgm_var + [self.pdos]
+
+    def get_command(self, model: str) -> list:
+        """
+        Get the command line arguments for the model.
+
+        Parameters
+        ----------
+        model : str
+            The model to use for the calculation.
+
+        Returns
+        -------
+        list
+            The command line arguments.
+        """
+        command = [self.keyword, model, self.file_alpha, self.file_beta, self.T]
+        return command if model == 'fgm' else command + [self.file_pdos]
 
     def test_fgm(self) -> None:
         """
@@ -138,11 +154,8 @@ class TestScinelSab(BaseTestScinel):
         # Generate the expected result:
         expected_result = Sab.from_fgm(*self.get_fgm_var).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, 'fgm', self.file_alpha, self.file_beta]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command('fgm'))
 
     def test_sct(self) -> None:
         """
@@ -151,12 +164,8 @@ class TestScinelSab(BaseTestScinel):
         # Generate the expected result:
         expected_result = Sab.from_sct(*self.get_sct_var).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, 'sct', self.file_alpha, self.file_beta,
-                             self.T, self.file_pdos]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command('sct'))
 
     def test_pdos(self) -> None:
         """
@@ -165,12 +174,8 @@ class TestScinelSab(BaseTestScinel):
         # Generate the expected result:
         expected_result = Sab.from_pdos(*self.get_sct_var).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, 'pdos', self.file_alpha, self.file_beta,
-                             self.T, self.file_pdos]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command('pdos'))
 
 
 class TestScinelScatFunc(BaseTestScinel):
@@ -198,8 +203,25 @@ class TestScinelScatFunc(BaseTestScinel):
         """
         Get the variables for the sct model.
         """
-        var_fgm = self.get_fgm_var
-        return var_fgm.extend([self.pdos])
+        return self.get_fgm_var + [self.pdos]
+
+    def get_command(self, model: str) -> list:
+        """
+        Get the command line arguments for the model.
+
+        Parameters
+        ----------
+        model : str
+            The model to use for the calculation.
+
+        Returns
+        -------
+        list
+            The command line arguments.
+        """
+        command = [self.keyword, model, self.Ein, self.M, self.T,
+                   self.file_Eout, self.file_theta]
+        return command if model == 'fgm' else command + [self.file_pdos]
 
     def test_fgm(self) -> None:
         """
@@ -208,11 +230,8 @@ class TestScinelScatFunc(BaseTestScinel):
         # Generate the expected result:
         expected_result = ScatFunc.from_fgm(*self.get_fgm_var).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, 'fgm', self.Ein, self.M, self.T,
-                             self.file_Eout, self.file_theta]
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command('fgm'))
 
     def test_sct(self) -> None:
         """
@@ -221,12 +240,8 @@ class TestScinelScatFunc(BaseTestScinel):
         # Generate the expected result:
         expected_result = ScatFunc.from_sct(*self.get_sct_var).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, 'sct', self.Ein, self.M, self.T,
-                             self.file_Eout, self.file_theta, self.file_pdos]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command('sct'))
 
     def test_pdos(self) -> None:
         """
@@ -235,12 +250,8 @@ class TestScinelScatFunc(BaseTestScinel):
         # Generate the expected result:
         expected_result = ScatFunc.from_pdos(*self.get_sct_var).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, 'pdos', self.Ein, self.M, self.T,
-                             self.file_Eout, self.file_theta, self.file_pdos]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command('pdos'))
 
 
 class TestScinelTransferFunc(BaseTestScinel):
@@ -267,8 +278,25 @@ class TestScinelTransferFunc(BaseTestScinel):
         """
         Get the variables for the sct model.
         """
-        var_fgm = self.get_fgm_var
-        return var_fgm.extend([self.pdos])
+        return self.get_fgm_var + [self.pdos]
+
+    def get_command(self, model: str) -> list:
+        """
+        Get the command line arguments for the model.
+
+        Parameters
+        ----------
+        model : str
+            The model to use for the calculation.
+
+        Returns
+        -------
+        list
+            The command line arguments.
+        """
+        command = [self.keyword, model, self.Ein, self.M, self.T,
+                   self.file_Eout, self.theta]
+        return command if model == 'fgm' else command + [self.file_pdos]
 
     def test_fgm(self) -> None:
         """
@@ -279,11 +307,8 @@ class TestScinelTransferFunc(BaseTestScinel):
         expected_result = TransferFunc.from_theta(*self.get_fgm_var,
                                                   model=model).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
-                             self.file_Eout, self.theta]
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model))
 
     def test_sct(self) -> None:
         """
@@ -293,12 +318,8 @@ class TestScinelTransferFunc(BaseTestScinel):
         model = 'sct'
         expected_result = TransferFunc.from_theta(*self.get_sct_var, model=model).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
-                             self.file_Eout, self.theta, self.file_pdos]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model))
 
     def test_pdos(self) -> None:
         """
@@ -308,12 +329,8 @@ class TestScinelTransferFunc(BaseTestScinel):
         model = 'pdos'
         expected_result = TransferFunc.from_theta(*self.get_sct_var, model=model).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, model, self.Ein, self.M, self.T,
-                             self.file_Eout, self.theta, self.file_pdos]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model))
 
 
 class TestScinelDxs(BaseTestScinel):
@@ -327,20 +344,36 @@ class TestScinelDxs(BaseTestScinel):
         super().setUp()
         self.keyword = 'dxs'
 
-    @property
-    def get_fgm_var(self) -> list:
+    def get_fgm_var(self, theta: [float, np.array]) -> list:
         """
         Get the variables for the fgm model.
         """
-        return [self.xs0K, self.Ein, self.M, self.T, self.Eout, self.theta]
+        return [self.xs0K, self.Ein, self.M, self.T, self.Eout, theta]
 
-    @property
-    def get_sct_var(self) -> list:
+    def get_sct_var(self, theta: [float, np.array]) -> list:
         """
         Get the variables for the sct model.
         """
-        fgm_var = self.get_fgm_var
-        return fgm_var.extend([self.pdos])
+        return self.get_fgm_var(theta) + [self.pdos]
+
+    def get_command(self, model: str, theta: [float, np.array]) -> list:
+        """
+        Get the command line arguments for the model.
+        Parameters
+        ----------
+        model : str
+            The model to use for the calculation.
+        theta : [float, np.array]
+            The scattering angle.
+
+        Returns
+        -------
+        list
+            The command line arguments.
+        """
+        command = [self.keyword, model, self.file_xs0K, self.Ein, self.M, self.T,
+                   self.file_Eout, theta]
+        return command if model == 'fgm' else command + [self.file_pdos]
 
     def ModelFgm(self, method, theta: [float, np.array]) -> None:
         """
@@ -355,14 +388,10 @@ class TestScinelDxs(BaseTestScinel):
         """
         model = 'fgm'
         # Generate the expected result:
-        expected_result = method(*self.get_fgm_var, model=model).data.values
-
-        # Command line arguments
-        command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
-                             self.M, self.T, self.file_Eout, theta]
+        expected_result = method(*self.get_fgm_var(theta), model=model).data.values
 
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model, theta))
 
     def ModelSct(self, method, theta: [float, np.array]) -> None:
         """
@@ -377,14 +406,10 @@ class TestScinelDxs(BaseTestScinel):
         """
         model = 'SCT'
         # Generate the expected result:
-        expected_result = method(self.get_sct_var, model=model).data.values
-
-        # Command line arguments
-        command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
-                             self.M, self.T, self.file_Eout, theta, self.file_pdos]
+        expected_result = method(self.get_sct_var(theta), model=model).data.values
 
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model, theta))
 
     def ModelPdos(self, method, theta: [float, np.array]) -> None:
         """
@@ -399,14 +424,10 @@ class TestScinelDxs(BaseTestScinel):
         """
         model = 'pdos'
         # Generate the expected result:
-        expected_result = method(*self.get_sct_var, model=model).data.values
-
-        # Command line arguments
-        command_line_args = [self.keyword, model, self.file_xs0K, self.Ein,
-                             self.M, self.T, self.file_Eout, theta, self.file_pdos]
+        expected_result = method(*self.get_sct_var(theta), model=model).data.values
 
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model, theta))
 
     def Modeltest(self, method, theta: [float, np.array]) -> None:
         """
@@ -467,8 +488,25 @@ class TestScinelDDxs(BaseTestScinel):
         """
         Get the variables for the sct model.
         """
-        var_fgm = self.get_fgm_var
-        return var_fgm.extend([self.pdos])
+        return self.get_fgm_var + [self.pdos]
+
+    def get_command(self, model: str) -> list:
+        """
+        Get the command line arguments for the model.
+
+        Parameters
+        ----------
+        model : str
+            The model to use for the calculation.
+
+        Returns
+        -------
+        list
+            The command line arguments.
+        """
+        command = [self.keyword, model, self.file_xs0K, self.Ein, self.M, self.T,
+                   self.file_Eout, self.file_theta]
+        return command if model == 'fgm' else command + [self.file_pdos]
 
     def ModelFgm(self, algorithm: str, method):
         """
@@ -486,12 +524,8 @@ class TestScinelDDxs(BaseTestScinel):
         # Generate the expected result:
         expected_result = method(*self.get_fgm_var, model=model).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
-                             self.Ein, self.M, self.T, self.file_Eout, self.file_theta]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model))
 
     def ModelSct(self, algorithm: str, method) -> None:
         """
@@ -510,12 +544,8 @@ class TestScinelDDxs(BaseTestScinel):
         # Generate the expected result:
         expected_result = method(*self.get_sct_var, model=model).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
-                             self.Ein, self.M, self.T, self.file_Eout, self.file_theta,
-                             self.file_pdos]
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model))
 
     def ModelPdos(self, algorithm: str, method) -> None:
         """
@@ -533,13 +563,8 @@ class TestScinelDDxs(BaseTestScinel):
         # Generate the expected result:
         expected_result = method(*self.get_sct_var, model=model).data.values
 
-        # Command line arguments
-        command_line_args = [self.keyword, algorithm, model, self.file_xs0K,
-                             self.Ein, self.M, self.T, self.file_Eout, self.file_theta,
-                             self.file_pdos]
-
         # Check the results:
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command(model))
 
     def Modeltest(self, algorithm: str, method) -> None:
         """

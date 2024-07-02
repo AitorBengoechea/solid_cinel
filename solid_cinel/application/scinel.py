@@ -3,6 +3,7 @@ import numpy as np
 from solid_cinel.application.pdosApp import get_PdosArgs, add_TeffArgs, handle_TeffArgs
 from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
 from solid_cinel.application.scatfunctApp import add_ScatFuncArgs, handle_ScatFuncArgs
+from solid_cinel.application.dxsApp import add_DxsArgs, handle_DxsArgs
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
@@ -17,6 +18,10 @@ KEYWORD_TO_FUNCTION_MAP = {
     "scatfunc": {
         "add": add_ScatFuncArgs,
         "handle": handle_ScatFuncArgs,
+    },
+    "dxs": {
+        "add": add_DxsArgs,
+        "handle": handle_DxsArgs,
     },
 }
 

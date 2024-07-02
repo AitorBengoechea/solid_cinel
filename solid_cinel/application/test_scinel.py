@@ -11,6 +11,7 @@ from solid_cinel.application.scinel import main
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
 from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.xs import Dxs, Xs
 
 
 def check_results(expected_result: np.array, *command_line_args) -> None:
@@ -34,6 +35,33 @@ def check_results(expected_result: np.array, *command_line_args) -> None:
 
     # Check the returned result
     np.testing.assert_array_equal(result, expected_result)
+
+
+class TestScinelTeff(unittest.TestCase):
+    """
+    Test the Effective temperature calculation in terminal application in the
+    solid_cinel package.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables
+        """
+        self.T = 300
+        self.keyword = 'teff'
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
+        self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
+        self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+
+    def test_teff(self) -> None:
+        """
+        Test the effective temperature calculation
+        """
+        # Generate the expected result
+        expected_result = np.array([self.T, self.pdos.fix_T(self.T).Teff])
+
+        # Check the results
+        check_results(expected_result, 'Teff', str(self.T),
+                      self.file_pdos)
 
 
 class TestScinelSab(unittest.TestCase):
@@ -208,31 +236,106 @@ class TestScinelTransferFunc(unittest.TestCase):
                       str(self.Ein), str(self.M), str(self.T), self.file_Eout, str(self.theta),
                       self.file_pdos)
 
-class TestScinelTeff(unittest.TestCase):
+
+class TestScinelDxs(unittest.TestCase):
     """
-    Test the Effective temperature calculation in terminal application in the
-    solid_cinel package.
+    Test the Dxs class terminal application in the solid_cinel package.
     """
     def setUp(self) -> None:
         """
-        Set up the test common variables
+        Set up the test common variables.
         """
-        self.T = 300
-        self.keyword = 'teff'
+        self.T = 1000
+        self.keyword = 'dxs'
         self.file_dir = os.path.dirname(os.path.abspath(__file__))
+        self.Ein = 7.2
+        self.M = 238.05077040419212
+        self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
+        self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
         self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
+        self.file_xs0K = os.path.join(self.file_dir, 'inputTest/u238.0.2')
+        self.Eout = np.loadtxt(self.file_Eout)
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
+        self.xs0K = Xs.read_xs(self.file_xs0K)
 
-    def test_teff(self) -> None:
+    def test_fgm(self) -> None:
         """
-        Test the effective temperature calculation
+        Test the fgm model for the generating differential cross section.
         """
-        # Generate the expected result
-        expected_result = np.array([self.T, self.pdos.fix_T(self.T).Teff])
+        model = 'fgm'
+        # Generate the expected result for single angle:
+        theta = 60
+        expected_result = Dxs.from_theta(self.xs0K, self.Ein, self.M, self.T,
+                                         self.Eout, theta, model=model).data.values
 
-        # Check the results
-        check_results(expected_result, 'Teff', str(self.T),
-                      self.file_pdos)
+        # Check the results:
+        check_results(expected_result, self.keyword, model, self.file_xs0K,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      str(theta))
+
+        # Generate the expected result for single angle:
+        theta = np.loadtxt(self.file_theta)
+        expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
+                                       self.Eout, theta, model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, model, self.file_xs0K,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      self.file_theta)
+
+    def test_sct(self) -> None:
+        """
+        Test the sct model for the generating differential cross section.
+        """
+        model = 'SCT'
+        # Generate the expected result for single angle:
+        theta = 60
+        expected_result = Dxs.from_theta(self.xs0K, self.Ein, self.M, self.T,
+                                         self.Eout, theta, self.pdos,
+                                         model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, model, self.file_xs0K,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      str(theta), self.file_pdos)
+
+        # Generate the expected result for single angle:
+        theta = np.loadtxt(self.file_theta)
+        expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
+                                       self.Eout, theta, self.pdos,
+                                       model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, model, self.file_xs0K,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      self.file_theta, self.file_pdos)
+
+    def test_pdos(self) -> None:
+        """
+        Test the pdos model for the generating differential cross section.
+        """
+        model = 'pdos'
+        # Generate the expected result for single angle:
+        theta = 60
+        expected_result = Dxs.from_theta(self.xs0K, self.Ein, self.M, self.T,
+                                         self.Eout, theta, self.pdos,
+                                         model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, model, self.file_xs0K,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      str(theta), self.file_pdos)
+
+        # Generate the expected result for single angle:
+        theta = np.loadtxt(self.file_theta)
+        expected_result = Dxs.from_sab(self.xs0K, self.Ein, self.M, self.T,
+                                       self.Eout, theta, self.pdos,
+                                       model=model).data.values
+
+        # Check the results:
+        check_results(expected_result, self.keyword, model, self.file_xs0K,
+                      str(self.Ein), str(self.M), str(self.T), self.file_Eout,
+                      self.file_theta, self.file_pdos)
 
 
 if __name__ == '__main__':

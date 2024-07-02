@@ -4,6 +4,7 @@ from solid_cinel.application.pdosApp import get_PdosArgs, add_TeffArgs, handle_T
 from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
 from solid_cinel.application.scatfunctApp import add_ScatFuncArgs, handle_ScatFuncArgs
 from solid_cinel.application.dxsApp import add_DxsArgs, handle_DxsArgs
+from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
@@ -22,6 +23,10 @@ KEYWORD_TO_FUNCTION_MAP = {
     "dxs": {
         "add": add_DxsArgs,
         "handle": handle_DxsArgs,
+    },
+    "ddxs": {
+        "add": add_DDxsArgs,
+        "handle": handle_DDxsArgs,
     },
 }
 

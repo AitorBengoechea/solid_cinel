@@ -147,36 +147,41 @@ class TestScinelSab(BaseTestScinel):
         command = [self.keyword, model, self.file_alpha, self.file_beta, self.T]
         return command if model == 'fgm' else command + [self.file_pdos]
 
+    def modelTest(self, model: str) -> None:
+        """
+        Test the specified model for generating Van Hove scattering function tables.
+
+        Parameters
+        ----------
+        model : str
+            The model to test. Can be 'fgm', 'sct', or 'pdos'.
+        """
+        # Determine the appropriate variables based on the model
+        variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
+
+        # Generate the expected result
+        expected_result = Sab.from_model(*variables, model=model).data.values
+
+        # Check the results
+        self.check_results(expected_result, *self.get_command(model))
+
     def test_fgm(self) -> None:
         """
         Test the fgm model for the generating S(alpha, -beta) tables.
         """
-        # Generate the expected result:
-        expected_result = Sab.from_fgm(*self.get_fgm_var).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command('fgm'))
+        self.modelTest('fgm')
 
     def test_sct(self) -> None:
         """
         Test the sct model for the generating S(alpha, -beta) tables.
         """
-        # Generate the expected result:
-        expected_result = Sab.from_sct(*self.get_sct_var).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command('sct'))
+        self.modelTest('sct')
 
     def test_pdos(self) -> None:
         """
         Test the pdos model for the generating S(alpha, -beta) tables.
         """
-        # Generate the expected result:
-        expected_result = Sab.from_pdos(*self.get_sct_var).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command('pdos'))
-
+        self.modelTest('pdos')
 
 class TestScinelScatFunc(BaseTestScinel):
     """
@@ -196,7 +201,7 @@ class TestScinelScatFunc(BaseTestScinel):
         """
         Get the variables for the fgm model.
         """
-        return [self.Ein, self.M, self.T, self.Eout, self.mu]
+        return [self.Ein, self.M, self.T, self.Eout, self.theta]
 
     @property
     def get_sct_var(self) -> list:
@@ -223,35 +228,42 @@ class TestScinelScatFunc(BaseTestScinel):
                    self.file_Eout, self.file_theta]
         return command if model == 'fgm' else command + [self.file_pdos]
 
+    def modelTest(self, model: str) -> None:
+        """
+        Test the specified model for generating Van Hove scattering function tables.
+
+        Parameters
+        ----------
+        model : str
+            The model to test. Can be 'fgm', 'sct', or 'pdos'.
+        """
+        # Determine the appropriate variables based on the model
+        variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
+
+        # Generate the expected result
+        expected_result = ScatFunc.from_model(*variables,
+                                              model=model).data.values
+
+        # Check the results
+        self.check_results(expected_result, *self.get_command(model))
+
     def test_fgm(self) -> None:
         """
-        Test the fgm model for the generating Van Hove scattering function tables.
+        Test the fgm model for generating transfer function based on an angle.
         """
-        # Generate the expected result:
-        expected_result = ScatFunc.from_fgm(*self.get_fgm_var).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command('fgm'))
+        self.modelTest('fgm')
 
     def test_sct(self) -> None:
         """
-        Test the sct model for the generating Van Hove scattering function tables.
+        Test the sct model for generating transfer function based on an angle.
         """
-        # Generate the expected result:
-        expected_result = ScatFunc.from_sct(*self.get_sct_var).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command('sct'))
+        self.modelTest('sct')
 
     def test_pdos(self) -> None:
         """
-        Test the pdos model for the generating Van Hove scattering function tables.
+        Test the pdos model for generating transfer function based on an angle.
         """
-        # Generate the expected result:
-        expected_result = ScatFunc.from_pdos(*self.get_sct_var).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command('pdos'))
+        self.modelTest('pdos')
 
 
 class TestScinelTransferFunc(BaseTestScinel):
@@ -298,39 +310,42 @@ class TestScinelTransferFunc(BaseTestScinel):
                    self.file_Eout, self.theta]
         return command if model == 'fgm' else command + [self.file_pdos]
 
+    def modelTest(self, model: str) -> None:
+        """
+        Test the specified model for generating transfer function based on an angle.
+
+        Parameters
+        ----------
+        model : str
+            The model to test. Can be 'fgm', 'sct', or 'pdos'.
+        """
+        # Determine the appropriate variables based on the model
+        variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
+
+        # Generate the expected result
+        expected_result = TransferFunc.from_theta(*variables,
+                                                  model=model).data.values
+
+        # Check the results
+        self.check_results(expected_result, *self.get_command(model))
+
     def test_fgm(self) -> None:
         """
         Test the fgm model for generating transfer function based on an angle.
         """
-        # Generate the expected result:
-        model = 'fgm'
-        expected_result = TransferFunc.from_theta(*self.get_fgm_var,
-                                                  model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command(model))
+        self.modelTest('fgm')
 
     def test_sct(self) -> None:
         """
         Test the sct model for generating transfer function based on an angle.
         """
-        # Generate the expected result:
-        model = 'sct'
-        expected_result = TransferFunc.from_theta(*self.get_sct_var, model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command(model))
+        self.modelTest('sct')
 
     def test_pdos(self) -> None:
         """
         Test the pdos model for generating transfer function based on an angle.
         """
-        # Generate the expected result:
-        model = 'pdos'
-        expected_result = TransferFunc.from_theta(*self.get_sct_var, model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command(model))
+        self.modelTest('pdos')
 
 
 class TestScinelDxs(BaseTestScinel):
@@ -372,64 +387,33 @@ class TestScinelDxs(BaseTestScinel):
             The command line arguments.
         """
         command = [self.keyword, model, self.file_xs0K, self.Ein, self.M, self.T,
-                   self.file_Eout, theta]
+                   self.file_Eout]
+        command += [theta] if isinstance(theta, (int, float)) else [self.file_theta]
         return command if model == 'fgm' else command + [self.file_pdos]
 
-    def ModelFgm(self, method, theta: [float, np.array]) -> None:
+    def model(self, method, model: str,  theta: [float, np.array]) -> None:
         """
-        Test the FGM model for the generating differential cross section.
+        Test the differential cross section calculation for the specified model.
 
         Parameters
         ----------
         method : method
             The method to use for the calculation.
+        model : str
+            The model to use for the calculation.
         theta : [float, np.array]
             The scattering angle.
         """
-        model = 'fgm'
+        # Determine the appropriate variables generation based on the model
+        variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
+
         # Generate the expected result:
-        expected_result = method(*self.get_fgm_var(theta), model=model).data.values
+        expected_result = method(*variables(theta), model=model).data.values
 
         # Check the results:
         self.check_results(expected_result, *self.get_command(model, theta))
 
-    def ModelSct(self, method, theta: [float, np.array]) -> None:
-        """
-        Test the SCT model for the generating differential cross section.
-
-        Parameters
-        ----------
-        method : method
-            The method to use for the calculation.
-        theta : [float, np.array]
-            The scattering angle.
-        """
-        model = 'SCT'
-        # Generate the expected result:
-        expected_result = method(self.get_sct_var(theta), model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command(model, theta))
-
-    def ModelPdos(self, method, theta: [float, np.array]) -> None:
-        """
-        Test the PDOS model for the generating differential cross section.
-
-        Parameters
-        ----------
-        method : method
-            The method to use for the calculation.
-        theta : [float, np.array]
-            The scattering angle.
-        """
-        model = 'pdos'
-        # Generate the expected result:
-        expected_result = method(*self.get_sct_var(theta), model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command(model, theta))
-
-    def Modeltest(self, method, theta: [float, np.array]) -> None:
+    def modelTest(self, method, theta: [float, np.array]) -> None:
         """
         Test the differential cross section calculation.
 
@@ -441,27 +425,27 @@ class TestScinelDxs(BaseTestScinel):
             The scattering angle.
         """
         # Test FGM:
-        self.ModelFgm(method, theta)
+        self.model(method, "fgm",  theta)
 
         # Test SCT:
-        self.ModelSct(method, theta)
+        self.model(method, "sct",  theta)
 
         # Test PDOS:
-        self.ModelPdos(method, theta)
+        self.model(method, "pdos",  theta)
 
     def test_SingleAngle(self) -> None:
         """
         Test the fgm model for the generating differential cross section for a
         single angle.
         """
-        self.Modeltest(Dxs.from_theta, 60)
+        self.modelTest(Dxs.from_theta, 60)
 
     def test_MultipleAngles(self) -> None:
         """
         Test the fgm model for the generating differential cross section for
         multiple angles.
         """
-        self.Modeltest(Dxs.from_sab, self.theta)
+        self.modelTest(Dxs.from_sab, self.theta)
 
 
 class TestScinelDDxs(BaseTestScinel):
@@ -490,7 +474,7 @@ class TestScinelDDxs(BaseTestScinel):
         """
         return self.get_fgm_var + [self.pdos]
 
-    def get_command(self, model: str) -> list:
+    def get_command(self, algorithm: str, model: str) -> list:
         """
         Get the command line arguments for the model.
 
@@ -504,69 +488,21 @@ class TestScinelDDxs(BaseTestScinel):
         list
             The command line arguments.
         """
-        command = [self.keyword, model, self.file_xs0K, self.Ein, self.M, self.T,
-                   self.file_Eout, self.file_theta]
+        command = [self.keyword, algorithm, model, self.file_xs0K, self.Ein,
+                   self.M, self.T, self.file_Eout, self.file_theta]
         return command if model == 'fgm' else command + [self.file_pdos]
 
-    def ModelFgm(self, algorithm: str, method):
-        """
-        Test the FGM model for the generating double differential scattering
-        cross section.
+    def model(self, algorithm: str, method, model: str) -> None:
+        # Determine the appropriate variables based on the model
+        variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
 
-        Parameters
-        ----------
-        algorithm : str
-            The algorithm to use for the calculation.
-        method : method
-            The method to use for the calculation.
-        """
-        model = "fgm"
         # Generate the expected result:
-        expected_result = method(*self.get_fgm_var, model=model).data.values
+        expected_result = method(*variables, model=model).data.values
 
         # Check the results:
-        self.check_results(expected_result, *self.get_command(model))
+        self.check_results(expected_result, *self.get_command(algorithm, model))
 
-    def ModelSct(self, algorithm: str, method) -> None:
-        """
-        Test the SCT model for the generating double differential scattering
-        cross section.
-
-        Parameters
-        ----------
-        algorithm : str
-            The algorithm to use for the calculation.
-        method : method
-            The method to use for the calculation.
-        """
-
-        model = "sct"
-        # Generate the expected result:
-        expected_result = method(*self.get_sct_var, model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command(model))
-
-    def ModelPdos(self, algorithm: str, method) -> None:
-        """
-        Test the PDOS model for the generating double differential scattering
-        cross section.
-
-        Parameters
-        ----------
-        algorithm : str
-            The algorithm to use for the calculation.
-        method : method
-            The method to use for the calculation.
-        """
-        model = "pdos"
-        # Generate the expected result:
-        expected_result = method(*self.get_sct_var, model=model).data.values
-
-        # Check the results:
-        self.check_results(expected_result, *self.get_command(model))
-
-    def Modeltest(self, algorithm: str, method) -> None:
+    def modelTest(self, algorithm: str,  method) -> None:
         """
         Test the double differential scattering cross section calculation.
 
@@ -578,27 +514,27 @@ class TestScinelDDxs(BaseTestScinel):
             The method to use for the calculation.
         """
         # Test FGM:
-        self.ModelFgm(algorithm, method)
+        self.model(algorithm, method, "fgm")
 
         # Test SCT:
-        self.ModelSct(algorithm, method)
+        self.model(algorithm, method, "sct")
 
         # Test PDOS:
-        self.ModelPdos(algorithm, method)
+        self.model(algorithm, method, "pdos")
 
     def test_sab(self) -> None:
         """
         Test the SAB algorithm for the generating double differential scattering
         cross section.
         """
-        self.Modeltest('sab', DDxs.from_Sab)
+        self.modelTest('sab', DDxs.from_Sab)
 
     def test_4pcf(self) -> None:
         """
         Test the 4PCF algorithm for the generating double differential scattering
         cross section.
         """
-        self.Modeltest('4pcf', DDxs.from_4PCF)
+        self.modelTest('4pcf', DDxs.from_4PCF)
 
 
 if __name__ == '__main__':

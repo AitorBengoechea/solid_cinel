@@ -6,7 +6,7 @@ from solid_cinel.core.scattering_function.sab import Sab
 
 def add_SabArgs(parser: argparse.ArgumentParser):
     """
-    Add arguments to the parser for the calculation of the effective temperature.
+    Add arguments to the parser for the calculation of S(alpha, -beta) tables.
 
     Parameters
     ----------
@@ -25,7 +25,7 @@ def add_SabArgs(parser: argparse.ArgumentParser):
 
 def handle_SabArgs(args: argparse.Namespace) -> np.array:
     """
-    Handle the arguments for the calculation of the effective temperature.
+    Handle the arguments for the calculation of the S(alpha, -beta) tables.
 
     Parameters
     ----------

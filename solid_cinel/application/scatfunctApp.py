@@ -13,7 +13,7 @@ def str_or_float(value):
 
 def add_ScatFuncArgs(parser: argparse.ArgumentParser):
     """
-    Add arguments to the parser for the calculation of the effective temperature.
+    Add arguments to the parser for the calculation of the scattering function.
 
     Parameters
     ----------

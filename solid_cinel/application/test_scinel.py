@@ -334,7 +334,7 @@ class TestScinelDDxs(BaseTestScinel):
         self.keyword = 'ddxs'
         self.xs = Xs(self.M, 0, self.xs0K)
 
-    def fgm(self, algorithm, method):
+    def ModelFgm(self, algorithm, method):
         model = "fgm"
         # Generate the expected result:
         expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
@@ -345,7 +345,7 @@ class TestScinelDDxs(BaseTestScinel):
                       self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
                       self.file_Eout, self.file_theta)
 
-    def sct(self, algorithm, method):
+    def ModelSct(self, algorithm, method):
         model = "sct"
         # Generate the expected result:
         expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
@@ -356,7 +356,7 @@ class TestScinelDDxs(BaseTestScinel):
                       self.file_xs0K, str(self.Ein), str(self.M), str(self.T),
                       self.file_Eout, self.file_theta, self.file_pdos)
 
-    def pdos(self, algorithm, method):
+    def ModelPdos(self, algorithm, method):
         model = "pdos"
         # Generate the expected result:
         expected_result = method(self.xs, self.Ein, self.T, self.Eout, self.theta,
@@ -373,13 +373,13 @@ class TestScinelDDxs(BaseTestScinel):
         method = DDxs.from_Sab
 
         # Test FGM:
-        self.fgm(algorithm, method)
+        self.ModelFgm(algorithm, method)
 
         # Test SCT:
-        self.sct(algorithm, method)
+        self.ModelSct(algorithm, method)
 
         # Test PDOS:
-        self.pdos(algorithm, method)
+        self.ModelPdos(algorithm, method)
 
 
 if __name__ == '__main__':

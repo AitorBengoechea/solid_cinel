@@ -1143,7 +1143,7 @@ class Xs:
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, cache=True)
 def default_Eout(Ein: float) -> np.ndarray:
     """
     Generate the default Eout grid for the convolution. The grid is tested with
@@ -1194,7 +1194,8 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 
-@vectorize(["float64(float64, float64, float64, float64)"], nopython=True, target="parallel")
+@vectorize(["float64(float64, float64, float64, float64)"],
+           target="parallel", cache=True)
 def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
                     M: float) -> float:
     """

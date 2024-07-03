@@ -1157,7 +1157,8 @@ class TransferFunc:
         return cdf / cdf.iloc[-1]
 
 
-@vectorize(['float64(float64, float64, float64, float64)'], target='parallel', nopython=True)
+@vectorize(['float64(float64, float64, float64, float64)'],
+           target='parallel', cache=True)
 def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     Sigma1 function for Energy differential scattering function
@@ -1212,7 +1213,7 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     return transferFunc
 
 
-@nb.jit(nopython=True)
+@nb.jit(nopython=True, cache=True)
 def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
                        M: float, Teff: float, ws: float) -> np.ndarray:
     """
@@ -1262,7 +1263,7 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     return sabValues * normFactor(Eout, Ein, T, M)
 
 
-@nb.jit(nopython=True)
+@nb.jit(nopython=True, cache=True)
 def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
                DebyeWallerCoeff: float) -> np.ndarray:
     """
@@ -1333,7 +1334,7 @@ def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
     return S_diag
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, cache=True)
 def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the scattering function calculation.
@@ -1360,7 +1361,7 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 
-@nb.jit(nopython=True)
+@nb.jit(nopython=True, cache=True)
 def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
                     mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
                     DebyeWallerCoeff: float) -> np.ndarray:

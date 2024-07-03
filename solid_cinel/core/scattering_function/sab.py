@@ -860,7 +860,40 @@ class Sab:
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
-    def interp_beta(self, betaNew: Union[Iterable, float], add: bool = False) -> pd.DataFrame:
+    def update_data(self, sabNew: pd.DataFrame, inplace: bool, axis: int):
+        """
+        Update the S(alpha, -beta) matrix with new values.
+
+        Parameters
+        ----------
+        sabNew : "pd.DataFrame"
+            New S(alpha, -beta) matrix.
+        inplace : "bool"
+            If True, the S(alpha, -beta) matrix is updated in place. If False,
+            a new Sab object is returned.
+        axis : "int", optional
+            Axis to concatenate the new values. The default is 1.
+
+        Returns
+        -------
+        "None" or "Sab"
+            If inplace is True, the S(alpha, -beta) matrix is updated in place.
+            If False, a new Sab object is returned.
+        """
+        # Concatenate the S(alpha, -beta) matris:
+        dataNew = pd.concat([self.data, sabNew], axis=axis)
+
+        # Sort the concatenate axis:
+        dataNew = dataNew.sort_index(axis=axis)
+
+        # Update the S(alpha, -beta) matrix:
+        if inplace:
+            self.data = dataNew
+            return self
+        else:
+            return Sab(dataNew)
+
+    def interp_beta(self, betaNew: Union[Iterable, float], inplace: bool = False) -> pd.DataFrame:
         """
         Quadratic interpolation to get the probability of the new beta value
         for all the alpha existing in the S(alpha, -beta) matrix:
@@ -873,7 +906,7 @@ class Sab:
         ----------
         betaNew : "float" or 1D iterable
             New beta values.
-        add : "bool", optional
+        inplace : "bool", optional
             Optional argument to add the output to the existing S(alpha, -beta)
             matrix or only get the pd.Dataframe. The default is False.
 
@@ -893,22 +926,22 @@ class Sab:
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> betaNew = 0.01
-        >>> S_mat.interp_beta(betaNew).iloc[0:10]
-        beta          0.01
-        alpha
-        0.004893  0.005423
-        0.009786  0.010765
-        0.014680  0.016027
-        0.019573  0.021208
-        0.024466  0.026309
-        0.029359  0.031331
-        0.034253  0.036275
-        0.039146  0.041141
-        0.044039  0.045929
-        0.048932  0.050641
+        >>> S_mat.interp_beta(betaNew).data.iloc[1, 0:10].round(6)
+        beta
+        0.000000    0.010712
+        0.010000    0.010765
+        0.024466    0.010842
+        0.048932    0.010972
+        0.073399    0.011103
+        0.097865    0.011232
+        0.122331    0.011355
+        0.146797    0.011491
+        0.171263    0.011625
+        0.195730    0.011759
+        Name: 0.009786476949338778, dtype: float64
 
         >>> betaNew = [0.01, 0.03]
-        >>> S_mat.interp_beta(betaNew, add=True).data.iloc[0:10, 0:4] #doctest: +NORMALIZE_WHITESPACE
+        >>> S_mat.interp_beta(betaNew, inplace=True).data.iloc[0:10, 0:4] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.010000  0.024466  0.030000
         alpha
         0.004893  0.005396  0.005423  0.005462  0.005477
@@ -934,16 +967,13 @@ class Sab:
         # DataFrame construction with the new beta values:
         beta_df = pd.DataFrame.from_records(betaValues.values,
                                             index=betaValues.index,
-                                            columns=pd.Index(betaNew_,
-                                                             name="beta"))
+                                            columns=pd.Index(betaNew_, name="beta"))
 
         # Add the new beta values to the S(alpha, -beta) matrix or return:
-        if add:
-            return Sab(pd.concat([beta_df, self.data], axis=1))
-        else:
-            return beta_df
+        return self.update_data(beta_df, inplace, 1)
 
-    def interp_alpha(self, alphaNew: Union[Iterable, float], add: bool = False) -> pd.DataFrame:
+    def interp_alpha(self, alphaNew: Union[Iterable, float],
+                     inplace: bool = False) -> pd.DataFrame:
         """
         Unit base interpolation to get the probability of the new alpha values
         for all the beta existing in the S(alpha, -beta) matrix.
@@ -989,7 +1019,7 @@ class Sab:
         0.000135  0.000502  0.000508  0.000471  0.000466  0.000467
 
         >>> alphaNew = [1.25e-4, 1.35e-4]
-        >>> S_mat.interp_alpha(alphaNew, add=True).data.iloc[0:5, 0:5] #doctest: +NORMALIZE_WHITESPACE
+        >>> S_mat.interp_alpha(alphaNew, inplace=True).data.iloc[0:5, 0:5] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.025237  0.050474  0.075712  0.100949
         alpha
         0.000112  0.000418  0.000423  0.000392  0.000387  0.000388
@@ -1010,10 +1040,7 @@ class Sab:
         alphaNew_df = pd.concat(alphaVec, axis=1).T
 
         # Add the new alpha values to the S(alpha, -beta) matrix or return:
-        if add:
-            return Sab(pd.concat([self.data, alphaNew_df]))
-        else:
-            return Sab(alphaNew_df)
+        return self.update_data(alphaNew_df, inplace, 0)
 
     def _interp_alpha(self, alphaNew: float) -> pd.DataFrame:
         """
@@ -1087,7 +1114,7 @@ class Sab:
         if hasattr(self, "DebyeWallerCoeff"):
             debyeWeller = self.DebyeWallerCoeff
             probNorm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x / (
-                        1 - np.exp(-debyeWeller * x.name)))
+                    1 - np.exp(-debyeWeller * x.name)))
         else:
             probNorm = prob.apply(lambda x: (1 + np.exp(-x.index)) * x)
 
@@ -1100,8 +1127,9 @@ class Sab:
         if hasattr(self, "DebyeWallerCoeff"):
             alphaNewVec *= (1 - np.exp(- debyeWeller * alphaNew))
 
-        return pd.DataFrame(alphaNewVec,
-                            columns=pd.Index([alphaNew], name="alpha"))
+        # Return the new alpha values:
+        columns = pd.Index([alphaNew], name="alpha")
+        return pd.DataFrame(alphaNewVec, columns=columns)
 
     def interp_alphaBeta(self, alpha: Union[Iterable, float, str],
                          beta: Union[Iterable, float, str]) -> pd.DataFrame:

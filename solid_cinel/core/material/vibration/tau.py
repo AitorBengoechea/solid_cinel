@@ -1,12 +1,13 @@
 
 import numpy as np
 import numba as nb
-from numba import cuda
+from numba import cuda, float64, int32
 from solid_cinel.core.scattering_function.beta import Beta
 gpu_available = True if cuda.is_available() else False
 
 
-@nb.jit(nopython=True)
+@nb.jit(int32(float64[:, :], float64),
+        nopython=True, cache=True)
 def first_all_zero_column(tauN, threshold):
     for i in range(tauN.shape[1]):
         if np.all(tauN[:, i] <= threshold):
@@ -172,10 +173,11 @@ def tauN_calculation_threads(expBeta, deltaBeta, tau1, Ntau1, tauNminus1, tauNde
               start, NtauN, stride)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
-def calc_tauNfunc_cpu(tauNfunc: np.ndarray, tau1: np.ndarray,
-                      Ntau1: int, beta: np.ndarray,
-                      deltaBeta: np.ndarray, nphonon: int, NtauN: int,):
+@nb.jit(float64[:, :](float64[:, :], float64[:], int32, float64[:], float64[:], int32, int32),
+        nopython=True, cache=True)
+def calc_tauNfunc_cpu(tauNfunc: np.ndarray, tau1: np.ndarray, Ntau1: int,
+                      beta: np.ndarray, deltaBeta: np.ndarray, nphonon: int,
+                      NtauN: int):
     """
     Get the tau_{n}(-beta) function values for all n.
 
@@ -348,7 +350,8 @@ def get_tauNfunc(tau1: np.ndarray, beta: np.ndarray,
     return tauNfunc[::, :column_max]
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=False)
+@nb.jit(float64[:](float64[:], int32),
+    nopython=True, nogil=True, cache=True, parallel=False)
 def get_tauNbeta(tau1beta: np.ndarray, Nbeta=int):
     """
     Create the tauN_beta grid based on the tau1beta grid. The tauN_beta grid

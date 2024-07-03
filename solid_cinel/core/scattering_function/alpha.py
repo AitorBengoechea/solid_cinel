@@ -478,7 +478,7 @@ class Alpha:
         return get_expansionOrder(self.data.max(), DebyeWallerCoeff, decimal, orderMax)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_alphaRecoil(Eout: np.ndarray, Ein: float, M: float, mu: float):
     """
     Get the alpha recoil value from the parameters of the function:
@@ -503,7 +503,7 @@ def get_alphaRecoil(Eout: np.ndarray, Ein: float, M: float, mu: float):
     return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M / m)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
                       mu: float) -> np.ndarray:
     """
@@ -531,7 +531,8 @@ def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
     return get_alphaRecoil(Eout, Ein, M, mu) / (kb * T)
 
 
-@nb.vectorize(['float64(float64, float64, float64, float64, float64)'], nopython=True, target='parallel')
+@nb.vectorize(['float64(float64, float64, float64, float64, float64)'],
+              nopython=True, target='parallel')
 def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
     """
     Get all the posible alpha values from the parameters of the function:
@@ -559,7 +560,7 @@ def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
     return get_alphaFromEout(Eout, Ein, T, M, mu)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
 def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
                  mu: np.ndarray) -> np.ndarray:
     """
@@ -613,7 +614,7 @@ def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
     return alphaMat
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> np.ndarray:
     """
     Get the alpha multiplication for the phonon expansion cumulative sum for
@@ -672,7 +673,7 @@ def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> 
     return alphaMul.cumsum()
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
                        decimal: int, orderMax: int) -> int:
     """
@@ -750,7 +751,7 @@ def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     return nMin if nMin > 0 else checkDiff(alphaCumsum, decimal, orderMax)
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def checkDiff(alphaCumsum: np.ndarray, decimal: float, orderMax: int) -> int:
     """
     Check the difference between the cumulative sum of the alpha values because
@@ -785,7 +786,7 @@ def checkDiff(alphaCumsum: np.ndarray, decimal: float, orderMax: int) -> int:
         return np.argmax(n) if n.any() else orderMax
 
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_gressierRecoil(Ein: [int, float, np.ndarray] , T: float,
                         M: float) -> np.ndarray:
     """
@@ -815,7 +816,7 @@ def get_gressierRecoil(Ein: [int, float, np.ndarray] , T: float,
     """
     return m / (m + M) * (Ein - 3 / 2 * kb * T)
 
-@nb.jit(nopython=True, nogil=False, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_recoilMat(Ein: np.ndarray, T: [float, np.ndarray], M: float) -> np.ndarray:
     """
     Get the recoil energy for a given incident energy, temperature and mass.

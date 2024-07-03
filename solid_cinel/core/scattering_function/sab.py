@@ -13,8 +13,7 @@ from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import vectorize
-from math import pi, sqrt
+from math import pi
 from numba import prange
 import warnings
 try:
@@ -1291,7 +1290,7 @@ def _phonon_expansion_gpu(alpha: xp.ndarray, nphonon: int, tauNinterp: xp.ndarra
     return sabValues
 
 
-@nb.jit(nopython=True)
+@nb.jit(nopython=True, cache=True)
 def _phonon_expansion_cpu(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
                           DebyeWallerCoeff: float) -> np.ndarray:
     """
@@ -1382,7 +1381,7 @@ def phonon_expansion(alpha: np.ndarray, beta: np.ndarray,
     return _phonon_expansion_cpu(alpha, nphonon, tauNinterp, DebyeWallerCoeff)
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, cache=True)
 def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float, ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time for a single
@@ -1410,8 +1409,9 @@ def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float, ws: float) ->
     return sabValues / np.sqrt(4 * pi * ws * alpha * Tratio)
 
 
-@nb.jit(nopython=True, nogil=True, parallel=True)
-def get_SabSct(alpha: float, beta: float, Tratio: float, ws: float) -> float:
+@nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
+def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
+               ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time:
     .. math::
@@ -1436,5 +1436,5 @@ def get_SabSct(alpha: float, beta: float, Tratio: float, ws: float) -> float:
     Nalpha = len(alpha)
     Sab = np.zeros((Nalpha, len(beta)))
     for i in prange(Nalpha):
-        Sab[i] += get_SabSctAlpha(alpha[i], beta, Tratio, ws)
+        Sab[i, :] = get_SabSctAlpha(alpha[i], beta, Tratio, ws)
     return Sab

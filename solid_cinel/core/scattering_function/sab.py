@@ -6,7 +6,7 @@ Python file for working with S(alpha, -beta) matrixs.
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential, interp_multyParallel
 from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import get_tauNfunc, gpu_available, get_tauNbeta
+from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.scattering_function.alpha import Alpha, get_expansionOrder
 from typing import Iterable, Union
@@ -16,12 +16,6 @@ import numba as nb
 from math import pi
 from numba import prange
 import warnings
-try:
-    import cupy as cp
-    xp = cp
-except ImportError:
-    gpu_available = False
-    xp = np
 
 # Constants:
 kb = const["Boltzmann constant in eV/K"][0]
@@ -485,10 +479,7 @@ class Sab:
         # Get tauN beta grid values:
         tauNbeta = get_tauNbeta(cls.pdos.beta.data, tauN.shape[1])
 
-        # Get the S(alpha, -beta) matrix:
-        S_values = phonon_expansion(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
-
-        return cls(S_values, columns=beta_, index=alpha_)
+        return cls.from_tau(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
 
     @classmethod
     def from_model(cls, *args, model: str = "pdos", **kwargs):
@@ -683,8 +674,16 @@ class Sab:
         # Get the Debye-Waller coefficient:
         cls.DebyeWallerCoeff = DebyeWallerCoeff
 
-        # Get the S(alpha, -beta) matrix:
-        S_values = phonon_expansion(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
+        # Get the number of phonon expansion:
+        nphonon = tauN.shape[0]
+
+        # Interpolation of the tauN functions to avoid extra calculations:
+        tauNinterp = interp_multyParallel(beta_, tauNbeta, tauN)
+
+        # Get the S(alpha, -beta) matrix (alpha in matrix form to avoid using
+        # outer product):
+        S_values = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
+                                    DebyeWallerCoeff)
 
         return cls(S_values, columns=beta_, index=alpha_)
 
@@ -1005,14 +1004,19 @@ class Sab:
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha = Alpha(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> betaTest = beta_grid.data[0:5]
         >>> alphaNew = 0.00013
-        >>> S_mat.interp_alpha(alphaNew).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
-        beta     0.000000  0.025237  0.050474  0.075712  0.100949
-        alpha
-        0.00013  0.000484   0.00049  0.000453  0.000448  0.000449
+        >>> S_mat.interp_alpha(alphaNew).data.loc[alphaNew, betaTest] #doctest: +NORMALIZE_WHITESPACE
+        beta
+        0.000000    0.000484
+        0.025237    0.000490
+        0.050474    0.000453
+        0.075712    0.000448
+        0.100949    0.000449
+        Name: 0.00013, dtype: float64
 
         >>> alphaNew = [1.25e-4, 1.35e-4]
-        >>> S_mat.interp_alpha(alphaNew).data.iloc[::, 0:5] #doctest: +NORMALIZE_WHITESPACE
+        >>> S_mat.interp_alpha(alphaNew).data.loc[alphaNew, betaTest] #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.025237  0.050474  0.075712  0.100949
         alpha
         0.000125  0.000465  0.000471  0.000436  0.000431  0.000432
@@ -1076,8 +1080,8 @@ class Sab:
         beta
         0.000000  0.000484
         0.025237  0.000490
-        0.050474  0.000454
-        0.075712  0.000449
+        0.050474  0.000453
+        0.075712  0.000448
         0.100949  0.000449
         0.126186  0.000459
         0.151423  0.000476
@@ -1088,7 +1092,7 @@ class Sab:
         Check the contrains:
         >>> debyeWeller = pdos.DebyeWallerCoeff(T)
         >>> float(round(integrate(alphaVec.iloc[::, 0] * (1 + np.exp(-beta_grid.data))) / (1 - np.exp(-debyeWeller * alphaNew)), 6))
-        1.006052
+        1.005782
 
         >>> float(round(integrate(alphaVec.iloc[::, 0] * beta_grid.data * (1 -  np.exp( - beta_grid.data))), 6))
         0.000131
@@ -1176,16 +1180,12 @@ class Sab:
 
         # New beta values in the appropriate format:
         beta_ = np.array(beta) if hasattr(beta, '__len__') else np.array([beta])
+        betaUnique = np.unique(abs(beta_))
 
         # Interpolation of the new alpha and beta values:
-        interp_alphabeta = self.interp_alpha(alpha_).interp_beta(abs(beta_))\
-                               .set_axis(pd.Index(beta_, name="beta"), axis=1)
+        interp_AlphaBeta = self.interp_alpha(alpha_).interp_beta(betaUnique)
 
-        # return the S(alpha, beta) matrix if the beta is positive and negative:
-        if (beta_ > 0).any():
-            interp_alphabeta.loc[::, beta_ > 0] *= np.exp(- beta_[beta_ > 0])
-
-        return interp_alphabeta.sort_index(axis=0).sort_index(axis=1)
+        return interp_AlphaBeta.full.loc[alpha_.data, np.unique(beta_)]
 
 
 def _SumRule(x: pd.Series) -> float:
@@ -1275,52 +1275,9 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-def _phonon_expansion_gpu(alpha: xp.ndarray, nphonon: int, tauNinterp: xp.ndarray,
-                          DebyeWallerCoeff: float) -> xp.ndarray:
-    """
-    Generate S(alpha, -beta) matrix using tauN functions:
-    .. math::
-        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
-
-    Parameters
-    ----------
-    alpha: 'xp.ndarray', (N,)
-        alpha grid values in the cpu as numpy array or in the gpu as cupy array.
-    beta: 'xp.ndarray', (M,)
-        beta grid values in the cpu as numpy array or in the gpu as cupy array.
-    nphonon: 'int'
-        Number of phonon expansion.
-    tauN: 'xp.ndarray', (Z, T)
-        tauN functions. The first dimension is the number of the expansion
-        and the second dimension is the number of the beta grid. In the cpu as
-        numpy array or in the gpu as cupy array.
-    tauNbeta: 'np.ndarray', (T,)
-        Beta values of the tauN functions.
-    DebyeWallerCoeff: 'float'
-        Debye Waller coefficient.
-
-    Returns
-    -------
-    'xp.ndarray', (N, M)
-        S(alpha, -beta) matrix values.
-    """
-    # Zero phonon expansion:
-    IterSum = xp.log(alpha * DebyeWallerCoeff)
-    alphaMul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
-    sabValues = xp.outer(alphaMul, tauNinterp[0])
-
-    # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, nphonon):
-        # Compute S(alpha, -beta) for tauN reshape
-        IterSum += xp.log(alpha * DebyeWallerCoeff / (n + 1))
-        alphaMul = xp.exp(- alpha * DebyeWallerCoeff + IterSum)
-        sabValues += xp.outer(alphaMul, tauNinterp[n])
-    return sabValues
-
-
 @nb.jit(nopython=True, cache=True)
-def _phonon_expansion_cpu(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
-                          DebyeWallerCoeff: float) -> np.ndarray:
+def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
+                     DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate S(alpha, -beta) matrix using tauN functions:
     .. math::
@@ -1351,62 +1308,15 @@ def _phonon_expansion_cpu(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarra
     # Zero phonon expansion:
     IterSum = np.log(alpha * DebyeWallerCoeff)
     alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-    sabValues = np.outer(alphaMul, tauNinterp[0])
+    sabValues = alphaMul * tauNinterp[0]
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
         IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
         alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-        sabValues += np.outer(alphaMul, tauNinterp[n])
+        sabValues += alphaMul * tauNinterp[n]
     return sabValues
-
-
-def phonon_expansion(alpha: np.ndarray, beta: np.ndarray,
-                     tauN: np.ndarray, tauNbeta: np.ndarray,
-                     DebyeWallerCoeff: float) -> np.ndarray:
-    """
-    Generate S(alpha, -beta) matrix using tauN functions:
-    .. math::
-        S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
-
-    Parameters
-    ----------
-    alpha: 'xp.ndarray', (N,)
-        alpha grid values
-    beta: 'xp.ndarray', (M,)
-        beta grid values
-    nphonon: 'int'
-        Number of phonon expansion.
-    tauN: 'xp.ndarray', (Z, T)
-        tauN functions. The first dimension is the number of the expansion
-        and the second dimension is the number of the beta grid.
-    delta_beta: 'float'
-        Delta beta value.
-    DebyeWallerCoeff: 'float'
-        Debye Waller coefficient.
-
-    Returns
-    -------
-    'xp.ndarray', (N, M)
-        S(alpha, -beta) matrix values.
-    """
-    # Get the number of phonon expansion:
-    nphonon = tauN.shape[0]
-
-    # Interpolation of the tauN functions to avoid extra calculations:
-    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
-
-    # GPU calculation if available and enough memory:
-    if gpu_available:
-        try:
-            return _phonon_expansion_gpu(xp.asarray(alpha), nphonon,
-                                         xp.asarray(tauNinterp),
-                                         DebyeWallerCoeff).get()
-        except xp.cuda.memory.OutOfMemoryError:
-            pass
-
-    return _phonon_expansion_cpu(alpha, nphonon, tauNinterp, DebyeWallerCoeff)
 
 
 @nb.jit(nopython=True, cache=True)

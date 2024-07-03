@@ -10,7 +10,7 @@ from numba import vectorize
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
-from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaFromEout, get_expansionOrder, Alpha
+from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder, Alpha
 from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNbeta
@@ -1364,7 +1364,7 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
 @nb.jit(nopython=True, cache=True)
 def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
                     mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
-                    DebyeWallerCoeff: float) -> np.ndarray:
+                    DebyeWallerCoeff: float,  alpha0: float = None) -> np.ndarray:
     """
     Generate the scattering function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -1418,6 +1418,18 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     7.3157    0.415630
     7.4480    0.042074
     dtype: float64
+
+    # Using the alpha0 parameter:
+    >>> alpha0 = Ein / M / (kb * T)
+    >>> sd_pdf = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff, alpha0)
+    >>> pd.Series(sd_pdf[0], index=Eout).loc[Eout_test].round(6)
+    6.7554    0.000002
+    6.9050    0.005037
+    7.0439    0.605736
+    7.2000    2.560414
+    7.3157    0.360692
+    7.4480    0.002042
+    dtype: float64
     """
     # Get the beta grid:
     beta = get_beta(Eout, Ein, T)
@@ -1437,7 +1449,11 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
 
     # Get the alpha matrix for the scattering function with the maximun outgoing energy:
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
-    alphaMat = get_alphaMat(Eout_, Ein, T, M, mu)
+    if alpha0 is None:
+        alphaMat = get_alphaMat(Eout_, Ein, T, M, mu)
+    else:
+        alphaMat = get_alphaMatMod(Eout_, Ein, M, T, mu, DebyeWallerCoeff,
+                                   alpha0)
 
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
     sabValues = get_SabClm(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)

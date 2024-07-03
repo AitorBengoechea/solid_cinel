@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder, Alpha
-from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab
+from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab, phonon_expansion
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from typing import Iterable
@@ -1251,87 +1251,17 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     # Get the temperature ratio:
     Tratio = Teff / T
 
-    # Get the alpha grid and the scattering function:
+    # Get the alpha grid:
     if isinstance(mu, (int, float)):
-        alpha = get_alphaFromEout(Eout, Ein, T, M, mu)
-        sabValues = get_SabSctAlpha(alpha, beta, Tratio, ws)
+        alpha = get_alphaFromEout(Eout, Ein, T, M, mu)[::, np.newaxis]
     else:
         alpha = get_alphaMat(Eout, Ein, T, M, mu)
-        sabValues = get_SabSct(alpha, beta, Tratio, ws)
+
+    # Get the scattering function values:
+    sabValues = get_SabSct(alpha, beta, Tratio, ws)
 
     # Apply normalization to the scattering function:
     return sabValues * normFactor(Eout, Ein, T, M)
-
-
-@nb.jit(nopython=True, cache=True)
-def get_SabClm(alpha: np.ndarray, nphonon: int,  tauNinterp: np.ndarray,
-               DebyeWallerCoeff: float) -> np.ndarray:
-    """
-    Generate the scattering function from a S(alpha, -beta) table based on
-    the phonon expansion model using a single angle.
-
-    Parameters
-    ----------
-    alpha : 'np.ndarray', (Z, N)
-        alpha grid values.
-    nphonon : 'int', optional
-        Phonon expansion order.
-    tauNinterp : 'np.ndarray', (Z, N)
-        tauN function for the phonon expansion interpolated to the beta grid.
-    DebyeWallerCoeff : 'float'
-        Debye Waller Coefficient in LEAPR formalism.
-
-    Returns
-    -------
-    S_diag : 'np.ndarray', (Z, N)
-        S(alpha, -beta) values for the alpha and beta combinations.
-
-    Examples
-    --------
-    >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
-    >>> Ein = 7.2
-    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-    >>> T = 1000
-    >>> M = 238.05077040419212
-    >>> mu = np.cos(np.deg2rad([120]))
-    >>> beta = get_beta(Eout, Ein, T)
-    >>> alpha_mat = get_alphaMat(beta * kb * T + Ein, Ein, T, M, mu)
-    >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-    >>> nphonon = get_expansionOrder(alpha_mat, DebyeWallerCoeff, 1.0e-6, 5000)
-    >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
-    >>> tau1beta = pdos.beta.data
-    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
-    >>> sabValues = get_SabClm(alpha_mat, nphonon, tauNinterp, DebyeWallerCoeff)
-    >>> pd.DataFrame(sabValues, index=[120], columns=beta).T.iloc[::100].round(6)
-                   120
-    0.000000  0.210641
-    0.399957  0.247226
-    0.802224  0.269120
-    1.204491  0.271591
-    1.603331  0.254529
-    2.000979  0.221921
-    2.403246  0.179661
-    2.805512  0.135357
-    3.526166  0.068344
-    4.330699  0.024589
-    5.135233  0.006799
-    """
-    # Zero phonon expansion:
-    IterSum = np.log(alpha * DebyeWallerCoeff)
-    alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-    S_diag = alphaMul * tauNinterp[0]
-
-    # Higher phonon expansion (nphonon >= 1):
-    for n in range(1, nphonon):
-        # Compute S(alpha, -beta) for tauN reshape
-        IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-        S_diag += alphaMul * tauNinterp[n]
-    return S_diag
 
 
 @nb.jit(nopython=True, cache=True)
@@ -1456,7 +1386,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
                                    alpha0)
 
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = get_SabClm(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)
+    sabValues = phonon_expansion(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)
 
     # Full Scattering function values calculation:
     scatFuncValues = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]

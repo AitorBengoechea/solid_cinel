@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from math import pi
-from numba import prange
+from numba import prange, float64, int32
 import warnings
 
 # Constants:
@@ -305,22 +305,22 @@ class Sab:
         >>> Sab.from_fgm(alpha, beta).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
-        0.001050	  8.701463	8.417992 7.524148	6.213536	    4.740815
-        0.001087  8.553363	8.285768	 7.435678	6.181592	    4.760714
-        0.001125	  8.407781	8.155251	 7.346923	6.147319	    4.777252
-        0.001164	  8.264674	8.026439	 7.257961	6.110841	    4.790511
-        0.001205	  8.124000	7.899326	 7.168869	6.072279	    4.800575
-        0.001247	  7.985718	7.773908	 7.079717	6.031753	    4.807533
-        0.001291	  7.849787	7.650178	 6.990574	5.989379	    4.811476
-        0.001336	  7.716166	7.528129	 6.901504	5.945271	    4.812500
-        0.001382	  7.584817	7.407753	 6.812568	5.899540	    4.810701
-        0.001431	  7.455701	7.289040	 6.723822	5.852292	    4.806177
+        0.001050	  8.701463	8.417992     7.524148	6.213536	4.740815
+        0.001087      8.553363	8.285768	 7.435678	6.181592	4.760714
+        0.001125	  8.407781	8.155251	 7.346923	6.147319	4.777252
+        0.001164	  8.264674	8.026439	 7.257961	6.110841	4.790511
+        0.001205	  8.124000	7.899326	 7.168869	6.072279	4.800575
+        0.001247	  7.985718	7.773908	 7.079717	6.031753	4.807533
+        0.001291	  7.849787	7.650178	 6.990574	5.989379	4.811476
+        0.001336	  7.716166	7.528129	 6.901504	5.945271	4.812500
+        0.001382	  7.584817	7.407753	 6.812568	5.899540	4.810701
+        0.001431	  7.455701	7.289040	 6.723822	5.852292	4.806177
         """
         # Set the beta grid and the alpha grid:
         alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_, - beta_, 1.0, wt)
+        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, 1.0, wt)
 
         return cls(S_values, index=alpha_, columns=beta_)
 
@@ -387,7 +387,7 @@ class Sab:
         alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
         # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_, - beta_, ratio, ws)
+        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, ratio, ws)
 
         return cls(S_values, index=alpha_, columns=beta_)
 
@@ -465,7 +465,7 @@ class Sab:
         DebyeWallerCoeff = cls.pdos.DebyeWallerCoeff
 
         # Get the Expansion order:
-        if nphonon:
+        if nphonon is not None:
             warnings.warn("Is posible that the expansion order is not enough to get the correct results")
         else:
             decimal = kwargs.get("decimal", 1.0e-6)
@@ -1275,7 +1275,8 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(float64[:, :](float64[:, :], int32, float64[:, :], float64),
+        nopython=True, cache=True)
 def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
                      DebyeWallerCoeff: float) -> np.ndarray:
     """
@@ -1319,8 +1320,10 @@ def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
     return sabValues
 
 
-@nb.jit(nopython=True, cache=True)
-def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float, ws: float) -> np.ndarray:
+@nb.jit(float64[:](float64[:], float64[:], float64, float64),
+        nopython=True, cache=True)
+def get_SabSctAlpha(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
+                    ws: float) -> np.ndarray:
     """
     Generate S(alpha, beta) matrix using Short Collision Time for a single
     alpha value
@@ -1347,7 +1350,8 @@ def get_SabSctAlpha(alpha: float, beta: np.ndarray, Tratio: float, ws: float) ->
     return sabValues / np.sqrt(4 * pi * ws * alpha * Tratio)
 
 
-@nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
+@nb.jit(float64[:, :](float64[:, :], float64[:], float64, float64),
+        nopython=True, nogil=True, parallel=True, cache=True)
 def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
                ws: float) -> np.ndarray:
     """

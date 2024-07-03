@@ -6,12 +6,12 @@ Python file for working with scattering functions.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import vectorize
+from numba import vectorize, float64, int32
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder, Alpha
-from solid_cinel.core.scattering_function.sab import get_SabSct, get_SabSctAlpha, Sab, phonon_expansion
+from solid_cinel.core.scattering_function.sab import get_SabSct, Sab, phonon_expansion
 from solid_cinel.core.material.vibration.pdos import Pdos
 from solid_cinel.core.material.vibration.tau import get_tauNbeta
 from typing import Iterable
@@ -1157,7 +1157,7 @@ class TransferFunc:
         return cdf / cdf.iloc[-1]
 
 
-@vectorize(['float64(float64, float64, float64, float64)'],
+@vectorize([float64(float64, float64, float64, float64)],
            target='parallel', cache=True)
 def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
@@ -1214,8 +1214,8 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
 
 
 @nb.jit(nopython=True, cache=True)
-def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
-                       M: float, Teff: float, ws: float) -> np.ndarray:
+def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
+                       T: float, M: float, Teff: float, ws: float) -> np.ndarray:
     """
     Calculate the scattering function from the Short Collision Time model using
     a single angle.
@@ -1264,7 +1264,8 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: np.ndarray, Ein: float, T: float,
     return sabValues * normFactor(Eout, Ein, T, M)
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(float64[:](float64[:], float64, float64, float64),
+        nopython=True, cache=True)
 def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the scattering function calculation.

@@ -11,7 +11,7 @@ from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange
+from numba import prange, float64, int32
 from math import exp
 
 # constants
@@ -533,7 +533,7 @@ def get_alphaFromEout(Eout: np.ndarray, Ein: float, T: float, M: float,
 
 
 @nb.vectorize(['float64(float64, float64, float64, float64, float64)'],
-              nopython=True, target='parallel')
+              cache=True, target='parallel')
 def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
     """
     Get all the posible alpha values from the parameters of the function:
@@ -561,7 +561,8 @@ def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
     return get_alphaFromEout(Eout, Ein, T, M, mu)
 
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(float64[:, :](float64[:], float64, float64, float64, float64[:]),
+        nopython=True, nogil=True, cache=True, parallel=True)
 def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
                  mu: np.ndarray) -> np.ndarray:
     """
@@ -614,7 +615,8 @@ def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
         alphaMat[i] += get_alphaFromEout(Eout, Ein, T, M, mu[i])
     return alphaMat
 
-@nb.jit(nopython=True, nogil=True, cache=True, parallel=True)
+@nb.jit(float64[:, :](float64[:], float64, float64, float64, float64[:], float64, float64),
+        nopython=True, nogil=True, cache=True, parallel=True)
 def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
                     mu: np.ndarray, DebyeWallerCoeff: float, alpha0: float) -> np.ndarray:
     """

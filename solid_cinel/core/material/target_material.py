@@ -24,8 +24,8 @@ h = const["reduced Planck constant in eV s"][0]
 m_to_eV = const["atomic mass unit-electron volt relationship"][0]
 mn_to_MeV = const["neutron mass energy equivalent in MeV"][0]
 kb = const["Boltzmann constant in eV/K"][0]
-Bfac_unit_change = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
-Bragg_unit_change = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
+BfacUnitChange = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
+BraggUnitChange = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
 
 class TargetMat(Solid):
@@ -186,7 +186,7 @@ class TargetMat(Solid):
             self.compute_pdos(pdosDict)
         elif self.pdos is None:
             raise ValueError("The pdosDict must be defined or initialized in the object.")
-        Bfact = Bfac_unit_change * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
+        Bfact = BfacUnitChange * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
         Bfact /= T * self.atoms.apply(lambda x: x.atom_mass)
         return Bfact * 1.0e20 if anstrom else Bfact
 
@@ -271,8 +271,7 @@ class TargetMat(Solid):
                        .set_index(["h", "k", "l"])
 
     @staticmethod
-    def _get_pddf(data: pd.DataFrame, kind: str = None,
-                  pddf_val: str = None) -> pd.DataFrame:
+    def _get_pddf(data: pd.DataFrame, kind: str = None, pddf_val: str = None) -> pd.DataFrame:
         """
         Add to the hkl data dataframe the Pole Density Distribution Function.
         March-dollase:
@@ -389,22 +388,27 @@ class TargetMat(Solid):
           3 2  0.824661  0.097189          90.000000          24.0  0.367879
             3  0.777498  0.094765          70.528779          32.0  0.513417
         """
-        orientation_angle = data.loc[:, "Orientation angle"] * np.pi / 180
+        orientation_angle = np.deg2rad(data.loc[:, "Orientation angle"])
 
         if kind is None:
             data["Orientation angle"] = 0.
-            PDDF_hkl = 1.
+            data["PDDF"] = 1.
+
         elif kind.lower() == 'march-dollase' and isinstance(pddf_val, (int, float)):
-            PDDF_hkl = (pddf_val ** 2 * np.cos(orientation_angle) ** 2 +
-                        np.sin(orientation_angle) ** 2 / pddf_val) ** (-1.5)
+            value = (pddf_val * np.cos(orientation_angle)) ** 2
+            value += np.sin(orientation_angle) ** 2 / pddf_val
+            data["PDDF"] = value ** (-1.5)
+
         elif kind.lower() == 'altomare' and len(pddf_val) == 2:
-            PDDF_hkl = np.exp(pddf_val[0] * np.cos(2 * orientation_angle)) + pddf_val[1]
+            value = pddf_val[0] * np.cos(2 * orientation_angle)
+            data["PDDF"] = np.exp(value) + pddf_val[1]
+
         elif kind.lower() == 'cvc' and len(pddf_val) == 2:
-            PDDF_hkl = np.exp(-pddf_val[0] * (1 - np.cos(orientation_angle) ** pddf_val[1]))
+            value = pddf_val[0] * (1 - np.cos(orientation_angle) ** pddf_val[1])
+            data["PDDF"] = np.exp(- value)
+
         else:
             ValueError("Introduced kind is not available")
-
-        data["PDDF"] = PDDF_hkl
         return data
 
     @staticmethod
@@ -467,7 +471,7 @@ class TargetMat(Solid):
 
         """
         d = data.loc[:, "d"]
-        angle_value = np.clip(1 - pi ** 2 * Bragg_unit_change / (d ** 2 * energyCut),
+        angle_value = np.clip(1 - pi ** 2 * BraggUnitChange / (d ** 2 * energyCut),
                               -1, 1)
         data["theta"] = np.rad2deg(np.arccos(angle_value))
         return data
@@ -542,7 +546,7 @@ class TargetMat(Solid):
         if "PDDF" not in data.columns:
             TargetMat.get_pddf(data)
         data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
-        data["Xs"] *= Bragg_unit_change * pi ** 2 / (unit_cell_vol * atom_number)
+        data["Xs"] *= BraggUnitChange * pi ** 2 / (unit_cell_vol * atom_number)
         if threshold:
             data.loc[data["Xs"] < threshold, "Xs"] = 0.0
         return data
@@ -638,12 +642,14 @@ class TargetMat(Solid):
             3   1.0  0.033831  0.005850  13.929091
         """
         # Get multiplicity
-        data = self.get_multiplicity(*args, precision=kwargs.pop("precision", [6, 6]))
+        precision = kwargs.pop("precision", [6, 6])
+        data = self.get_multiplicity(*args, precision=precision)
+
         # Get PDDF:
         self._get_pddf(data, kwargs.pop("kind", None), kwargs.pop("pddf_val", None))
 
         # Get Bragg Edges:
-        data["E"] = pi ** 2 * Bragg_unit_change / (2 * data["d"] ** 2)
+        data["E"] = pi ** 2 * BraggUnitChange / (2 * data["d"] ** 2)
         data.sort_values(by=["E"], inplace=True)
 
         # Optional argument:
@@ -883,17 +889,18 @@ def numba_hkl_data(d_min: float, rec_vecs: np.ndarray, Bfac: pd.Series,
         Bfac_[element], csl_[element] = Bfac[element], csl[element]
         pos_[element] = pos[element].values
     preferred_orientation_ = np.array(preferred_orientation, dtype=float)
+
     # Execute numba
     hkl_data_dict = hklloop(d_min, hkl_max, rec_vecs, Bfac_, pos_, csl_,
                             preferred_orientation_, np.array(precision))
 
     # Order the output
     columns = ["h", "k", "l", "d", "Fsq", "Orientation angle", "Multiplicity"]
-    return pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, orientation, mul] for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul] in hkl_data_dict.items()],
-                        columns=columns)
+    values = [[h, k, l, d_hkl, Fsq_hkl, orientation, mul] for (h, k, l), [d_hkl, Fsq_hkl, orientation, mul] in hkl_data_dict.items()]
+    return pd.DataFrame(values, columns=columns)
 
 
-@nb.jit(nopython=True, nogil=True)
+@nb.jit(nopython=True, cache=True)
 def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
             Bfac: dict, pos: dict, csl: dict, preferred_orientation: np.ndarray,
             precision: np.ndarray) -> dict:
@@ -929,29 +936,38 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
     "dict"
         Dictionary containing the hkl planes, the d_hkl, Fsq, orientation_angle.
     """
+    # Get the output variables:
     hklM = {}
     hkldF = {}
+
+    # Get the orientation norm:
     orientation_norm = np.linalg.norm(preferred_orientation)
+
+    # Loop over the hkl planes:
     h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
 
+    # Loop over the hkl planes:
     for h in h_range[::-1]:  # to get positive hkl order
         for k in k_range[::-1]:
             for l in l_range[::-1]:
                 if h ** 2 + k ** 2 + l ** 2 == 0:  # (0, 0, 0) is excluded
                     continue
 
-                # d_hkl:
+                # Get the d_hkl and Fsq_hkl
                 vec_tau_hkl = h * rec_vecs[0] + k * rec_vecs[1] + l * rec_vecs[2]
                 d_hkl = 2 * np.pi / np.linalg.norm(vec_tau_hkl)
 
-                if d_hkl < d_min:  # d < d_min is excluded
+                # Check if d_hkl is greater than d_min
+                if d_hkl < d_min:
                     continue
 
-                Fsq = Fsq_hkl(vec_tau_hkl, Bfac, csl, pos)  # Fsquared
+                # Get the Fsq_hkl squared
+                Fsq = Fsq_hkl(vec_tau_hkl, Bfac, csl, pos)
 
                 # same dspacing and Fsquared with precision will be regrouped
-                d_rnd = round(d_hkl, precision[0])
-                Fsq_rnd = round(Fsq, precision[1])
+                d_rnd, Fsq_rnd = round(d_hkl, precision[0]), round(Fsq, precision[1])
+
+                # Write the output
                 if (d_rnd, Fsq_rnd) in hkldF:
                     hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
                 else:
@@ -964,7 +980,7 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
     return hklM
 
 
-@nb.jit(nopython=True, nogil=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
     """
     Get F_hkl:
@@ -997,4 +1013,4 @@ def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
         expon_hkl = exp(constant * Bfac[element])
         real *= csl[element] * 0.1 * expon_hkl
         imag *= csl[element] * 0.1 * expon_hkl
-    return real ** 2 + imag ** 2  # Fsquared
+    return real ** 2 + imag ** 2

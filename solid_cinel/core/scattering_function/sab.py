@@ -69,7 +69,7 @@ class Sab:
         Return the inelastic cross section from S(alpha, beta) matrix
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, DebyeWallerCoeff: float = .0, **kwargs):
         """
         Initialize the S(alpha, beta) matrix class.
 
@@ -80,7 +80,12 @@ class Sab:
         kwargs : "dict"
             Dictionary containing the S(alpha, -beta) matrix.
         """
+        # Get the Debye-Waller coefficient for checking the normalization:
+        self.DebyeWallerCoeff = DebyeWallerCoeff
+
+        # Get the S(alpha, -beta) matrix:
         self.data = pd.DataFrame(*args, **kwargs)
+
 
     @property
     def alpha(self) -> Alpha:
@@ -273,6 +278,35 @@ class Sab:
         # Return the matrix:
         return Sab_complete if len(Sab_complete.index) > 1 else Sab_complete.iloc[0]
 
+    @staticmethod
+    def get_Tratio(T: float, pdos: Pdos = None) -> float:
+        """
+        Get the 0K scattering function with all the data
+
+        Parameters
+        ----------
+        xs0Kcomplete: pd.Series
+            The 0K scattering function with all the data
+
+        Returns
+        -------
+        pd.Series
+            The 0K scattering function with all the data
+        """
+        if pdos is None:
+            return 1.0
+        else:
+            # Fix the pdos to the temperature:
+            pdosFix = pdos.fix_T(T)
+
+            # Get the temperature ratio:
+            ratio = pdosFix.Teff / T
+            if np.isnan(ratio):
+                warnings.warn("The effective temperature is not defined, the ratio will be 1")
+                return 1.0
+            else:
+                return ratio
+
     @classmethod
     def from_fgm(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
                  T: float = None, wt: float = 1):
@@ -319,8 +353,11 @@ class Sab:
         # Set the beta grid and the alpha grid:
         alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
+        # Get the temperature ratio (1):
+        Tratio = cls.get_Tratio(T)
+
         # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, 1.0, wt)
+        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, Tratio, wt)
 
         return cls(S_values, index=alpha_, columns=beta_)
 
@@ -374,26 +411,21 @@ class Sab:
         0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
         0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
         """
-        # Save the Phonon Density of States for extrapolation
-        cls.pdos = pdos.fix_T(T)
-
-        # Get the temperature ratio:
-        ratio = cls.pdos.Teff / T
-        if np.isnan(ratio):
-            warnings.warn("The effective temperature is not defined, the ratio will be 1")
-            ratio = 1.0
-
         # Set the beta grid and the alpha grid:
         alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
+        # Get the temperature ratio (1):
+        Tratio = cls.get_Tratio(T, pdos)
+
         # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, ratio, ws)
+        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, Tratio, ws)
 
         return cls(S_values, index=alpha_, columns=beta_)
 
     @classmethod
     def from_pdos(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
-                  T: float, pdos: Pdos, nphonon: int = None, **kwargs):
+                  T: float, pdos: Pdos, nphonon: int = None, decimal: float = 1.0e-6,
+                  orderMax: int = 5000, threshold: float = 0.0):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -458,28 +490,103 @@ class Sab:
         # Set the beta grid and the alpha grid:
         alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
 
-        # Save the Phonon Density of States for extrapolation
-        cls.pdos = pdos.fix_T(T)
+        # Fix the pdos to the temperature:
+        Tpdos = pdos.fix_T(T)
 
         # Get the Debye-Waller coefficient:
-        DebyeWallerCoeff = cls.pdos.DebyeWallerCoeff
+        DebyeWallerCoeff = Tpdos.DebyeWallerCoeff
 
         # Get the Expansion order:
         if nphonon is not None:
             warnings.warn("Is posible that the expansion order is not enough to get the correct results")
         else:
-            decimal = kwargs.get("decimal", 1.0e-6)
-            order_max = kwargs.get("order_max", 5000)
-            nphonon = get_expansionOrder(alpha_, DebyeWallerCoeff, decimal, order_max)
+            nphonon = get_expansionOrder(alpha_, DebyeWallerCoeff, decimal, orderMax)
 
         # Get tauN function:
-        threshold = kwargs.get("threshold", 0.0)
-        tauN = cls.pdos.tauN(nphonon, threshold=threshold, values=True)
+        tauN = Tpdos.tauN(nphonon, threshold=threshold, values=True)
 
         # Get tauN beta grid values:
-        tauNbeta = get_tauNbeta(cls.pdos.beta.data, tauN.shape[1])
+        tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
 
         return cls.from_tau(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
+
+    @classmethod
+    def from_tau(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float):
+        """
+        Generate S(alpha, -beta) matrix using tauN functions.
+        .. math::
+            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+        Numerical appoximation to get convergence in large exponentiation and
+        factorial numbers. Each element of the array is related with one alpha
+        and represent the following term of the previous equation:
+        ..math::
+           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+        Parameters
+        ----------
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        tauN: np.ndarray, (Z, T)
+            tauN functions. The first dimension is the number of the expansion
+            and the second dimension is the number of the beta grid.
+        delta_beta: float
+            Delta beta value.
+        DebyeWallerCoeff: float
+            Debye Waller coefficient.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) based on Phonon Density Of States model.
+
+        Example
+        -------
+        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> T = 800
+        >>> pdos = Pdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> beta = Beta(beta0_).scale(T)
+        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
+        >>> tau1 = pdos.tau1.values
+        >>> tau1beta = pdos.beta.data
+        >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
+        >>> tauN = get_tauNfunc(tau1, tau1beta, nphonon, 0.0)
+        >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
+        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+        """
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
+
+        # Get the number of phonon expansion:
+        nphonon = tauN.shape[0]
+
+        # Interpolation of the tauN functions to avoid extra calculations:
+        tauNinterp = interp_multyParallel(beta_, tauNbeta, tauN)
+
+        # Get the S(alpha, -beta) matrix (alpha in matrix form to avoid using
+        # outer product):
+        S_values = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
+                                    DebyeWallerCoeff)
+
+        return cls(S_values, DebyeWallerCoeff=DebyeWallerCoeff,
+                   columns=beta_, index=alpha_)
 
     @classmethod
     def from_model(cls, *args, model: str = "pdos", **kwargs):
@@ -606,86 +713,6 @@ class Sab:
             return cls.from_sct(*args, **kwargs)
         elif model.lower() == "pdos":
             return cls.from_pdos(*args, **kwargs)
-
-    @classmethod
-    def from_tau(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
-                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float):
-        """
-        Generate S(alpha, -beta) matrix using tauN functions.
-        .. math::
-            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
-
-        Numerical appoximation to get convergence in large exponentiation and
-        factorial numbers. Each element of the array is related with one alpha
-        and represent the following term of the previous equation:
-        ..math::
-           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
-
-        Parameters
-        ----------
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
-            beta grid.
-        tauN: np.ndarray, (Z, T)
-            tauN functions. The first dimension is the number of the expansion
-            and the second dimension is the number of the beta grid.
-        delta_beta: float
-            Delta beta value.
-        DebyeWallerCoeff: float
-            Debye Waller coefficient.
-
-        Returns
-        -------
-        "Sab", (N, M)
-            S(alpha, -beta) based on Phonon Density Of States model.
-
-        Example
-        -------
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
-        >>> T = 800
-        >>> pdos = Pdos.from_dE(T, rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T)
-        >>> beta = Beta(beta0_).scale(T)
-        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-        >>> tau1 = pdos.tau1.values
-        >>> tau1beta = pdos.beta.data
-        >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
-        >>> tauN = get_tauNfunc(tau1, tau1beta, nphonon, 0.0)
-        >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
-        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
-        beta      0.000000  0.009175  0.018350  0.027524  0.036699
-        alpha
-        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
-        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
-        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
-        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
-        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
-        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
-        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
-        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
-        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
-        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
-        """
-        # Set the beta grid and the alpha grid:
-        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
-
-        # Get the Debye-Waller coefficient:
-        cls.DebyeWallerCoeff = DebyeWallerCoeff
-
-        # Get the number of phonon expansion:
-        nphonon = tauN.shape[0]
-
-        # Interpolation of the tauN functions to avoid extra calculations:
-        tauNinterp = interp_multyParallel(beta_, tauNbeta, tauN)
-
-        # Get the S(alpha, -beta) matrix (alpha in matrix form to avoid using
-        # outer product):
-        S_values = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
-                                    DebyeWallerCoeff)
-
-        return cls(S_values, columns=beta_, index=alpha_)
 
     @classmethod
     def from_alpha0(cls, Ein: [int, float, np.ndarray], T: float, M: float,
@@ -851,9 +878,7 @@ class Sab:
         """
         # Check the normalization:
         norm = S.apply(_norm, axis="columns")
-        if hasattr(self, "pdos"):
-            debye_waller_coeff = self.pdos.DebyeWallerCoeff
-            norm /= 1 - np.exp(- S.index.values * debye_waller_coeff)
+        norm /= 1 - np.exp(- S.index.values * self.DebyeWallerCoeff)
         if (abs(norm - 1.0) > 1.0e-2).any():
             warnings.warn(
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")

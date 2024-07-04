@@ -1,0 +1,13 @@
+# Al27 unit cell information:
+# Direct vertor length: a
+2.856710674519725
+# Direct vector length: b
+2.856710674519725
+# Direct vector length: c
+2.856710674519725
+# Direct vector angles: alpha
+60
+# Direct vector angles: beta
+60
+# Direct vector angles: gamma
+60

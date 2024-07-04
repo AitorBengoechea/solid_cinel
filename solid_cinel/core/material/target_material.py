@@ -128,7 +128,7 @@ class TargetMat(Solid):
         self.pdos = pdosCheck
 
 
-    def  get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
+    def get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
                   anstrom: bool = True) -> [float, pd.Series]:
         """
         Calculate mean square displacement for a certain pdos information.
@@ -1005,12 +1005,21 @@ def Fsq_hkl(vec_tau_hkl: np.ndarray, Bfac: dict, csl: dict, pos: dict) -> float:
     """
     real = 0.
     imag = 0.
+
+    # Define the constant for the expon_hkl:
     constant = - 0.5 * np.linalg.norm(vec_tau_hkl) ** 2 / (8 * pi ** 2)
     for element in Bfac:
+        # Define the expon_hkl for each element:
+        expon_hkl = exp(constant * Bfac[element])
+
+        # Get the real and imaginary part of the Fsq_hkl
         for iep in range(len(pos[element])):
             real += cos(np.sum(vec_tau_hkl * pos[element][iep]))
             imag += sin(np.sum(vec_tau_hkl * pos[element][iep]))
-        expon_hkl = exp(constant * Bfac[element])
+
+        # Multiply by the expon_hkl and the csl
         real *= csl[element] * 0.1 * expon_hkl
         imag *= csl[element] * 0.1 * expon_hkl
+
+    # Return the Fsq_hkl squared
     return real ** 2 + imag ** 2

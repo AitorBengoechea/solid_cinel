@@ -297,7 +297,7 @@ class Molecule:
         -------
         >>> import os
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
-        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27Info.txt')
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27Info')
         >>> molecule = Molecule.from_file(file_path)
         >>> assert molecule.name == "Al27"
         >>> assert molecule.atoms["Al27"].A == 27

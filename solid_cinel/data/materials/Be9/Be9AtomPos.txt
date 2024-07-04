@@ -1,0 +1,6 @@
+# Be9 atom position information
+# Preferred orientation:
+0 0 1
+# Atom position in unit cell:
+0.3333 0.6667 0.25
+0.6667 0.3333 0.75

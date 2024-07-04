@@ -430,3 +430,34 @@ class Molecule:
         0.19947114020071632
         """
         return "\n\n".join([atom.to_string for atom in self.atoms])
+
+    def to_file(self, filename: str) -> None:
+        """
+        Write the Molecule instance to a file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the file where the Molecule instance will be written.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
+        >>> import os
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27Info')
+        >>> molecule = Molecule.from_file(file_path)
+        >>> molecule.to_file("Al27Info")
+        >>> moleculeWritten = Molecule.from_file("Al27Info")
+
+        # Test the results:
+        >>> assert molecule.to_string == moleculeWritten.to_string
+
+        # Remove the file after the test:
+        >>> os.remove("Al27Info")
+        """
+        # Open the file in write mode and write the string
+        with open(filename, 'w') as file:
+            file.write(self.to_string)

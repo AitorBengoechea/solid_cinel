@@ -1,13 +1,5 @@
 # Fe56 unit cell information:
-# Direct vertor length: a
-2.476832
-# Direct vector length: b
-2.476832
-# Direct vector length: c
-2.476832
-# Direct vector angles: alpha
-109.47122063449069
-# Direct vector angles: beta
-109.47122063449069
-# Direct vector angles: gamma
-109.47122063449069
+# Direct vector length: (a, b, c)
+2.476832 2.476832 2.476832
+# Direct vector angles: (alpha, beta, gamma)
+109.47122063449069 109.47122063449069 109.47122063449069

@@ -128,7 +128,7 @@ class TargetMat(Solid):
         self.pdos = pdosCheck
 
 
-    def get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
+    def  get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
                   anstrom: bool = True) -> [float, pd.Series]:
         """
         Calculate mean square displacement for a certain pdos information.

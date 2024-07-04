@@ -298,8 +298,7 @@ class ScatFunc:
         tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
 
         # Get the scattering fucntion values:
-        return cls.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta,
-                            DebyeWallerCoeff)
+        return cls.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
 
     @classmethod
     def from_sct(cls, Ein: float, M: float, T: float, Eout: np.ndarray,

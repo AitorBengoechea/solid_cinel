@@ -151,6 +151,7 @@ class Xs:
         # Update the data in the object or return a new object
         if inplace:
             self.data = dataNew.sort_index(axis=axis)
+            return self
         else:
             return Xs(self.M, dataNew.columns, dataNew, self.xs0Kcomplete)
 

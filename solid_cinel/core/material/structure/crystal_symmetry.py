@@ -130,7 +130,6 @@ class CrystalStructure:
         >>> assert all(direct_vectors.loc["a1"].values.round(6) == np.array([2.856711, 0.      , 0.      ]))
         >>> assert all(direct_vectors.loc["a2"].values.round(6) == np.array([1.428355, 2.473984, 0.      ]))
         >>> assert all(direct_vectors.loc["a3"].values.round(6) == np.array([1.428355, 0.824661, 2.332494]))
-
         """
         return self.operator * self.length.values
 

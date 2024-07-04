@@ -213,6 +213,43 @@ class Atom:
         A, Z, M, b_coh, b_incoh = data
         return cls(A=A, Z=Z, M=M, b_coh=b_coh, b_incoh=b_incoh)
 
+    @property
+    def to_string(self) -> str:
+        """
+        Returns a string representation of the Atom instance in the specified format.
+
+        Returns
+        -------
+        str
+            The string representation of the Atom instance.
+
+        Example
+        -------
+        >>> from pprint import pprint
+        >>> data = (27, 13, 26.98153433356103, 3.449, 0.256)
+        >>> atom = Atom.from_iter(data)
+        >>> print(atom.to_string)
+        # Al27 information:
+        # A:
+        27
+        # Z:
+        13
+        # Atomic mass in amu:
+        26.98153433356103
+        # bound coherant cross section in barn:
+        3.449
+        # bound incoherent cross section in barn:
+        0.256
+        """
+        info_str = "\n".join([
+            f"# {self.name} information:",
+            f"# A:\n{self.A}",
+            f"# Z:\n{self.Z}",
+            f"# Atomic mass in amu:\n{self.M}",
+            f"# bound coherant cross section in barn:\n{self.b_coh}",
+            f"# bound incoherent cross section in barn:\n{self.b_incoh}"
+        ])
+        return info_str
 
 @dataclass
 class Molecule:
@@ -268,15 +305,15 @@ class Molecule:
 
         # Create a dictionary of Atom instances and store them in a pandas Series
         atoms_dict = {}
-        Alen = len(self.A)
-        for i in range(Alen):
+        self.atomNum = len(self.A)
+        for i in range(self.atomNum):
             atom = Atom(self.A[i], self.Z[i], self.M[i], self.b_coh[i], self.b_incoh[i])
             atoms_dict[atom.name] = atom
         self.atoms = pd.Series(atoms_dict)
 
         # Set the molecule name if not provided
         if self.name is None:
-            self.name = "Molecule" if Alen > 1 else self.atoms[0].name
+            self.name = "Molecule" if self.atomNum > 1 else self.atoms[0].name
 
     @classmethod
     def from_file(cls, file_path: str) -> "Molecule":
@@ -297,6 +334,8 @@ class Molecule:
         -------
         >>> import os
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
         >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27Info')
         >>> molecule = Molecule.from_file(file_path)
         >>> assert molecule.name == "Al27"
@@ -305,6 +344,20 @@ class Molecule:
         >>> assert molecule.atoms["Al27"].M == 26.98153433356103
         >>> assert molecule.atoms["Al27"].b_coh == 3.449
         >>> assert molecule.atoms["Al27"].b_incoh == 0.256
+
+        # 2 atoms in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/UO2/UO2Info')
+        >>> molecule = Molecule.from_file(file_path)
+        >>> assert molecule.atoms["U238"].A == 238
+        >>> assert molecule.atoms["U238"].Z == 92
+        >>> assert molecule.atoms["U238"].M == 238.05077040419212
+        >>> assert molecule.atoms["U238"].b_coh == 8.62912188811068
+        >>> assert molecule.atoms["U238"].b_incoh == 0.19947114020071632
+        >>> assert molecule.atoms["O16"].A == 16
+        >>> assert molecule.atoms["O16"].Z == 8
+        >>> assert molecule.atoms["O16"].M == 15.99491399021626
+        >>> assert molecule.atoms["O16"].b_coh == 5.878374042670532
+        >>> assert molecule.atoms["O16"].b_incoh == 0.0
         """
         # Load the data from the file
         atomData = np.loadtxt(file_path)
@@ -312,5 +365,68 @@ class Molecule:
             atomData = atomData.reshape(-1, 5)
         else:
             raise ValueError("The file does not contain the correct number of rows.")
+
+        # Create a Molecule instance from the atom data
         return cls(A=atomData[:, 0], Z=atomData[:, 1], M=atomData[:, 2],
                    b_coh=atomData[:, 3], b_incoh=atomData[:, 4])
+
+    @property
+    def to_string(self) -> str:
+        """
+        Returns a string representation of the Molecule instance in the specified format.
+
+        Returns
+        -------
+        str
+            The string representation of the Molecule instance.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27Info')
+        >>> molecule = Molecule.from_file(file_path)
+        >>> print(molecule.to_string)
+        # Al27 information:
+        # A:
+        27.0
+        # Z:
+        13.0
+        # Atomic mass in amu:
+        26.98153433356103
+        # bound coherant cross section in barn:
+        3.449
+        # bound incoherent cross section in barn:
+        0.256
+
+        # 2 atoms in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/UO2/UO2Info')
+        >>> molecule = Molecule.from_file(file_path)
+        >>> print(molecule.to_string)
+        # O16 information:
+        # A:
+        16.0
+        # Z:
+        8.0
+        # Atomic mass in amu:
+        15.99491399021626
+        # bound coherant cross section in barn:
+        5.878374042670532
+        # bound incoherent cross section in barn:
+        0.0
+        <BLANKLINE>
+        # U238 information:
+        # A:
+        238.0
+        # Z:
+        92.0
+        # Atomic mass in amu:
+        238.05077040419212
+        # bound coherant cross section in barn:
+        8.62912188811068
+        # bound incoherent cross section in barn:
+        0.19947114020071632
+        """
+        return "\n\n".join([atom.to_string for atom in self.atoms])

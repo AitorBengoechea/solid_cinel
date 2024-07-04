@@ -37,7 +37,7 @@ class Solid(CrystalStructure, Molecule):
         Atomic number.
     Z : 1D iterable of 'int' or 'int'
         Number of protons.
-    atom_mass : 1D iterable of 'float' or 'float'
+    M : 1D iterable of 'float' or 'float'
         Atom mass, amu.
     b_coh : 1D iterable of 'float' or 'float'
         Coherent scattering length, fm.
@@ -90,7 +90,7 @@ class Solid(CrystalStructure, Molecule):
             Atomic number.
         Z : 1D iterable of 'int' or 'int'
             Number of protons.
-        atom_mass : 1D iterable of 'float' or 'float'
+        M : 1D iterable of 'float' or 'float'
             Atom mass, amu.
         b_coh : 1D iterable of 'float' or 'float'
             Bound coherent scattering length (fm).

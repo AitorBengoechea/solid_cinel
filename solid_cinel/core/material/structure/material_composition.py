@@ -3,68 +3,60 @@ Python file for working with material composition.
 
 @author: AB272525
 """
-from solid_cinel.data.elements import ELEMENTS
-from scipy.constants import physical_constants as const
 import numpy as np
 import pandas as pd
 import collections
-from typing import Iterable, Union
+from dataclasses import dataclass, field
+from typing import Iterable, Union, Dict, List
+from solid_cinel.data.elements import ELEMENTS
+from scipy.constants import physical_constants as const
 collections.Callable = collections.abc.Callable
 
 
+@dataclass
 class Atom:
     """
-    Class to store properties of the atoms.
+    Represents an atom with its basic nuclear and scattering properties.
 
     Attributes
     ----------
-    A : 'int'
-        Atomic number.
-    Z : 'int'
-        Number of protons.
-    atom_mass : 'float'
-        Atom mass, amu.
-    b : 'dict'
-        Dictionary with the bound coherent and incoherent scattering lengths
-        (fm)
+    A : int
+        Mass number of the atom.
+    Z : int
+        Atomic number, representing the number of protons in the nucleus.
+    M : float
+        Atomic mass of the atom in atomic mass units (amu).
+    b_coh : float
+        Coherent scattering length of the atom in barns (b).
+    b_incoh : float
+        Incoherent scattering length of the atom in barns (b).
+    b : Dict[str, float], optional
+        Dictionary containing both coherent ('b_coh') and incoherent ('b_incoh') scattering lengths.
 
-    Properties
-    ----------
-    name : 'str'
-        Material name: element + A
-    zam: 'int'
-        (Z * 1000 + A) * 10
-    boundXs: float
-        Bound total scattering xs in barns
-    boundIncXs: float
-        Bound incoherent scattering xs in barns
-    freeXs: float
-        Free total scattering xs in barns
+    Methods
+    -------
+    __post_init__(self) -> None:
+        Initializes the `b` attribute with coherent and incoherent scattering lengths.
 
+    Examples
+    --------
+    >>> from solid_cinel.data.materials.Al27 import *
+    >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
+    >>> assert Al.name == "Al27"
     """
+    A: int
+    Z: int
+    M: float
+    b_coh: float
+    b_incoh: float
+    b: Dict[str, float] = None
 
-    def __init__(self, A: int, Z: int, atom_mass: float,
-                 b_coh: float, b_incoh: float):
+    def __post_init__(self) -> None:
         """
-        Initialize the Atom class to describe a single atoms.
+        Initialize the Atom class to describe b values.
+        """
+        self.b = {"b_coh": self.b_coh, "b_incoh": self.b_incoh}
 
-        Parameters
-        ----------
-        A : 'int'
-            Atomic number.
-        Z : 'int'
-            Number of protons.
-        atom_mass : 'float'
-            Atom mass, amu.
-        b_coh : 'float'
-            Bound coherent scattering length (fm).
-        b_incoh : 'float'
-            Bound incoherent scattering length (fm).
-        """
-        self.A = A
-        self.Z = Z
-        self.atom_mass = atom_mass
-        self.b = {"b_coh": b_coh, "b_incoh": b_incoh}
 
     @property
     def name(self) -> str:
@@ -85,7 +77,7 @@ class Atom:
         Test the results:
         >>> assert Al.name == "Al27"
         """
-        return f"{ELEMENTS[self.Z]}{self.A}"
+        return f"{ELEMENTS[int(self.Z)]}{int(self.A)}"
 
     @property
     def zam(self) -> int:
@@ -170,90 +162,155 @@ class Atom:
         Test the results:
         >>> assert np.double(Al.freeXs).round(6) == np.double(1.396702)
         """
-        A = self.atom_mass / const["neutron mass in u"][0]
+        A = self.M / const["neutron mass in u"][0]
         return self.boundXs * (A / (A + 1)) ** 2
 
-
-class Molecule(Atom):
-    """
-    Class to store the properties and method for all the atom of
-    the molecule.
-
-    Attributes
-    ----------
-    A : 1D iterable of 'int' or 'int'
-        Atomic number.
-    Z : 1D iterable of 'int' or 'int'
-        Number of protons.
-    atom_mass : 1D iterable of 'float' or 'float'
-        Atom mass, amu.
-    b_coh : 1D iterable of 'float' or 'float'
-        Bound coherent scattering length (fm).
-    b_incoh : 1D iterable of 'float' or 'float'
-        Bound incoherent scattering length (fm).
-    name : 'str', optional
-        Molecule name
-    """
-
-    def __init__(self, A: Union[Iterable, int], Z: Union[Iterable, int],
-                 atom_mass: Union[Iterable, float], b_coh: Union[Iterable, float],
-                 b_incoh: Union[Iterable, float], name: str = None):
+    @classmethod
+    def from_dict(cls, data: Dict[str, Union[int, float]]) -> "Atom":
         """
-        Initialize the Molecule class to describe a molecule.
+        Create an Atom instance from a dictionary.
 
         Parameters
         ----------
-        A : 1D iterable of 'int' or 'int'
-            Atomic number.
-        Z : 1D iterable of 'int' or 'int'
-            Number of protons.
-        atom_mass : 1D iterable of 'float' or 'float'
-            Atom mass, amu.
-        b_coh : 1D iterable of 'float' or 'float'
-            Bound coherent scattering length (fm).
-        b_incoh : 1D iterable of 'float' or 'float'
-            Bound incoherent scattering length (fm).
-        name : 'str', optional
-            Name of the molecule, by default None
-        """
-        atoms = {}
-        if isinstance(A, int):
-            atom = Atom(A, Z, atom_mass, b_coh, b_incoh)
-            atoms[atom.name] = atom
-            name = atom.name if name is None else name
-        else:
-            for i in range(len(A)):
-                single_atom = Atom(A[i], Z[i], atom_mass[i],
-                                   b_coh[i], b_incoh[i])
-                atoms[single_atom.name] = single_atom
-        self.atoms = pd.Series(atoms)
-        self.name = name
-
-    @property
-    def name(self) -> str:
-        """
-        Name of the molecule given by the user.
+        data : Dict[str, Union[int, float]]
+            Dictionary containing the atom properties.
 
         Returns
         -------
-        "str"
-            Name of the molecule.
+        Atom
+            An instance of Atom initialized with the properties from the dictionary.
 
         Example
         -------
-        Object initialization:
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Molecule(A, Z, atomic_mass, b_coh, b_incoh, name="Al")
-
-        Test the results:
-        >>> assert Al.name == "Al"
-        >>> assert Al.atoms["Al27"].name == "Al27"
-        >>> Al = Molecule(A, Z, atomic_mass, b_coh, b_incoh)
-        >>> assert Al.name == "Al27"
+        >>> data = {'A': 27, 'Z': 13, 'M': 26.98153433356103, 'b_coh': 3.449, 'b_incoh': 0.256}
+        >>> atom = Atom.from_dict(data)
+        >>> assert atom.A == 27
         """
-        return self._name
+        return cls(A=data["A"], Z=data["Z"], M=data["M"],
+                   b_coh=data["b_coh"], b_incoh=data["b_incoh"])
 
-    @name.setter
-    def name(self, name: str):
-        self._name = name if name is not None else "Molecule"
+    @classmethod
+    def from_iter(cls, data: Iterable[Union[int, float]]) -> "Atom":
+        """
+        Create an Atom instance from an iterable.
+
+        Parameters
+        ----------
+        data : Iterable[Union[int, float]]
+            Iterable containing the atom properties in the order: A, Z, M, b_coh, b_incoh.
+
+        Returns
+        -------
+        Atom
+            An instance of Atom initialized with the properties from the iterable.
+
+        Example
+        -------
+        >>> data = (27, 13, 26.98153433356103, 3.449, 0.256)
+        >>> atom = Atom.from_iter(data)
+        >>> assert atom.Z == 13
+        """
+        A, Z, M, b_coh, b_incoh = data
+        return cls(A=A, Z=Z, M=M, b_coh=b_coh, b_incoh=b_incoh)
+
+
+@dataclass
+class Molecule:
+    """
+    Represents a molecule with its atomic composition and scattering properties.
+
+    Attributes
+    ----------
+    A : Union[List[int], int]
+        Mass number of the atoms in the molecule.
+    Z : Union[List[int], int]
+        Atomic number of the atoms in the molecule.
+    M : Union[List[float], float]
+        Atomic mass of the atoms in the molecule in atomic mass units (amu).
+    b_coh : Union[List[float], float]
+        Coherent scattering length of the atoms in the molecule in barns (b).
+    b_incoh : Union[List[float], float]
+        Incoherent scattering length of the atoms in the molecule in barns (b).
+    name : str, optional
+        Name of the molecule.
+    atoms : pd.Series
+        Series containing Atom instances for each atom in the molecule.
+    """
+    A: Union[List[int], int]
+    Z: Union[List[int], int]
+    M: Union[List[float], float]
+    b_coh: Union[List[float], float]
+    b_incoh: Union[List[float], float]
+    name: str = None
+    atoms: pd.Series = field(init=False)
+
+    @staticmethod
+    def _ensure_iterable(value):
+        """Ensure the input value is iterable."""
+        if isinstance(value, Iterable):
+            return value
+        return [value]
+
+    def __post_init__(self) -> "Molecule":
+        """
+        Initialize the Molecule class to describe a molecule.
+        """
+        # Ensure all input values are iterable
+        self.A = self._ensure_iterable(self.A)
+        self.Z = self._ensure_iterable(self.Z)
+        self.M = self._ensure_iterable(self.M)
+        self.b_coh = self._ensure_iterable(self.b_coh)
+        self.b_incoh = self._ensure_iterable(self.b_incoh)
+
+        # Check if all input iterables have the same length
+        if not all(len(lst) == len(self.A) for lst in [self.Z, self.M, self.b_coh, self.b_incoh]):
+            raise ValueError("All input iterables must have the same length.")
+
+        # Create a dictionary of Atom instances and store them in a pandas Series
+        atoms_dict = {}
+        Alen = len(self.A)
+        for i in range(Alen):
+            atom = Atom(self.A[i], self.Z[i], self.M[i], self.b_coh[i], self.b_incoh[i])
+            atoms_dict[atom.name] = atom
+        self.atoms = pd.Series(atoms_dict)
+
+        # Set the molecule name if not provided
+        if self.name is None:
+            self.name = "Molecule" if Alen > 1 else self.atoms[0].name
+
+    @classmethod
+    def from_file(cls, file_path: str) -> "Molecule":
+        """
+        Create a Molecule instance from a file.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to the file containing the molecule properties.
+
+        Returns
+        -------
+        Molecule
+            An instance of Molecule initialized with the properties from the file.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27Info.txt')
+        >>> molecule = Molecule.from_file(file_path)
+        >>> assert molecule.name == "Al27"
+        >>> assert molecule.atoms["Al27"].A == 27
+        >>> assert molecule.atoms["Al27"].Z == 13
+        >>> assert molecule.atoms["Al27"].M == 26.98153433356103
+        >>> assert molecule.atoms["Al27"].b_coh == 3.449
+        >>> assert molecule.atoms["Al27"].b_incoh == 0.256
+        """
+        # Load the data from the file
+        atomData = np.loadtxt(file_path)
+        if len(atomData) % 5 == 0:
+            atomData = atomData.reshape(-1, 5)
+        else:
+            raise ValueError("The file does not contain the correct number of rows.")
+        return cls(A=atomData[:, 0], Z=atomData[:, 1], M=atomData[:, 2],
+                   b_coh=atomData[:, 3], b_incoh=atomData[:, 4])

@@ -1,8 +1,0 @@
-# O16 in UO2 atom position information
-# Preferred orientation:
-0 0 1
-# atom position in unit cell:
-0.500000  0.000000  0.000000
-0.500000  0.500000  0.500000
-0.000000  0.000000  0.500000
-0.000000  0.500000  0.000000

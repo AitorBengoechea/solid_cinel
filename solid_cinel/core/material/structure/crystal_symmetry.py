@@ -43,15 +43,27 @@ class CrystalStructure:
         angles : Iterable, (3,)
             direct vector angles in degrees
         """
+        self.get_length(length)
+        self.get_angle(angles)
+
+
+    def get_length(self, length: Iterable):
+        """
+        Get the direct vector lengths.
+        """
         if len(length) != 3:
             ValueError("The direct vector lengths array do not have the apropiate lenght")
+
+        self.length = pd.Series(length, index=["a", "b", "c"], name="direct vectors length")
+
+    def get_angle(self, angles: Iterable):
+        """
+        Get the direct vector angles.
+        """
         if len(angles) != 3:
             ValueError("The direct vector angles array do not have the apropiate lenght")
-        self.length = pd.Series(length,
-                                index=["a", "b", "c"],
-                                name="direct vectors length")
-        self.angles = pd.Series(np.array(angles) * np.pi / 180,
-                                index=["alpha", "beta", "gamma"],
+
+        self.angles = pd.Series(np.deg2rad(angles), index=["alpha", "beta", "gamma"],
                                 name="direct vectors angles")
 
     @property
@@ -175,6 +187,113 @@ class CrystalStructure:
             np.cross(dir_vec.loc["a1"], dir_vec.loc["a2"]),
                                ])
         reci_coeff *= 2 * np.pi / self.unit_cell_vol
-        return pd.DataFrame(reci_coeff,
-                            index=["b1", "b2", "b3"],
-                            columns=dir_vec.index)
+        return pd.DataFrame(reci_coeff, index=["b1", "b2", "b3"], columns=dir_vec.index)
+
+    @classmethod
+    def from_file(cls, file_path: str) -> "CrystalStructure":
+        """
+        Create a CrystalStructure object from a file.
+
+        Parameters
+        ----------
+        file_path : "str"
+            Path to the file with the crystal structure information.
+
+        Returns
+        -------
+        "CrystalStructure"
+            CrystalStructure object.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27UnitCell')
+        >>> unitCell = CrystalStructure.from_file(file_path)
+        >>> unitCell.length.round(6)
+        a    2.856711
+        b    2.856711
+        c    2.856711
+        Name: direct vectors length, dtype: float64
+
+        >>> unitCell.angles.round(6)
+        alpha    1.047198
+        beta     1.047198
+        gamma    1.047198
+        Name: direct vectors angles, dtype: float64
+        """
+        # Load the data from the file
+        UnitCell = np.loadtxt(file_path)
+        if UnitCell.shape != (2, 3):
+            ValueError("The file do not have the apropiate lenght")
+
+        # Create the object:
+        return cls(UnitCell[0], UnitCell[1])
+
+    @property
+    def to_string(self) -> str:
+        """
+        Return a string with the crystal structure information.
+
+        Returns
+        -------
+        "str"
+            String with the crystal structure information.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27UnitCell')
+        >>> unitCell = CrystalStructure.from_file(file_path)
+        >>> print(unitCell.to_string)
+        # Unit cell information:
+        # Direct vector length: (a, b, c)
+        2.856710674519725 2.856710674519725 2.856710674519725
+        # Direct vector angles: (alpha, beta, gamma)
+        60.0 60.0 60.0
+        """
+        lengthIter = self.length.values
+        anglesIter = np.rad2deg(self.angles.values).round(6)
+        info_str = "\n".join([
+            f"# Unit cell information:",
+            f"# Direct vector length: (a, b, c)",
+            f"{lengthIter[0]} {lengthIter[1]} {lengthIter[2]}",
+            f"# Direct vector angles: (alpha, beta, gamma)",
+            f"{anglesIter[0]} {anglesIter[1]} {anglesIter[2]}",
+        ])
+        return info_str
+
+    def to_file(self, filename: str) -> None:
+        """
+        Write the crystal structure information to a file.
+
+        Parameters
+        ----------
+        filename : "str"
+            Path to the file where the information will be written.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27UnitCell')
+        >>> unitCell = CrystalStructure.from_file(file_path)
+        >>> unitCell.to_file("Al27UnitCell")
+        >>> unitCellWritten = CrystalStructure.from_file("Al27UnitCell")
+
+        # Test the results:
+        >>> assert unitCell.to_string == unitCellWritten.to_string
+
+        # Remove the file after the test:
+        >>> os.remove("Al27UnitCell")
+        """
+        # Open the file in write mode and write the string
+        with open(filename, 'w') as file:
+            file.write(self.to_string)

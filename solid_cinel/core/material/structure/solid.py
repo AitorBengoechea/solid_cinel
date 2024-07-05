@@ -16,151 +16,64 @@ collections.Callable = collections.abc.Callable
 
 class Solid(CrystalStructure, Molecule):
     """
-    Class to store the properties and methods for solid materials.
-
-    Attributes
-    ----------
-    preferred_orientation : `np.array` of size (1, 3)
-        Preferred orientation of the target.
-    unit_pos : 'dict' or 1D iterable
-        Unitary positions of atoms in the lattice unit cell. Two options:
-        Single atom: 1D iterable
-        Multiple atoms: 'dict'
-            {"atom name" : [atom positions]}
-    length : `np.array` of size (1, 3)
-        Direct lattice vectors length in fm.
-    angles: `np.array` of size (1, 3)
-        Direct lattice vectors angles in ª.
-    symmetry : 'str', optional
-        Symmetry of the solid, by default "cubic"
-    A : 1D iterable of 'int' or 'int'
-        Atomic number.
-    Z : 1D iterable of 'int' or 'int'
-        Number of protons.
-    atom_mass : 1D iterable of 'float' or 'float'
-        Atom mass, amu.
-    b_coh : 1D iterable of 'float' or 'float'
-        Coherent scattering length, fm.
-    b_incoh : 1D iterable of 'float' or 'float'
-        Incoherent scattering length, fm.
-    energy_sup : 'float'
-        Energy of the incident neutron, eV.
-    energy_cut : 'float'
-        Energy cut-off, eV.
-
-    Properties
-    ----------
-    unit_pos: pd.Series
-        atom position in a unit cell for each atom
-    atom_pos: pd.Series
-        Position of atoms in the direct lattice
-    atom_number: int
-        Number of atoms in the unit cell
-
+    Class for the solid structure. It is a combination of the crystal structure
+    and the molecule class with the addition of the preferred orientation and
+    the unit position of the atoms in the unit cell.
     """
-
     def __init__(self, preferred_orientation: Iterable,
-                 unit_pos: Union[dict, Iterable],
-                 *args, **kwargs):
+                 unit_pos: Union[dict, Iterable], length: Iterable[float],
+                 angles: Iterable[float], A: Iterable[int], Z: Iterable[int],
+                 M: Iterable[float], b_coh: Iterable[float],
+                 b_incoh: Iterable[float], name: str = None):
         """
-        Initialize the crystaline structure formed by a single atom.
+        Initialize the solid class
 
         Parameters
         ----------
-        preferred_orientation : iterable or `np.array` of size (1, 3)
-            Preferred orientation of the target.
-        unit_pos : 'dict' or 1D iterable
-            Unitary positions of atoms in the lattice unit cell. Two options:
-            Single atom: 1D iterable
-            Multiple atoms: 'dict'
-                {"atom name" : [atom positions]}
-
-        Parameters for CrystalStructure
-        --------------------------------
-        length : iterable or `np.array` of size (1, 3)
-            Direct lattice vectors length in fm.
-        angles: iterable or `np.array` of size (1, 3)
-            Direct lattice vectors angles in ª.
-        symmetry : 'str', optional
-            Symmetry of the solid, by default "cubic"
-
-        Parameters for Molecule
-        -----------------------
-        A : 1D iterable of 'int' or 'int'
-            Atomic number.
-        Z : 1D iterable of 'int' or 'int'
-            Number of protons.
-        atom_mass : 1D iterable of 'float' or 'float'
-            Atom mass, amu.
-        b_coh : 1D iterable of 'float' or 'float'
-            Bound coherent scattering length (fm).
-        b_incoh : 1D iterable of 'float' or 'float'
-            Bound incoherent scattering length (fm).
-        name : 'str', optional
-            Name of the molecule, by default None
-
-        Returns
-        -------
-        ´Solid´
-            Class to store the properties and method related with a crystaline
-            structure of a solid.
-
+        preferred_orientation : Iterable
+            Preferred orientation of the solid.
+        unit_pos : Union[dict, Iterable]
+            Position of the atoms in the unit cell.
+        length : Iterable[float]
+            direct vector lengths
+        angles : Iterable[float]
+            direct vector angles in degrees
+        A : Iterable[int]
+            Atomic number of the atoms in the unit cell.
+        Z : Iterable[int]
+            Number of atoms in the unit cell.
+        M : Iterable[float]
+            Atomic mass of the atoms in the unit cell.
+        b_coh : Iterable[float]
+            Coherent scattering length of the atoms in the unit cell.
+        b_incoh : Iterable[float]
+            Incoherent scattering length of the atoms in the unit cell.
+        name : str, optional
+            Name of the solid. The default is None.
         """
-        CrystalStructure.__init__(self, *args[0:2])
-        Molecule.__init__(self, *args[2:], **kwargs)
-
-        if len(preferred_orientation) != 3:
-            ValueError("The preferential orientation array do not have the apropiate lenght")
+        CrystalStructure.__init__(self, length, angles)
+        Molecule.__init__(self, A=A, Z=Z, M=M, b_coh=b_coh, b_incoh=b_incoh, name=name)
         self.preferred_orientation = pd.Series(preferred_orientation,
                                                index=["x", "y", "z"],
                                                name="preferred orientation")
-        self.unit_pos = unit_pos
+        self.set_unit_pos(unit_pos)
 
-    @property
-    def unit_pos(self) -> pd.Series:
+    def set_unit_pos(self, unit_pos: Union[dict, Iterable]):
         """
-        Pandas series containnig atom position in a unit cell for each atom.
+        Set the position of the atoms in the unit cell.
 
-        Returns
-        -------
-        Pd.Series -> {"atom_name" : pd.DataFrame}
-            Pandas series containnig the dataframe of the atom position in a
-            unit cell for each atom.
-
-        Example
-        -------
-        Object initialization:
-        >>> from solid_cinel.data.materials.UO2 import *
-        >>> UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh)
-        >>> UO2.unit_pos["O16"]
-              x     y     z
-        0  0.25  0.25  0.25
-        1  0.75  0.25  0.25
-        2  0.25  0.75  0.75
-        3  0.75  0.75  0.75
-        4  0.75  0.25  0.75
-        5  0.25  0.25  0.75
-        6  0.75  0.75  0.25
-        7  0.25  0.75  0.25
-
-        >>> UO2.unit_pos["U238"]
-             x    y    z
-        0  0.5  0.0  0.0
-        1  0.5  0.5  0.5
-        2  0.0  0.0  0.5
-        3  0.0  0.5  0.0
+        Parameters
+        ----------
+        unit_pos : Union[dict, Iterable]
+            Position of the atoms in the unit cell.
         """
-        return self._unit_pos
-
-    @unit_pos.setter
-    def unit_pos(self, unit_pos):
         col = pd.Index(["x", "y", "z"])
         if isinstance(unit_pos, dict):
             _unit_pos = {element: pd.DataFrame(single_unit_pos.reshape(-1, 3), columns=col)
                          for element, single_unit_pos in unit_pos.items()}
         else:
             _unit_pos = {self.name: pd.DataFrame(np.array(unit_pos).reshape(-1, 3), columns=col)}
-        self._unit_pos = pd.Series(_unit_pos)
+        self.unit_pos = pd.Series(_unit_pos)
 
     @property
     def atom_pos(self) -> pd.Series:

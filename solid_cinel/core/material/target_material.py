@@ -187,7 +187,7 @@ class TargetMat(Solid):
         elif self.pdos is None:
             raise ValueError("The pdosDict must be defined or initialized in the object.")
         Bfact = BfacUnitChange * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
-        Bfact /= T * self.atoms.apply(lambda x: x.atom_mass)
+        Bfact /= T * self.atoms.apply(lambda x: x.M)
         return Bfact * 1.0e20 if anstrom else Bfact
 
     def get_multiplicity(self, energyCut: float, T: float,

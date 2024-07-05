@@ -387,7 +387,7 @@ class Solid(CrystalStructure, Molecule):
         >>> energyCut = 2.301
 
         Test the results:
-        >>> Al.get_BraggEdges(energyCut, T).round(6).iloc[:10, :4] #doctest: +NORMALIZE_WHITESPACE
+        >>> Al.get_BraggEdges(energyCut, T).round(6).iloc[:10, :4]
                       d       Fsq  Orientation angle  Multiplicity
         h k l
         1 1 1  2.332494  0.115989                0.0           8.0
@@ -401,19 +401,19 @@ class Solid(CrystalStructure, Molecule):
           3 2  0.824661  0.097189                0.0          24.0
             3  0.777498  0.094765                0.0          32.0
 
-        >>> Al.get_BraggEdges(energyCut, T).round(6).iloc[:10, 4::] #doctest: +NORMALIZE_WHITESPACE
-               PDDF         E        Xs      theta
+        >>> Al.get_BraggEdges(energyCut, T).round(6).iloc[:10, 4::]
+                      E  PDDF        Xs      theta
         h k l
-        1 1 1   1.0  0.003759  0.005370   4.632867
-            0   1.0  0.005012  0.003459   5.350060
-        2 1 1   1.0  0.010024  0.004729   7.568882
-          2 1   1.0  0.013783  0.007865   8.877727
-            2   1.0  0.015036  0.002489   9.273329
-            0   1.0  0.020048  0.001563  10.711827
-        3 2 2   1.0  0.023807  0.005595  11.676144
-            1   1.0  0.025060  0.005407  11.980567
-          3 2   1.0  0.030072  0.004773  13.128861
-            3   1.0  0.033831  0.005850  13.929091
+        1 1 1  0.003759   1.0  0.005370   4.632867
+            0  0.005012   1.0  0.003459   5.350060
+        2 1 1  0.010024   1.0  0.004729   7.568882
+          2 1  0.013783   1.0  0.007865   8.877727
+            2  0.015036   1.0  0.002489   9.273329
+            0  0.020048   1.0  0.001563  10.711827
+        3 2 2  0.023807   1.0  0.005595  11.676144
+            1  0.025060   1.0  0.005407  11.980567
+          3 2  0.030072   1.0  0.004773  13.128861
+            3  0.033831   1.0  0.005850  13.929091
         """
         # Get multiplicity
         multiplicity = self.get_multiplicity(energyCut, T, precision=precision)
@@ -423,7 +423,7 @@ class Solid(CrystalStructure, Molecule):
         multiplicity["E"] /= 2 * multiplicity["d"] ** 2
 
         # Sort the data by energy
-        multiplicity.sort_values(by=["E"], inplace=True)
+        multiplicity = multiplicity.sort_values(by=["E"])
 
         # Optional argument:
         # Xs:

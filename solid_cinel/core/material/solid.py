@@ -418,9 +418,6 @@ class Solid(CrystalStructure, Molecule):
         # Get multiplicity
         multiplicity = self.get_multiplicity(energyCut, T, precision=precision)
 
-        # Get PDDF:
-        add_pddfToMultiplicity(multiplicity, pddf_kind,  pddf_val)
-
         # Get Bragg Edges energy:
         multiplicity["E"] = pi ** 2 * BraggUnitChange
         multiplicity["E"] /= 2 * multiplicity["d"] ** 2
@@ -431,10 +428,14 @@ class Solid(CrystalStructure, Molecule):
         # Optional argument:
         # Xs:
         if xs:
+            # Get PDDF:
+            add_pddfToMultiplicity(multiplicity, pddf_kind, pddf_val)
+
+            # Get Bragg Edges Xs:
             add_BraggEdgesXsToMultiplicity(multiplicity, self.unitCellVol,
                                            self.atom_number, threshold)
 
-        # difraction angles vs hkl data
+        # difraction angles:
         if difracAngles:
             add_difracAnglesToMultiplicity(multiplicity, energyCut)
 
@@ -541,26 +542,26 @@ class Solid(CrystalStructure, Molecule):
         # Get the Bragg Edges
         BraggEdgesXs = self.get_BraggEdges(energyCut, T, xs=True, difracAngles=False,
                                            pddf_kind=pddf_kind, pddf_val=pddf_val,
-                                           threshold=threshold)
+                                           threshold=threshold, precision=precision)
 
         # Extract the energy and cross-section information and convert to a Series
-        xs = BraggEdgesXs.loc[:, ["E", "Xs"]].set_index("E").iloc[::, 0]
+        xsCoh = BraggEdgesXs[["E", "Xs"]].set_index("E")["Xs"]
 
         # Filter out data where energy exceeds the cut-off
-        xs = xs[xs.index <= energyCut]
+        xsCoh = xsCoh[xsCoh.index <= energyCut]
 
         # Sum the data if there are duplicate energy values
-        if xs.index.has_duplicates:
-            xs = xs.groupby(level=0).sum()
+        if xsCoh.index.has_duplicates:
+            xsCoh = xsCoh.groupby(level=0).sum()
 
         # Calculate the cumulative sum of the cross-sections and normalize by energy
-        xs = xs.cumsum() / xs.index.values
+        xsCoh = xsCoh.cumsum() / xsCoh.index.values
 
         # Save the data to a file if a filename is provided
         if file_Xs:
-            xs.to_csv(file_Xs, sep='\t', float_format="%20.10e")
+            xsCoh.to_csv(file_Xs, sep='\t', float_format="%20.10e")
 
-        return xs
+        return xsCoh
 
 
 def add_pddfToMultiplicity(multiplicity: pd.DataFrame, kind: str = None,
@@ -763,7 +764,7 @@ def add_difracAnglesToMultiplicity(multiplicity: pd.DataFrame,
         3  0.777498  0.094765          70.528779          32.0  13.929091
 
     """
-    d = multiplicity.loc[:, "d"]
+    d = multiplicity["d"]
     angle_value = np.clip(1 - pi ** 2 * BraggUnitChange / (d ** 2 * energyCut),
                           -1, 1)
     multiplicity["theta"] = np.rad2deg(np.arccos(angle_value))

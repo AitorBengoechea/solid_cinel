@@ -204,7 +204,7 @@ class CrystalStructure:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27UnitCell')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27UnitCell')
         >>> unitCell = CrystalStructure.from_file(file_path)
         >>> unitCell.length.round(6)
         a    2.856711
@@ -248,7 +248,7 @@ class CrystalStructure:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27UnitCell')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27UnitCell')
         >>> unitCell = CrystalStructure.from_file(file_path)
         >>> print(unitCell.to_string)
         # Unit cell information:
@@ -288,7 +288,7 @@ class CrystalStructure:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../../data/materials/Al27/Al27UnitCell')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27UnitCell')
         >>> unitCell = CrystalStructure.from_file(file_path)
         >>> unitCell.to_file("Al27UnitCell")
         >>> unitCellWritten = CrystalStructure.from_file("Al27UnitCell")

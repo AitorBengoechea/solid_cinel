@@ -159,7 +159,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.UO2 import *
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
         >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-        >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+        >>> UO2 = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
         Test the results:
         >>> T = 20
@@ -224,7 +224,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
 
         Test the results:
         >>> T = 20
@@ -310,7 +310,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> energyCut = 2.301
         >>> multiplicity = Al.get_multiplicity(energyCut, T)
@@ -436,7 +436,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> energyCut = 2.301
         >>> multiplicity = Al.get_multiplicity(energyCut, T)
@@ -508,7 +508,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> energyCut = 2.301
         >>> unit_cell_vol = Al.unit_cell_vol
@@ -608,7 +608,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> energyCut = 2.301
 
@@ -723,11 +723,11 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> from solid_cinel.data.materials.UO2 import *
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
         >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-        >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+        >>> UO2 = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
         Test the results:
         >>> T = 20
@@ -822,11 +822,11 @@ def numba_hkl_data(d_min: float, rec_vecs: np.ndarray, Bfac: pd.Series,
     >>> from solid_cinel.data.materials.Al27 import *
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
     >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> Al = TargetMat(preferred_orientation, unit_pos_Al27, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> Al = TargetMat(unit_pos_Al27, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
     >>> from solid_cinel.data.materials.UO2 import *
     >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
     >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-    >>> UO2 = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+    >>> UO2 = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
     Test the results:
     >>> T = 20

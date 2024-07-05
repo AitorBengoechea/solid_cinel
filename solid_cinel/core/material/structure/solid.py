@@ -20,24 +20,23 @@ class Solid(CrystalStructure, Molecule):
     and the molecule class with the addition of the preferred orientation and
     the unit position of the atoms in the unit cell.
     """
-    def __init__(self, preferred_orientation: Iterable,
-                 unit_pos: Union[dict, Iterable], length: Iterable[float],
-                 angles: Iterable[float], A: Iterable[int], Z: Iterable[int],
-                 M: Iterable[float], b_coh: Iterable[float],
+    def __init__(self, unit_pos: Union[dict, Iterable], length: Iterable[float],
+                 angles: Iterable[float], preferred_orientation: Iterable,
+                 A: Iterable[int], Z: Iterable[int], M: Iterable[float], b_coh: Iterable[float],
                  b_incoh: Iterable[float], name: str = None):
         """
         Initialize the solid class
 
         Parameters
         ----------
-        preferred_orientation : Iterable
-            Preferred orientation of the solid.
         unit_pos : Union[dict, Iterable]
             Position of the atoms in the unit cell.
         length : Iterable[float]
             direct vector lengths
         angles : Iterable[float]
             direct vector angles in degrees
+        preferred_orientation : Iterable
+            Preferred orientation of the solid.
         A : Iterable[int]
             Atomic number of the atoms in the unit cell.
         Z : Iterable[int]
@@ -51,11 +50,8 @@ class Solid(CrystalStructure, Molecule):
         name : str, optional
             Name of the solid. The default is None.
         """
-        CrystalStructure.__init__(self, length, angles)
+        CrystalStructure.__init__(self, length, angles, preferred_orientation)
         Molecule.__init__(self, A=A, Z=Z, M=M, b_coh=b_coh, b_incoh=b_incoh, name=name)
-        self.preferred_orientation = pd.Series(preferred_orientation,
-                                               index=["x", "y", "z"],
-                                               name="preferred orientation")
         self.set_unit_pos(unit_pos)
 
     def set_unit_pos(self, unit_pos: Union[dict, Iterable]):
@@ -90,7 +86,7 @@ class Solid(CrystalStructure, Molecule):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.UO2 import *
-        >>> UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh)
+        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh)
 
         >>> UO2.atom_pos["O16"].round(6)
                   x         y         z
@@ -127,9 +123,9 @@ class Solid(CrystalStructure, Molecule):
         -------
         Object initialization:
         >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh)
+        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh)
         >>> from solid_cinel.data.materials.UO2 import *
-        >>> UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atom_mass, b_coh, b_incoh)
+        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh)
 
         Test the results:
         >>> assert Al.atom_number == 1
@@ -161,7 +157,7 @@ def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
     -------
     Object initialization:
     >>> from solid_cinel.data.materials.Al27 import *
-    >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
+    >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, preferred_orientation)
     >>> rec_vecs = crys.reciproc_vec.values
     >>> d_min = 0.2360746677309732
     >>> hkl_max_value(rec_vecs, d_min)

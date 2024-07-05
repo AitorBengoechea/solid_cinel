@@ -2,7 +2,7 @@ import pytest
 import os
 import numpy as np
 import pandas as pd
-from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.xs.ddxs import DDxs
 from solid_cinel.core.xs.xs import Xs
 

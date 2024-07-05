@@ -10,7 +10,7 @@ import os
 from scipy.constants import physical_constants as const
 from typing import Iterable
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc
-from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.xs import Xs, Dxs
 from solid_cinel.core.generic import integrate, reshift
 from solid_cinel.core.xs.dxs import check_dx

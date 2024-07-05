@@ -4,7 +4,7 @@ Created on Thu Nov 24 10:15:33 2022
 @author: AB272525
 """
 
-from solid_cinel.core.material.target_material import Target_mat
+from solid_cinel.core.material import Solid
 from solid_cinel.core.cinematic.frames import Neutron
 import numba as nb
 import numpy as np
@@ -85,14 +85,14 @@ def test_multiplicity(E):
     unit_pos = np.random.rand(np.random.randint(1, 10), 3)
     dir_vec_length = np.random.rand(3) * 4
     dir_vec_angles = np.random.rand(3) * 180
-    Al = Target_mat(preferred_orientation, unit_pos,
+    Al = Solid(preferred_orientation, unit_pos,
                     dir_vec_length, dir_vec_angles,
                     A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
                     rho_in_energy, interv_in_energy)
     while Al.reciproc_vec.isnull().values.any():
         dir_vec_length = np.random.rand(3) * 4
         dir_vec_angles = np.random.rand(3) * 180
-        Al = Target_mat(preferred_orientation, unit_pos,
+        Al = Solid(preferred_orientation, unit_pos,
                         dir_vec_length, dir_vec_angles,
                         A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
                         rho_in_energy, interv_in_energy)

@@ -5,7 +5,7 @@ Created on Mon Nov 28 17:09:21 2022
 @author: AB272525
 """
 import pandas as pd
-from solid_cinel import TargetMat, Alpha, Beta, Pdos, Sab
+from solid_cinel import Solid, Alpha, Beta, Pdos, Sab
 from scipy.integrate import trapezoid
 import pytest
 import os
@@ -17,7 +17,7 @@ from examples import *
 
 # Target material:
 pdosBe9 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-Be = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
+Be = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
                A, Z, atomic_mass, b_coh, b_incoh, pdosBe9)
 
 

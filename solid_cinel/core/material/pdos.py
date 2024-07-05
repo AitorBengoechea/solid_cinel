@@ -5,7 +5,7 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
+from solid_cinel.core.material.tau import get_tauNfunc, get_tauNbeta
 from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 import numpy as np
@@ -213,7 +213,7 @@ class Tpdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> file = "../../../data/pdos/interp.300"
+        >>> file = "../../data/pdos/interp.300"
         >>> T = 300
         >>> Tpdos.from_dE_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
         beta
@@ -989,7 +989,7 @@ class Npdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> file = "../../../data/pdos/interp.300"
+        >>> file = "../../data/pdos/interp.300"
         >>> T = 300
         >>> Npdos.from_file(T, file).data.iloc[0:5]
         T            300

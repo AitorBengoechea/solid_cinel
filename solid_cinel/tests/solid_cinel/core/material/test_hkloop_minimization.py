@@ -5,8 +5,7 @@ Created on Mon Nov 21 14:13:08 2022
 @author: AB272525
 """
 
-from solid_cinel.core.material.structure.crystal_symmetry import Crystal_structure
-from solid_cinel.core.material.structure.solid import hkl_max_value
+from solid_cinel.core.material import CrystalStructure, hkl_max_value
 import numba as nb
 import numpy as np
 import pytest
@@ -37,12 +36,12 @@ def hklloop_max(rec_vecs, d_min):
 def test_hklloop_aprox(d_min):
     dir_vec_length = np.random.rand(3) * 4
     dir_vec_angles = np.random.rand(3) * 180
-    crys = Crystal_structure(dir_vec_length, dir_vec_angles)
+    crys = CrystalStructure(dir_vec_length, dir_vec_angles)
     rec_vecs = crys.reciproc_vec
     while rec_vecs.isnull().values.any():
         dir_vec_length = np.random.rand(3) * 4
         dir_vec_angles = np.random.rand(3) * 180
-        crys = Crystal_structure(dir_vec_length, dir_vec_angles)
+        crys = CrystalStructure(dir_vec_length, dir_vec_angles)
         rec_vecs = crys.reciproc_vec
     rec_vecs = rec_vecs.values
     try:

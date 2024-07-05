@@ -1,21 +1,21 @@
-# -*- coding: utf-8 -*-
 """
-Python file for working with Target Material.
+Python file for working with the solid structure.
 
 @author: AB272525
 """
-
-from solid_cinel.core.material.solid import Solid, hkl_max_value
+from solid_cinel.core.material.material_composition import Molecule
+from solid_cinel.core.material.crystal_symmetry import CrystalStructure
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.cinematic.frames import Neutron
-from scipy.constants import physical_constants as const
 import numpy as np
-from math import pi, cos, sin, acos, exp
 import pandas as pd
 import numba as nb
 import collections
+from typing import Iterable, Union, Dict
 from scipy.constants import c
-
+from scipy.constants import physical_constants as const
+from scipy.optimize import minimize
+from math import pi, cos, sin, acos, exp
 
 collections.Callable = collections.abc.Callable
 
@@ -27,97 +27,81 @@ kb = const["Boltzmann constant in eV/K"][0]
 BfacUnitChange = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
 BraggUnitChange = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
-
-class TargetMat(Solid):
+class Solid(CrystalStructure, Molecule):
     """
-    Class to store all the Target material methods and attributes.
-
-    Attributes
-    ----------
-    A : list[int]
-        Atomic number.
-    Z : list[int]
-        Number of protons.
-    dir_vec_length : iterable or `np.array` of size (1, 3)
-        Direct lattice vectors length in fm.
-    preferred_orientation : iterable or `np.array` of size (1, 3)
-        Direct lattice vectors angles in ª.
-    preferred_orientation : iterable or `np.array` of size (1, 3)
-        Preferred orientation of the target.
-    unit_pos : dict{"element name": 1D iterable}
-        Unitary positions of atoms in the lattice unit cell.
-    atom_mass : list[float]
-        Atom mass, amu.
-    b_coh : list[float]
-        Bound coherent scattering length (fm).
-    b_incoh : list[float]
-        Bound incoherent scattering length (fm).
-    rho_in_energy : list[1D iterable]
-        Density of states in energy, eV.
-    interv_in_energy : list[1D iterable]
-        Energy intervals in which the density of states is defined, eV.
-    energy_sup : float
-        Upper limit of the energy range, eV.
-    energyCut : float
-        Energy cut for the density of states, eV.
-
-    Methods
-    -------
-    get_Bfact: float or pd.Series
-        Calculate mean square displacement for a certain pdos information
-    get_multiplicity: pd.DataFrame
-        Obtain hkl data for the solid in a certain temperature and for a neutron
-        certain energy filtering with the multiplicity
-    get_BraggEdges: pd.DataFrame
-        Get Bragg Edges
-    get_XsCoh: pd.DataFrame
-        Get coherent xs for the materials in the class
-    get_Sab: pd.Series
-        Generate S(alpha, -beta) matrix for the materials in the class
-    get_inelastic_Xs: pd.DataFrame
-        Get inelastic Xs for the Target material based on the S(alpha, -beta)
+    Class for the solid structure. It is a combination of the crystal structure
+    and the molecule class with the addition of the preferred orientation and
+    the unit position of the atoms in the unit cell.
     """
-
-    def __init__(self, *args):
+    def __init__(self, unit_pos: Union[dict, Iterable], length: Iterable[float],
+                 angles: Iterable[float], preferred_orientation: Iterable,
+                 A: Iterable[int], Z: Iterable[int], M: Iterable[float], b_coh: Iterable[float],
+                 b_incoh: Iterable[float], pdos: [Pdos, dict[Pdos]] = None,
+                 name: str = None):
         """
-        Class to store all the Target material methods and atributtes.
+        Initialize the solid class
 
-        Parameters for Crys_atom
-        ------------------------
-        A : list[int]
-            Atomic number.
-        Z : list[int]
-            Number of protons.
-        dir_vec_length : iterable or `np.array` of size (1, 3)
-            Direct lattice vectors length in fm.
-        preferred_orientation : iterable or `np.array` of size (1, 3)
-            Direct lattice vectors angles in ª.
-        preferred_orientation : iterable or `np.array` of size (1, 3)
-            Preferred orientation of the target.
-        unit_pos : dict{"element name": 1D iterable}
-            Unitary positions of atoms in the lattice unit cell.
-        atom_mass : list[float]
-            Atom mass, amu.
-        b_coh : list[float]
-            Bound coherent scattering length (fm).
-        b_incoh : list[float]
-            Bound incoherent scattering length (fm).
-
-        Parameters for Pdos
-        ------------------------
-        rho : list of 1D iterable
-            rho values for each element.
-        interval_energy : list of 'float'
-            Energy interval in eV for each element.
+        Parameters
+        ----------
+        unit_pos : Union[dict, Iterable]
+            Position of the atoms in the unit cell.
+        length : Iterable[float]
+            direct vector lengths
+        angles : Iterable[float]
+            direct vector angles in degrees
+        preferred_orientation : Iterable
+            Preferred orientation of the solid.
+        A : Iterable[int]
+            Atomic number of the atoms in the unit cell.
+        Z : Iterable[int]
+            Number of atoms in the unit cell.
+        M : Iterable[float]
+            Atomic mass of the atoms in the unit cell.
+        b_coh : Iterable[float]
+            Coherent scattering length of the atoms in the unit cell.
+        b_incoh : Iterable[float]
+            Incoherent scattering length of the atoms in the unit cell.
+        name : str, optional
+            Name of the solid. The default is None.
         """
-        Solid.__init__(self, *args[0:9])
-        # Avoid data setter in Pdos:
-        if len(args) > 9:
-            self.compute_pdos(args[9])
+        # Initialize the parent classes
+        CrystalStructure.__init__(self, length, angles, preferred_orientation)
+        Molecule.__init__(self, A=A, Z=Z, M=M, b_coh=b_coh, b_incoh=b_incoh,
+                          name=name)
+
+        # Set the atom position in the unit cell:
+        self.set_unit_pos(unit_pos)
+
+        # Set the pdos information if it is available:
+        if pdos is not None:
+            self.set_pdos(pdos)
+
+    def set_unit_pos(self, unit_pos: Union[dict, Iterable]):
+        """
+        Set the position of the atoms in the unit cell.
+
+        Parameters
+        ----------
+        unit_pos : Union[dict, Iterable]
+            Position of the atoms in the unit cell.
+        """
+        col = pd.Index(["x", "y", "z"])
+        if isinstance(unit_pos, dict):
+            _unit_pos = {element: pd.DataFrame(single_unit_pos.reshape(-1, 3), columns=col)
+                         for element, single_unit_pos in unit_pos.items()}
         else:
-            self.pdos = None
+            _unit_pos = {self.name: pd.DataFrame(np.array(unit_pos).reshape(-1, 3), columns=col)}
+        self.unit_pos = pd.Series(_unit_pos)
 
-    def compute_pdos(self, pdosDict: [Pdos, dict[Pdos]]):
+    def set_pdos(self, pdosDict: [Pdos, dict[Pdos]]):
+        """
+        Set the pdos information of the atoms that form the solid.
+
+        Parameters
+        ----------
+        pdosDict : [Pdos, dict[Pdos]]
+            The pdos information of the atoms that form the solid.
+        """
         atoms = self.atoms.index
         if len(atoms) == 1:
             pdosCheck = pd.Series(pdosDict, index=atoms)
@@ -127,8 +111,69 @@ class TargetMat(Solid):
                 raise ValueError("The pdosDict must have the same elements as the object.")
         self.pdos = pdosCheck
 
+    @property
+    def atom_pos(self) -> pd.Series:
+        """
+        Position of atoms in the direct lattice.
 
-    def  get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
+        Returns
+        -------
+        "pd.Series"
+            Pandas series containnig the dataframe of the atom position in a
+            direct lattice cell for each atom.
+
+        Example
+        -------
+        Object initialization:
+        >>> from solid_cinel.data.materials.UO2 import *
+        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh)
+
+        >>> UO2.atom_pos["O16"].round(6)
+                  x         y         z
+        0  1.386952  1.386952  1.386952
+        1  4.160858  1.386952  1.386952
+        2  1.386953  4.160858  4.160858
+        3  4.160858  4.160858  4.160858
+        4  4.160858  1.386953  4.160858
+        5  1.386953  1.386953  4.160858
+        6  4.160858  4.160858  1.386952
+        7  1.386953  4.160858  1.386952
+
+        >>> UO2.atom_pos["U238"].round(6)
+                  x         y         z
+        0  2.773905  0.000000  0.000000
+        1  2.773905  2.773905  2.773905
+        2  0.000000  0.000000  2.773905
+        3  0.000000  2.773905  0.000000
+        """
+        return self.unit_pos.apply(lambda x: pd.DataFrame(x.values.dot(self.dir_vec),
+                                                          columns=x.columns))
+
+    @property
+    def atom_number(self) -> int:
+        """
+        Number of atoms in the unit cell.
+
+        Returns
+        -------
+        "int"
+            Number of atom in a molecule
+
+        Example
+        -------
+        Object initialization:
+        >>> from solid_cinel.data.materials.Al27 import *
+        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh)
+        >>> from solid_cinel.data.materials.UO2 import *
+        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh)
+
+        Test the results:
+        >>> assert Al.atom_number == 1
+        >>> assert UO2.atom_number == 12
+        """
+        return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
+
+    def get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
                   anstrom: bool = True) -> [float, pd.Series]:
         """
         Calculate mean square displacement for a certain pdos information.
@@ -155,11 +200,11 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh)
+        >>> Al = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh)
         >>> from solid_cinel.data.materials.UO2 import *
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
         >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-        >>> UO2 = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
         Test the results:
         >>> T = 20
@@ -182,12 +227,20 @@ class TargetMat(Solid):
         U238    0.340297
         dtype: float64
         """
+        # Check if the pdosDict is defined or initialized in the object
         if pdosDict is not None:
-            self.compute_pdos(pdosDict)
+            self.set_pdos(pdosDict)
         elif self.pdos is None:
             raise ValueError("The pdosDict must be defined or initialized in the object.")
-        Bfact = BfacUnitChange * self.pdos.apply(lambda x: x.DebyeWallerCoeff(T))
-        Bfact /= T * self.atoms.apply(lambda x: x.M)
+
+        # Get the Debye Waller coefficient for each atom for the give temperature:
+        DebyeWallerCoeff = self.pdos.apply(lambda x: x.fix_T(T).DebyeWallerCoeff)
+
+        # Get the mass of the atoms in the unit cell:
+        Matom = self.atoms.apply(lambda x: x.M)
+
+        # Calculate the B factor for each atom:
+        Bfact = BfacUnitChange * DebyeWallerCoeff / (T * Matom)
         return Bfact * 1.0e20 if anstrom else Bfact
 
     def get_multiplicity(self, energyCut: float, T: float,
@@ -224,7 +277,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
 
         Test the results:
         >>> T = 20
@@ -264,295 +317,16 @@ class TargetMat(Solid):
                                   self.reciproc_vec.values,
                                   self.get_Bfact(T, **kwargs),
                                   self.atom_pos,
-                                  self.atoms.apply(lambda x: x.b["b_coh"]),
+                                  self.atoms.apply(lambda x: x.b_coh),
                                   self.preferred_orientation.values,
                                   precision)
-        return hkl_data.sort_values(by=["h", "k", "l"])\
-                       .set_index(["h", "k", "l"])
+        return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
-    @staticmethod
-    def _get_pddf(data: pd.DataFrame, kind: str = None, pddf_val: str = None) -> pd.DataFrame:
-        """
-        Add to the hkl data dataframe the Pole Density Distribution Function.
-        March-dollase:
-            .. math::
-                \mathcal{P}_{hkl}(\Theta)=(P_1^2\cos^2(\Theta)+P_1^{-1}\sin^2(\Theta))^{-3/2}.
-        Altomare:
-            .. math::
-                \mathcal{P}_{hkl}(\Theta)=\exp(P_1\cos(2\Theta))
-        cvc:
-            .. math::
-                \mathcal{P}_{hkl}(\Theta)=\exp(-P_1(1-\cos^{P_2}(\Theta)))
-
-        Parameters
-        ----------
-        data: 'pd.DataFrame', (N, M)
-            Frame with hkl data.
-        kind : 'str', optional
-            key to calculate PDDF. The default is None. Options:
-                - march_dollase
-                - altomare
-                - cvc
-        pddf_val : 1D iterable, optional
-            Value to calculate PDDF. The default is None. Options:
-                - march-dollase : shape(1, 1)
-                - altomare: shape(1, 2)
-                - cvc: shape(1, 2)
-
-        Returns
-        -------
-        "pd.DataFrame", (N, M + 1)
-            Pole Density Distribution Function column
-
-        Example
-        -------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
-        >>> T = 20
-        >>> energyCut = 2.301
-        >>> multiplicity = Al.get_multiplicity(energyCut, T)
-        >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity
-        h k l
-        1 1 0  2.019999  0.115016         125.264390           6.0
-            1  2.332494  0.115989          70.528779           8.0
-        2 1 1  1.428355  0.111207          90.000000          12.0
-          2 0  1.010000  0.103962         125.264390           6.0
-            1  1.218106  0.108433         100.024988          24.0
-            2  1.166247  0.107523          70.528779           8.0
-        3 2 1  0.903371  0.100519         104.963217          24.0
-            2  0.926839  0.101369          82.388621          24.0
-          3 2  0.824661  0.097189          90.000000          24.0
-            3  0.777498  0.094765          70.528779          32.0
-
-        Test the results:
-        >>> TargetMat._get_pddf(multiplicity).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity  PDDF
-        h k l
-        1 1 0  2.019999  0.115016                0.0           6.0   1.0
-            1  2.332494  0.115989                0.0           8.0   1.0
-        2 1 1  1.428355  0.111207                0.0          12.0   1.0
-          2 0  1.010000  0.103962                0.0           6.0   1.0
-            1  1.218106  0.108433                0.0          24.0   1.0
-            2  1.166247  0.107523                0.0           8.0   1.0
-        3 2 1  0.903371  0.100519                0.0          24.0   1.0
-            2  0.926839  0.101369                0.0          24.0   1.0
-          3 2  0.824661  0.097189                0.0          24.0   1.0
-            3  0.777498  0.094765                0.0          32.0   1.0
-
-        >>> multiplicity = Al.get_multiplicity(energyCut, T)
-        >>> TargetMat._get_pddf(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity      PDDF
-        h k l
-        1 1 0  2.019999  0.115016         125.264390           6.0  0.464758
-            1  2.332494  0.115989          70.528779           8.0  1.193243
-        2 1 1  1.428355  0.111207          90.000000          12.0  2.828427
-          2 0  1.010000  0.103962         125.264390           6.0  0.464758
-            1  1.218106  0.108433         100.024988          24.0  2.119463
-            2  1.166247  0.107523          70.528779           8.0  1.193243
-        3 2 1  0.903371  0.100519         104.963217          24.0  1.592384
-            2  0.926839  0.101369          82.388621          24.0  2.377318
-          3 2  0.824661  0.097189          90.000000          24.0  2.828427
-            3  0.777498  0.094765          70.528779          32.0  1.193243
-
-        >>> multiplicity = Al.get_multiplicity(energyCut, T)
-        >>> TargetMat._get_pddf(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity      PDDF
-        h k l
-        1 1 0  2.019999  0.115016         125.264390           6.0  1.716531
-            1  2.332494  0.115989          70.528779           8.0  1.459426
-        2 1 1  1.428355  0.111207          90.000000          12.0  1.367879
-          2 0  1.010000  0.103962         125.264390           6.0  1.716531
-            1  1.218106  0.108433         100.024988          24.0  1.390865
-            2  1.166247  0.107523          70.528779           8.0  1.459426
-        3 2 1  0.903371  0.100519         104.963217          24.0  1.420350
-            2  0.926839  0.101369          82.388621          24.0  1.381017
-          3 2  0.824661  0.097189          90.000000          24.0  1.367879
-            3  0.777498  0.094765          70.528779          32.0  1.459426
-
-        >>> multiplicity = Al.get_multiplicity(energyCut, T)
-        >>> TargetMat._get_pddf(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity      PDDF
-        h k l
-        1 1 0  2.019999  0.115016         125.264390           6.0  0.206522
-            1  2.332494  0.115989          70.528779           8.0  0.513417
-        2 1 1  1.428355  0.111207          90.000000          12.0  0.367879
-          2 0  1.010000  0.103962         125.264390           6.0  0.206522
-            1  1.218106  0.108433         100.024988          24.0  0.309104
-            2  1.166247  0.107523          70.528779           8.0  0.513417
-        3 2 1  0.903371  0.100519         104.963217          24.0  0.284165
-            2  0.926839  0.101369          82.388621          24.0  0.419981
-          3 2  0.824661  0.097189          90.000000          24.0  0.367879
-            3  0.777498  0.094765          70.528779          32.0  0.513417
-        """
-        orientation_angle = np.deg2rad(data.loc[:, "Orientation angle"])
-
-        if kind is None:
-            data["Orientation angle"] = 0.
-            data["PDDF"] = 1.
-
-        elif kind.lower() == 'march-dollase' and isinstance(pddf_val, (int, float)):
-            value = (pddf_val * np.cos(orientation_angle)) ** 2
-            value += np.sin(orientation_angle) ** 2 / pddf_val
-            data["PDDF"] = value ** (-1.5)
-
-        elif kind.lower() == 'altomare' and len(pddf_val) == 2:
-            value = pddf_val[0] * np.cos(2 * orientation_angle)
-            data["PDDF"] = np.exp(value) + pddf_val[1]
-
-        elif kind.lower() == 'cvc' and len(pddf_val) == 2:
-            value = pddf_val[0] * (1 - np.cos(orientation_angle) ** pddf_val[1])
-            data["PDDF"] = np.exp(- value)
-
-        else:
-            ValueError("Introduced kind is not available")
-        return data
-
-    @staticmethod
-    def _get_difracAngles(data: pd.DataFrame, energyCut: float) -> pd.DataFrame:
-        """
-        Add to the hkl data dataframe the difraction angles(ª) vs hkl data.
-        .. math::
-            2\theta_{hkl}=\arccos\left(1-\dfrac{\pi^2\hbar^2}{md_{hkl}^2E}\right)
-
-        Parameters
-        ----------
-        data: 'pd.DataFrame', (N, M)
-            Frame with hkl data.
-        energyCut : 'float'
-            Energy cut for d espace in eV
-
-        Returns
-        -------
-        "pd.DataFrame", (N, M + 1)
-            Difraction angle column.
-
-        Example
-        -------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
-        >>> T = 20
-        >>> energyCut = 2.301
-        >>> multiplicity = Al.get_multiplicity(energyCut, T)
-        >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity
-        h k l
-        1 1 0  2.019999  0.115016         125.264390           6.0
-            1  2.332494  0.115989          70.528779           8.0
-        2 1 1  1.428355  0.111207          90.000000          12.0
-          2 0  1.010000  0.103962         125.264390           6.0
-            1  1.218106  0.108433         100.024988          24.0
-            2  1.166247  0.107523          70.528779           8.0
-        3 2 1  0.903371  0.100519         104.963217          24.0
-            2  0.926839  0.101369          82.388621          24.0
-          3 2  0.824661  0.097189          90.000000          24.0
-            3  0.777498  0.094765          70.528779          32.0
-
-        Test the results:
-        >>> TargetMat._get_difracAngles(multiplicity, energyCut).iloc[:10] #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity     theta
-        h k l
-        1 1 0  2.019999  0.115016         125.264390           6.0   5.350060
-            1  2.332494  0.115989          70.528779           8.0   4.632867
-        2 1 1  1.428355  0.111207          90.000000          12.0   7.568882
-          2 0  1.010000  0.103962         125.264390           6.0  10.711827
-            1  1.218106  0.108433         100.024988          24.0   8.877727
-            2  1.166247  0.107523          70.528779           8.0   9.273329
-        3 2 1  0.903371  0.100519         104.963217          24.0  11.980567
-            2  0.926839  0.101369          82.388621          24.0  11.676144
-          3 2  0.824661  0.097189          90.000000          24.0  13.128861
-            3  0.777498  0.094765          70.528779          32.0  13.929091
-
-        """
-        d = data.loc[:, "d"]
-        angle_value = np.clip(1 - pi ** 2 * BraggUnitChange / (d ** 2 * energyCut),
-                              -1, 1)
-        data["theta"] = np.rad2deg(np.arccos(angle_value))
-        return data
-
-    @staticmethod
-    def _get_BraggEdgesXs(data: pd.DataFrame, unit_cell_vol: float,
-                           atom_number: int,
-                           threshold: float = 1.e-30) -> pd.DataFrame:
-        """
-        Add to the hkl data dataframe the cross section related with the
-        Bragg Edges.
-        .. math::
-            \sigma_{\textrm{coh}}^{\textrm{el}}(E_{hkl})=\dfrac{\pi^2\hbar^2}{mN_{uc}V_{uc}E_{hkl}}M_{hkl}d_{hkl}\left|F(\vec{\tau}_{hkl})\right|^2\mathcal{P}_{hkl}(\Theta_{hkl})
-
-        Parameters
-        ----------
-        data: 'pd.DataFrame', (N, M)
-            Frame with hkl data.
-        unit_cell_vol : 'float'
-            Unit cell volume.
-        atom_number : 'int'
-            The number of atoms in the unit cell.
-        threshold : 'float', optional
-            Minimun value of xs. The default is 1.e-30.
-
-        Returns
-        -------
-        "pd.DataFrame", (N, M + 1)
-            Xs related to the Bragg Edges.
-
-        Example
-        -------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
-        >>> T = 20
-        >>> energyCut = 2.301
-        >>> unit_cell_vol = Al.unit_cell_vol
-        >>> atom_number = Al.atom_number
-        >>> BraggEdges = Al.get_BraggEdges(energyCut, T, xs=False, theta=False)
-        >>> BraggEdges.iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
-                      d       Fsq  Orientation angle  Multiplicity  PDDF         E
-        h k l
-        1 1 1  2.332494  0.115989                0.0           8.0   1.0  0.003759
-            0  2.019999  0.115016                0.0           6.0   1.0  0.005012
-        2 1 1  1.428355  0.111207                0.0          12.0   1.0  0.010024
-          2 1  1.218106  0.108433                0.0          24.0   1.0  0.013783
-            2  1.166247  0.107523                0.0           8.0   1.0  0.015036
-            0  1.010000  0.103962                0.0           6.0   1.0  0.020048
-        3 2 2  0.926839  0.101369                0.0          24.0   1.0  0.023807
-            1  0.903371  0.100519                0.0          24.0   1.0  0.025060
-          3 2  0.824661  0.097189                0.0          24.0   1.0  0.030072
-            3  0.777498  0.094765                0.0          32.0   1.0  0.033831
-
-        Test the results:
-        >>> TargetMat._get_BraggEdgesXs(BraggEdges, unit_cell_vol, atom_number).loc[::, "Xs"].iloc[:10]  #doctest: +NORMALIZE_WHITESPACE
-        h  k  l
-        1  1  1    0.005370
-              0    0.003459
-        2  1  1    0.004729
-           2  1    0.007865
-              2    0.002489
-              0    0.001563
-        3  2  2    0.005595
-              1    0.005407
-           3  2    0.004773
-              3    0.005850
-        Name: Xs, dtype: float64
-        """
-        if "PDDF" not in data.columns:
-            TargetMat.get_pddf(data)
-        data["Xs"] = data["d"] * data["Fsq"] * data["Multiplicity"] * data["PDDF"]
-        data["Xs"] *= BraggUnitChange * pi ** 2 / (unit_cell_vol * atom_number)
-        if threshold:
-            data.loc[data["Xs"] < threshold, "Xs"] = 0.0
-        return data
-
-    def get_BraggEdges(self, *args, xs: bool = True, file_BraggEdges: str = None,
-                       theta: bool = True, **kwargs) -> pd.DataFrame:
+    def get_BraggEdges(self, energyCut: float, T: float,
+                       xs: bool = True, file_BraggEdges: str = None,
+                       difracAngles: bool = True, precision = [6, 6],
+                       pddf_kind: str = None, pddf_val: str = None,
+                       threshold: float = 1.e-30) -> pd.DataFrame:
         """
         Get BraggEdges.
         .. math::
@@ -608,7 +382,7 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> T = 20
         >>> energyCut = 2.301
 
@@ -642,32 +416,36 @@ class TargetMat(Solid):
             3   1.0  0.033831  0.005850  13.929091
         """
         # Get multiplicity
-        precision = kwargs.pop("precision", [6, 6])
-        data = self.get_multiplicity(*args, precision=precision)
+        multiplicity = self.get_multiplicity(energyCut, T, precision=precision)
 
         # Get PDDF:
-        self._get_pddf(data, kwargs.pop("kind", None), kwargs.pop("pddf_val", None))
+        add_pddfToMultiplicity(multiplicity, pddf_kind,  pddf_val)
 
-        # Get Bragg Edges:
-        data["E"] = pi ** 2 * BraggUnitChange / (2 * data["d"] ** 2)
-        data.sort_values(by=["E"], inplace=True)
+        # Get Bragg Edges energy:
+        multiplicity["E"] = pi ** 2 * BraggUnitChange
+        multiplicity["E"] /= 2 * multiplicity["d"] ** 2
+
+        # Sort the data by energy
+        multiplicity.sort_values(by=["E"], inplace=True)
 
         # Optional argument:
         # Xs:
         if xs:
-            self._get_BraggEdgesXs(data, self.unit_cell_vol, self.atom_number,
-                                   threshold=kwargs.get("threshold", 1.e-30))
+            add_BraggEdgesXsToMultiplicity(multiplicity, self.unitCellVol,
+                                           self.atom_number, threshold)
 
         # difraction angles vs hkl data
-        if theta:
-            self._get_difracAngles(data, args[0])
+        if difracAngles:
+            add_difracAnglesToMultiplicity(multiplicity, energyCut)
 
         # Get the final result
-        if file_BraggEdges:
-            data.to_csv(file_BraggEdges, sep='\t', float_format="%20.10e")
-        return data
+        if file_BraggEdges is not None:
+            multiplicity.to_csv(file_BraggEdges, sep='\t', float_format="%20.10e")
+        return multiplicity
 
-    def get_XsCoh(self, energyCut: float, *args, file_Xs: str = None, **kwargs) -> pd.Series:
+    def get_XsCoh(self, energyCut: float, T: float, precision = [6, 6],
+                  pddf_kind: str = None, pddf_val: str = None,
+                  threshold: float = 1.e-30, file_Xs: str = None) -> pd.Series:
         """
         Get coherent Xs.
 
@@ -723,11 +501,11 @@ class TargetMat(Solid):
         >>> from solid_cinel.data.materials.Al27 import *
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
         >>> from solid_cinel.data.materials.UO2 import *
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
         >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-        >>> UO2 = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
         Test the results:
         >>> T = 20
@@ -761,7 +539,9 @@ class TargetMat(Solid):
         Name: Xs, dtype: float64
         """
         # Get the Bragg Edges
-        BraggEdgesXs = self.get_BraggEdges(energyCut, *args, **kwargs)
+        BraggEdgesXs = self.get_BraggEdges(energyCut, T, xs=True, difracAngles=False,
+                                           pddf_kind=pddf_kind, pddf_val=pddf_val,
+                                           threshold=threshold)
 
         # Extract the energy and cross-section information and convert to a Series
         xs = BraggEdgesXs.loc[:, ["E", "Xs"]].set_index("E").iloc[::, 0]
@@ -781,6 +561,334 @@ class TargetMat(Solid):
             xs.to_csv(file_Xs, sep='\t', float_format="%20.10e")
 
         return xs
+
+
+def add_pddfToMultiplicity(multiplicity: pd.DataFrame, kind: str = None,
+                           pddf_val: str = None) -> pd.DataFrame:
+    """
+    Add to the hkl data dataframe the Pole Density Distribution Function.
+    March-dollase:
+        .. math::
+            \mathcal{P}_{hkl}(\Theta)=(P_1^2\cos^2(\Theta)+P_1^{-1}\sin^2(\Theta))^{-3/2}.
+    Altomare:
+        .. math::
+            \mathcal{P}_{hkl}(\Theta)=\exp(P_1\cos(2\Theta))
+    cvc:
+        .. math::
+            \mathcal{P}_{hkl}(\Theta)=\exp(-P_1(1-\cos^{P_2}(\Theta)))
+
+    Parameters
+    ----------
+    multiplicity: 'pd.DataFrame', (N, M)
+        Frame with hkl data.
+    kind : 'str', optional
+        key to calculate PDDF. The default is None. Options:
+            - march_dollase
+            - altomare
+            - cvc
+    pddf_val : 1D iterable, optional
+        Value to calculate PDDF. The default is None. Options:
+            - march-dollase : shape(1, 1)
+            - altomare: shape(1, 2)
+            - cvc: shape(1, 2)
+
+    Returns
+    -------
+    "pd.DataFrame", (N, M + 1)
+        Pole Density Distribution Function column
+
+    Example
+    -------
+    Object initialization:
+    >>> from solid_cinel.data.materials.Al27 import *
+    >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> T = 20
+    >>> energyCut = 2.301
+    >>> multiplicity = Al.get_multiplicity(energyCut, T)
+    >>> multiplicity.iloc[:10]
+                  d       Fsq  Orientation angle  Multiplicity
+    h k l
+    1 1 0  2.019999  0.115016         125.264390           6.0
+        1  2.332494  0.115989          70.528779           8.0
+    2 1 1  1.428355  0.111207          90.000000          12.0
+      2 0  1.010000  0.103962         125.264390           6.0
+        1  1.218106  0.108433         100.024988          24.0
+        2  1.166247  0.107523          70.528779           8.0
+    3 2 1  0.903371  0.100519         104.963217          24.0
+        2  0.926839  0.101369          82.388621          24.0
+      3 2  0.824661  0.097189          90.000000          24.0
+        3  0.777498  0.094765          70.528779          32.0
+
+    Test the results:
+    >>> add_pddfToMultiplicity(multiplicity).iloc[:10]
+                  d       Fsq  Orientation angle  Multiplicity  PDDF
+    h k l
+    1 1 0  2.019999  0.115016                0.0           6.0   1.0
+        1  2.332494  0.115989                0.0           8.0   1.0
+    2 1 1  1.428355  0.111207                0.0          12.0   1.0
+      2 0  1.010000  0.103962                0.0           6.0   1.0
+        1  1.218106  0.108433                0.0          24.0   1.0
+        2  1.166247  0.107523                0.0           8.0   1.0
+    3 2 1  0.903371  0.100519                0.0          24.0   1.0
+        2  0.926839  0.101369                0.0          24.0   1.0
+      3 2  0.824661  0.097189                0.0          24.0   1.0
+        3  0.777498  0.094765                0.0          32.0   1.0
+
+    >>> multiplicity = Al.get_multiplicity(energyCut, T)
+    >>> add_pddfToMultiplicity(multiplicity, kind='march-dollase', pddf_val=2).iloc[:10]
+                  d       Fsq  Orientation angle  Multiplicity      PDDF
+    h k l
+    1 1 0  2.019999  0.115016         125.264390           6.0  0.464758
+        1  2.332494  0.115989          70.528779           8.0  1.193243
+    2 1 1  1.428355  0.111207          90.000000          12.0  2.828427
+      2 0  1.010000  0.103962         125.264390           6.0  0.464758
+        1  1.218106  0.108433         100.024988          24.0  2.119463
+        2  1.166247  0.107523          70.528779           8.0  1.193243
+    3 2 1  0.903371  0.100519         104.963217          24.0  1.592384
+        2  0.926839  0.101369          82.388621          24.0  2.377318
+      3 2  0.824661  0.097189          90.000000          24.0  2.828427
+        3  0.777498  0.094765          70.528779          32.0  1.193243
+
+    >>> multiplicity = Al.get_multiplicity(energyCut, T)
+    >>> add_pddfToMultiplicity(multiplicity, kind='altomare', pddf_val=[1, 1]).iloc[:10]
+                  d       Fsq  Orientation angle  Multiplicity      PDDF
+    h k l
+    1 1 0  2.019999  0.115016         125.264390           6.0  1.716531
+        1  2.332494  0.115989          70.528779           8.0  1.459426
+    2 1 1  1.428355  0.111207          90.000000          12.0  1.367879
+      2 0  1.010000  0.103962         125.264390           6.0  1.716531
+        1  1.218106  0.108433         100.024988          24.0  1.390865
+        2  1.166247  0.107523          70.528779           8.0  1.459426
+    3 2 1  0.903371  0.100519         104.963217          24.0  1.420350
+        2  0.926839  0.101369          82.388621          24.0  1.381017
+      3 2  0.824661  0.097189          90.000000          24.0  1.367879
+        3  0.777498  0.094765          70.528779          32.0  1.459426
+
+    >>> multiplicity = Al.get_multiplicity(energyCut, T)
+    >>> add_pddfToMultiplicity(multiplicity, kind='cvc', pddf_val=[1, 1]).iloc[:10]
+                  d       Fsq  Orientation angle  Multiplicity      PDDF
+    h k l
+    1 1 0  2.019999  0.115016         125.264390           6.0  0.206522
+        1  2.332494  0.115989          70.528779           8.0  0.513417
+    2 1 1  1.428355  0.111207          90.000000          12.0  0.367879
+      2 0  1.010000  0.103962         125.264390           6.0  0.206522
+        1  1.218106  0.108433         100.024988          24.0  0.309104
+        2  1.166247  0.107523          70.528779           8.0  0.513417
+    3 2 1  0.903371  0.100519         104.963217          24.0  0.284165
+        2  0.926839  0.101369          82.388621          24.0  0.419981
+      3 2  0.824661  0.097189          90.000000          24.0  0.367879
+        3  0.777498  0.094765          70.528779          32.0  0.513417
+    """
+    orientation_angle = np.deg2rad(multiplicity.loc[:, "Orientation angle"])
+
+    if kind is None:
+        multiplicity["Orientation angle"] = 0.
+        multiplicity["PDDF"] = 1.
+
+    elif kind.lower() == 'march-dollase' and isinstance(pddf_val, (int, float)):
+        value = (pddf_val * np.cos(orientation_angle)) ** 2
+        value += np.sin(orientation_angle) ** 2 / pddf_val
+        multiplicity["PDDF"] = value ** (-1.5)
+
+    elif kind.lower() == 'altomare' and len(pddf_val) == 2:
+        value = pddf_val[0] * np.cos(2 * orientation_angle)
+        multiplicity["PDDF"] = np.exp(value) + pddf_val[1]
+
+    elif kind.lower() == 'cvc' and len(pddf_val) == 2:
+        value = pddf_val[0] * (1 - np.cos(orientation_angle) ** pddf_val[1])
+        multiplicity["PDDF"] = np.exp(- value)
+
+    else:
+        ValueError("Introduced kind is not available")
+    return multiplicity
+
+def add_difracAnglesToMultiplicity(multiplicity: pd.DataFrame,
+                                       energyCut: float) -> pd.DataFrame:
+    """
+    Add to the hkl data dataframe the difraction angles(ª) vs hkl data.
+    .. math::
+        2\theta_{hkl}=\arccos\left(1-\dfrac{\pi^2\hbar^2}{md_{hkl}^2E}\right)
+
+    Parameters
+    ----------
+    multiplicity: 'pd.DataFrame', (N, M)
+        Frame with hkl data.
+    energyCut : 'float'
+        Energy cut for d espace in eV
+
+    Returns
+    -------
+    "pd.DataFrame", (N, M + 1)
+        Difraction angle column.
+
+    Example
+    -------
+    Object initialization:
+    >>> from solid_cinel.data.materials.Al27 import *
+    >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> T = 20
+    >>> energyCut = 2.301
+    >>> multiplicity = Al.get_multiplicity(energyCut, T)
+    >>> multiplicity.iloc[:10] #doctest: +NORMALIZE_WHITESPACE
+                  d       Fsq  Orientation angle  Multiplicity
+    h k l
+    1 1 0  2.019999  0.115016         125.264390           6.0
+        1  2.332494  0.115989          70.528779           8.0
+    2 1 1  1.428355  0.111207          90.000000          12.0
+      2 0  1.010000  0.103962         125.264390           6.0
+        1  1.218106  0.108433         100.024988          24.0
+        2  1.166247  0.107523          70.528779           8.0
+    3 2 1  0.903371  0.100519         104.963217          24.0
+        2  0.926839  0.101369          82.388621          24.0
+      3 2  0.824661  0.097189          90.000000          24.0
+        3  0.777498  0.094765          70.528779          32.0
+
+    Test the results:
+    >>> add_difracAnglesToMultiplicity(multiplicity, energyCut).iloc[:10]
+                  d       Fsq  Orientation angle  Multiplicity     theta
+    h k l
+    1 1 0  2.019999  0.115016         125.264390           6.0   5.350060
+        1  2.332494  0.115989          70.528779           8.0   4.632867
+    2 1 1  1.428355  0.111207          90.000000          12.0   7.568882
+      2 0  1.010000  0.103962         125.264390           6.0  10.711827
+        1  1.218106  0.108433         100.024988          24.0   8.877727
+        2  1.166247  0.107523          70.528779           8.0   9.273329
+    3 2 1  0.903371  0.100519         104.963217          24.0  11.980567
+        2  0.926839  0.101369          82.388621          24.0  11.676144
+      3 2  0.824661  0.097189          90.000000          24.0  13.128861
+        3  0.777498  0.094765          70.528779          32.0  13.929091
+
+    """
+    d = multiplicity.loc[:, "d"]
+    angle_value = np.clip(1 - pi ** 2 * BraggUnitChange / (d ** 2 * energyCut),
+                          -1, 1)
+    multiplicity["theta"] = np.rad2deg(np.arccos(angle_value))
+    return multiplicity
+
+
+def add_BraggEdgesXsToMultiplicity(multiplicity: pd.DataFrame, unitCellVol: float,
+                                   atom_number: int, threshold: float = 1.e-30) -> pd.DataFrame:
+    """
+    Add to the hkl data dataframe the cross section related with the
+    Bragg Edges.
+    .. math::
+        \sigma_{\textrm{coh}}^{\textrm{el}}(E_{hkl})=\dfrac{\pi^2\hbar^2}{mN_{uc}V_{uc}E_{hkl}}M_{hkl}d_{hkl}\left|F(\vec{\tau}_{hkl})\right|^2\mathcal{P}_{hkl}(\Theta_{hkl})
+
+    Parameters
+    ----------
+    multiplicity: 'pd.DataFrame', (N, M)
+        Frame with hkl data.
+    unitCellVol : 'float'
+        Unit cell volume.
+    atom_number : 'int'
+        The number of atoms in the unit cell.
+    threshold : 'float', optional
+        Minimun value of xs. The default is 1.e-30.
+
+    Returns
+    -------
+    "pd.DataFrame", (N, M + 1)
+        Xs related to the Bragg Edges.
+
+    Example
+    -------
+    Object initialization:
+    >>> from solid_cinel.data.materials.Al27 import *
+    >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
+    >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> T = 20
+    >>> energyCut = 2.301
+    >>> unit_cell_vol = Al.unitCellVol
+    >>> atom_number = Al.atom_number
+
+    # Calculate Multiplicity, PDDF and Xs:
+    >>> multiplicity = Al.get_multiplicity(energyCut, T)
+    >>> multiplicity = add_pddfToMultiplicity(multiplicity)
+    >>> multiplicity = add_BraggEdgesXsToMultiplicity(multiplicity, unit_cell_vol, atom_number)
+
+    Test the results:
+    >>> multiplicity.loc[::, "Xs"].iloc[:10]
+    h  k  l
+    1  1  0    0.003459
+          1    0.005370
+    2  1  1    0.004729
+       2  0    0.001563
+          1    0.007865
+          2    0.002489
+    3  2  1    0.005407
+          2    0.005595
+       3  2    0.004773
+          3    0.005850
+    Name: Xs, dtype: float64
+    """
+    # Check if the PDDF is defined in the multiplicity dataframe
+    if "PDDF" not in multiplicity.columns:
+        raise ValueError("The PDDF column is not defined in the multiplicity dataframe.")
+
+    # Calculate the cross section related with the Bragg Edges:
+    multiplicity["Xs"] = multiplicity["d"] * multiplicity["Fsq"]
+    multiplicity["Xs"] *= multiplicity["Multiplicity"] * multiplicity["PDDF"]
+    multiplicity["Xs"] *= BraggUnitChange * pi ** 2
+    multiplicity["Xs"] /= unitCellVol * atom_number
+
+    # Set the threshold value
+    if threshold:
+        multiplicity.loc[multiplicity["Xs"] < threshold, "Xs"] = 0.0
+
+    return multiplicity
+
+
+def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
+                  precision: float = 1.0e-7) -> np.ndarray:
+    """
+    Get the maximun h, k and l integers for the constrain of d > d_min.
+
+    Parameters
+    ----------
+    rec_vecs : 'np.ndarray', (3, 3)
+        Reciprocal vectors.
+    d_min : 'float'
+        The minimun d space.
+    precision: "float", optional
+        Precision of the minimization problem. The default is 1.0e-7.
+
+    Returns
+    -------
+    "np.ndarray", (3,)
+        Array with the integers of the maximum hkl planes.
+
+    Example
+    -------
+    Object initialization:
+    >>> from solid_cinel.data.materials.Al27 import *
+    >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, preferred_orientation)
+    >>> rec_vecs = crys.reciproc_vec.values
+    >>> d_min = 0.2360746677309732
+    >>> hkl_max_value(rec_vecs, d_min)
+    array([12, 12, 12])
+    """
+    def hkl_range_minimization(x, i):
+        return x[i]
+
+    def constrain(x, d_min):
+        vec_tau_hkl = x[0] * rec_vecs[0] + x[1] * rec_vecs[1] + x[2] * rec_vecs[2]
+        vec_tau_hkl_norm = np.linalg.norm(vec_tau_hkl)
+        d_hkl = 2 * np.pi / vec_tau_hkl_norm
+        return d_hkl - d_min
+    result = []
+    for i in range(3):
+        result.append(minimize(lambda x: hkl_range_minimization(x, i),
+                               [-100, -100, -100],
+                               method='COBYLA',
+                               constraints=({'type': 'ineq', 'fun': constrain, 'args': [d_min]})).x)
+    confidance = np.array(list(map(lambda x: constrain(x, d_min), result)))
+    hkl_max = abs(np.array(result).diagonal().astype(int))
+    return np.where(abs(confidance) <= precision,  hkl_max, 100)
 
 
 def numba_hkl_data(d_min: float, rec_vecs: np.ndarray, Bfac: pd.Series,
@@ -822,11 +930,11 @@ def numba_hkl_data(d_min: float, rec_vecs: np.ndarray, Bfac: pd.Series,
     >>> from solid_cinel.data.materials.Al27 import *
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
     >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> Al = TargetMat(unit_pos_Al27, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> Al = Solid(unit_pos_Al27, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
     >>> from solid_cinel.data.materials.UO2 import *
     >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
     >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-    >>> UO2 = TargetMat(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+    >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
     Test the results:
     >>> T = 20

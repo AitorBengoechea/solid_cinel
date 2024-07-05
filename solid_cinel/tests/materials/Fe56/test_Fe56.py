@@ -6,7 +6,7 @@ Created on Fri Nov 25 14:52:18 2022
 from scipy.integrate import trapezoid
 """
 import pandas as pd
-from solid_cinel import TargetMat, Alpha, Beta, Pdos, Sab
+from solid_cinel import Solid, Alpha, Beta, Pdos, Sab
 from scipy.integrate import trapezoid
 import pytest
 import os
@@ -19,7 +19,7 @@ from examples import *
 
 # Target material
 pdosFe56 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-Fe = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
+Fe = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
                A, Z, atomic_mass, b_coh, b_incoh, pdosFe56)
 
 

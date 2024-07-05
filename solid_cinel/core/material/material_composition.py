@@ -251,6 +251,7 @@ class Atom:
         ])
         return info_str
 
+
 @dataclass
 class Molecule:
     """
@@ -313,7 +314,7 @@ class Molecule:
 
         # Set the molecule name if not provided
         if self.name is None:
-            self.name = "Molecule" if self.atomNum > 1 else self.atoms[0].name
+            self.name = "Molecule" if self.atomNum > 1 else atom.name
 
     @classmethod
     def from_file(cls, file_path: str) -> "Molecule":

@@ -28,7 +28,7 @@ class CrystalStructure:
         Vectors of the direct lattice with the keys ["a1", "a2", "a3"]
     reciproc_vec -> pd.DataFrame
         Vectors of the reciprocal lattice with the keys ["b1", "b2", "b3"]
-    unit_cell_vol -> float
+    unitCellVol -> float
         Unit cell volume
     """
 
@@ -125,7 +125,7 @@ class CrystalStructure:
         return self.operator * self.length.values
 
     @property
-    def unit_cell_vol(self) -> float:
+    def unitCellVol(self) -> float:
         """
         Unit cell volume.
 
@@ -144,7 +144,7 @@ class CrystalStructure:
         >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, proferred_orientation)
 
         Test the results:
-        >>> assert crys.unit_cell_vol.round(6) == 16.484804
+        >>> assert crys.unitCellVol.round(6) == 16.484804
         """
         vec = self.dir_vec
         return np.dot(vec.loc["a1"], np.cross(vec.loc["a2"], vec.loc["a3"]))
@@ -180,7 +180,7 @@ class CrystalStructure:
             np.cross(dir_vec.loc["a3"], dir_vec.loc["a1"]),
             np.cross(dir_vec.loc["a1"], dir_vec.loc["a2"]),
                                ])
-        reci_coeff *= 2 * np.pi / self.unit_cell_vol
+        reci_coeff *= 2 * np.pi / self.unitCellVol
         return pd.DataFrame(reci_coeff, index=["b1", "b2", "b3"], columns=dir_vec.index)
 
     @classmethod

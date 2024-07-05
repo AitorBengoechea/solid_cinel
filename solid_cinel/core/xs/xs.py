@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc
 from solid_cinel.core.xs.dxs import Dxs
-from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import interpolation
 from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
 import warnings

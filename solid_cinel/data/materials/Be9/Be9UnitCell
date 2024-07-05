@@ -3,3 +3,5 @@
 2.271566 2.271566 3.545935
 # Direct vector angles: (alpha, beta, gamma)
 90 90 120
+# Preferred orientation:
+0 0 1

@@ -5,6 +5,7 @@ Python file for working with crystal structures.
 """
 import numpy as np
 import pandas as pd
+from math import cos, sin, sqrt
 from typing import Iterable
 
 
@@ -31,7 +32,8 @@ class CrystalStructure:
         Unit cell volume
     """
 
-    def __init__(self, length: Iterable, angles: Iterable):
+    def __init__(self, length: Iterable, angles: Iterable,
+                 preferred_orientation: Iterable):
         """
         Initialize the crystal structure class with the direct vector lengths.
         and angles
@@ -43,28 +45,22 @@ class CrystalStructure:
         angles : Iterable, (3,)
             direct vector angles in degrees
         """
-        self.get_length(length)
-        self.get_angle(angles)
+        # Define the direct vectors length:
+        self.length = pd.Series(length,
+                                index=["a", "b", "c"],
+                                name="direct vectors length")
 
-
-    def get_length(self, length: Iterable):
-        """
-        Get the direct vector lengths.
-        """
-        if len(length) != 3:
-            ValueError("The direct vector lengths array do not have the apropiate lenght")
-
-        self.length = pd.Series(length, index=["a", "b", "c"], name="direct vectors length")
-
-    def get_angle(self, angles: Iterable):
-        """
-        Get the direct vector angles.
-        """
-        if len(angles) != 3:
-            ValueError("The direct vector angles array do not have the apropiate lenght")
-
-        self.angles = pd.Series(np.deg2rad(angles), index=["alpha", "beta", "gamma"],
+        # Define the direct vectors angles:
+        self.angles = pd.Series(np.deg2rad(angles),
+                                index=["alpha", "beta", "gamma"],
                                 name="direct vectors angles")
+
+        # Define the preferred orientation:
+        self.preferred_orientation = pd.Series(preferred_orientation,
+                                               index=["x", "y", "z"],
+                                               name="preferred orientation")
+
+
 
     @property
     def operator(self) -> pd.DataFrame:
@@ -82,7 +78,8 @@ class CrystalStructure:
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
+        >>> proferred_orientation = [0, 0, 1]
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, proferred_orientation)
         >>> cubic_vec = crys.operator.values
 
         Test the results:
@@ -90,18 +87,12 @@ class CrystalStructure:
         >>> assert all(cubic_vec[1].round(6) == np.array([0.5     , 0.866025, 0.      ]))
         >>> assert all(cubic_vec[2].round(6) == np.array([0.5     , 0.288675, 0.816497]))
         """
-        angles = self.angles
-        a = np.array([1.,
-                      0.,
-                      0.])
-        b = np.array([np.cos(angles["gamma"]),
-                      np.sin(angles["gamma"]),
-                      0.])
-        c = np.array([np.cos(angles["beta"]),
-                      np.cos(angles["alpha"]) - np.cos(angles["beta"]) * np.cos(angles["gamma"]),
-                      1.0])
-        c[1] /= np.sin(angles["gamma"])
-        c[2] *= np.sqrt(1. - c[0] ** 2 - c[1] ** 2)
+        alpha, beta, gamma = self.angles.values
+        a = np.array([1., 0., 0.])
+        b = np.array([cos(gamma), sin(gamma), 0.])
+        c = np.array([cos(beta), cos(alpha) - cos(beta) * cos(gamma), 1.0])
+        c[1] /= sin(gamma)
+        c[2] *= sqrt(1. - c[0] ** 2 - c[1] ** 2)
         return pd.DataFrame([a, b, c], index=["a1", "a2", "a3"],
                             columns=["x", "y", "z"])
 
@@ -121,7 +112,8 @@ class CrystalStructure:
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
+        >>> proferred_orientation = [0, 0, 1]
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, proferred_orientation)
         >>> direct_vectors = crys.dir_vec
 
         Test the results:
@@ -148,7 +140,8 @@ class CrystalStructure:
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
+        >>> proferred_orientation = [0, 0, 1]
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, proferred_orientation)
 
         Test the results:
         >>> assert crys.unit_cell_vol.round(6) == 16.484804
@@ -172,7 +165,8 @@ class CrystalStructure:
         >>> a = 2.856710674519725
         >>> dir_vec_length = [a, a, a]
         >>> dir_vec_angles = [60, 60, 60]
-        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles)
+        >>> proferred_orientation = [0, 0, 1]
+        >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, proferred_orientation)
         >>> reciprocal_vector = crys.reciproc_vec
 
         Test the results:
@@ -223,14 +217,20 @@ class CrystalStructure:
         beta     1.047198
         gamma    1.047198
         Name: direct vectors angles, dtype: float64
+
+        >>> unitCell.preferred_orientation.round(6)
+        x    0.0
+        y    0.0
+        z    1.0
+        Name: preferred orientation, dtype: float64
         """
         # Load the data from the file
         UnitCell = np.loadtxt(file_path)
-        if UnitCell.shape != (2, 3):
+        if UnitCell.shape != (3, 3):
             ValueError("The file do not have the apropiate lenght")
 
         # Create the object:
-        return cls(UnitCell[0], UnitCell[1])
+        return cls(UnitCell[0], UnitCell[1], UnitCell[2])
 
     @property
     def to_string(self) -> str:
@@ -256,15 +256,20 @@ class CrystalStructure:
         2.856710674519725 2.856710674519725 2.856710674519725
         # Direct vector angles: (alpha, beta, gamma)
         60.0 60.0 60.0
+        # Preferred orientation:
+        0.0 0.0 1.0
         """
         lengthIter = self.length.values
         anglesIter = np.rad2deg(self.angles.values).round(6)
+        orientationIter = self.preferred_orientation.values
         info_str = "\n".join([
             f"# Unit cell information:",
             f"# Direct vector length: (a, b, c)",
             f"{lengthIter[0]} {lengthIter[1]} {lengthIter[2]}",
             f"# Direct vector angles: (alpha, beta, gamma)",
             f"{anglesIter[0]} {anglesIter[1]} {anglesIter[2]}",
+            f"# Preferred orientation:",
+            f"{orientationIter[0]} {orientationIter[1]} {orientationIter[2]}"
         ])
         return info_str
 

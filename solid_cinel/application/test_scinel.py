@@ -32,9 +32,9 @@ class BaseTestScinel(unittest.TestCase):
         self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
         self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
         self.file_xs0K = os.path.join(self.file_dir, 'inputTest/u238.0.2')
-        self.compositon_file = os.path.join(self.file_dir, 'inputTest/UO2composition')
-        self.structure_file = os.path.join(self.file_dir, 'inputTest/UO2structure')
-        self.atomPos_file = os.path.join(self.file_dir, 'inputTest/UO2atomPos')
+        self.composition_file = os.path.join(self.file_dir, 'inputTest/UO2Composition')
+        self.structure_file = os.path.join(self.file_dir, 'inputTest/UO2Structure')
+        self.atomPos_file = os.path.join(self.file_dir, 'inputTest/UO2AtomPos')
 
         # Get the data in python:
         self.Eout = np.loadtxt(self.file_Eout)
@@ -562,7 +562,7 @@ class TestScinelXsCoh(BaseTestScinel):
 
     def calc_xsCoh(self) -> np.ndarray:
 
-        solid = Solid.from_files(self.compositon_file, self.structure_file,
+        solid = Solid.from_files(self.composition_file, self.structure_file,
                                  self.atomPos_file)
         solid.set_pdos([self.pdos, self.pdos])
         xsCoh = solid.get_xsCoh(self.energyCut, self.T)
@@ -575,7 +575,7 @@ class TestScinelXsCoh(BaseTestScinel):
         expected_result = self.calc_xsCoh()
 
         # Command line arguments
-        command_line_args = [self.keyword, self.compositon_file, self.structure_file,
+        command_line_args = [self.keyword, self.composition_file, self.structure_file,
                              self.atomPos_file, self.energyCut, self.T,
                              self.file_pdos, self.file_pdos]
 

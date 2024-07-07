@@ -183,6 +183,39 @@ class CrystalStructure:
         reci_coeff *= 2 * np.pi / self.unitCellVol
         return pd.DataFrame(reci_coeff, index=["b1", "b2", "b3"], columns=dir_vec.index)
 
+    @staticmethod
+    def get_var_from_file(file_path: str) -> np.ndarray:
+        """
+        Get the crystal structure information from a file in a variable
+
+        Parameters
+        ----------
+        file_path : "str"
+            Path to the file with the crystal structure information.
+
+        Returns
+        -------
+        "np.ndarray"
+            Crystal structure information in a variable.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+        >>> CrystalStructure.get_var_from_file(file_path).round(6)
+        array([[ 2.856711,  2.856711,  2.856711],
+               [60.      , 60.      , 60.      ],
+               [ 0.      ,  0.      ,  1.      ]])
+        """
+        # Load the data from the file
+        UnitCell = np.loadtxt(file_path)
+        if UnitCell.shape != (3, 3):
+            ValueError("The file do not have the apropiate lenght")
+        return UnitCell
+
     @classmethod
     def from_file(cls, file_path: str) -> "CrystalStructure":
         """
@@ -204,7 +237,7 @@ class CrystalStructure:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27UnitCell')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
         >>> unitCell = CrystalStructure.from_file(file_path)
         >>> unitCell.length.round(6)
         a    2.856711
@@ -225,12 +258,12 @@ class CrystalStructure:
         Name: preferred orientation, dtype: float64
         """
         # Load the data from the file
-        UnitCell = np.loadtxt(file_path)
-        if UnitCell.shape != (3, 3):
+        crystalData = np.loadtxt(file_path)
+        if crystalData.shape != (3, 3):
             ValueError("The file do not have the apropiate lenght")
 
         # Create the object:
-        return cls(UnitCell[0], UnitCell[1], UnitCell[2])
+        return cls(crystalData[0], crystalData[1], crystalData[2])
 
     @property
     def to_string(self) -> str:
@@ -248,7 +281,7 @@ class CrystalStructure:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27UnitCell')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
         >>> unitCell = CrystalStructure.from_file(file_path)
         >>> print(unitCell.to_string)
         # Unit cell information:
@@ -288,16 +321,16 @@ class CrystalStructure:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27UnitCell')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
         >>> unitCell = CrystalStructure.from_file(file_path)
-        >>> unitCell.to_file("Al27UnitCell")
-        >>> unitCellWritten = CrystalStructure.from_file("Al27UnitCell")
+        >>> unitCell.to_file("Al27Structure")
+        >>> unitCellWritten = CrystalStructure.from_file("Al27Structure")
 
         # Test the results:
         >>> assert unitCell.to_string == unitCellWritten.to_string
 
         # Remove the file after the test:
-        >>> os.remove("Al27UnitCell")
+        >>> os.remove("Al27Structure")
         """
         # Open the file in write mode and write the string
         with open(filename, 'w') as file:

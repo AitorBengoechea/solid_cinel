@@ -316,6 +316,43 @@ class Molecule:
         if self.name is None:
             self.name = "Molecule" if self.atomNum > 1 else atom.name
 
+    @staticmethod
+    def get_var_from_file(file_path: str) -> np.ndarray:
+        """
+        Get the variables from a file.
+        Parameters
+        ----------
+        file_path : str
+            Path to the file containing the variables.
+
+        Returns
+        -------
+        np.ndarray
+            The variables from the file.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> Molecule.get_var_from_file(file_path).round(3)
+        array([[27.   , 13.   , 26.982,  3.449,  0.256]])
+
+        # 2 atoms in the molecule:
+        >>> file_path = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
+        >>> Molecule.get_var_from_file(file_path).round(3)
+        array([[1.60000e+01, 8.00000e+00, 1.59950e+01, 5.87800e+00, 0.00000e+00],
+               [2.38000e+02, 9.20000e+01, 2.38051e+02, 8.62900e+00, 1.99000e-01]])
+        """
+        # Load the data from the file
+        atomData = np.loadtxt(file_path)
+        if len(atomData) % 5 == 0:
+            atomData = atomData.reshape(-1, 5)
+        else:
+            raise ValueError("The file does not contain the correct number of rows.")
+        return atomData
     @classmethod
     def from_file(cls, file_path: str) -> "Molecule":
         """
@@ -337,7 +374,7 @@ class Molecule:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Info')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
         >>> molecule = Molecule.from_file(file_path)
         >>> assert molecule.name == "Al27"
         >>> assert molecule.atoms["Al27"].A == 27
@@ -347,7 +384,7 @@ class Molecule:
         >>> assert molecule.atoms["Al27"].b_incoh == 0.256
 
         # 2 atoms in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../data/materials/UO2/UO2Info')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
         >>> molecule = Molecule.from_file(file_path)
         >>> assert molecule.atoms["U238"].A == 238
         >>> assert molecule.atoms["U238"].Z == 92
@@ -361,11 +398,7 @@ class Molecule:
         >>> assert molecule.atoms["O16"].b_incoh == 0.0
         """
         # Load the data from the file
-        atomData = np.loadtxt(file_path)
-        if len(atomData) % 5 == 0:
-            atomData = atomData.reshape(-1, 5)
-        else:
-            raise ValueError("The file does not contain the correct number of rows.")
+        atomData = cls.get_var_from_file(file_path)
 
         # Create a Molecule instance from the atom data
         return cls(A=atomData[:, 0], Z=atomData[:, 1], M=atomData[:, 2],
@@ -387,7 +420,7 @@ class Molecule:
         >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
         # 1 atom in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Info')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
         >>> molecule = Molecule.from_file(file_path)
         >>> print(molecule.to_string)
         # Al27 information:
@@ -403,7 +436,7 @@ class Molecule:
         0.256
 
         # 2 atoms in the molecule:
-        >>> file_path = os.path.join(file_dir, '../../data/materials/UO2/UO2Info')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
         >>> molecule = Molecule.from_file(file_path)
         >>> print(molecule.to_string)
         # O16 information:
@@ -448,16 +481,16 @@ class Molecule:
 
         # 1 atom in the molecule:
         >>> import os
-        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Info')
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
         >>> molecule = Molecule.from_file(file_path)
-        >>> molecule.to_file("Al27Info")
-        >>> moleculeWritten = Molecule.from_file("Al27Info")
+        >>> molecule.to_file("Al27Composition")
+        >>> moleculeWritten = Molecule.from_file("Al27Composition")
 
         # Test the results:
         >>> assert molecule.to_string == moleculeWritten.to_string
 
         # Remove the file after the test:
-        >>> os.remove("Al27Info")
+        >>> os.remove("Al27Composition")
         """
         # Open the file in write mode and write the string
         with open(filename, 'w') as file:

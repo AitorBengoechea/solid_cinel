@@ -11,11 +11,12 @@ import numpy as np
 import pandas as pd
 import numba as nb
 import collections
-from typing import Iterable, Union, Dict
+from typing import Iterable, Union, Dict, List
 from scipy.constants import c
 from scipy.constants import physical_constants as const
 from scipy.optimize import minimize
 from math import pi, cos, sin, acos, exp
+from io import StringIO
 
 collections.Callable = collections.abc.Callable
 
@@ -76,7 +77,7 @@ class Solid(CrystalStructure, Molecule):
         if pdos is not None:
             self.set_pdos(pdos)
 
-    def set_unit_pos(self, unit_pos: Union[dict, Iterable]):
+    def set_unit_pos(self, unit_pos: Union[List, Dict, Iterable]):
         """
         Set the position of the atoms in the unit cell.
 
@@ -87,10 +88,28 @@ class Solid(CrystalStructure, Molecule):
         """
         col = pd.Index(["x", "y", "z"])
         if isinstance(unit_pos, dict):
+            # Molecule elements name and unit_pos name are the same:
             _unit_pos = {element: pd.DataFrame(single_unit_pos.reshape(-1, 3), columns=col)
                          for element, single_unit_pos in unit_pos.items()}
+
+        elif hasattr(unit_pos, '__len__'):
+            # Molecule elements name and number of atom types:
+            atoms = self.atoms.index
+            Natoms = self.atomNum
+
+            # unit pos a 3D array with the shape (Natoms, NatomInUnitCell, 3)
+            if Natoms == 1:
+                unit_pos = np.array(unit_pos)
+                if len(unit_pos.shape) == 1:
+                    unit_pos = unit_pos[np.newaxis, ::]
+                else:
+                    unit_pos = unit_pos[np.newaxis, ::, ::]
+
+            # Transfor into a dictionary containing dataframes for the position:
+            _unit_pos = {atoms[i]: pd.DataFrame(unit_pos[i].reshape(-1, 3), columns=col)
+                         for i in range(Natoms)}
         else:
-            _unit_pos = {self.name: pd.DataFrame(np.array(unit_pos).reshape(-1, 3), columns=col)}
+            raise ValueError("The unit_pos must be a dictionary or an iterable.")
         self.unit_pos = pd.Series(_unit_pos)
 
     def set_pdos(self, pdosDict: [Pdos, dict[Pdos]]):
@@ -172,6 +191,118 @@ class Solid(CrystalStructure, Molecule):
         >>> assert UO2.atom_number == 12
         """
         return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
+
+    @staticmethod
+    def get_var_from_file(file_path: str) -> List:
+        """
+        Read structured data from a file separated by empty lines and return a
+        list of numpy arrays.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to the file containing the structured data.
+
+        Returns
+        -------
+        list
+            A list of numpy arrays, each corresponding to a section of the file
+            separated by empty lines.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
+        >>> atomPos = Solid.get_var_from_file(atomPos_file)
+        >>> atomPos[0]
+        array([[0.5, 0. , 0. ],
+               [0.5, 0.5, 0.5],
+               [0. , 0. , 0.5],
+               [0. , 0.5, 0. ]])
+
+        >>> atomPos[1]
+        array([[0.25, 0.25, 0.25],
+               [0.75, 0.25, 0.25],
+               [0.25, 0.75, 0.75],
+               [0.75, 0.75, 0.75],
+               [0.75, 0.25, 0.75],
+               [0.25, 0.25, 0.75],
+               [0.75, 0.75, 0.25],
+               [0.25, 0.75, 0.25]])
+        """
+        # Read the file and return as string:
+        with open(file_path, 'r') as file:
+            file_str = file.read()
+
+        # Split the string by the empty line
+        atomsPosInUnitCellStr = file_str.strip().split('\n\n')
+
+        # Get the data from the string:
+        atomsPosInUnitCell = []
+        for SingleAtomPosInUnitCell in atomsPosInUnitCellStr:
+            # Use StringIO to create file-like objects
+            SingleAtomPosInUnitCell_io = StringIO(SingleAtomPosInUnitCell)
+
+            # Read the data from the file-like object
+            SingleAtomPosInUnitCell_array = np.genfromtxt(SingleAtomPosInUnitCell_io,
+                                                    comments="#")
+
+            # Append the data to the list
+            atomsPosInUnitCell.append(SingleAtomPosInUnitCell_array)
+
+        # Return the data: (Natoms, NatomInUnitCell, 3)
+        return atomsPosInUnitCell
+
+    @classmethod
+    def from_files(cls, compositon_file: str, structure_file: str,
+                   atomPos_file: str) -> "Solid":
+        """
+        Create a Solid object from the data in the files.
+
+        Parameters
+        ----------
+        compositon_file : str
+            Path to the file containing the composition data.
+        structure_file : str
+            Path to the file containing the crystal structure data.
+        atomPos_file : str
+            Path to the file containing the atom position data.
+
+        Returns
+        -------
+        "Solid"
+            A Solid object created from the data in the files.
+
+        Example
+        -------
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule: Al27
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+        >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
+        >>> assert isinstance(Al, Solid)
+
+        # 2 atoms in the molecule: UO2
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
+        >>> UO2 = Solid.from_files(compositon_file, structure_file, atomPos_file)
+        >>> assert isinstance(UO2, Solid)
+        """
+        # Get the parent class data from the files:
+        atomData = Molecule.get_var_from_file(compositon_file)
+        A, Z, M, b_coh, b_incoh = atomData[:, 0], atomData[:, 1], atomData[:, 2], atomData[:, 3], atomData[:, 4]
+        crystalData = CrystalStructure.get_var_from_file(structure_file)
+        vectorLength, vectorAngles, preferredOrientation = crystalData[0], crystalData[1], crystalData[2]
+
+        # Get the unit cell data from the file:
+        unitCellData = cls.get_var_from_file(atomPos_file)
+        return cls(unitCellData, vectorLength, vectorAngles, preferredOrientation,
+                   A, Z, M, b_coh, b_incoh)
 
     def get_Bfact(self, T: float, pdosDict: dict[Pdos] = None,
                   anstrom: bool = True) -> [float, pd.Series]:

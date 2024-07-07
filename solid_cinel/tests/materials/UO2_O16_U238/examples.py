@@ -258,3 +258,4 @@ beta0_str_O16 = '''
 '''
 alpha0_O16 = np.fromstring(alpha0_str_O16, dtype=np.float64, sep=' ')
 beta0_O16 = np.fromstring(beta0_str_O16, dtype=np.float64, sep=' ')
+energy_cut = 5.0

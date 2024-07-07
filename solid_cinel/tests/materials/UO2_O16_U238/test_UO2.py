@@ -5,22 +5,26 @@ Created on Wed Nov 30 15:00:47 2022
 @author: AB272525
 """
 import pandas as pd
-from solid_cinel import Solid, Alpha, Beta, Pdos, Sab
+from solid_cinel.core import Solid, Alpha, Beta, Pdos, Sab
 from scipy.integrate import trapezoid
 import pytest
 import os
-# Material information variables:
-from solid_cinel.data.materials.UO2 import *
 
 # Example variables:
 from examples import *
 
 # Target Material
+file_dir = os.path.dirname(os.path.abspath(__file__))
+compositon_file = os.path.join(file_dir,
+                                    '../../../data/materials/UO2/UO2Composition')
+structure_file = os.path.join(file_dir,
+                                   '../../../data/materials/UO2/UO2Structure')
+atomPos_file = os.path.join(file_dir,
+                                 '../../../data/materials/UO2/UO2AtomPos')
+UO2 = Solid.from_files(compositon_file, structure_file, atomPos_file)
 pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]),
            "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-UO2 = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
-                A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
-
+UO2.set_pdos(pdosUO2)
 
 @pytest.mark.parametrize("T", [296, 400, 500, 600, 700, 800, 1000, 1200])
 def test_UO2_BraggEddges(T):

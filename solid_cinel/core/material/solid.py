@@ -439,7 +439,8 @@ class Solid(CrystalStructure, Molecule):
         return Bfact * 1.0e20 if anstrom else Bfact
 
     def get_multiplicity(self, energyCut: float, T: float,
-                         precision: list = [6, 6], **kwargs) -> pd.DataFrame:
+                         precision: list = [6, 6], d_min = None,
+                         **kwargs) -> pd.DataFrame:
         """
         Obtain hkl data for the solid in a certain temperature and for a neutron
         certain energy filtering with the multiplicity.
@@ -453,6 +454,8 @@ class Solid(CrystalStructure, Molecule):
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
+        d_min : 'float', optional
+            Minimum d espace to calculate the multiplicity. The default is None.
 
         Parameters for get_Bfact
         ------------------------
@@ -515,19 +518,26 @@ class Solid(CrystalStructure, Molecule):
               18  0.090247  0.0          88.521943         192.0
               19  0.090090  0.0          86.309150         168.0
         """
-        hkl_data = numba_hkl_data(Neutron(energyCut).d_min,
+        # Get the dmin for the multiplicity calculation:
+        if d_min is None:
+            d_min = Neutron(energyCut).d_min
+
+        # Get the hkl data for the solid:
+        hkl_data = numba_hkl_data(d_min,
                                   self.reciproc_vec.values,
                                   self.get_Bfact(T, **kwargs),
                                   self.atom_pos,
                                   self.atoms.apply(lambda x: x.b_coh),
                                   self.preferred_orientation.values,
                                   precision)
+
+        # Return the hkl data in the appropiate format:
         return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
     def get_BraggEdges(self, energyCut: float, T: float,
                        xs: bool = True, file_BraggEdges: str = None,
                        difracAngles: bool = True, precision = [6, 6],
-                       pddf_kind: str = None, pddf_val: str = None,
+                       d_min = None, pddf_kind: str = None, pddf_val: str = None,
                        threshold: float = 1.e-30) -> pd.DataFrame:
         """
         Get BraggEdges.
@@ -554,6 +564,8 @@ class Solid(CrystalStructure, Molecule):
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
+        d_min : 'float', optional
+            Minimum d espace to calculate the multiplicity. The default is None.
 
         Parameters for get_ppdf
         -----------------------
@@ -625,7 +637,8 @@ class Solid(CrystalStructure, Molecule):
             3  0.033831   1.0  0.005850  13.929091
         """
         # Get multiplicity
-        multiplicity = self.get_multiplicity(energyCut, T, precision=precision)
+        multiplicity = self.get_multiplicity(energyCut, T, precision=precision,
+                                             d_min=d_min)
 
         # Get Bragg Edges energy:
         multiplicity["E"] = pi ** 2 * BraggUnitChange

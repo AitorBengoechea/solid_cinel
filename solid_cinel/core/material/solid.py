@@ -112,23 +112,23 @@ class Solid(CrystalStructure, Molecule):
             raise ValueError("The unit_pos must be a dictionary or an iterable.")
         self.unit_pos = pd.Series(_unit_pos)
 
-    def set_pdos(self, pdosDict: [Pdos, dict[Pdos]]):
+    def set_pdos(self, multiplePdos: Union[Pdos, Iterable, Dict]):
         """
         Set the pdos information of the atoms that form the solid.
 
         Parameters
         ----------
-        pdosDict : [Pdos, dict[Pdos]]
-            The pdos information of the atoms that form the solid.
+        pdosDict : Iterable, Dict, Pdos
+            The pdos information of the atoms that form the solid. If an Iterable
+            is given, the pdos information is set for each atom in the order of
+            the atoms in the solid. If a dictionary is given, the pdos information
+            is set for each atom in the dictionary. If a Pdos object is given, the
+            pdos information is set for all the atoms in the solid.
         """
         atoms = self.atoms.index
-        if len(atoms) == 1:
-            pdosCheck = pd.Series(pdosDict, index=atoms)
-        else:
-            pdosCheck = pd.Series({element: pdosDict.get(element) for element in atoms})
-            if pdosCheck.isnull().any():
-                raise ValueError("The pdosDict must have the same elements as the object.")
-        self.pdos = pdosCheck
+        if isinstance(multiplePdos, dict):
+            multiplePdos = [multiplePdos.get(element) for element in atoms]
+        self.pdos = pd.Series(multiplePdos, index=atoms)
 
     @property
     def atom_pos(self) -> pd.Series:

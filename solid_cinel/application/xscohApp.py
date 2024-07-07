@@ -56,7 +56,7 @@ def handle_xsCohArgs(args: argparse.Namespace) -> np.array:
     solid.set_pdos(get_Pdos(args))
 
     # Calculate the coherent cross section:
-    xsCoh = solid.get_xsCoh(args.energyCut, args.T, precision=args.precision,
+    xsCoh = solid.get_XsCoh(args.energyCut, args.T, precision=args.precision,
                             d_min=args.d_min, pddf_kind=args.pddf_kind,
                             pddf_val=args.pddf_val, threshold=args.threshold)
     return np.column_stack((xsCoh.index.values, xsCoh.values))

@@ -561,15 +561,18 @@ class TestScinelXsCoh(BaseTestScinel):
         self.energyCut = 0.1
 
     def calc_xsCoh(self) -> np.ndarray:
-
+        """
+        Calculate the coherent cross section.
+        """
         solid = Solid.from_files(self.composition_file, self.structure_file,
                                  self.atomPos_file)
         solid.set_pdos([self.pdos, self.pdos])
-        xsCoh = solid.get_xsCoh(self.energyCut, self.T)
+        xsCoh = solid.get_XsCoh(self.energyCut, self.T)
         return  np.column_stack((xsCoh.index.values, xsCoh.values))
+
     def test_xscoh(self) -> None:
         """
-        Test the effective temperature calculation
+        Test the coherent cross section calculation
         """
         # Generate the expected result
         expected_result = self.calc_xsCoh()

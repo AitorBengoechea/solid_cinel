@@ -173,8 +173,7 @@ def tauN_calculation_threads(expBeta, deltaBeta, tau1, Ntau1, tauNminus1, tauNde
               start, NtauN, stride)
 
 
-@nb.jit(float64[:, :](float64[:, :], float64[:], int32, float64[:], float64[:], int32, int32),
-        nopython=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def calc_tauNfunc_cpu(tauNfunc: np.ndarray, tau1: np.ndarray, Ntau1: int,
                       beta: np.ndarray, deltaBeta: np.ndarray, nphonon: int,
                       NtauN: int):

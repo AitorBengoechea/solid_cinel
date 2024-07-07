@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+from typing import List, Union
 from solid_cinel.core.material.pdos import Pdos
 
 def add_PdosArgs() -> argparse.ArgumentParser:
@@ -13,7 +14,8 @@ def add_PdosArgs() -> argparse.ArgumentParser:
     """
     pdos_parser = argparse.ArgumentParser(description='Pdos file arguments')
     # Required arguments
-    pdos_parser.add_argument('rho', type=str, help='pdos file or values file')
+    pdos_parser.add_argument('rho', type=str, nargs="*",
+                             help='pdos file or values file')
 
     # Optional arguments for the reading of the pdos file
     pdos_parser.add_argument('-dE', type=float, default=None, help='dE (optional, must be provided with values file)')
@@ -37,7 +39,7 @@ def get_PdosArgs(pdos_args: list) -> argparse.Namespace:
     return add_PdosArgs().parse_args(pdos_args)
 
 
-def get_Pdos(argsPdos: argparse.Namespace) -> Pdos:
+def get_Pdos(argsPdos: argparse.Namespace) -> Union[Pdos, List]:
     """
     Get the pdos object based on the arguments.
 
@@ -51,15 +53,23 @@ def get_Pdos(argsPdos: argparse.Namespace) -> Pdos:
     Pdos
         The pdos object.
     """
+    Npdos = len(argsPdos.rho)
     # Check if dE is provided
     if argsPdos.dE:
         # If dE is provided, load the rho values from the file and create a pdos object
-        pdos = Pdos.from_dE(np.loadtxt(argsPdos.rho), argsPdos.dE)
-    else:
+        pdos = Pdos.from_dE(np.loadtxt(argsPdos.rho[0]), argsPdos.dE)
+    elif Npdos == 1:
         # If dE is not provided, create a Tpdos object from the file
-        pdos = Pdos.from_file([argsPdos.T], [argsPdos.rho], header=argsPdos.header,
+        pdos = Pdos.from_file([argsPdos.T], argsPdos.rho, header=argsPdos.header,
                                   usecols=argsPdos.usecols, index_col=argsPdos.index_col,
                                   engine=argsPdos.engine, grid=argsPdos.grid)
+    else:
+        pdos = [
+            Pdos.from_file([argsPdos.T], argsPdos.rho[i], header=argsPdos.header,
+                           usecols=argsPdos.usecols, index_col=argsPdos.index_col,
+                           engine=argsPdos.engine, grid=argsPdos.grid)
+            for i in range(Npdos)
+        ]
     return pdos
 
 

@@ -535,9 +535,8 @@ class Solid(CrystalStructure, Molecule):
         return hkl_data.sort_values(by=["h", "k", "l"]).set_index(["h", "k", "l"])
 
     def get_BraggEdges(self, energyCut: float, T: float,
-                       xs: bool = True, file_BraggEdges: str = None,
-                       difracAngles: bool = True, precision = [6, 6],
-                       d_min = None, pddf_kind: str = None, pddf_val: str = None,
+                       xs: bool = True, difracAngles: bool = True,
+                       precision = [6, 6], d_min = None, pddf_kind: str = None, pddf_val: str = None,
                        threshold: float = 1.e-30) -> pd.DataFrame:
         """
         Get BraggEdges.
@@ -661,14 +660,11 @@ class Solid(CrystalStructure, Molecule):
         if difracAngles:
             add_difracAnglesToMultiplicity(multiplicity, energyCut)
 
-        # Get the final result
-        if file_BraggEdges is not None:
-            multiplicity.to_csv(file_BraggEdges, sep='\t', float_format="%20.10e")
         return multiplicity
 
-    def get_XsCoh(self, energyCut: float, T: float, precision = [6, 6],
-                  pddf_kind: str = None, pddf_val: str = None,
-                  threshold: float = 1.e-30, file_Xs: str = None) -> pd.Series:
+    def get_XsCoh(self, energyCut: float, T: float, precision: List = [6, 6],
+                  d_min = None, pddf_kind: str = None, pddf_val: str = None,
+                  threshold: float = 1.e-30) -> pd.Series:
         """
         Get coherent Xs.
 
@@ -694,10 +690,12 @@ class Solid(CrystalStructure, Molecule):
         precision: ['int', 'int'], optional
             Precision to get the multiplicity for d_hkl and Fsq_hkl. The
             default is [6, 6].
+        d_min : 'float', optional
+            Minimum d espace to calculate the multiplicity. The default is None.
 
         Parameters for get_ppdf
         -----------------------
-        kind : 'str', optional
+        pddf_kind : 'str', optional
             key to calculate PDDF. The default is None. Options:
                 - march_dollase
                 - altomare
@@ -776,9 +774,10 @@ class Solid(CrystalStructure, Molecule):
         Name: Xs, dtype: float64
         """
         # Get the Bragg Edges
-        BraggEdgesXs = self.get_BraggEdges(energyCut, T, xs=True, difracAngles=False,
+        BraggEdgesXs = self.get_BraggEdges(energyCut, T, difracAngles=False,
+                                           d_min=d_min, precision=precision,
                                            pddf_kind=pddf_kind, pddf_val=pddf_val,
-                                           threshold=threshold, precision=precision)
+                                           threshold=threshold)
 
         # Extract the energy and cross-section information and convert to a Series
         xsCoh = BraggEdgesXs[["E", "Xs"]].set_index("E")["Xs"]
@@ -792,10 +791,6 @@ class Solid(CrystalStructure, Molecule):
 
         # Calculate the cumulative sum of the cross-sections and normalize by energy
         xsCoh = xsCoh.cumsum() / xsCoh.index.values
-
-        # Save the data to a file if a filename is provided
-        if file_Xs:
-            xsCoh.to_csv(file_Xs, sep='\t', float_format="%20.10e")
 
         return xsCoh
 

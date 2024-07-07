@@ -10,7 +10,7 @@ from solid_cinel.application.scinel import main
 # POO direct application:
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
-from solid_cinel.core.material.pdos import Pdos
+from solid_cinel.core.material import Pdos, Solid
 from solid_cinel.core.xs import Dxs, Xs, DDxs
 
 
@@ -19,16 +19,24 @@ class BaseTestScinel(unittest.TestCase):
         """
         Set up the test common variables.
         """
+        # Get the floats:
         self.T = 300
-        self.file_dir = os.path.dirname(os.path.abspath(__file__))
         self.Ein = 7.2
         self.M = 238.05077040419212
+
+        # Get the files:
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
         self.file_alpha = os.path.join(self.file_dir, 'inputTest/alphaGrid')
         self.file_beta = os.path.join(self.file_dir, 'inputTest/betaGrid')
         self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
         self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
         self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
         self.file_xs0K = os.path.join(self.file_dir, 'inputTest/u238.0.2')
+        self.compositon_file = os.path.join(self.file_dir, 'inputTest/UO2composition')
+        self.structure_file = os.path.join(self.file_dir, 'inputTest/UO2structure')
+        self.atomPos_file = os.path.join(self.file_dir, 'inputTest/UO2atomPos')
+
+        # Get the data in python:
         self.Eout = np.loadtxt(self.file_Eout)
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
         self.xs0K = Xs.read_xs(self.file_xs0K)
@@ -539,6 +547,41 @@ class TestScinelDDxs(BaseTestScinel):
         cross section.
         """
         self.allModelTest('4pcf', DDxs.from_4PCF)
+
+class TestScinelXsCoh(BaseTestScinel):
+    """
+    Test the XsCoh class terminal application in the solid_cinel package.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables
+        """
+        super().setUp()
+        self.keyword = 'xscoh'
+        self.energyCut = 0.1
+
+    def calc_xsCoh(self) -> np.ndarray:
+
+        solid = Solid.from_files(self.compositon_file, self.structure_file,
+                                 self.atomPos_file)
+        solid.set_pdos([self.pdos, self.pdos])
+        xsCoh = solid.get_xsCoh(self.energyCut, self.T)
+        return  np.column_stack((xsCoh.index.values, xsCoh.values))
+    def test_xscoh(self) -> None:
+        """
+        Test the effective temperature calculation
+        """
+        # Generate the expected result
+        expected_result = self.calc_xsCoh()
+
+        # Command line arguments
+        command_line_args = [self.keyword, self.compositon_file, self.structure_file,
+                             self.atomPos_file, self.energyCut, self.T,
+                             self.file_pdos, self.file_pdos]
+
+        # Check the results
+        self.check_results(expected_result, *command_line_args)
+
 
 
 if __name__ == '__main__':

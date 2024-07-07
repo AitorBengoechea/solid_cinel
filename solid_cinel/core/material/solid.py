@@ -28,6 +28,9 @@ kb = const["Boltzmann constant in eV/K"][0]
 BfacUnitChange = (4 * c ** 2 * pi**2) * h ** 2 / (m_to_eV * kb)
 BraggUnitChange = 1.0e20 * h ** 2 * c ** 2 / (mn_to_MeV * 1.0e6)
 
+# Output style:
+PosCol = pd.Index(["x", "y", "z"])
+
 class Solid(CrystalStructure, Molecule):
     """
     Class for the solid structure. It is a combination of the crystal structure
@@ -77,7 +80,61 @@ class Solid(CrystalStructure, Molecule):
         if pdos is not None:
             self.set_pdos(pdos)
 
-    def set_unit_pos(self, unit_pos: Union[List, Dict, Iterable]):
+    def set_unit_pos_from_dict(self, unit_pos: Dict) -> Dict:
+        """
+        Set the position of the atoms in the unit cell from a dictionary.
+
+        Parameters
+        ----------
+        unit_pos : Dict
+            Position of the atoms in the unit cell.
+
+        Returns
+        -------
+        "Dict"
+            Dictionary containing the position of the atoms in the unit cell.
+        """
+        return {
+            element: pd.DataFrame(single_unit_pos.reshape(-1, 3), columns=PosCol)
+            for element, single_unit_pos in unit_pos.items()
+        }
+
+    def set_unit_pos_from_iterable(self, unit_pos: Iterable) -> Dict:
+        """
+        Set the position of the atoms in the unit cell from an iterable. The
+        iterable must be in the order of the atoms in the Molecule class.
+
+        Parameters
+        ----------
+        unit_pos : Iterable
+            Position of the atoms in the unit cell.
+
+        Returns
+        -------
+        "Dict"
+            Dictionary containing the position of the atoms in the unit cell.
+        """
+        # Get the atoms name in the molecule:
+        atoms = self.atoms.index
+
+        # Get the number of atoms type in the molecule:
+        Natoms = self.atomNum
+
+        # unit pos a 3D array with the shape (Natoms, NatomInUnitCell, 3)
+        if Natoms == 1:
+            unit_pos = np.array(unit_pos)
+            if len(unit_pos.shape) == 1:
+                unit_pos = unit_pos[np.newaxis, ::]
+            else:
+                unit_pos = unit_pos[np.newaxis, ::, ::]
+
+        # Transfor into a dictionary containing dataframes for the position:
+        return {
+            atoms[i]: pd.DataFrame(unit_pos[i].reshape(-1, 3), columns=PosCol)
+            for i in range(Natoms)
+        }
+
+    def set_unit_pos(self, unit_pos: Union[Dict, Iterable]):
         """
         Set the position of the atoms in the unit cell.
 
@@ -86,30 +143,17 @@ class Solid(CrystalStructure, Molecule):
         unit_pos : Union[dict, Iterable]
             Position of the atoms in the unit cell.
         """
-        col = pd.Index(["x", "y", "z"])
+        # Transform the unit_pos into a dictionary of dataframes:
         if isinstance(unit_pos, dict):
-            # Molecule elements name and unit_pos name are the same:
-            _unit_pos = {element: pd.DataFrame(single_unit_pos.reshape(-1, 3), columns=col)
-                         for element, single_unit_pos in unit_pos.items()}
+            _unit_pos = self.set_unit_pos_from_dict(unit_pos)
 
         elif hasattr(unit_pos, '__len__'):
-            # Molecule elements name and number of atom types:
-            atoms = self.atoms.index
-            Natoms = self.atomNum
+            _unit_pos = self.set_unit_pos_from_iterable(unit_pos)
 
-            # unit pos a 3D array with the shape (Natoms, NatomInUnitCell, 3)
-            if Natoms == 1:
-                unit_pos = np.array(unit_pos)
-                if len(unit_pos.shape) == 1:
-                    unit_pos = unit_pos[np.newaxis, ::]
-                else:
-                    unit_pos = unit_pos[np.newaxis, ::, ::]
-
-            # Transfor into a dictionary containing dataframes for the position:
-            _unit_pos = {atoms[i]: pd.DataFrame(unit_pos[i].reshape(-1, 3), columns=col)
-                         for i in range(Natoms)}
         else:
             raise ValueError("The unit_pos must be a dictionary or an iterable.")
+
+        # Set the unit position:
         self.unit_pos = pd.Series(_unit_pos)
 
     def set_pdos(self, multiplePdos: Union[Pdos, Iterable, Dict]):
@@ -143,10 +187,14 @@ class Solid(CrystalStructure, Molecule):
 
         Example
         -------
-        Object initialization:
-        >>> from solid_cinel.data.materials.UO2 import *
-        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh)
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
+        # 2 atoms in the molecule: UO2
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
+        >>> UO2 = Solid.from_files(compositon_file, structure_file, atomPos_file)
         >>> UO2.atom_pos["O16"].round(6)
                   x         y         z
         0  1.386952  1.386952  1.386952
@@ -180,14 +228,21 @@ class Solid(CrystalStructure, Molecule):
 
         Example
         -------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh)
-        >>> from solid_cinel.data.materials.UO2 import *
-        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh)
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
-        Test the results:
+        # 1 atom in the molecule: Al27
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+        >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
         >>> assert Al.atom_number == 1
+
+        # 2 atoms in the molecule: UO2
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
+        >>> UO2 = Solid.from_files(compositon_file, structure_file, atomPos_file)
         >>> assert UO2.atom_number == 12
         """
         return sum(self.atom_pos.apply(lambda x: x.shape[0]).values)
@@ -216,12 +271,6 @@ class Solid(CrystalStructure, Molecule):
         >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
         >>> atomPos = Solid.get_var_from_file(atomPos_file)
         >>> atomPos[0]
-        array([[0.5, 0. , 0. ],
-               [0.5, 0.5, 0.5],
-               [0. , 0. , 0.5],
-               [0. , 0.5, 0. ]])
-
-        >>> atomPos[1]
         array([[0.25, 0.25, 0.25],
                [0.75, 0.25, 0.25],
                [0.25, 0.75, 0.75],
@@ -230,6 +279,12 @@ class Solid(CrystalStructure, Molecule):
                [0.25, 0.25, 0.75],
                [0.75, 0.75, 0.25],
                [0.25, 0.75, 0.25]])
+
+        >>> atomPos[1]
+        array([[0.5, 0. , 0. ],
+               [0.5, 0.5, 0.5],
+               [0. , 0. , 0.5],
+               [0. , 0.5, 0. ]])
         """
         # Read the file and return as string:
         with open(file_path, 'r') as file:
@@ -327,15 +382,24 @@ class Solid(CrystalStructure, Molecule):
 
         Examples
         --------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule: Al27
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+        >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
         >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = Solid(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles, A, Z, atomic_mass, b_coh, b_incoh)
-        >>> from solid_cinel.data.materials.UO2 import *
+
+        # 2 atoms in the molecule: UO2
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
+        >>> UO2 = Solid.from_files(compositon_file, structure_file, atomPos_file)
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
         >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
 
         Test the results:
         >>> T = 20
@@ -347,13 +411,13 @@ class Solid(CrystalStructure, Molecule):
         0.337081
 
         >>> T = 296
-        >>> UO2.get_Bfact(T).round(6)
+        >>> UO2.get_Bfact(T, pdosUO2).round(6)
         O16     0.468604
         U238    0.253845
         dtype: float64
 
         >>> T = 400
-        >>> UO2.get_Bfact(T).round(6)
+        >>> UO2.get_Bfact(T, pdosUO2).round(6)
         O16     0.595531
         U238    0.340297
         dtype: float64
@@ -362,7 +426,7 @@ class Solid(CrystalStructure, Molecule):
         if pdosDict is not None:
             self.set_pdos(pdosDict)
         elif self.pdos is None:
-            raise ValueError("The pdosDict must be defined or initialized in the object.")
+            raise ValueError("The Pdos information must be defined or initialized in the object.")
 
         # Get the Debye Waller coefficient for each atom for the give temperature:
         DebyeWallerCoeff = self.pdos.apply(lambda x: x.fix_T(T).DebyeWallerCoeff)
@@ -404,11 +468,18 @@ class Solid(CrystalStructure, Molecule):
 
         Examples
         --------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule: Al27
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+        >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
+
+        # Set the pdos information:
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+        >>> Al.set_pdos(Pdos.from_dE(rho_in_energy, interv_in_energy))
 
         Test the results:
         >>> T = 20
@@ -509,15 +580,22 @@ class Solid(CrystalStructure, Molecule):
 
         Example
         -------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule: Al27
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+        >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
+
+        # Set the pdos information:
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
-        >>> T = 20
-        >>> energyCut = 2.301
+        >>> Al.set_pdos(Pdos.from_dE(rho_in_energy, interv_in_energy))
 
         Test the results:
+        >>> T = 20
+        >>> energyCut = 2.301
         >>> Al.get_BraggEdges(energyCut, T).round(6).iloc[:10, :4]
                       d       Fsq  Orientation angle  Multiplicity
         h k l
@@ -629,15 +707,29 @@ class Solid(CrystalStructure, Molecule):
 
         Examples
         --------
-        Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 1 atom in the molecule: Al27
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+        >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
+
+        # Set the pdos information:
         >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-        >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
-        >>> from solid_cinel.data.materials.UO2 import *
+        >>> Al.set_pdos(Pdos.from_dE(rho_in_energy, interv_in_energy))
+
+        # 2 atoms in the molecule: UO2
+        >>> compositon_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
+        >>> structure_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Structure')
+        >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
+        >>> UO2 = Solid.from_files(compositon_file, structure_file, atomPos_file)
+
+        # Set the pdos information:
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
-        >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-        >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+        >>> pdosUO2 = [Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]),  Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])]
+        >>> UO2.set_pdos(pdosUO2)
 
         Test the results:
         >>> T = 20

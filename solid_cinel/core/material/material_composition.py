@@ -40,8 +40,10 @@ class Atom:
 
     Examples
     --------
-    >>> from solid_cinel.data.materials.Al27 import *
-    >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
+    >>> import os
+    >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+    >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+    >>> Al = Atom.from_iter(*Molecule.get_var_from_file(file_path))
     >>> assert Al.name == "Al27"
     """
     A: int
@@ -71,8 +73,10 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> Al = Atom.from_iter(*Molecule.get_var_from_file(file_path))
 
         Test the results:
         >>> assert Al.name == "Al27"
@@ -92,8 +96,10 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> Al = Atom.from_iter(*Molecule.get_var_from_file(file_path))
 
         Test the results:
         >>> assert Al.zam == 130270
@@ -114,8 +120,10 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> Al = Atom.from_iter(*Molecule.get_var_from_file(file_path))
 
         Test the results:
         >>> assert np.double(Al.boundXs).round(6) == np.double(1.503081)
@@ -135,8 +143,10 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> Al = Atom.from_iter(*Molecule.get_var_from_file(file_path))
 
         Test the results:
         >>> assert np.double(Al.boundIncXs).round(6) == np.double(0.008235)
@@ -156,8 +166,10 @@ class Atom:
         Example
         -------
         Object initialization:
-        >>> from solid_cinel.data.materials.Al27 import *
-        >>> Al = Atom(A, Z, atomic_mass, b_coh, b_incoh)
+        >>> import os
+        >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+        >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+        >>> Al = Atom.from_iter(*Molecule.get_var_from_file(file_path))
 
         Test the results:
         >>> assert np.double(Al.freeXs).round(6) == np.double(1.396702)

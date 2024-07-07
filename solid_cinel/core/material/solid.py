@@ -824,10 +824,14 @@ def add_pddfToMultiplicity(multiplicity: pd.DataFrame, kind: str = None,
     Example
     -------
     Object initialization:
-    >>> from solid_cinel.data.materials.Al27 import *
+    >>> import os
+    >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+    >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+    >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+    >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+    >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> Al.set_pdos(Pdos.from_dE(rho_in_energy, interv_in_energy))
     >>> T = 20
     >>> energyCut = 2.301
     >>> multiplicity = Al.get_multiplicity(energyCut, T)
@@ -950,10 +954,14 @@ def add_difracAnglesToMultiplicity(multiplicity: pd.DataFrame,
     Example
     -------
     Object initialization:
-    >>> from solid_cinel.data.materials.Al27 import *
+    >>> import os
+    >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+    >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+    >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+    >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+    >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> Al.set_pdos(Pdos.from_dE(rho_in_energy, interv_in_energy))
     >>> T = 20
     >>> energyCut = 2.301
     >>> multiplicity = Al.get_multiplicity(energyCut, T)
@@ -1021,10 +1029,14 @@ def add_BraggEdgesXsToMultiplicity(multiplicity: pd.DataFrame, unitCellVol: floa
     Example
     -------
     Object initialization:
-    >>> from solid_cinel.data.materials.Al27 import *
+    >>> import os
+    >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+    >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+    >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+    >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+    >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> Al = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+    >>> Al.set_pdos(Pdos.from_dE(rho_in_energy, interv_in_energy))
     >>> T = 20
     >>> energyCut = 2.301
     >>> unit_cell_vol = Al.unitCellVol
@@ -1089,8 +1101,12 @@ def hkl_max_value(rec_vecs: np.ndarray, d_min: float,
     Example
     -------
     Object initialization:
-    >>> from solid_cinel.data.materials.Al27 import *
-    >>> crys = CrystalStructure(dir_vec_length, dir_vec_angles, preferred_orientation)
+    >>> import os
+    >>> file_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # 1 atom in the molecule:
+    >>> file_path = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+    >>> crys = CrystalStructure.from_file(file_path)
     >>> rec_vecs = crys.reciproc_vec.values
     >>> d_min = 0.2360746677309732
     >>> hkl_max_value(rec_vecs, d_min)
@@ -1149,16 +1165,29 @@ def numba_hkl_data(d_min: float, rec_vecs: np.ndarray, Bfac: pd.Series,
     Examples
     --------
     Object initialization:
+    >>> import os
+    >>> file_dir = os.path.dirname(os.path.abspath(__file__))
 
-    >>> unit_pos_Al27 = np.array([0.25, 0.25, 0.25, 0.75, 0.25, 0.25, 0.25, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75, 0.25, 0.25,0.75, 0.25])
-    >>> from solid_cinel.data.materials.Al27 import *
+    # 1 atom in the molecule: Al27
+    >>> compositon_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Composition')
+    >>> structure_file = os.path.join(file_dir, '../../data/materials/Al27/Al27Structure')
+    >>> atomPos_file = os.path.join(file_dir, '../../data/materials/Al27/Al27AtomPos')
+    >>> Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
+
+    # Set the pdos information:
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
-    >>> pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-    >>> Al = Solid(unit_pos_Al27, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
-    >>> from solid_cinel.data.materials.UO2 import *
+    >>> Al.set_pdos(Pdos.from_dE(rho_in_energy, interv_in_energy))
+
+    # 2 atoms in the molecule: UO2
+    >>> compositon_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Composition')
+    >>> structure_file = os.path.join(file_dir, '../../data/materials/UO2/UO2Structure')
+    >>> atomPos_file = os.path.join(file_dir, '../../data/materials/UO2/UO2AtomPos')
+    >>> UO2 = Solid.from_files(compositon_file, structure_file, atomPos_file)
+
+    # Set the pdos information:
     >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy, interv_in_energy
-    >>> pdosUO2 = {"O16": Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]), "U238": Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])}
-    >>> UO2 = Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation, A, Z, atom_mass, b_coh, b_incoh, pdosUO2)
+    >>> pdosUO2 = [Pdos.from_dE(rho_in_energy[0], interv_in_energy[0]),  Pdos.from_dE(rho_in_energy[1], interv_in_energy[1])]
+    >>> UO2.set_pdos(pdosUO2)
 
     Test the results:
     >>> T = 20

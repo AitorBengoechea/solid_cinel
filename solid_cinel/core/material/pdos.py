@@ -5,7 +5,7 @@ Python file for working with Phonon Density Of States.
 """
 from solid_cinel.core.generic import integrate
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
+from solid_cinel.core.material.tau import get_tauNfunc, get_tauNbeta
 from scipy.interpolate import RectBivariateSpline
 import pandas as pd
 import numpy as np
@@ -213,7 +213,7 @@ class Tpdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> file = "../../../data/pdos/interp.300"
+        >>> file = "../../data/pdos/interp.300"
         >>> T = 300
         >>> Tpdos.from_dE_file(T, file, usecols=[0, 1], index_col=0).data.iloc[0:5]
         beta
@@ -674,7 +674,7 @@ class Epdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> os.chdir("../../../data/pdos/")
+        >>> os.chdir("../../data/pdos/")
         >>> file = "interp.300"
         >>> Epdos.from_file(file).data.iloc[0:5]
         dE
@@ -944,7 +944,7 @@ class Npdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> folder = "../../../data/pdos"
+        >>> folder = "../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> assert npdos.get_Tnew([300]).empty == True
         >>> assert npdos.get_Tnew(200) == pd.Index([200])
@@ -989,7 +989,7 @@ class Npdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> file = "../../../data/pdos/interp.300"
+        >>> file = "../../data/pdos/interp.300"
         >>> T = 300
         >>> Npdos.from_file(T, file).data.iloc[0:5]
         T            300
@@ -1038,7 +1038,7 @@ class Npdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> folder = "../../../data/pdos"
+        >>> folder = "../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0).data
         >>> npdos.iloc[0:5]
         T         300.0     500.0     1000.0    1700.0
@@ -1158,7 +1158,7 @@ class Npdos:
         --------
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> folder = "../../../data/pdos"
+        >>> folder = "../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> npdos.Tinterp(600).data.iloc[0:5]
         beta
@@ -1229,7 +1229,7 @@ class Npdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> folder = "../../../data/pdos"
+        >>> folder = "../../data/pdos"
         >>> npdos = Npdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> npdos.get_Tpdos(300).data.iloc[0:5]
         beta
@@ -1341,7 +1341,7 @@ class Pdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> folder = "../../../data/pdos"
+        >>> folder = "../../data/pdos"
         >>> npdos = Pdos.from_directory(folder, usecols=[0, 1], index_col=0).data
         >>> npdos.iloc[0:5]
         T         300.0     500.0     1000.0    1700.0
@@ -1370,7 +1370,7 @@ class Pdos:
         Object initialization:
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("pdos.py", ""))
-        >>> folder = "../../../data/pdos"
+        >>> folder = "../../data/pdos"
         >>> pdos = Pdos.from_directory(folder, usecols=[0, 1], index_col=0)
         >>> pdos.type
         'Npdos'

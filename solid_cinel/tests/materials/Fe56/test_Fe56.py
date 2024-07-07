@@ -6,21 +6,25 @@ Created on Fri Nov 25 14:52:18 2022
 from scipy.integrate import trapezoid
 """
 import pandas as pd
-from solid_cinel import TargetMat, Alpha, Beta, Pdos, Sab
+from solid_cinel.core import Solid, Alpha, Beta, Pdos, Sab
 from scipy.integrate import trapezoid
 import pytest
 import os
-# Material information variables:
-from solid_cinel.data.materials.Fe56 import *
-
 
 # Example variables:
 from examples import *
 
-# Target material
+# Target material:
+file_dir = os.path.dirname(os.path.abspath(__file__))
+compositon_file = os.path.join(file_dir,
+                                    '../../../data/materials/Fe56/Fe56Composition')
+structure_file = os.path.join(file_dir,
+                                   '../../../data/materials/Fe56/Fe56Structure')
+atomPos_file = os.path.join(file_dir,
+                                 '../../../data/materials/Fe56/Fe56AtomPos')
+Fe = Solid.from_files(compositon_file, structure_file, atomPos_file)
 pdosFe56 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-Fe = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
-               A, Z, atomic_mass, b_coh, b_incoh, pdosFe56)
+Fe.set_pdos(pdosFe56)
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])

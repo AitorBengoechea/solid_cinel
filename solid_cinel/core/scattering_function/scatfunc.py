@@ -6,14 +6,14 @@ Python file for working with scattering functions.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import vectorize, float64, int32
+from numba import vectorize, float64
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder, Alpha
 from solid_cinel.core.scattering_function.sab import get_SabSct, Sab, phonon_expansion
-from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import get_tauNbeta
+from solid_cinel.core.material.pdos import Pdos
+from solid_cinel.core.material.tau import get_tauNbeta
 from typing import Iterable
 from math import sqrt, pi, exp
 import warnings

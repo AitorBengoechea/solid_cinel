@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.pdos import Pdos
 
 def add_PdosArgs() -> argparse.ArgumentParser:
     """

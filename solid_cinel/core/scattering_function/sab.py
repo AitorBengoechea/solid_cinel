@@ -5,8 +5,8 @@ Python file for working with S(alpha, -beta) matrixs.
 """
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential, interp_multyParallel
-from solid_cinel.core.material.vibration.pdos import Pdos
-from solid_cinel.core.material.vibration.tau import get_tauNfunc, get_tauNbeta
+from solid_cinel.core.material.pdos import Pdos
+from solid_cinel.core.material.tau import get_tauNfunc, get_tauNbeta
 from solid_cinel.core.scattering_function.beta import Beta
 from solid_cinel.core.scattering_function.alpha import Alpha, get_expansionOrder
 from typing import Iterable, Union

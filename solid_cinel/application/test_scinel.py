@@ -10,7 +10,7 @@ from solid_cinel.application.scinel import main
 # POO direct application:
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
-from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.xs import Dxs, Xs, DDxs
 
 

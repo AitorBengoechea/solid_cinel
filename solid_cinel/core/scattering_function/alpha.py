@@ -6,12 +6,12 @@ Python file for working with alpha function.
 """
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.material.vibration.pdos import Pdos
+from solid_cinel.core.material.pdos import Pdos
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange, float64, int32
+from numba import prange, float64
 from math import exp
 
 # constants
@@ -295,7 +295,7 @@ class Alpha:
 
         Examples
         --------
-        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> from solid_cinel.core.material import Pdos
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> T = 800
         >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
@@ -467,7 +467,7 @@ class Alpha:
 
         Example
         -------
-        >>> from solid_cinel.core.material.vibration.pdos import Pdos
+        >>> from solid_cinel.core.material import Pdos
         >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 800
         >>> alpha_grid = Alpha(alpha0_).scale(T)
@@ -708,7 +708,7 @@ def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> 
     >>> orderMax = 10
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
-    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> from solid_cinel.core.material import Pdos
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
     >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
     >>> T = 300
@@ -773,7 +773,7 @@ def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     >>> orderMax = 5000
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
-    >>> from solid_cinel.core.material.vibration.pdos import Pdos
+    >>> from solid_cinel.core.material import Pdos
     >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
     >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
     >>> T = 300

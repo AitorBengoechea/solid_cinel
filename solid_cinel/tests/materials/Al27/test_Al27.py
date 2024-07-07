@@ -5,20 +5,26 @@ Created on Fri Nov 25 14:52:18 2022
 @author: AB272525
 """
 import pandas as pd
-from solid_cinel import TargetMat, Alpha, Beta, Pdos, Sab
+from solid_cinel.core import Solid, Alpha, Beta, Pdos, Sab
 from scipy.integrate import trapezoid
 import pytest
 import os
-# Material information:
-from solid_cinel.data.materials.Al27 import *
 
 # Example variables:
 from examples import *
 
 # Target material:
+
+file_dir = os.path.dirname(os.path.abspath(__file__))
+compositon_file = os.path.join(file_dir,
+                                    '../../../data/materials/Al27/Al27Composition')
+structure_file = os.path.join(file_dir,
+                                   '../../../data/materials/Al27/Al27Structure')
+atomPos_file = os.path.join(file_dir,
+                                 '../../../data/materials/Al27/Al27AtomPos')
+Al = Solid.from_files(compositon_file, structure_file, atomPos_file)
 pdosAl27 = Pdos.from_dE(rho_in_energy, interv_in_energy)
-Al = TargetMat(preferred_orientation, unit_pos, dir_vec_length, dir_vec_angles,
-               A, Z, atomic_mass, b_coh, b_incoh, pdosAl27)
+Al.set_pdos(pdosAl27)
 
 
 @pytest.mark.parametrize("T", [20, 80, 293.6, 400, 600, 800])

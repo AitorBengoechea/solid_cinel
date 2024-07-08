@@ -32,7 +32,8 @@ def add_DDxsArgs(parser: argparse.ArgumentParser):
     parser.add_argument('theta', type=str,
                         help='Grid for the scattering angle in degrees')
 
-def check_algirithm(algorithm: str):
+
+def check_algorithm(algorithm: str):
     """
     Check if the algorithm is valid.
 
@@ -54,7 +55,7 @@ def check_algirithm(algorithm: str):
         raise ValueError(f'Invalid algorithm: {algorithm}')
 
 
-def handle_DDxsArgs(args: argparse.Namespace) -> np.array:
+def handle_DDxsArgs(args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments for the calculation of the double differential scattering
     cross section.
@@ -66,8 +67,9 @@ def handle_DDxsArgs(args: argparse.Namespace) -> np.array:
 
     Returns
     -------
-    np.array
-        An array containing the input temperature and the calculated effective temperature.
+    np.ndarray
+        An array containing the double differential scattering cross section
+        values.
     """
     # Read the data from files:
     theta, Eout = np.loadtxt(args.theta), np.loadtxt(args.Eout)
@@ -76,7 +78,7 @@ def handle_DDxsArgs(args: argparse.Namespace) -> np.array:
     xs = Xs.from_xs0K(args.xs0K, args.M)
 
     # Define the method to use
-    method = check_algirithm(args.algorithm)
+    method = check_algorithm(args.algorithm)
 
     # Get the extra arguments for Pdos
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []

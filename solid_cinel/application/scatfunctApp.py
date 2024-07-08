@@ -34,7 +34,7 @@ def add_ScatFuncArgs(parser: argparse.ArgumentParser):
                         help='Grid for the scattering angle in degrees')
 
 
-def handle_ScatFuncArgs(args: argparse.Namespace) -> np.array:
+def handle_ScatFuncArgs(args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments for the calculation of scattering function.
 
@@ -45,8 +45,8 @@ def handle_ScatFuncArgs(args: argparse.Namespace) -> np.array:
 
     Returns
     -------
-    np.array
-        An array containing the input temperature and the calculated effective temperature.
+    np.ndarray
+        An array containing the values of the scattering function.
     """
     # Read the data from files:
     theta = np.loadtxt(args.theta) if isinstance(args.theta, str) else args.theta

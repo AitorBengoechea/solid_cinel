@@ -100,7 +100,7 @@ class Neutron(Particle):
 
         Returns
         -------
-        "float"
+        float
             Velocity of the neutron in m/s
 
         Example
@@ -119,7 +119,7 @@ class Neutron(Particle):
 
         Returns
         -------
-        "float"
+        float
             Wavelength of the neutron in Angstrom
         """
         walength = 2 * np.pi * const["reduced Planck constant in eV s"][0] / np.sqrt(2 * self.m * self.E)
@@ -132,7 +132,7 @@ class Neutron(Particle):
 
         Returns
         -------
-        "float"
+        float
             Minimum distance for the LEAPR module of NJOY in Angstrom
         """
         return 0.5 * self.wavelength * 0.95
@@ -161,9 +161,9 @@ class Nucleus(Particle):
 
         Parameters
         ----------
-        M : "float"
+        M : float
             Mass of the nucleus in Amu
-        samples : "int", optional
+        samples : int, optional
             Number of samples to generate random velocities of the nucleus
             according to Maxwell-Boltzmann distribution, by default 1000.
         """
@@ -171,7 +171,7 @@ class Nucleus(Particle):
         self.samples = samples
         pass
 
-    def v(self, T: float, d: int = 1) -> np.array:
+    def v(self, T: float, d: int = 1) -> np.ndarray:
         """
         Random Velocity of the nucleus in m/s according to the Maxwell-Boltzmann
         distribution
@@ -180,32 +180,32 @@ class Nucleus(Particle):
 
         Parameters
         ----------
-        T : "float"
+        T : float
             Temperature of the nucleus in K
         d : "int", optional
             Number of dimensions of the sampling, by default 1
 
         Returns
         -------
-        "np.array", (samples,)
+        np.ndarray, (samples,)
             Array of random velocities of the nucleus in m/s according to the
             Maxwell-Boltzmann velocity distribution
         """
         a = np.sqrt(kb * T / self.m)
         return maxwell(scale=a).ppf(sampling(d, self.samples))
 
-    def get_E(self, v: np.array) -> np.array:
+    def get_E(self, v: np.ndarray) -> np.ndarray:
         """
         Kinetic energy of the nucleus in eV
 
         Parameters
         ----------
-        v : "np.array", (N,)
+        v : np.ndarray, (N,)
             Array of velocities of the nucleus in m/s
 
         Returns
         -------
-        "np.array", (N,)
+        np.ndarray, (N,)
             Array of kinetic energies of the nucleus in eV
 
         Example

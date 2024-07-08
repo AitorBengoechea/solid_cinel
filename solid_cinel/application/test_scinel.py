@@ -10,7 +10,7 @@ from solid_cinel.application.scinel import main
 # POO direct application:
 from solid_cinel.core.scattering_function.sab import Sab
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
-from solid_cinel.core.material.pdos import Pdos
+from solid_cinel.core.material import Pdos, Solid
 from solid_cinel.core.xs import Dxs, Xs, DDxs
 
 
@@ -19,16 +19,24 @@ class BaseTestScinel(unittest.TestCase):
         """
         Set up the test common variables.
         """
+        # Get the floats:
         self.T = 300
-        self.file_dir = os.path.dirname(os.path.abspath(__file__))
         self.Ein = 7.2
         self.M = 238.05077040419212
+
+        # Get the files:
+        self.file_dir = os.path.dirname(os.path.abspath(__file__))
         self.file_alpha = os.path.join(self.file_dir, 'inputTest/alphaGrid')
         self.file_beta = os.path.join(self.file_dir, 'inputTest/betaGrid')
         self.file_Eout = os.path.join(self.file_dir, 'inputTest/EoutGrid')
         self.file_theta = os.path.join(self.file_dir, 'inputTest/thetaGrid')
         self.file_pdos = os.path.join(self.file_dir, 'inputTest/interp.300')
         self.file_xs0K = os.path.join(self.file_dir, 'inputTest/u238.0.2')
+        self.composition_file = os.path.join(self.file_dir, 'inputTest/UO2Composition')
+        self.structure_file = os.path.join(self.file_dir, 'inputTest/UO2Structure')
+        self.atomPos_file = os.path.join(self.file_dir, 'inputTest/UO2AtomPos')
+
+        # Get the data in python:
         self.Eout = np.loadtxt(self.file_Eout)
         self.pdos = Pdos.from_file([self.T], [self.file_pdos])
         self.xs0K = Xs.read_xs(self.file_xs0K)
@@ -99,6 +107,7 @@ class BaseTestScinel(unittest.TestCase):
         # Check the results
         self.check_results(expected_result, *command_line)
 
+
 class TestScinelTeff(BaseTestScinel):
     """
     Test the Effective temperature calculation in terminal application in the
@@ -112,6 +121,13 @@ class TestScinelTeff(BaseTestScinel):
         self.keyword = 'teff'
         self.T = 300
 
+    @property
+    def get_command(self) -> list:
+        """
+        Get the command line arguments for the calculation.
+        """
+        return [self.keyword, self.T, self.file_pdos]
+
     def test_teff(self) -> None:
         """
         Test the effective temperature calculation
@@ -119,11 +135,8 @@ class TestScinelTeff(BaseTestScinel):
         # Generate the expected result
         expected_result = np.array([self.T, self.pdos.fix_T(self.T).Teff])
 
-        # Command line arguments
-        command_line_args = [self.keyword, self.T, self.file_pdos]
-
         # Check the results
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command)
 
 
 class TestScinelSab(BaseTestScinel):
@@ -200,6 +213,7 @@ class TestScinelSab(BaseTestScinel):
         Test the pdos model for the generating S(alpha, -beta) tables.
         """
         self.modelTest('pdos')
+
 
 class TestScinelScatFunc(BaseTestScinel):
     """
@@ -539,6 +553,87 @@ class TestScinelDDxs(BaseTestScinel):
         cross section.
         """
         self.allModelTest('4pcf', DDxs.from_4PCF)
+
+
+class TestScinelBraggEdges(BaseTestScinel):
+    """
+    Test the Bragg Edges calculation in terminal application.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables
+        """
+        super().setUp()
+        self.keyword = 'braggedges'
+        self.energyCut = 0.1
+
+    @property
+    def get_command(self) -> list:
+        """
+        Get the command line arguments for the calculation.
+        """
+        return [self.keyword, self.composition_file, self.structure_file,
+                self.atomPos_file, self.energyCut, self.T,
+                self.file_pdos, self.file_pdos]
+
+    @property
+    def get_solid(self) -> Solid:
+        """
+        Get the solid object for the calculation.
+        """
+        # Initialize the solid object:
+        solid = Solid.from_files(self.composition_file, self.structure_file,
+                                 self.atomPos_file)
+
+        # Introduce the partial density of states in the solid object:
+        solid.set_pdos([self.pdos, self.pdos])
+        return solid
+
+    def calc_BraggEdges(self) -> np.ndarray:
+        """
+        Calculate the Bragg Edges information.
+        """
+        bragg = self.get_solid.get_BraggEdges(self.energyCut, self.T)
+        return bragg.reset_index().values
+
+    def test_xscoh(self) -> None:
+        """
+        Test the coherent cross section calculation
+        """
+        # Generate the expected result
+        expected_result = self.calc_BraggEdges()
+
+        # Check the results
+        self.check_results(expected_result, *self.get_command)
+
+
+class TestScinelXsCoh(TestScinelBraggEdges):
+    """
+    Test the XsCoh class terminal application in the solid_cinel package.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables
+        """
+        super().setUp()
+        self.keyword = 'xscoh'
+
+    def calc_xsCoh(self) -> np.ndarray:
+        """
+        Calculate the coherent cross section.
+        """
+        xsCoh = self.get_solid.get_XsCoh(self.energyCut, self.T)
+        return np.column_stack((xsCoh.index.values, xsCoh.values))
+
+    def test_xscoh(self) -> None:
+        """
+        Test the coherent cross section calculation
+        """
+        # Generate the expected result
+        expected_result = self.calc_xsCoh()
+
+        # Check the results
+        self.check_results(expected_result, *self.get_command)
 
 
 if __name__ == '__main__':

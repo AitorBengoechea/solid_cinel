@@ -318,7 +318,7 @@ def reshift(data: pd.Series, dx: [float, np.ndarray]) -> pd.Series:
     return pd.Series(reshifted_data, index=data.index.values)
 
 
-def sampling(d: int, n: int) -> np.array:
+def sampling(d: int, n: int) -> np.ndarray:
     """
     Generate a latin hypercube sampling between 0 and 1.
 
@@ -331,7 +331,7 @@ def sampling(d: int, n: int) -> np.array:
 
     Returns
     -------
-    "np.array"
+    "np.ndarray"
         Array of random numbers between 0 and 1 based on LHS
     """
     samples = qmc.LatinHypercube(d=d).random(n=n)

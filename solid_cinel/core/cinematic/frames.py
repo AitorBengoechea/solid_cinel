@@ -55,26 +55,27 @@ class Cm:
         self.samples = samples
         pass
     @property
-    def mu(self) -> np.array:
+    def mu(self) -> np.ndarray:
         """
         Cosine of the angle between the velocity of the neutron in the CM and
         the velocity of the nucleus in the CM
 
         Returns
         -------
-        "np.array", (samples,)
+        "np.np.ndarray", (samples,)
             Array of random cosines between the velocity of the neutron in the
             CM and the velocity of the nucleus in the CM in the collision plane
         """
         return sampling(1, self.samples) * 2 - 1
     @property
-    def phi(self) -> np.array:
+    def phi(self) -> np.ndarray:
         """
         Angle between the velocity of the neutron in the CM and the velocity of
         the nucleus in the CM outside the collision plane
+
         Returns
         -------
-        "np.array", (samples,)
+        "np.ndarray", (samples,)
             Array of random angles between the velocity of the neutron in the CM
             and the velocity of the nucleus in the CM outside the collision
             plane
@@ -114,8 +115,8 @@ class Tr:
         Cosine of the angle between the velocities of the neutron before and
         after the collision in the TR frame
     """
-    def __init__(self, M: float, T: float, mu: np.array = None,
-                 muCm: np.array = None, v_nucleus: np.array = None,
+    def __init__(self, M: float, T: float, mu: np.ndarray = None,
+                 muCm: np.ndarray = None, v_nucleus: np.ndarray = None,
                  samples: int = 1000):
         """
         Initialize the class Tr. If the arguments are not provided by the user,
@@ -123,22 +124,22 @@ class Tr:
 
         Parameters
         ----------
-        M : "float"
+        M : float
             Mass of the nucleus in Amu
-        T : "float"
+        T : float
             Temperature of the nucleus in K
-        mu : "np.array", optional
+        mu : np.ndarray, optional
             Cosine of the velocity of the target nucleus and the velocity of the
             neutron in LAB frame. By default None, so its calculated randomly.
-        muCm : "np.array", optional
+        muCm : np.ndarray, optional
             Cosine of the velocity of the neutron in the CM and the velocity of
             the nucleus in the CM in the collision . By default None, so it is
             randomly calculated in Cm class.
-        v_nucleus : "np.array", optional
+        v_nucleus : np.ndarray, optional
             Velocity of the nucleus in the LAB frame according to the
             Maxwell-Boltzmann velocity distribution. By default None, so it is
             randomly calculated in Nucleus class.
-        samples : "int", optional
+        samples : int, optional
             Number of samples to generate random velocities of the nucleus if
             the previous arguments are not provided, by default 1000.
         """
@@ -149,7 +150,7 @@ class Tr:
         self.samples = len(self.mu)  # For consistency
         pass
 
-    def v(self, Eneutron: float) -> np.array:
+    def v(self, Eneutron: float) -> np.ndarray:
         """
         Velocity of the neutron in the TR frame
         .. math::
@@ -157,12 +158,12 @@ class Tr:
 
         Parameters
         ----------
-        Eneutron : "float"
+        Eneutron : float
             Energy of the neutron in the LAB frame in eV
 
         Returns
         -------
-        "np.array", (samples,)
+        np.ndarray, (samples,)
             Array of the velocities of the neutron in the TR frame for different
             nucleus velocities in the LAB frame
 
@@ -176,7 +177,7 @@ class Tr:
         v_neutron = Neutron(Eneutron).v
         return np.sqrt(v_neutron ** 2 + self.v_nucleus ** 2 - 2 * self.v_nucleus * v_neutron * self.mu)
 
-    def vprime(self, Eneutron: float) -> np.array:
+    def vprime(self, Eneutron: float) -> np.ndarray:
         """
         Velocity of the neutron in the Tr frame after the collision
         .. math::
@@ -185,12 +186,12 @@ class Tr:
 
         Parameters
         ----------
-        Eneutron : "float"
+        Eneutron : float
             Energy of the neutron in the LAB frame in eV
 
         Returns
         -------
-        "np.array", (samples,)
+        np.ndarray, (samples,)
             Array of the velocities of the neutron in the TR frame after the
             collision for different nucleus velocities and angles between the
             velocity of the neutron and the velocity of the nucleus in the LAB
@@ -198,7 +199,7 @@ class Tr:
 
         Examples
         --------
-        >>> Target_at_Rest = Tr(238, 300, v_nucleus = v_nucleus, mu = mu, muCm = muCm)
+        >>> Target_at_Rest = Tr(238, 300, v_nucleus=v_nucleus, mu=mu, muCm=muCm)
         >>> E = 6.6
         >>> Target_at_Rest.vprime(E).round(2)
         array([35331.11, 35393.54])
@@ -209,7 +210,7 @@ class Tr:
         return vprime
 
     @property
-    def muprime(self) -> np.array:
+    def muprime(self) -> np.ndarray:
         """
         Cosine of the angle between the velocities of the neutron before and
         after the collision in the TR
@@ -219,7 +220,7 @@ class Tr:
 
         Returns
         -------
-        "np.array", (samples,)
+        np.ndarray, (samples,)
             Array of angles between the velocities of the neutron before and
             after the collision in the TR frame for different nucleus velocities
             and angles between the velocity of the neutron and the velocity of
@@ -261,19 +262,19 @@ class Lab:
 
     Methods
     -------
-    v -> np.array:
+    v -> np.ndarray:
         Velocity of the neutron in the LAB frame
-    vprime -> np.array:
+    vprime -> np.ndarray:
         Velocity of the neutron in the LAB frame after the collision
-    muprime -> np.array:
+    muprime -> np.ndarray:
         Cosine of the angle between the velocities of the neutron before and
         after the collision in the LAB
     run -> pd.DataFrame:
         Run the simulation of the collision in the LAB frame
     """
-    def __init__(self, M: float, T: float, mu: np.array = None,
-                 muCm: np.array = None, phiCm: np.array = None,
-                 v_nucleus: np.array = None, samples: int = 1000) -> None:
+    def __init__(self, M: float, T: float, mu: np.ndarray = None,
+                 muCm: np.ndarray = None, phiCm: np.ndarray = None,
+                 v_nucleus: np.ndarray = None, samples: int = 1000) -> None:
         """
         Class to simulate 2 body collisions in the LAB frame according to the
         SVT model
@@ -284,22 +285,22 @@ class Lab:
             Mass of the nucleus in Amu
         T : "float"
             Temperature of the nucleus in K
-        mu : "np.array", optional
+        mu : np.ndarray, optional
             Cosine of the velocity of the target nucleus and the velocity of the
             neutron in LAB frame. By default None, so its calculated randomly.
-        muCm : "np.array", optional
+        muCm : np.ndarray, optional
             Cosine of the velocity of the neutron in the CM and the velocity of
             the nucleus in the CM in the collision . By default None, so it is
             randomly calculated in Cm class.
-        phiCm : "np.array", optional
+        phiCm : np.ndarray, optional
             Angle between the velocity of the neutron in the CM and the velocity
             of the nucleus in the CM outside the collision plane. By default
              None, so it is randomly calculated in Cm class.
-        v_nucleus : "np.array", optional
+        v_nucleus : np.ndarray, optional
             Velocity of the nucleus in the LAB frame according to the
             Maxwell-Boltzmann velocity distribution. By default None, so it is
             randomly calculated in Nucleus class.
-        E_nucleus : "np.array", optional
+        E_nucleus : np.ndarray, optional
             Energy of the nucleus in Ev
         samples : "int", optional
             Number of samples to generate random velocities of the nucleus if
@@ -314,7 +315,7 @@ class Lab:
         self.Tr = Tr(M, T, mu=self.mu, muCm=self.muCm, v_nucleus=self.v_nucleus, samples=self.samples)
         pass
 
-    def mu_relative(self, Eneutron: float) -> np.array:
+    def mu_relative(self, Eneutron: float) -> np.ndarray:
         """
         Relative cosine between the relative velocity of the neutron in the
         Target at Rest Frame and the velocity of the nucleus in the LAB frame.
@@ -323,18 +324,18 @@ class Lab:
 
         Parameters
         ----------
-        Eneutron : "float"
+        Eneutron : float
             Energy of the neutron in the LAB frame in eV
 
         Returns
         -------
-        "np.array", (samples,)
+        np.ndarray, (samples,)
             Array of the relative cosine between the relative velocity in the TR
             frame and the velocity of the nucleus in the LAB frame.
 
         Examples
         --------
-        >>> lab = Lab(238, 300, v_nucleus = v_nucleus, mu = mu, muCm = muCm, phiCm = phiCm)
+        >>> lab = Lab(238, 300, v_nucleus=v_nucleus, mu=mu, muCm=muCm, phiCm=phiCm)
         >>> E = 6.6
         >>> lab.mu_relative(E).round(2)
         array([ 0.71, -0.5 ])
@@ -344,7 +345,7 @@ class Lab:
         mu_relative /= np.sqrt(v_neutron ** 2 + self.v_nucleus ** 2 - 2 * v_neutron * self.v_nucleus * self.mu)
         return mu_relative
 
-    def mu_Tr_v_nucl(self, Eneutron: float):
+    def mu_Tr_v_nucl(self, Eneutron: float) -> np.ndarray:
         """
         Cosine of the angle between the velocity of the neutron after the
         collision in the TR frame and the velocity of the nucleus in the LAB
@@ -354,19 +355,19 @@ class Lab:
 
         Parameters
         ----------
-        Eneutron : "float"
+        Eneutron : float
             Energy of the neutron in the LAB frame in eV
 
         Returns
         -------
-        "np.array", (samples,)
+        np.ndarray, (samples,)
             Array of the cosine of the angle between the velocity of the neutron
             after the collision in the TR frame and the velocity of the nucleus
             in the LAB frame
 
         Examples
         --------
-        >>> lab = Lab(238, 300, v_nucleus = v_nucleus, mu = mu, muCm = muCm, phiCm = phiCm)
+        >>> lab = Lab(238, 300, v_nucleus=v_nucleus, mu=mu, muCm=muCm, phiCm=phiCm)
         >>> E = 6.6
         >>> lab.mu_Tr_v_nucl(E).round(2)
         array([ 0.4 , -0.22])
@@ -375,7 +376,7 @@ class Lab:
         Trmuprime = self.Tr.muprime
         return Trmuprime * mu_relative + np.sqrt(1 - Trmuprime ** 2) * np.sqrt(1 - mu_relative ** 2) * np.cos(self.phiCm)
 
-    def vprime(self, Eneutron: float) -> np.array:
+    def vprime(self, Eneutron: float) -> np.ndarray:
         """
         Velocity of the neutron after the collision in the LAB frame
         .. math::
@@ -388,13 +389,13 @@ class Lab:
 
         Returns
         -------
-        "np.array", (samples,)
+        np.ndarray, (samples,)
             Array of the velocity of the neutron after the collision in the LAB
             frame
 
         Examples
         --------
-        >>> lab = Lab(238, 300, v_nucleus = v_nucleus, mu = mu, muCm = muCm, phiCm = phiCm)
+        >>> lab = Lab(238, 300, v_nucleus=v_nucleus, mu=mu, muCm=muCm, phiCm=phiCm)
         >>> E = 6.6
         >>> lab.vprime(E).round(2)
         array([35437.77, 35362.94])
@@ -403,7 +404,7 @@ class Lab:
         Tr_vprime = self.Tr.vprime(Eneutron)
         return np.sqrt(Tr_vprime ** 2 + 2 * Tr_vprime * self.v_nucleus * mu_Tr_v_nucl + self.v_nucleus ** 2)
 
-    def muprime(self, Eneutron: float) -> np.array:
+    def muprime(self, Eneutron: float) -> np.ndarray:
         """
         Cosine of the angle between the velocity of the neutron after and before
         the collision in the LAB frame
@@ -417,13 +418,13 @@ class Lab:
 
         Returns
         -------
-        "np.array", (samples,)
+        "np.ndarray", (samples,)
             Array of the cosine of the angle between the velocity of the neutron
             after and before the collision in the LAB frame
 
         Examples
         --------
-        >>> lab = Lab(238, 300, v_nucleus = v_nucleus, mu = mu, muCm = muCm, phiCm = phiCm)
+        >>> lab = Lab(238, 300, v_nucleus=v_nucleus, mu=mu, muCm=muCm, phiCm=phiCm)
         >>> E = 6.6
         >>> lab.muprime(E).round(2)
         array([ 0.91, -0.41])

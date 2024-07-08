@@ -35,7 +35,29 @@ def add_BraggEdgesArgs(parser: argparse.ArgumentParser):
                         help='Threshold to consider a value as zero')
 
 
-def handle_xsCohArgs(args: argparse.Namespace) -> np.array:
+def get_solid(args: argparse.Namespace) -> Solid:
+    """
+    Get the solid object from the arguments.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments.
+
+    Returns
+    -------
+    Solid
+        The solid object.
+    """
+    # Initialize the solid object:
+    solid = Solid.from_files(args.compositon_file, args.structure_file, args.atomPos_file)
+
+    # Introduce the partial density of states in the solid object:
+    solid.set_pdos(get_Pdos(args))
+    return solid
+
+
+def handle_xsCohArgs(args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments for the calculation of the coherant cross section.
 
@@ -46,16 +68,13 @@ def handle_xsCohArgs(args: argparse.Namespace) -> np.array:
 
     Returns
     -------
-    np.array
+    np.ndarray
         An array containing the coherent cross section. The columns are:
             - The energy in eV
             - The coherent cross section in barns
     """
     # Initialize the solid object:
-    solid = Solid.from_files(args.compositon_file, args.structure_file, args.atomPos_file)
-
-    # Introduce the partial density of states in the solid object:
-    solid.set_pdos(get_Pdos(args))
+    solid = get_solid(args)
 
     # Calculate the coherent cross section:
     xsCoh = solid.get_XsCoh(args.energyCut, args.T, precision=args.precision,
@@ -64,7 +83,7 @@ def handle_xsCohArgs(args: argparse.Namespace) -> np.array:
     return np.column_stack((xsCoh.index.values, xsCoh.values))
 
 
-def handle_BraggEdgesArgs(args: argparse.Namespace) -> np.array:
+def handle_BraggEdgesArgs(args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments for the calculation of the Bragg Edges.
 
@@ -75,7 +94,7 @@ def handle_BraggEdgesArgs(args: argparse.Namespace) -> np.array:
 
     Returns
     -------
-    np.array
+    np.ndarray
         An array containing all the information of the Bragg Edges. The columns
         are:
             - hkl: The Miller indexes of the Bragg Edge (h, k, l)
@@ -89,10 +108,7 @@ def handle_BraggEdgesArgs(args: argparse.Namespace) -> np.array:
             - The difraction angle in degrees
     """
     # Initialize the solid object:
-    solid = Solid.from_files(args.compositon_file, args.structure_file, args.atomPos_file)
-
-    # Introduce the partial density of states in the solid object:
-    solid.set_pdos(get_Pdos(args))
+    solid = get_solid(args)
 
     # Calculate all the information of the Bragg Edges:
     braggEdges = solid.get_BraggEdges(args.energyCut, args.T,

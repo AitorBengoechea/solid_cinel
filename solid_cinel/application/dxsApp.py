@@ -8,7 +8,8 @@ from solid_cinel.core.xs.xs import Xs
 
 def add_DxsArgs(parser: argparse.ArgumentParser):
     """
-    Add arguments to the parser for the calculation of the differential cross section.
+    Add arguments to the parser for the calculation of the differential cross
+    section.
 
     Parameters
     ----------
@@ -45,7 +46,10 @@ def handle_DxsArgs(args: argparse.Namespace) -> np.array:
     Returns
     -------
     np.array
-        An array containing the input temperature and the calculated effective temperature.
+        An array containing the differential cross section. The columns are:
+            - The energy in eV
+            - The scattering angle in degrees
+            - The differential cross section in barns
     """
     # Read the data from files:
     theta = np.loadtxt(args.theta) if isinstance(args.theta, str) else args.theta

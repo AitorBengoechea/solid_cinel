@@ -3,6 +3,7 @@ import numpy as np
 from typing import List, Union
 from solid_cinel.core.material.pdos import Pdos
 
+
 def add_PdosArgs() -> argparse.ArgumentParser:
     """
     Add arguments to the parser for the calculation of the effective temperature.
@@ -86,7 +87,7 @@ def add_TeffArgs(parser: argparse.ArgumentParser):
     parser.add_argument('T', type=float, help='Temperature in Kelvin')
 
 
-def handle_TeffArgs(args: argparse.Namespace) -> np.array:
+def handle_TeffArgs(args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments for the calculation of the effective temperature.
 
@@ -97,8 +98,9 @@ def handle_TeffArgs(args: argparse.Namespace) -> np.array:
 
     Returns
     -------
-    np.array
-        An array containing the input temperature and the calculated effective temperature.
+    np.ndarray
+        An array containing the input temperature and the calculated effective
+        temperature.
     """
     # Return the input temperature and the calculated effective temperature
     return np.array([args.T, get_Pdos(args).fix_T(args.T).Teff])

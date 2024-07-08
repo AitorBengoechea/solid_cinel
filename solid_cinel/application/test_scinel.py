@@ -107,6 +107,7 @@ class BaseTestScinel(unittest.TestCase):
         # Check the results
         self.check_results(expected_result, *command_line)
 
+
 class TestScinelTeff(BaseTestScinel):
     """
     Test the Effective temperature calculation in terminal application in the
@@ -120,6 +121,13 @@ class TestScinelTeff(BaseTestScinel):
         self.keyword = 'teff'
         self.T = 300
 
+    @property
+    def get_command(self) -> list:
+        """
+        Get the command line arguments for the calculation.
+        """
+        return [self.keyword, self.T, self.file_pdos]
+
     def test_teff(self) -> None:
         """
         Test the effective temperature calculation
@@ -127,11 +135,8 @@ class TestScinelTeff(BaseTestScinel):
         # Generate the expected result
         expected_result = np.array([self.T, self.pdos.fix_T(self.T).Teff])
 
-        # Command line arguments
-        command_line_args = [self.keyword, self.T, self.file_pdos]
-
         # Check the results
-        self.check_results(expected_result, *command_line_args)
+        self.check_results(expected_result, *self.get_command)
 
 
 class TestScinelSab(BaseTestScinel):
@@ -208,6 +213,7 @@ class TestScinelSab(BaseTestScinel):
         Test the pdos model for the generating S(alpha, -beta) tables.
         """
         self.modelTest('pdos')
+
 
 class TestScinelScatFunc(BaseTestScinel):
     """
@@ -548,7 +554,60 @@ class TestScinelDDxs(BaseTestScinel):
         """
         self.allModelTest('4pcf', DDxs.from_4PCF)
 
-class TestScinelXsCoh(BaseTestScinel):
+
+class TestScinelBraggEdges(BaseTestScinel):
+    """
+    Test the Bragg Edges calculation in terminal application.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables
+        """
+        super().setUp()
+        self.keyword = 'braggedges'
+        self.energyCut = 0.1
+
+    @property
+    def get_command(self) -> list:
+        """
+        Get the command line arguments for the calculation.
+        """
+        return [self.keyword, self.composition_file, self.structure_file,
+                self.atomPos_file, self.energyCut, self.T,
+                self.file_pdos, self.file_pdos]
+
+    @property
+    def get_solid(self) -> Solid:
+        """
+        Get the solid object for the calculation.
+        """
+        # Initialize the solid object:
+        solid = Solid.from_files(self.composition_file, self.structure_file,
+                                 self.atomPos_file)
+
+        # Introduce the partial density of states in the solid object:
+        solid.set_pdos([self.pdos, self.pdos])
+        return solid
+
+    def calc_BraggEdges(self) -> np.ndarray:
+        """
+        Calculate the Bragg Edges information.
+        """
+        bragg = self.get_solid.get_BraggEdges(self.energyCut, self.T)
+        return bragg.reset_index().values
+
+    def test_xscoh(self) -> None:
+        """
+        Test the coherent cross section calculation
+        """
+        # Generate the expected result
+        expected_result = self.calc_BraggEdges()
+
+        # Check the results
+        self.check_results(expected_result, *self.get_command)
+
+
+class TestScinelXsCoh(TestScinelBraggEdges):
     """
     Test the XsCoh class terminal application in the solid_cinel package.
     """
@@ -558,17 +617,13 @@ class TestScinelXsCoh(BaseTestScinel):
         """
         super().setUp()
         self.keyword = 'xscoh'
-        self.energyCut = 0.1
 
     def calc_xsCoh(self) -> np.ndarray:
         """
         Calculate the coherent cross section.
         """
-        solid = Solid.from_files(self.composition_file, self.structure_file,
-                                 self.atomPos_file)
-        solid.set_pdos([self.pdos, self.pdos])
-        xsCoh = solid.get_XsCoh(self.energyCut, self.T)
-        return  np.column_stack((xsCoh.index.values, xsCoh.values))
+        xsCoh = self.get_solid.get_XsCoh(self.energyCut, self.T)
+        return np.column_stack((xsCoh.index.values, xsCoh.values))
 
     def test_xscoh(self) -> None:
         """
@@ -577,14 +632,8 @@ class TestScinelXsCoh(BaseTestScinel):
         # Generate the expected result
         expected_result = self.calc_xsCoh()
 
-        # Command line arguments
-        command_line_args = [self.keyword, self.composition_file, self.structure_file,
-                             self.atomPos_file, self.energyCut, self.T,
-                             self.file_pdos, self.file_pdos]
-
         # Check the results
-        self.check_results(expected_result, *command_line_args)
-
+        self.check_results(expected_result, *self.get_command)
 
 
 if __name__ == '__main__':

@@ -439,7 +439,7 @@ class Solid(CrystalStructure, Molecule):
         return Bfact * 1.0e20 if anstrom else Bfact
 
     def get_multiplicity(self, energyCut: float, T: float,
-                         precision: list = [6, 6], d_min = None,
+                         precision: list = [6, 6], d_min: float = None,
                          **kwargs) -> pd.DataFrame:
         """
         Obtain hkl data for the solid in a certain temperature and for a neutron
@@ -536,7 +536,8 @@ class Solid(CrystalStructure, Molecule):
 
     def get_BraggEdges(self, energyCut: float, T: float,
                        xs: bool = True, difracAngles: bool = True,
-                       precision = [6, 6], d_min = None, pddf_kind: str = None, pddf_val: str = None,
+                       precision: List = [6, 6], d_min: float = None,
+                       pddf_kind: str = None, pddf_val: str = None,
                        threshold: float = 1.e-30) -> pd.DataFrame:
         """
         Get BraggEdges.
@@ -568,7 +569,7 @@ class Solid(CrystalStructure, Molecule):
 
         Parameters for get_ppdf
         -----------------------
-        kind : 'str', optional
+        pddf_kind : 'str', optional
             key to calculate PDDF. The default is None. Options:
                 - march_dollase
                 - altomare
@@ -663,8 +664,8 @@ class Solid(CrystalStructure, Molecule):
         return multiplicity
 
     def get_XsCoh(self, energyCut: float, T: float, precision: List = [6, 6],
-                  d_min = None, pddf_kind: str = None, pddf_val: str = None,
-                  threshold: float = 1.e-30) -> pd.Series:
+                  d_min: float = None, pddf_kind: str = None,
+                  pddf_val: str = None, threshold: float = 1.e-30) -> pd.Series:
         """
         Get coherent Xs.
 
@@ -941,7 +942,7 @@ def add_pddfToMultiplicity(multiplicity: pd.DataFrame, kind: str = None,
     return multiplicity
 
 def add_difracAnglesToMultiplicity(multiplicity: pd.DataFrame,
-                                       energyCut: float) -> pd.DataFrame:
+                                   energyCut: float) -> pd.DataFrame:
     """
     Add to the hkl data dataframe the difraction angles(ª) vs hkl data.
     .. math::

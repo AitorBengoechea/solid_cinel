@@ -5,7 +5,7 @@ from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
 from solid_cinel.application.scatfunctApp import add_ScatFuncArgs, handle_ScatFuncArgs
 from solid_cinel.application.dxsApp import add_DxsArgs, handle_DxsArgs
 from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs
-from solid_cinel.application.xscohApp import add_xsCohArgs, handle_xsCohArgs
+from solid_cinel.application.xscohApp import add_BraggEdgesArgs, handle_xsCohArgs, handle_BraggEdgesArgs
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
@@ -30,9 +30,13 @@ KEYWORD_TO_FUNCTION_MAP = {
         "handle": handle_DDxsArgs,
     },
     "xscoh": {
-        "add": add_xsCohArgs,
+        "add": add_BraggEdgesArgs,
         "handle": handle_xsCohArgs,
     },
+    "braggedges": {
+        "add": add_BraggEdgesArgs,
+        "handle": handle_BraggEdgesArgs,
+    }
 }
 
 
@@ -58,7 +62,7 @@ def add_args(parser: argparse.ArgumentParser, keyword: str):
         raise ValueError(f'Invalid keyword: {keyword}')
 
 
-def handle_args(keyword: str, args: argparse.Namespace) -> np.array:
+def handle_args(keyword: str, args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments based on the keyword.
 
@@ -71,7 +75,7 @@ def handle_args(keyword: str, args: argparse.Namespace) -> np.array:
 
     Returns
     -------
-    np.array
+    np.ndarray
         The results of handling the arguments.
 
     Raises
@@ -111,7 +115,7 @@ def merge_namespaces(ns1, ns2):
     # Convert merged dictionary back to namespace
     return argparse.Namespace(**merged_dict)
 
-def get_results(args: argparse.Namespace, remaining_args: list) -> np.array:
+def get_results(args: argparse.Namespace, remaining_args: list) -> np.ndarray:
     """
     Get the results based on the keyword.
 
@@ -124,7 +128,7 @@ def get_results(args: argparse.Namespace, remaining_args: list) -> np.array:
 
     Returns
     -------
-    np.array
+    np.ndarray
         The results of handling the arguments.
     """
     # Second parser to parse the dynamic arguments of the functions
@@ -169,7 +173,7 @@ def write_results(results: np.array, keyword: str):
     np.savetxt(f'{keyword}', results)
 
 
-def main(*command_manual_args, write_to_file=True):
+def main(*command_manual_args: list, write_to_file=True):
     """
     This is the main function for the Solid Cinel application. It uses the
     argparse module to create a command-line interface.
@@ -186,8 +190,9 @@ def main(*command_manual_args, write_to_file=True):
 
     Returns
     -------
-    np.array or None
-        The results of handling the arguments, if write_to_file is False. Otherwise, None.
+    np.ndarray or None
+        The results of handling the arguments, if write_to_file is False.
+        Otherwise, None.
     """
     # 'keyword' argument to determine the function to execute
     parser = argparse.ArgumentParser(description='Solid Cinel: Solid State Physics and Materials Science',

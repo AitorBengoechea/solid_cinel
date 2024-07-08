@@ -23,7 +23,7 @@ def add_SabArgs(parser: argparse.ArgumentParser):
                         help='Temperature in Kelvin')
 
 
-def handle_SabArgs(args: argparse.Namespace) -> np.array:
+def handle_SabArgs(args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments for the calculation of the S(alpha, -beta) tables.
 
@@ -34,8 +34,8 @@ def handle_SabArgs(args: argparse.Namespace) -> np.array:
 
     Returns
     -------
-    np.array
-        An array containing the input temperature and the calculated effective temperature.
+    np.ndarray
+        An array containing the values of the S(alpha, -beta) table.
     """
     # Validate temperature
     if args.T < 0:

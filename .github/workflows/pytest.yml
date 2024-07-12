@@ -21,14 +21,8 @@ jobs:
           python-version: '3.10.12'
           cache: 'pip'
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-      - name: install general python dependencies
-        run: pip install sphinx sphinx_rtd_theme numpydoc coveralls pytest-cov nbval
-      - name: install solid cinel requirements
-        run: pip install -r requirements.txt
       - name: install solid_cinel
-        run: python -m pip install . --user
+        run: bash install.sh
       - name: pytest solid_cinel code core
         run: pytest --cov=solid_cinel solid_cinel/core/
       - name: pytest solid_cinel code applications

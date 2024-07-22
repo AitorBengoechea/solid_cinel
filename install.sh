@@ -46,8 +46,6 @@ python -m pip install --upgrade pip
 pip install sphinx sphinx_rtd_theme numpydoc coveralls pytest-cov nbval
 
 # Step 9: Install solid_cinel dependencies
-# Assuming this step is meant to install a local package or module.
-# Ensure this command is run in the directory containing setup.py or adjust the path accordingly.
 python -m pip install . --user
 
-echo "Setup completed successfully."
+echo "To use the program, you need to activate the Conda environment 'scinel' by running 'conda activate scinel'."

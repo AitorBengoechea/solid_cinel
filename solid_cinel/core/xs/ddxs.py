@@ -136,7 +136,7 @@ class DDxs:
         >>> Ein = 2.0
         >>> Eout = np.array([1.8, 1.88008, 1.96016, 2.04024, 2.12032])
         >>> theta = np.array([40, 80, 120, 160])
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # S(alpha, -beta) algorithm for FGM:
@@ -245,7 +245,7 @@ class DDxs:
         >>> Ein = 2.0
         >>> Eout = np.array([1.8, 1.88008, 1.96016, 2.04024, 2.12032])
         >>> theta = np.array([40, 80, 120, 160])
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # Coercelle with sigma1 algorithm:
@@ -366,7 +366,7 @@ class DDxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # S(alpha, -beta) algorithm for FGM:

@@ -1023,7 +1023,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
@@ -1092,7 +1092,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
@@ -1186,7 +1186,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)

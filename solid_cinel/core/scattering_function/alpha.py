@@ -296,7 +296,7 @@ class Alpha:
         Examples
         --------
         >>> from solid_cinel.core.material import Pdos
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> T = 800
         >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
         >>> M = 26.98153433356103

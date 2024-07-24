@@ -1094,10 +1094,10 @@ class Xs:
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
         180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    8.421971  8.414644  8.407319  8.399813  8.392374
-        90     8.868318  8.857919  8.847491  8.836837  8.826207
-        60     8.996254  8.985686  8.975071  8.964208  8.953327
-        30     9.036288  9.025780  9.015211  9.004388  8.993517
+        120    8.715814  8.706095  8.696352  8.686417  8.676536
+        90     8.919007  8.908490  8.897931  8.887140  8.876363
+        60     9.009400  8.998842  8.988231  8.977373  8.966493
+        30     9.042192  9.031696  9.021137  9.010325  8.999463
 
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
@@ -1113,6 +1113,12 @@ class Xs:
 
         # Get the temperature grid for the 4PCF model:
         T4PCF = T * (1 + mu) / 2
+
+        # Fix the temperatures for the SCT model as the effective temperature
+        if kwargs.get("model", "fgm") == "sct":
+            Teff4PCF = np.array([args[0].fix_T(Tmu).Teff if Tmu > 0 else Tmu for Tmu in T4PCF])
+            NonNanNumber = ~np.isnan(Teff4PCF)
+            T4PCF[NonNanNumber] = Teff4PCF[NonNanNumber]
 
         # Get the incident energy grid:
         Ein4PCF = EinMat4PCF(Ein, Eout, mu[::, np.newaxis], self.M)
@@ -1197,8 +1203,7 @@ def default_Eout(Ein: float) -> np.ndarray:
 
 @vectorize(["float64(float64, float64, float64, float64)"],
            target="parallel", cache=True)
-def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                    M: float) -> float:
+def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> float:
     """
     Get the incident energy matrix for 4PCF model.
 

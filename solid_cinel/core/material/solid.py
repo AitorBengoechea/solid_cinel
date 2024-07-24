@@ -1314,12 +1314,9 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
     orientation_norm = np.linalg.norm(preferred_orientation)
 
     # Loop over the hkl planes:
-    h_range, k_range, l_range = [np.arange(-x, x + 1) for x in hkl_max]
-
-    # Loop over the hkl planes:
-    for h in h_range[::-1]:  # to get positive hkl order
-        for k in k_range[::-1]:
-            for l in l_range[::-1]:
+    for h in range(hkl_max[0], -hkl_max[0] - 1, -1):  # to get positive hkl order
+        for k in range(hkl_max[1], -hkl_max[1] - 1, -1):
+            for l in range(hkl_max[2], -hkl_max[2] - 1, -1):
                 if h ** 2 + k ** 2 + l ** 2 == 0:  # (0, 0, 0) is excluded
                     continue
 
@@ -1335,18 +1332,19 @@ def hklloop(d_min: float, hkl_max: np.ndarray, rec_vecs: np.ndarray,
                 Fsq = Fsq_hkl(vec_tau_hkl, Bfac, csl, pos)
 
                 # same dspacing and Fsquared with precision will be regrouped
-                d_rnd, Fsq_rnd = round(d_hkl, precision[0]), round(Fsq, precision[1])
+                d_rnd = round(d_hkl, precision[0])
+                Fsq_rnd = round(Fsq, precision[1])
 
                 # Write the output
                 if (d_rnd, Fsq_rnd) in hkldF:
-                    hklM[hkldF[(d_rnd, Fsq_rnd)]][-1] += 1
+                    hkl_regroup = hkldF[(d_rnd, Fsq_rnd)]
+                    hklM[hkl_regroup][-1] += 1
                 else:
                     hkldF[(d_rnd, Fsq_rnd)] = (h, k, l)
                     OA_num = np.sum(vec_tau_hkl * preferred_orientation)
                     OA_den = np.linalg.norm(vec_tau_hkl) * orientation_norm
-                    hklM[(h, k, l)] = np.array([d_hkl, Fsq,
-                                                acos(OA_num / OA_den) * 180 / pi,
-                                                1])
+                    difracAngle = acos(OA_num / OA_den) * 180 / pi
+                    hklM[(h, k, l)] = np.array([d_hkl, Fsq, difracAngle, 1])
     return hklM
 
 

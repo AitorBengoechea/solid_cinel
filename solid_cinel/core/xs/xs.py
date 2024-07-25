@@ -1234,5 +1234,5 @@ def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
          0.5  1.903825  1.954028  2.004237  2.054452  2.104671
          0.9  1.900524  1.950660  2.000847  2.051083  2.101362
     """
-    EinArno = (Eout + Ein + get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)) / 2
+    EinArno = (Eout + Ein) / 2
     return EinArno - Ein * mu * m / M

@@ -576,7 +576,7 @@ class Xs:
         >>> xs = Xs.from_xs0K("u238.0.2", M, EinGrid)
         >>> os.chdir(wd)
 
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> Xs._calc_alpha0(T, EinGrid, xs.xs0Kcomplete, M, model="fgm").round(6)
@@ -707,7 +707,7 @@ class Xs:
         300  9.086237  455.670534
         100  9.086957  664.556512
 
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
                  2.00        6.67
@@ -795,7 +795,7 @@ class Xs:
         7.000000    19.825115   19.897556   20.036626
 
         # Alpha0 with SCT:
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_T(T, pdos, algorithm="alpha0", model="sct").data
         T                 0           100         300
@@ -901,7 +901,7 @@ class Xs:
         7.000000    19.825115   19.893739   20.039076
 
         # With alpha0 model SCT:
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.calc_Ein(Ein, pdos, algorithm="alpha0", model="sct").data
         T                 0           100         300
@@ -1088,7 +1088,7 @@ class Xs:
 
         >>> mu = np.cos(np.deg2rad(theta))
         >>> T4PCF = T * (1 + mu) / 2
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T4PCF[1::], rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2

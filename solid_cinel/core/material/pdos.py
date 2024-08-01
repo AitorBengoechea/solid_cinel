@@ -15,7 +15,7 @@ from typing import Iterable, Union
 
 
 # Examples variables:
-from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
 
 
 class Tpdos:

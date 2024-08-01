@@ -228,7 +228,7 @@ class Dxs:
 
         # Using the Short Collision Time model:
         >>> from solid_cinel.core.material import Pdos
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> Dxs.from_alpha(xs0K, alpha, Ein, M, T, Eout, pdos, model="sct").data.iloc[::100]
         Eout
@@ -338,7 +338,7 @@ class Dxs:
 
         # Using the Short Collision Time model:
         >>> from solid_cinel.core.material import Pdos
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::100]
         Eout
@@ -579,7 +579,7 @@ class Dxs:
 
         # Using the Short Collision Time model:
         >>> from solid_cinel.core.material import Pdos
-        >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
         >>> dxs.data.iloc[::100]

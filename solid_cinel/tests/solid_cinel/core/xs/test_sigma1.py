@@ -15,12 +15,14 @@ def test_sigma1(T):
     xsTest = pd.read_csv(f"u238.{T}.2", sep='\s+', header=None, index_col=0, usecols=[0, 1], engine="python").iloc[::, 0]
     xsTest.index.name = "E"
     xsTest = xsTest.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
+
     # Get 0K data:
     os.chdir("../../../../data/xs/U238/")
     xs0K = pd.read_csv("u238.0.2", sep='\s+', header=None, index_col=0, usecols=[0, 1], engine="python").iloc[::, 0]
     xs0K.index.name = "E"
     xs0K = xs0K.reset_index().drop_duplicates(subset='E', keep='first').set_index('E').iloc[:, 0]
     os.chdir(wd)
+
     # Remove duplicated index:
     for Ein in xsTest.index[xsTest.index <= 100]:
         Eout = default_Eout(Ein)

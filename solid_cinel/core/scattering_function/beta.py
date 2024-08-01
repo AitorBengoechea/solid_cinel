@@ -200,7 +200,7 @@ class Beta:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
         >>> energy_grid = np.arange(len(rho_in_energy)) * interv_in_energy
         >>> T = 300
         >>> Beta.from_dE(energy_grid, T).data[0:5].round(6)
@@ -317,7 +317,7 @@ class Beta:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_
+        >>> from solid_cinel.data.examples.Al27 import beta0_
         >>> T = 800
         >>> beta_grid = Beta(beta0_).scale(T)
         >>> pd.Series(beta_grid.get_dE(T), index=beta_grid.data).iloc[0:5]
@@ -358,7 +358,7 @@ class Beta:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_
+        >>> from solid_cinel.data.examples.Al27 import beta0_
         >>> T = 800
         >>> Ein = 0.33118
         >>> beta_grid = Beta(beta0_).scale(T)

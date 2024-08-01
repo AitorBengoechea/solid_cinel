@@ -42,6 +42,6 @@ jobs:
       - name: install solid_cinel
         run: bash install.sh
       - name: Test materials
-        run: pytest --cov=solid_cinel solid_cinel/tests/materials/
+        run: python -m unittest solid_cinel/tests/materials/test_materials.py
       - name: Big test for the whole solid_cinel code
         run: pytest --cov=solid_cinel solid_cinel/tests/solid_cinel/

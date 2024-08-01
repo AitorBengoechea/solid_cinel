@@ -296,7 +296,7 @@ class Alpha:
         Examples
         --------
         >>> from solid_cinel.core.material import Pdos
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> T = 800
         >>> Ein = np.array([0.33, 0.4, 0.8, 1.5, 2.33118])
         >>> M = 26.98153433356103
@@ -354,7 +354,7 @@ class Alpha:
         Example
         -------
         >>> import numpy as np
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_
         >>> T = 800
         >>> M = 26.98153433356103
         >>> Ein = 0.33118
@@ -468,7 +468,7 @@ class Alpha:
         Example
         -------
         >>> from solid_cinel.core.material import Pdos
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 800
         >>> alpha_grid = Alpha(alpha0_).scale(T)
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
@@ -709,7 +709,7 @@ def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> 
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
     >>> from solid_cinel.core.material import Pdos
-    >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+    >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
     >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
     >>> T = 300
     >>> debye_waller = pdos.DebyeWallerCoeff(T)
@@ -774,7 +774,7 @@ def get_expansionOrder(alpha: [float, np.ndarray], DebyeWallerCoeff: float,
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad(np.arange(1, 180, 1)))
     >>> from solid_cinel.core.material import Pdos
-    >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+    >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
     >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
     >>> T = 300
     >>> debye_waller = pdos.DebyeWallerCoeff(T)

@@ -177,7 +177,7 @@ class ScatFunc:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
         >>> T = 1000
@@ -243,7 +243,7 @@ class ScatFunc:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -313,7 +313,7 @@ class ScatFunc:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -435,7 +435,7 @@ class ScatFunc:
          9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
 
         # Using the Short Collision Time model:
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> ScatFunc.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
@@ -523,7 +523,7 @@ class ScatFunc:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -770,7 +770,7 @@ class TransferFunc:
         7.3157     0.000000
         Name: 15, dtype: float64
 
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout
@@ -855,7 +855,7 @@ class TransferFunc:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -962,7 +962,7 @@ class TransferFunc:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -1063,7 +1063,7 @@ class TransferFunc:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
         >>> index = pd.Index(Ein, name="Ein")
         >>> T = 300
@@ -1324,7 +1324,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
 
     Examples
     --------
-    >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+    >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
     >>> Ein = 7.2
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])

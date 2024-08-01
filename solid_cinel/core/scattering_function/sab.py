@@ -391,7 +391,7 @@ class Sab:
         -------
         SCT:
         Dont fit the normalization and sum rule with the correct precision
-        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> beta = Beta.generate_grid(T)
@@ -467,7 +467,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 800
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
@@ -545,7 +545,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 800
         >>> pdos = Pdos.from_dE(T, rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
@@ -653,7 +653,7 @@ class Sab:
 
         Examples
         --------
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
 
         FGM:
         >>> T = 300
@@ -762,7 +762,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.Al27.examples import rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
         >>> T = 300
         >>> beta = Beta.generate_grid(T).data
         >>> Ein = np.array([6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0])
@@ -943,7 +943,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.Al27.examples import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
@@ -1023,7 +1023,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
@@ -1092,7 +1092,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
@@ -1186,7 +1186,7 @@ class Sab:
 
         Example
         -------
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238, alpha0_U238, beta0_U238
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)

@@ -4,7 +4,7 @@ Created on Thu Nov 24 10:15:33 2022
 @author: AB272525
 """
 
-from solid_cinel.core.material import Solid
+from solid_cinel.core.material import Solid, Pdos
 from solid_cinel.core.cinematic.frames import Neutron
 import numba as nb
 import numpy as np
@@ -32,6 +32,7 @@ rho_in_energy_str = '''
 '''
 rho_in_energy = np.fromstring(rho_in_energy_str, dtype=np.float64, sep=' ')
 interv_in_energy = 0.0008
+AlPdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
 
 @nb.jit(nopython=True, nogil=True)
 def hklloop(d_min,
@@ -78,40 +79,50 @@ def hklloop(d_min,
                     hklM[(h, k, l)] = np.array([d_hkl, Fsq_hkl, 1])
     return hklM
 
-@pytest.mark.parametrize("E", [np.random.rand(1)[0] * 10])
-def test_multiplicity(E):
-    d_min = Neutron(E).d_min
-    T = np.random.rand(1)[0] * 1000
+def random_Solid():
     unit_pos = np.random.rand(np.random.randint(1, 10), 3)
     dir_vec_length = np.random.rand(3) * 4
     dir_vec_angles = np.random.rand(3) * 180
-    Al = Solid(preferred_orientation, unit_pos,
-                    dir_vec_length, dir_vec_angles,
-                    A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
-                    rho_in_energy, interv_in_energy)
-    while Al.reciproc_vec.isnull().values.any():
-        dir_vec_length = np.random.rand(3) * 4
-        dir_vec_angles = np.random.rand(3) * 180
-        Al = Solid(preferred_orientation, unit_pos,
-                        dir_vec_length, dir_vec_angles,
-                        A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27,
-                        rho_in_energy, interv_in_energy)
-    Bfac = nb.typed.Dict.empty(
-            key_type   = nb.core.types.unicode_type,
-            value_type = nb.core.types.float64,
-        )
-    pos = nb.typed.Dict.empty(
-            key_type   = nb.core.types.unicode_type,
-            value_type = nb.core.types.float64[:,:],
-        )
-    csl = nb.typed.Dict.empty(
-            key_type   = nb.core.types.unicode_type,
-            value_type = nb.core.types.float64,
-    )
+    return Solid(unit_pos, dir_vec_length, dir_vec_angles, preferred_orientation,
+                 A, Z, atomic_mass_Al27, b_coh_Al27, b_incoh_Al27)
+
+
+def get_Solid():
+    while True:
+        Al = random_Solid()
+        try:
+            if not Al.reciproc_vec.isnull().values.any():
+                break
+        except ValueError:
+            continue
+    Al.set_pdos(AlPdos)
+    return Al
+
+def get_numba_var(Al, T):
+    Bfac = nb.typed.Dict.empty(key_type=nb.core.types.unicode_type,
+                               value_type=nb.core.types.float64)
+    pos = nb.typed.Dict.empty(key_type=nb.core.types.unicode_type,
+                              value_type=nb.core.types.float64[:, :])
+    csl = nb.typed.Dict.empty(key_type=nb.core.types.unicode_type,
+                              value_type=nb.core.types.float64)
     for element, value in Al.get_Bfact(T).to_dict().items():
         Bfac[element] = value
         pos[element] = Al.atom_pos[element].values
         csl[element] = 3.449
+    return Bfac, pos, csl
+
+@pytest.mark.parametrize("E", [np.random.rand(1)[0] * 10])
+def test_multiplicity(E):
+    d_min = Neutron(E).d_min
+    T = np.random.rand(1)[0] * 1000
+
+    # Get Solid:
+    Al = get_Solid()
+
+    # Get numba variables:
+    Bfac, pos, csl = get_numba_var(Al, T)
+
+    # Test:
     try:
         data_original = hklloop(d_min,
                                 6,
@@ -122,7 +133,7 @@ def test_multiplicity(E):
                                 csl)
         data_original_frame = pd.DataFrame([[h, k, l, d_hkl, Fsq_hkl, mul] for (h, k, l), [d_hkl, Fsq_hkl, mul] in data_original.items()],
                                    columns = ["h", "k", "l", "d", "Fsq", "Multiplicity"]).loc[:, "Multiplicity"].sum()
-        data = Al.get_multiplicity(T, E).loc[:, "Multiplicity"].sum()
+        data = Al.get_multiplicity(E, T).loc[:, "Multiplicity"].sum()
         assert int(data_original_frame) == int(data)
 
     except IndexError: #Random problem can not be solve in hklloop_max

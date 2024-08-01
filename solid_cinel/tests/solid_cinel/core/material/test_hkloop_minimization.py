@@ -36,7 +36,7 @@ def hklloop_max(rec_vecs, d_min):
 def test_hklloop_aprox(d_min):
     dir_vec_length = np.random.rand(3) * 4
     dir_vec_angles = np.random.rand(3) * 180
-    crys = CrystalStructure(dir_vec_length, dir_vec_angles)
+    crys = CrystalStructure(dir_vec_length, dir_vec_angles, [0, 0, 1])
     rec_vecs = crys.reciproc_vec
     while rec_vecs.isnull().values.any():
         dir_vec_length = np.random.rand(3) * 4

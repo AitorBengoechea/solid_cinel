@@ -1068,45 +1068,45 @@ class Xs:
         >>> Eout = np.linspace(2.0 * 0.9, 2.0 * 1.1, 5)
         >>> theta = np.array([180, 120, 90, 60, 30])
         >>> index = pd.Index(theta, name="theta")
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> T4PCF = T * (1 + mu) / 2
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="sigma1").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
-        180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    9.104914  9.094623  9.084231  9.073561  9.062890
+        180    9.102442  9.092164  9.081758  9.071095  9.060433
+        120    9.104958  9.094644  9.084231  9.073539  9.062845
         90     9.105581  9.095328  9.084990  9.074371  9.063732
-        60     9.106114  9.095876  9.085560  9.074971  9.064341
-        30     9.106574  9.096350  9.086046  9.075473  9.064836
+        60     9.106072  9.095855  9.085560  9.074994  9.064387
+        30     9.106513  9.096316  9.086046  9.075515  9.064926
 
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, algorithm="alpha0", model="fgm").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
-        180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    9.105038  9.094818  9.084497  9.073897  9.063295
+        180    9.102442  9.092164  9.081758  9.071095  9.060433
+        120    9.105081  9.094839  9.084497  9.073875  9.063250
         90     9.105296  9.095061  9.084744  9.074144  9.063526
-        60     9.105840  9.095607  9.085300  9.074717  9.064094
-        30     9.106301  9.096081  9.085785  9.075215  9.064583
+        60     9.105798  9.095586  9.085300  9.074740  9.064140
+        30     9.106239  9.096047  9.085785  9.075257  9.064673
 
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> T4PCF = T * (1 + mu) / 2
         >>> from solid_cinel.tests.materials.UO2_O16_U238.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T4PCF[1::], rho_in_energy_U238, interv_in_energy_U238)
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
-        180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    8.421971  8.414644  8.407319  8.399813  8.392374
+        180    9.102442  9.092164  9.081758  9.071095  9.060433
+        120    8.422003  8.414660  8.407319  8.399798  8.392343
         90     8.868318  8.857919  8.847491  8.836837  8.826207
-        60     8.996254  8.985686  8.975071  8.964208  8.953327
-        30     9.036288  9.025780  9.015211  9.004388  8.993517
+        60     8.996210  8.985664  8.975071  8.964232  8.953374
+        30     9.036224  9.025744  9.015211  9.004431  8.993608
 
         >>> xs.get_4PCFxs(Ein, T, Eout, theta, pdos, algorithm="alpha0", model="pdos").set_axis(index, axis=0)
         Eout        1.8       1.9       2.0       2.1       2.2
         theta
-        180    9.102355  9.092121  9.081758  9.071139  9.060521
-        120    4.877076  4.976241  5.082816  5.177156  5.265810
+        180    9.102442  9.092164  9.081758  9.071095  9.060433
+        120    4.876492  4.976052  5.082816  5.177328  5.266196
         90     6.893454  6.979544  7.058797  7.136817  7.202696
-        60     7.985702  8.045719  8.094413  8.147071  8.185316
-        30     8.426736  8.469297  8.500190  8.536056  8.558696
+        60     7.985973  8.045831  8.094413  8.146989  8.185115
+        30     8.427016  8.469407  8.500190  8.535953  8.558440
         """
         # Get the cosine of the angle
         mu = np.sort(np.cos(np.deg2rad(theta)))
@@ -1197,8 +1197,7 @@ def default_Eout(Ein: float) -> np.ndarray:
 
 @vectorize(["float64(float64, float64, float64, float64)"],
            target="parallel", cache=True)
-def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                    M: float) -> float:
+def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> float:
     """
     Get the incident energy matrix for 4PCF model.
 
@@ -1234,5 +1233,5 @@ def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
          0.5  1.903825  1.954028  2.004237  2.054452  2.104671
          0.9  1.900524  1.950660  2.000847  2.051083  2.101362
     """
-    EinArno = (Eout + Ein + get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)) / 2
-    return EinArno - Ein * mu * m / M
+    EinArno = Eout + Ein + get_alphaRecoil(Eout, Ein, M, mu)
+    return EinArno / 2

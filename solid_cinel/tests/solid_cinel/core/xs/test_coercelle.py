@@ -66,7 +66,6 @@ def test_coercelle(model):
     os.chdir(wd)
 
     # Get the Xs object:
-    # Get the Xs object:
     M = 238.05077040419212
     xs = Xs(M, 0, xs0K)
 

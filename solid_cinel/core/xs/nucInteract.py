@@ -932,10 +932,10 @@ class NucInteract:
         """
         if -1.0 in self.mu:
             values0K = interpolation(xs.xs0Kcomplete, EinMat[0], values=True)
-            valuesTstar = xs._compute(Tinteraction[1:], EinMat[1:])
+            valuesTstar = xs.compute(Tinteraction[1:], EinMat[1:])
             return np.vstack((values0K, valuesTstar))
         else:
-            return xs._compute(Tinteraction, EinMat)
+            return xs.compute(Tinteraction, EinMat)
 
     def from_sigma(self, xs: Xs, Ein: float, Eout: np.ndarray,
                    approx: bool = True, kind: str = "corrected") -> pd.DataFrame:

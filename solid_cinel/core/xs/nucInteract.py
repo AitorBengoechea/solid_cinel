@@ -589,8 +589,7 @@ class InteractEnergy:
 
     @classmethod
     def from_4PCF(cls, Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                  M: float, original: bool = False, mod: bool = True,
-                  approx: bool = True) -> "InteractEnergy":
+                  M: float, approx: bool = True, kind: str = "corr") -> "InteractEnergy":
         """
         Calculate the interaction energy from the 4PCF model.
 
@@ -604,10 +603,13 @@ class InteractEnergy:
             The cosine of the angle between the incident and outgoing particles
         M: float
             The mass of the target nucleus in amu
-        mod: bool
-            Whether to use the modified 4PCF model
         approx: bool
-            Whether to use the approximation
+            Whether to use the approximation or strict calculation
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
 
         Returns
         -------
@@ -616,29 +618,14 @@ class InteractEnergy:
 
         Examples
         --------
+        # Example data:
         >>> Ein = 1
         >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
         >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.75])
         >>> M = 238.05077040419212
-        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M)
-        >>> EinMat.data
-                    0.5       0.9       1.0       1.1       1.5       2.0
-        -1.00  0.756174  0.958045  1.008474  1.058893  1.260486  1.512348
-        -0.50  0.754676  0.956035  1.006356  1.056671  1.257891  1.509352
-         0.00  0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
-         0.50  0.751680  0.952015  1.002119  1.052227  1.252702  1.503360
-         0.75  0.750931  0.951011  1.001059  1.051116  1.251404  1.501862
 
-        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, approx=False)
-        >>> EinMat.data
-                    0.5       0.9       1.0       1.1       1.5       2.0
-        -1.00  0.714340  0.956940  1.008474  1.057490  1.234172  1.424443
-        -0.50  0.699100  0.954492  1.006356  1.054871  1.223273  1.393963
-         0.00  0.670904  0.951606  1.004237  1.051856  1.204237  1.337571
-         0.50  0.595089  0.946971  1.002119  1.047259  1.153623  1.185940
-         0.75  0.467472  0.940740  1.001059  1.041413  1.061775  0.930707
-
-        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, original=True, approx= True, mod=False)
+        # Approximate original 4PCF model
+        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, kind="original")
         >>> EinMat.data
                     0.5       0.9       1.0       1.1       1.5       2.0
         -1.00  0.754237  0.954237  1.004237  1.054237  1.254237  1.504237
@@ -647,7 +634,8 @@ class InteractEnergy:
          0.50  0.747881  0.947881  0.997881  1.047881  1.247881  1.497881
          0.75  0.746822  0.946822  0.996822  1.046822  1.246822  1.496822
 
-        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, original=True, approx= True, mod=True)
+        # Approximate modified 4PCF model
+        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, kind="modified")
         >>> EinMat.data
                     0.5       0.9       1.0       1.1       1.5       2.0
         -1.00  0.757324  0.958260  1.008474  1.058684  1.259480  1.510411
@@ -656,7 +644,28 @@ class InteractEnergy:
          0.50  0.751241  0.951912  1.002119  1.052335  1.253285  1.504601
          0.75  0.750545  0.950864  1.001059  1.051286  1.252440  1.504268
 
-        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, original=True, approx= False, mod=True)
+        # Approximate corrected 4PCF model
+        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, kind="corrected")
+        >>> EinMat.data
+                    0.5       0.9       1.0       1.1       1.5       2.0
+        -1.00  0.756174  0.958045  1.008474  1.058893  1.260486  1.512348
+        -0.50  0.754676  0.956035  1.006356  1.056671  1.257891  1.509352
+         0.00  0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
+         0.50  0.751680  0.952015  1.002119  1.052227  1.252702  1.503360
+         0.75  0.750931  0.951011  1.001059  1.051116  1.251404  1.501862
+
+        # Strict original 4PCF model
+        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, approx=False, kind="original")
+        >>> EinMat.data
+                    0.5       0.9       1.0       1.1       1.5       2.0
+        -1.00  0.708592  0.950676  1.002100  1.051012  1.227317  1.417184
+        -0.50  0.694107  0.949241  1.001050  1.049514  1.217727  1.388215
+         0.00  0.666667  0.947368  1.000000  1.047619  1.200000  1.333333
+         0.50  0.591607  0.943748  0.998950  1.044142  1.150694  1.183214
+         0.75  0.464368  0.938023  0.998425  1.038856  1.059500  0.928737
+
+        # Strict modified 4PCF model
+        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, approx=False, kind="modified")
         >>> EinMat.data
                     0.5       0.9       1.0       1.1       1.5       2.0
         -1.00  0.711679  0.954698  1.006338  1.055458  1.232560  1.423358
@@ -665,31 +674,38 @@ class InteractEnergy:
          0.50  0.594967  0.947779  1.003187  1.048596  1.156098  1.189933
          0.75  0.468091  0.942065  1.002662  1.043320  1.065118  0.936183
 
-        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, original=True, approx= False, mod=True)
+        # Strict corrected 4PCF model
+        >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, approx=False, kind="corrected")
         >>> EinMat.data
                     0.5       0.9       1.0       1.1       1.5       2.0
-        -1.00  0.711679  0.954698  1.006338  1.055458  1.232560  1.423358
-        -0.50  0.697225  0.953265  1.005287  1.053961  1.222988  1.394449
-         0.00  0.669845  0.951394  1.004237  1.052068  1.205296  1.339689
-         0.50  0.594967  0.947779  1.003187  1.048596  1.156098  1.189933
-         0.75  0.468091  0.942065  1.002662  1.043320  1.065118  0.936183
+        -1.00  0.714340  0.956940  1.008474  1.057490  1.234172  1.424443
+        -0.50  0.699100  0.954492  1.006356  1.054871  1.223273  1.393963
+         0.00  0.670904  0.951606  1.004237  1.051856  1.204237  1.337571
+         0.50  0.595089  0.946971  1.002119  1.047259  1.153623  1.185940
+         0.75  0.467472  0.940740  1.001059  1.041413  1.061775  0.930707
         """
-        if original:
-            if approx:
-                if mod:
-                    Einteract = cls.mod4PCFapprox(Ein, Eout, mu, M)
-                else:
-                    Einteract = cls.original4PCFapprox(Ein, Eout, mu, M)
-            else:
-                if mod:
-                    Einteract = cls.mod4PCFstrict(Ein, Eout, mu, M)
-                else:
-                    Einteract = cls.original4PCFstrict(Ein, Eout, mu, M)
-        else:
-            if approx:
-                Einteract = cls.corr4PCFapprox(Ein, Eout, mu, M)
-            else:
-                Einteract = cls.corr4PCFstrict(Ein, Eout, mu, M)
+        method_dict = {
+                       (True, "corrected"): cls.corr4PCFapprox,
+                       (True, "modified"): cls.mod4PCFapprox,
+                       (True, "original"): cls.original4PCFapprox,
+                       (False, "corrected"): cls.corr4PCFstrict,
+                       (False, "modified"): cls.mod4PCFstrict,
+                       (False, "original"): cls.original4PCFstrict
+        }
+        Einteract = method_dict[(approx, kind.lower())](Ein, Eout, mu, M)
         return cls(Einteract, index=mu, columns=Eout)
+
+
 class NucInteract:
-    pass
+    """
+    Class to calculate the nuclear interaction of the material with the neutron.
+    """
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the class with the data.
+        Parameters
+        ----------
+        data: Iterable
+            The data to be stored in the class
+        """
+        self._data = pd.DataFrame(*args, **kwargs)

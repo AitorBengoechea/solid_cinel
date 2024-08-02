@@ -767,7 +767,10 @@ class NucInteract:
         60   141.885436  212.862866  225.000000  235.447187  264.652925  283.770872
         30   136.237244  262.817382  279.903811  291.097921  297.084879  272.474487
         """
-        return InteractTemp.from_4PCF(self.T, self.mu, *args, approx=approx).data
+        # Define the method to calculate the interaction temperature in the
+        # material from InteractTemp class
+        method = InteractTemp.from_4PCF
+        return method(self.T, self.mu, *args, approx=approx).data
 
     def get_interactEnergy(self, Ein: float, Eout: np.ndarray, approx: bool = True,
                            kind: str = "corr") -> pd.DataFrame:
@@ -863,4 +866,7 @@ class NucInteract:
         60   0.595089  0.946971  1.002119  1.047259  1.153623  1.185940
         30   0.297518  0.931288  1.000568  1.032746  0.919649  0.590799
         """
-        return InteractEnergy.from_4PCF(Ein, Eout, self.mu, self.M, approx, kind).data
+        # Define the method to calculate the interaction energy in the material
+        # from InteractEnergy class
+        method = InteractEnergy.from_4PCF
+        return method(Ein, Eout, self.mu, self.M, approx, kind).data

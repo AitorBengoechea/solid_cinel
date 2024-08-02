@@ -3,6 +3,8 @@ import pandas as pd
 from scipy.constants import physical_constants as const
 from typing import Iterable
 from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
+from solid_cinel.core.xs.xs import Xs
+from solid_cinel.core.generic import interpolation
 
 
 # constants
@@ -197,10 +199,10 @@ class InteractTemp:
         30   136.237244  262.817382  279.903811  291.097921  297.084879  272.474487
         """
         if approx:
-            Tinteract = cls.from_approx4PCF(T, mu)
+            Tinteraction = cls.from_approx4PCF(T, mu)
         else:
-            Tinteract = cls.from_strict4PCF(T, mu, *args)
-        return cls(Tinteract)
+            Tinteraction = cls.from_strict4PCF(T, mu, *args)
+        return cls(Tinteraction)
 
 
 class InteractEnergy:
@@ -773,7 +775,7 @@ class NucInteract:
         return method(self.T, self.mu, *args, approx=approx).data
 
     def get_interactEnergy(self, Ein: float, Eout: np.ndarray, approx: bool = True,
-                           kind: str = "corr") -> pd.DataFrame:
+                           kind: str = "corrected") -> pd.DataFrame:
         """
         Get the interaction energy of the material in eV.
 
@@ -870,3 +872,136 @@ class NucInteract:
         # from InteractEnergy class
         method = InteractEnergy.from_4PCF
         return method(Ein, Eout, self.mu, self.M, approx, kind).data
+
+    def calc_interactionXs(self, xs: Xs, Tinteraction: np.ndarray,
+                           EinMat: np.ndarray) -> np.ndarray:
+        """
+        Calculate the interaction cross section of the material.
+
+        Parameters
+        ----------
+        xs: Xs
+            The cross section class with 0K data in barns
+        Tinteraction: np.ndarray
+            The interaction temperature of the material in Kelvin
+        EinMat: np.ndarray
+            The interaction energy of the material in eV
+
+        Returns
+        -------
+        np.ndarray
+            The interaction cross section of the material in barns
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("nucInteract.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150, 180])
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+
+        # Initialize the class
+        >>> nuclearInteraction = NucInteract(M, T, theta)
+
+        # Get the interaction temperature of the material
+        >>> Tinteraction = nuclearInteraction.get_interactTemp(Ein, Eout)
+
+        # Get the interaction energy of the material
+        >>> EinMat = nuclearInteraction.get_interactEnergy(Ein, Eout).values
+
+        # Calculate the cross section interaction:
+        >>> values = nuclearInteraction.calc_interactionXs(xs, Tinteraction, EinMat)
+        >>> pd.DataFrame(values, index=nuclearInteraction.mu, columns=Eout)
+                            0.5       0.9       1.0       1.1       1.5       2.0
+        -1.000000e+00  9.308729  9.276303  9.268018  9.259652  9.225313  9.180326
+        -8.660254e-01  9.312016  9.278274  9.269748  9.261169  9.226225  9.180848
+        -5.000000e-01  9.312039  9.279556  9.271239  9.262833  9.228322  9.183091
+         6.123234e-17  9.310983  9.278747  9.270498  9.262162  9.227947  9.183081
+         5.000000e-01  9.310813  9.278633  9.270400  9.262083  9.227958  9.183225
+         8.660254e-01  9.310884  9.278735  9.270511  9.262204  9.228123  9.183458
+        """
+        if -1.0 in self.mu:
+            values0K = interpolation(xs.xs0Kcomplete, EinMat[0], values=True)
+            valuesTstar = xs._compute(Tinteraction[1:], EinMat[1:])
+            return np.vstack((values0K, valuesTstar))
+        else:
+            return xs._compute(Tinteraction, EinMat)
+
+    def from_sigma(self, xs: Xs, Ein: float, Eout: np.ndarray,
+                   approx: bool = True, kind: str = "corrected") -> pd.DataFrame:
+        """
+        Calculate the cross section from the nuclear interaction of the material.
+
+        Parameters
+        ----------
+        xs: Xs
+            The cross section class with 0K data in barns
+        Ein: float
+            The energy of the incident particle in eV
+        T: float
+            The temperature of the material in Kelvin
+        Eout: np.ndarray
+            The energy of the outgoing particles in eV
+        theta: np.ndarray
+            The angle of the outgoing particles in degrees
+        approx: bool
+            Whether to use the approximation or strict calculation
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
+
+        Returns
+        -------
+        pd.DataFrame
+            The cross section of the material in barns
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("nucInteract.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150, 180])
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+
+        # Initialize the class
+        >>> nuclearInteraction = NucInteract(M, T, theta)
+        >>> nuclearInteraction.from_sigma(xs, Ein, Eout)
+                            0.5       0.9       1.0       1.1       1.5       2.0
+        -1.000000e+00  9.308729  9.276303  9.268018  9.259652  9.225313  9.180326
+        -8.660254e-01  9.312016  9.278274  9.269748  9.261169  9.226225  9.180848
+        -5.000000e-01  9.312039  9.279556  9.271239  9.262833  9.228322  9.183091
+         6.123234e-17  9.310983  9.278747  9.270498  9.262162  9.227947  9.183081
+         5.000000e-01  9.310813  9.278633  9.270400  9.262083  9.227958  9.183225
+         8.660254e-01  9.310884  9.278735  9.270511  9.262204  9.228123  9.183458
+        """
+        # Get the interaction temperature of the material
+        Tinteraction = self.get_interactTemp(Ein, Eout, approx=approx)
+
+        # Get the interaction energy of the material
+        EinMat = self.get_interactEnergy(Ein, Eout, approx=approx, kind=kind).values
+
+        # Calculate the cross section interaction:
+        values = self.calc_interactionXs(xs, Tinteraction, EinMat)
+        return pd.DataFrame(values, index=self.mu, columns=Eout)

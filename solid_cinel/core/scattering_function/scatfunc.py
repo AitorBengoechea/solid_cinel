@@ -1156,7 +1156,7 @@ class TransferFunc:
 
 
 @vectorize([float64(float64, float64, float64, float64)],
-           target='parallel', cache=True)
+           target='parallel', cache=True, nopython=True)
 def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     Sigma1 function for Energy differential scattering function

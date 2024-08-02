@@ -715,6 +715,7 @@ class NucInteract:
         self.M = M
         self.T = T
         self.mu = np.sort(np.cos(np.deg2rad(theta)))
+        self.is0KinTinteraction = 180 in np.array(theta)
 
     def get_interactTemp(self, *args, approx: bool = True) -> np.ndarray:
         """
@@ -930,7 +931,7 @@ class NucInteract:
          5.000000e-01  9.310813  9.278633  9.270400  9.262083  9.227958  9.183225
          8.660254e-01  9.310884  9.278735  9.270511  9.262204  9.228123  9.183458
         """
-        if -1.0 in self.mu:
+        if self.is0KinTinteraction:
             values0K = interpolation(xs.xs0Kcomplete, EinMat[0], values=True)
             valuesTstar = xs.compute(Tinteraction[1:], EinMat[1:])
             return np.vstack((values0K, valuesTstar))

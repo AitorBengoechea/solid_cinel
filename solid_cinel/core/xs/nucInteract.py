@@ -145,7 +145,7 @@ class InteractTemp:
         return Tstar
 
     @classmethod
-    def from_4PCF(cls, T: float, theta: np.ndarray, *args,
+    def from_4PCF(cls, T: float, mu: np.ndarray, *args,
                   approx: bool = True) -> "InteractTemp":
         """
         Calculate the interaction temperature from the 4PCF model.
@@ -154,8 +154,8 @@ class InteractTemp:
         ----------
         T: float
             The temperature of the material in Kelvin
-        theta: np.ndarray
-            The angle between the incident and outgoing particles in degrees
+        mu: np.ndarray
+            The cosine between the incident and outgoing particles
         approx: bool
             Whether to use the approximation or strict calculation
 
@@ -175,18 +175,19 @@ class InteractTemp:
         --------
         >>> T = 300
         >>> theta = np.array([30, 60, 90, 120, 150])
-        >>> values = InteractTemp.from_4PCF(T, theta)
-        >>> pd.Series(values.data, index=theta)
-        30      20.096189
-        60      75.000000
+        >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+        >>> values = InteractTemp.from_4PCF(T, mu)
+        >>> pd.Series(values.data, index=theta[::-1])
+        150     20.096189
+        120     75.000000
         90     150.000000
-        120    225.000000
-        150    279.903811
+        60     225.000000
+        30     279.903811
         dtype: float64
 
         >>> Ein = 1
         >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
-        >>> values = InteractTemp.from_4PCF(T, theta, Ein, Eout, approx=False)
+        >>> values = InteractTemp.from_4PCF(T, mu, Ein, Eout, approx=False)
         >>> pd.DataFrame(values.data, index=theta[::-1], columns=Eout)
                     0.5         0.9         1.0         1.1         1.5         2.0
         150   13.762756   19.050750   20.096189   21.064241   24.343692   27.525513
@@ -195,12 +196,13 @@ class InteractTemp:
         60   141.885436  212.862866  225.000000  235.447187  264.652925  283.770872
         30   136.237244  262.817382  279.903811  291.097921  297.084879  272.474487
         """
-        mu = np.sort(np.cos(np.deg2rad(theta)))
         if approx:
             Tinteract = cls.from_approx4PCF(T, mu)
         else:
             Tinteract = cls.from_strict4PCF(T, mu, *args)
         return cls(Tinteract)
+
+
 class InteractEnergy:
     """
     Class to calculate the interaction energy of a material.
@@ -700,7 +702,7 @@ class NucInteract:
     """
     Class to calculate the nuclear interaction of the material with the neutron.
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, M: float, T: float, theta: np.ndarray):
         """
         Initialize the class with the data.
         Parameters
@@ -708,4 +710,157 @@ class NucInteract:
         data: Iterable
             The data to be stored in the class
         """
-        self._data = pd.DataFrame(*args, **kwargs)
+        self.M = M
+        self.T = T
+        self.mu = np.sort(np.cos(np.deg2rad(theta)))
+
+    def get_interactTemp(self, *args, approx: bool = True) -> np.ndarray:
+        """
+        Get the interaction temperature of the material in Kelvin.
+
+        Parameters
+        ----------
+        approx: bool
+            Whether to use the approximation or strict calculation
+
+        Parameters for strict calculation:
+        ----------------------------------
+        Ein: float
+            The energy of the incident particle in eV
+        Eout: np.ndarray
+            The energy of the outgoing particles in eV
+
+        Returns
+        -------
+        np.ndarray
+            The interaction temperature of the material in Kelvin in ascending
+            order of mu
+
+        Examples
+        --------
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150])
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+
+        # Initialize the class
+        >>> nuclearInteraction = NucInteract(M, T, theta)
+
+        # Nuclear interaction temperature from aproximate 4PCF model
+        >>> pd.Series(nuclearInteraction.get_interactTemp(), index=theta[::-1])
+        150     20.096189
+        120     75.000000
+        90     150.000000
+        60     225.000000
+        30     279.903811
+        dtype: float64
+
+        # Nuclear interaction temperature from strict 4PCF model
+        >>> values = nuclearInteraction.get_interactTemp(Ein, Eout, approx=False)
+        >>> pd.DataFrame(values, index=theta[::-1], columns=Eout)
+                    0.5         0.9         1.0         1.1         1.5         2.0
+        150   13.762756   19.050750   20.096189   21.064241   24.343692   27.525513
+        120   50.971707   71.085473   75.000000   78.601151   90.610233  101.943414
+        90   100.000000  142.105263  150.000000  157.142857  180.000000  200.000000
+        60   141.885436  212.862866  225.000000  235.447187  264.652925  283.770872
+        30   136.237244  262.817382  279.903811  291.097921  297.084879  272.474487
+        """
+        return InteractTemp.from_4PCF(self.T, self.mu, *args, approx=approx).data
+
+    def get_interactEnergy(self, Ein: float, Eout: np.ndarray, approx: bool = True,
+                           kind: str = "corr") -> pd.DataFrame:
+        """
+        Get the interaction energy of the material in eV.
+
+        Parameters
+        ----------
+        Ein: float
+            The energy of the incident particle in eV
+        Eout: np.ndarray
+            The energy of the outgoing particles in eV
+        mu: np.ndarray
+            The cosine of the angle between the incident and outgoing particles
+        M: float
+            The mass of the target nucleus in amu
+        approx: bool
+            Whether to use the approximation or strict calculation
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
+
+        Returns
+        -------
+        pd.DataFrame
+            The interaction energy of the material in eV
+
+        Examples
+        --------
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150])
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+
+        # Initialize the class
+        >>> nuclearInteraction = NucInteract(M, T, theta)
+
+        # Nuclear interaction energy from original 4PCF model
+        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, kind="original").set_axis(theta[::-1], axis=0)
+                  0.5       0.9       1.0       1.1       1.5       2.0
+        150  0.753670  0.953670  1.003670  1.053670  1.253670  1.503670
+        120  0.752119  0.952119  1.002119  1.052119  1.252119  1.502119
+        90   0.750000  0.950000  1.000000  1.050000  1.250000  1.500000
+        60   0.747881  0.947881  0.997881  1.047881  1.247881  1.497881
+        30   0.746330  0.946330  0.996330  1.046330  1.246330  1.496330
+
+        # Approximate modified 4PCF model
+        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, kind="modified").set_axis(theta[::-1], axis=0)
+                  0.5       0.9       1.0       1.1       1.5       2.0
+        150  0.756763  0.957692  1.007907  1.058116  1.258916  1.509857
+        120  0.755236  0.956142  1.006356  1.056566  1.257379  1.508353
+        90   0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
+        60   0.751241  0.951912  1.002119  1.052335  1.253285  1.504601
+        30   0.750683  0.950392  1.000568  1.050812  1.252319  1.505036
+
+        # Approximate corrected 4PCF model
+        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, kind="corrected").set_axis(theta[::-1], axis=0)
+                  0.5       0.9       1.0       1.1       1.5       2.0
+        150  0.755773  0.957507  1.007907  1.058298  1.259791  1.511545
+        120  0.754676  0.956035  1.006356  1.056671  1.257891  1.509352
+        90   0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
+        60   0.751680  0.952015  1.002119  1.052227  1.252702  1.503360
+        30   0.750583  0.950544  1.000568  1.050600  1.250802  1.501166
+
+        # Strict original 4PCF model
+        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, approx=False, kind="original").set_axis(theta[::-1], axis=0)
+                  0.5       0.9       1.0       1.1       1.5       2.0
+        150  0.705410  0.950314  1.001819  1.050631  1.225179  1.410821
+        120  0.694107  0.949241  1.001050  1.049514  1.217727  1.388215
+        90   0.666667  0.947368  1.000000  1.047619  1.200000  1.333333
+        60   0.591607  0.943748  0.998950  1.044142  1.150694  1.183214
+        30   0.294590  0.928806  0.998181  1.030450  0.917678  0.589179
+
+        # Strict modified 4PCF model
+        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, approx=False, kind="modified").set_axis(theta[::-1], axis=0)
+                  0.5       0.9       1.0       1.1       1.5       2.0
+        150  0.708504  0.954337  1.006056  1.055078  1.230426  1.417008
+        120  0.697225  0.953265  1.005287  1.053961  1.222988  1.394449
+        90   0.669845  0.951394  1.004237  1.052068  1.205296  1.339689
+        60   0.594967  0.947779  1.003187  1.048596  1.156098  1.189933
+        30   0.298942  0.932868  1.002418  1.034932  0.923666  0.597885
+
+        # Strict corrected 4PCF model
+        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, approx=False, kind="corrected").set_axis(theta[::-1], axis=0)
+                  0.5       0.9       1.0       1.1       1.5       2.0
+        150  0.710956  0.956307  1.007907  1.056809  1.231683  1.417675
+        120  0.699100  0.954492  1.006356  1.054871  1.223273  1.393963
+        90   0.670904  0.951606  1.004237  1.051856  1.204237  1.337571
+        60   0.595089  0.946971  1.002119  1.047259  1.153623  1.185940
+        30   0.297518  0.931288  1.000568  1.032746  0.919649  0.590799
+        """
+        return InteractEnergy.from_4PCF(Ein, Eout, self.mu, self.M, approx, kind).data

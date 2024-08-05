@@ -663,7 +663,7 @@ class Xs:
             return [Xs._calc_alpha0(Tnew[i], EinGrid[i], *args, **kwargs)
                     for i in range(len(Tnew))]
 
-    def _compute(self, Tnew: Iterable, EinGrid: Iterable, *args,
+    def compute(self, Tnew: Iterable, EinGrid: Iterable, *args,
                  algorithm: str = "sigma1", **kwargs) -> np.ndarray:
         """
         Calculate the elastic scattering cross section at new temperatures using
@@ -702,24 +702,24 @@ class Xs:
         >>> os.chdir(wd)
 
         >>> Tnew = [300, 100]
-        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="sigma1"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs.compute(Tnew, EinGrid, algorithm="sigma1"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.086237  455.670534
         100  9.086957  664.556512
 
         >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs.compute(Tnew, EinGrid, algorithm="alpha0", model="fgm"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.085972  466.295230
         100  9.086873  677.372091
 
-        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="sct"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs.compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="sct"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.024954  458.934423
         100  8.627295  617.394144
 
-        >>> pd.DataFrame(xs._compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
+        >>> pd.DataFrame(xs.compute(Tnew, EinGrid, pdos, algorithm="alpha0", model="pdos"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  8.602954  469.614362
         100  5.835051  646.772904
@@ -827,7 +827,7 @@ class Xs:
             return self
 
         # Calculate the cross section for the new temperatures
-        xsTValues = self._compute(Tnew, self.data.index, *args, **kwargs).T
+        xsTValues = self.compute(Tnew, self.data.index, *args, **kwargs).T
 
         # Get the output data in the corresponding format
         xsT = self.get_output(xsTValues, T=Tnew)
@@ -943,7 +943,7 @@ class Xs:
             return Xs(self.M, 0, xsEin, xs0Kcomplete=self.xs0Kcomplete)
 
         # Compute the calculation
-        xsEinValuesCalc = self._compute(temp, EinGrid,  *args, **kwargs).T
+        xsEinValuesCalc = self.compute(temp, EinGrid,  *args, **kwargs).T
 
         # Get the output data in the appropriate format
         xsEinCalc = self.get_output(xsEinValuesCalc, Ein=EinGrid, T=temp)
@@ -1139,7 +1139,7 @@ class Xs:
         if Tcalc.empty:
             xsCalc = None
         else:
-            xsCalcValues = self._compute(Tcalc, Ein4PCF[np.isin(T4PCF, Tcalc)], *args, **kwargs)
+            xsCalcValues = self.compute(Tcalc, Ein4PCF[np.isin(T4PCF, Tcalc)], *args, **kwargs)
             xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
 

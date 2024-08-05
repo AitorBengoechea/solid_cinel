@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable
 from solid_cinel.core.scattering_function.scatfunc import ScatFunc
 from solid_cinel.core.material.pdos import Pdos
-from solid_cinel.core.xs import Xs, Dxs
+from solid_cinel.core.xs import Xs, Dxs, NucInteract
 from solid_cinel.core.generic import integrate, reshift
 from solid_cinel.core.xs.dxs import check_dx
 
@@ -179,7 +179,8 @@ class DDxs:
 
     @classmethod
     def from_4PCF(cls, xs: Xs, Ein: float, T: float, Eout: np.ndarray,
-                  theta: np.ndarray, *args, algorithm: str = "sigma1", **kwargs):
+                  theta: np.ndarray, *args, algorithm: str = "sigma1",
+                  approx: bool = True, kind: str = "corrected", **kwargs):
         """
         Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
         correlation function modified
@@ -249,7 +250,7 @@ class DDxs:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
 
         # Coercelle with sigma1 algorithm:
-        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, model="fgm").data
+        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, kind="modified", model="fgm").data
         >>> ddxs_test.round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu
@@ -258,7 +259,7 @@ class DDxs:
          0.173648  0.018206   3.279258  32.151616  20.370851  0.978487
          0.766044  0.000000   0.002704  26.832215  17.011020  0.001208
 
-        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, model="sct").data
+        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, kind="modified", model="sct").data
         >>> ddxs_test.round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu
@@ -269,7 +270,7 @@ class DDxs:
 
         # Coercelle with pdos model: (Example not very accurate, only for
         # demonstration purposes)
-        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, threshold=1.0e-14, nphonon=100, model="pdos").data
+        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, kind="modified", threshold=1.0e-14, nphonon=100, model="pdos").data
         >>> ddxs_test.round(6)
         Eout        1.80000    1.88008    1.96016    2.04024   2.12032
         mu
@@ -288,15 +289,20 @@ class DDxs:
 #        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, algorithm="alpha0", threshold=1.0e-14, nphonon=100, model="pdos").data
 #        >>> ddxs_test.round(6)
         """
-        # Generate Scatering function:
+        # Generate Dynamic structure of the phonon dynamics:
         scatfunc = ScatFunc.from_model(Ein, xs.M, T, Eout, theta,*args, **kwargs).data
 
         # Use only Eout values with information for optimization:
         Eout_ = scatfunc.columns.values
 
-        # Get Xs matrix for convolution with scattering function
+        # Get nuclear interaction parameters:
         kwargs["algorithm"] = algorithm
-        xsMat = xs.get_4PCFxs(Ein, T, Eout_, theta, *args, **kwargs)
+        nuclearInteraction = NucInteract(xs.M, T, theta)
+        if algorithm.lower() == "sigma1":
+            xsMat = nuclearInteraction.from_sigma(xs, Ein, Eout_, approx=approx,
+                                                  kind=kind)
+        else:
+            xsMat = xs.get_4PCFxs(Ein, T, Eout_, theta, *args, **kwargs)
 
         # Convolve the scattering function with the cross section matrix:
         ddxs = scatfunc * xsMat

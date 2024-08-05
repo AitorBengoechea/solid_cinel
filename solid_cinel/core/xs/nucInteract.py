@@ -1001,8 +1001,8 @@ class NucInteract:
         Tinteraction = self.get_interactTemp(Ein, Eout, approx=approx)
 
         # Get the interaction energy of the material
-        EinMat = self.get_interactEnergy(Ein, Eout, approx=approx, kind=kind).values
+        EinMat = self.get_interactEnergy(Ein, Eout, approx=approx, kind=kind)
 
         # Calculate the cross section interaction:
-        values = self.calc_interactionXs(xs, Tinteraction, EinMat)
+        values = self.calc_interactionXs(xs, Tinteraction, EinMat.values)
         return pd.DataFrame(values, index=self.mu, columns=Eout)

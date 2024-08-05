@@ -1197,16 +1197,18 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     # Define teh constants:
     AkbT = M / (m * kb * T)
+    EinSqrt = sqrt(Ein)
+    EoutSqrt = sqrt(Eout)
 
     # Get the negative exponetiial part:
-    expNegative = exp(- AkbT * (sqrt(Ein) - sqrt(Eout)) ** 2)
+    expNegative = exp(- AkbT * (EinSqrt - EoutSqrt) ** 2)
 
     # Get the positive exponetiial part:
-    expPositive = exp(- AkbT * (sqrt(Ein) + sqrt(Eout)) ** 2)
+    expPositive = exp(- AkbT * (EinSqrt + EoutSqrt) ** 2)
 
     # Calculate the scattering function:
     transferFunc = 0.5 * (expNegative - expPositive)
-    transferFunc *= sqrt(AkbT / pi) * sqrt(Eout) / Ein
+    transferFunc *= sqrt(AkbT / pi) * EoutSqrt / Ein
 
     return transferFunc
 

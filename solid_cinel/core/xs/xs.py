@@ -479,9 +479,10 @@ class Xs:
         3    (100, 4)
         dtype: object
         """
-        if len(EinGrid.shape) == 2:
-            N, M = EinGrid.shape[0], EinGrid.shape[1]
-            return [(Tnew[i], EinGrid[i, j]) for i in range(N) for j in range(M)]
+        EinGrid_, Tnew_ = np.array(EinGrid), np.array(Tnew)
+        if len(EinGrid_.shape) == 2:
+            return [(Tnew[i], EinGrid[i, j]) for i in range(EinGrid.shape[0])
+                    for j in range(EinGrid_.shape[1])]
         else:
             return [(T, Ein) for T in Tnew for Ein in EinGrid]
 

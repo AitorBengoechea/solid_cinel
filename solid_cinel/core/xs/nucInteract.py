@@ -593,7 +593,7 @@ class InteractEnergy:
 
     @classmethod
     def from_4PCF(cls, Ein: float, Eout: np.ndarray, mu: np.ndarray,
-                  M: float, approx: bool = True, kind: str = "corr") -> "InteractEnergy":
+                  M: float, approx: bool = True, kind: str = "corrected") -> "InteractEnergy":
         """
         Calculate the interaction energy from the 4PCF model.
 

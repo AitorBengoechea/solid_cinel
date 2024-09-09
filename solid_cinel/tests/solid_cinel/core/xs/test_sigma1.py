@@ -2,7 +2,7 @@ import pytest
 import os
 import pandas as pd
 from solid_cinel.core.xs.xs import default_Eout
-from solid_cinel.core.xs.dxs import Dxs
+from solid_cinel.core.xs.scatfunc import ScatFunc
 
 
 @pytest.mark.parametrize("T", [300, 1000])
@@ -26,7 +26,7 @@ def test_sigma1(T):
     # Remove duplicated index:
     for Ein in xsTest.index[xsTest.index <= 100]:
         Eout = default_Eout(Ein)
-        xs_broad = Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral
+        xs_broad = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral
         assert abs(1 - xs_broad/xs_test.loc[Ein]) < 0.8
 
 

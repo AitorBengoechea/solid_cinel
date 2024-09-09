@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function import TransferFunc, ScatFunc
+from solid_cinel.core.scattering_function import TransferFunc, DynamicStruc
 from solid_cinel.core.scattering_function.alpha import get_alpha, get_alphaMat
 from solid_cinel.core.generic import integrate, reshift, interpolation
 import os
@@ -21,13 +21,13 @@ m = const["neutron mass in u"][0]
 nb.config.FASTMATH_DEFAULT = False
 
 
-class Dxs:
+class ScatFunc:
     """
-    Class for the differential cross section for elastic scattering
+    Class for the Scattering function of inelastic scattering
     """
     def __init__(self, Ein: float, T: float, M: float, *args, **kwargs):
         """
-        Class for the Double differential cross section for elastic scattering
+        Class for the Scattering function of inelastic scattering
 
         Parameters
         ----------
@@ -84,7 +84,7 @@ class Dxs:
     @classmethod
     def from_sigma1(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray):
         """
-        Generate the Differential xs for elastic scattering from sigma1
+        Generate the Scattering function for inelastic scattering from sigma1
         ..math::
             \frac{d\sigma_T(E)}{dE^\prime} = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\sigma_0(E^\prime)\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
 
@@ -103,15 +103,15 @@ class Dxs:
 
         Returns
         -------
-        Dxs
-            Differential cross section for elastic scattering
+        ScatFunc
+            Scattering function for inelastic scattering
 
         Examples
         --------
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -123,7 +123,7 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # SIGMA1 algorithm:
-        >>> Dxs.from_sigma1(xs0K, Ein, M, T, Eout).data.iloc[::100]
+        >>> ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).data.iloc[::100]
         Eout
         1.80000     0.000049
         1.84004     0.009909
@@ -140,7 +140,7 @@ class Dxs:
         # Get the transfer function:
         transferFunc = TransferFunc.from_sigma1(Ein, M, T, Eout).data
 
-        # Get the differential cross section:
+        # Get the Scattering function:
         dxs = transferFunc * cls.interp_xs0K(xs0K, transferFunc.index.values)
 
         return cls(Ein, T, M, dxs)
@@ -149,7 +149,7 @@ class Dxs:
     def from_alpha(cls, xs0K: pd.Series, alpha: float, Ein: float, M: float,
                    T: float, Eout: np.ndarray, *args, model: str = "fgm", **kwargs):
         """
-        Generate the Differential xs for elastic scattering from the
+        Generate the Scattering function for inelastic scattering from the
         S(alpha, beta) tables distribution
 
         Parameters
@@ -191,15 +191,15 @@ class Dxs:
 
         Returns
         -------
-        Dxs
-            Differential cross section for elastic scattering
+        ScatFunc
+            Scattering function for inelastic scattering
 
         Examples
         --------
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -212,7 +212,7 @@ class Dxs:
         >>> alpha = Ein / (kb * T) / M
 
         # alpha0 algorithm:
-        >>> Dxs.from_alpha(xs0K, alpha, Ein, M, T, Eout, model="fgm").data.iloc[::100]
+        >>> ScatFunc.from_alpha(xs0K, alpha, Ein, M, T, Eout, model="fgm").data.iloc[::100]
         Eout
         1.80000     0.000299
         1.84004     0.034346
@@ -230,7 +230,7 @@ class Dxs:
         >>> from solid_cinel.core.material import Pdos
         >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> Dxs.from_alpha(xs0K, alpha, Ein, M, T, Eout, pdos, model="sct").data.iloc[::100]
+        >>> ScatFunc.from_alpha(xs0K, alpha, Ein, M, T, Eout, pdos, model="sct").data.iloc[::100]
         Eout
         1.80000     0.000312
         1.84004     0.035241
@@ -251,7 +251,7 @@ class Dxs:
         # Get the recoil energy:
         recoil = alpha * kb * T
 
-        # Get the differential cross section:
+        # Get the Scattering function:
         dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
 
         return cls(Ein, T, M, dxs)
@@ -260,8 +260,8 @@ class Dxs:
     def from_alpha0(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
                    theta: np.ndarray, *args, model: str = "fgm", **kwargs):
         """
-        Generate the Differential xs for elastic scattering from the most similar distribution of the S(alpha, -beta)
-        tables and sigma1 algorithm
+        Generate the Scattering function for inelastic scattering from the most
+        similar distribution of the S(alpha, -beta) tables and sigma1 algorithm
         ..math::
             \frac{d\sigma_T(E)}{dE^\prime} = \frac{\sigma(E^\prime + R)}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
@@ -309,7 +309,7 @@ class Dxs:
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -322,7 +322,7 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # alpha0 algorithm:
-        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::100]
+        >>> ScatFunc.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::100]
         Eout
         1.80000     0.000287
         1.84004     0.033460
@@ -340,7 +340,7 @@ class Dxs:
         >>> from solid_cinel.core.material import Pdos
         >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::100]
+        >>> ScatFunc.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="sct").data.iloc[::100]
         Eout
         1.80000     0.000299
         1.84004     0.034323
@@ -355,7 +355,7 @@ class Dxs:
         dtype: float64
 
         # Using the Phonon Density of States model:
-        >>> Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos").data.iloc[::100]
+        >>> ScatFunc.from_alpha0(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos").data.iloc[::100]
         Eout
         1.80000     0.005152
         1.84004     0.112088
@@ -370,8 +370,8 @@ class Dxs:
         dtype: float64
         """
         # Calculate alpha0 values from the scattering function:
-        alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
-                                     model=model, **kwargs).alpha0
+        alpha0 = DynamicStruc.from_model(Ein, M, T, Eout, theta, *args,
+                                         model=model, **kwargs).alpha0
 
         # Get dxs based on the alpha0:
         return cls.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, model=model, **kwargs)
@@ -380,8 +380,8 @@ class Dxs:
     def from_theta(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
                    theta: float, *args, model: str = "fgm", **kwargs):
         """
-        Generate the Differential xs for elastic scattering from the scattering
-        function angle distribution
+        Generate the Scattering function for inelastic scattering from the
+        Scattering function angle distribution
 
         Parameters
         ----------
@@ -445,13 +445,13 @@ class Dxs:
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Using the Free Gas Model:
-        >>> Dxs.from_theta(xs0K, Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        >>> ScatFunc.from_theta(xs0K, Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout
         7.1000      0.000277
         7.1500      8.291518
@@ -462,13 +462,13 @@ class Dxs:
         """
         # Get the transfer function:
         transferFunc = TransferFunc.from_theta(Ein, M, T, Eout, theta, *args,
-                                                model= model, **kwargs).data
+                                               model= model, **kwargs).data
 
         # Get the recoil energy:
         recoil = get_alpha(Ein, T, M, Eout, np.cos(np.deg2rad(theta)))
         recoil *= kb * T
 
-        # Get the differential cross section:
+        # Get the Scattering function:
         dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
 
         return cls(Ein, T, M, dxs)
@@ -478,8 +478,8 @@ class Dxs:
                  theta: np.ndarray, *args, model: str = "fgm", recoil: bool = True,
                  **kwargs):
         """
-        Generate the Differential xs for elastic scattering from the scattering
-        function angle distribution
+        Generate the Scattering function for inelastic scattering from the
+        Dynamic Structure Factor.
 
         Parameters
         ----------
@@ -532,7 +532,7 @@ class Dxs:
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -545,7 +545,7 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # Using the Free Gas Model(NO RECOIL):
-        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm", recoil=False)
+        >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm", recoil=False)
         >>> dxs.data.iloc[::100]
         Eout
         1.80000     0.768794
@@ -562,7 +562,7 @@ class Dxs:
 
 
         # Using the Free Gas Model(RECOIL):
-        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm")
+        >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm")
         >>> dxs.data.iloc[::100]
         Eout
         1.80000     0.768710
@@ -581,7 +581,7 @@ class Dxs:
         >>> from solid_cinel.core.material import Pdos
         >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
+        >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
         >>> dxs.data.iloc[::100]
         Eout
         1.80000     0.776211
@@ -597,7 +597,7 @@ class Dxs:
         dtype: float64
 
         # Using the Phonon Density of States model:
-        >>> dxs = Dxs.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos")
+        >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos")
         >>> dxs.data.iloc[::100]
         Eout
         1.80000     1.171084
@@ -613,9 +613,9 @@ class Dxs:
         dtype: float64
         """
         mu = np.cos(np.deg2rad(theta))
-        # Calculate the scattering function:
-        scatFunc = ScatFunc.from_model(Ein, M, T, Eout, theta, *args,
-                                     model= model, **kwargs)
+        # Calculate the Dynamic Structure Factor:
+        scatFunc = DynamicStruc.from_model(Ein, M, T, Eout, theta, *args,
+                                           model= model, **kwargs)
 
         # Get the recoil energy if needed:
         if recoil:
@@ -623,7 +623,7 @@ class Dxs:
             xs0Kinterp = cls.interp_xs0K(xs0K, Eout, recoil=alphaRecoil)
             dxs = (scatFunc.data * xs0Kinterp).apply(integrate)
         else:
-            transferFunc = scatFunc.to_transferFunc.data
+            transferFunc = scatFunc.to_ScatFunc.data
             dxs = transferFunc * cls.interp_xs0K(xs0K, Eout)
 
         return cls(Ein, T, M, dxs)
@@ -656,7 +656,7 @@ class Dxs:
     @property
     def integral(self) -> float:
         """
-        The integral value of the Diferential xs
+        The integral value of the Scattering function
 
         Returns
         -------
@@ -668,7 +668,7 @@ class Dxs:
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -680,12 +680,12 @@ class Dxs:
         >>> M = 238.05077040419212
 
         # SIGMA1 algorithm:
-        >>> float(round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
+        >>> float(round(ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
         9.09
 
         # DOPUSH algorithm:
         >>> theta = np.arange(0, 180, 1)[1::]
-        >>> float(round(Dxs.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2))
+        >>> float(round(ScatFunc.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2))
         9.09
         """
         return integrate(self.data)
@@ -693,7 +693,8 @@ class Dxs:
     @property
     def prob(self) -> dict:
         """
-        Get the upscattering and downscattering probabilities for the selected Ein, T, M
+        Get the upscattering and downscattering probabilities for the selected
+        Ein, T and M.
 
         Returns
         -------
@@ -705,7 +706,7 @@ class Dxs:
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -715,7 +716,7 @@ class Dxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
+        >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
         >>> float(round(dxs.prob["upscattering"], 6))
         0.505184
         >>> float(round(dxs.prob["downscattering"], 6))
@@ -738,19 +739,19 @@ class Dxs:
     @property
     def pdf(self) -> pd.Series:
         """
-        Get the probability density function of the Differential XS
+        Get the probability density function of the Scattering function
 
         Returns
         -------
         pd.Series
-            The probability density function of the Differential XS
+            The probability density function of the Scattering function
 
         Examples
         --------
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -760,7 +761,7 @@ class Dxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
+        >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
 
         # SIGMA1 algorithm:
         >>> dxs.pdf.iloc[::100]
@@ -781,7 +782,8 @@ class Dxs:
 
     def shift(self, dx: [float, np.ndarray, pd.DataFrame]):
         """
-        Shift the Double Differential XS in the given axis and interpolate to get the values of the original axis
+        Shift the Scattering function in the given axis and interpolate to get
+        the values of the original axis.
 
         Parameters
         ----------
@@ -789,19 +791,19 @@ class Dxs:
             The shift value in the given axis. If a pd.DataFrame is given, the shift value is calculated according to
             the index or the columns of the pd.DataFrame (next argument to select).
         axis : str, optional
-            The axis to shift the Double Differential XS. The default is "Eout".
+            The axis to shift the Double Scattering function. The default is "Eout".
 
         Returns
         -------
         DDxs
-            The shifted Double Differential XS values in the original axis
+            The shifted Double Scattering function values in the original axis
 
         Examples
         --------
         # 0K xs data for U238:
         >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("dxs.py", ""))
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> xs0K = Xs.read_xs("u238.0.2")
         >>> os.chdir(wd)
@@ -811,7 +813,7 @@ class Dxs:
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> M = 238.05077040419212
-        >>> dxs = Dxs.from_sigma1(xs0K, Ein, M, T, Eout)
+        >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
         >>> dxs.data.iloc[::200].round(6)
         Eout
         1.80000     0.000049
@@ -855,20 +857,20 @@ class Dxs:
         else:
             dxs.loc[dx_.index] = reshift(dxs.loc[dx_.index], dx_)
 
-        return Dxs(self.Ein, self.T, self.M, dxs)
+        return ScatFunc(self.Ein, self.T, self.M, dxs)
 
 
 def check_dx(data: [pd.DataFrame, pd.Series],
              dx: [float, np.ndarray, pd.DataFrame],
              axis: [str, int]) -> [float, pd.Series, pd.DataFrame]:
     """
-    Check the dx value to shift the Double Differential XS and return the value
+    Check the dx value to shift the Double Scattering function and return the value
     in the correct format for the shift aplicattion.
 
     Parameters
     ----------
     data : pd.DataFrame, pd.Series
-        Double or Single Differential XS data to shift
+        Double or Single Scattering function data to shift
     dx : float, np.ndarray, pd.DataFrame
         Value to shift the data
     axis : str, int

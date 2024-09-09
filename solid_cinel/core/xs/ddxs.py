@@ -9,11 +9,11 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from typing import Iterable
-from solid_cinel.core.scattering_function.scatfunc import ScatFunc
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
 from solid_cinel.core.material.pdos import Pdos
-from solid_cinel.core.xs import Xs, Dxs, NucInteract
+from solid_cinel.core.xs import Xs, ScatFunc, NucInteract
 from solid_cinel.core.generic import integrate, reshift
-from solid_cinel.core.xs.dxs import check_dx
+from solid_cinel.core.xs.scatfunc import check_dx
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -30,7 +30,7 @@ class DDxs:
 
     def __init__(self, Ein: float, T: float, M: float, *args, **kwargs):
         """
-        Class for the Double differential cross section for elastic scattering
+        Class for the Double differential cross section for inelastic scattering
 
         Parameters
         ----------
@@ -45,7 +45,7 @@ class DDxs:
         kwargs : dict
             Optional arguments for the construction of the pd.DataFrame
         """
-        # Atributes of the scattering function:
+        # Atributes of the Double Differential XS:
         self.Ein = Ein
         self.T = T
         self.M = M
@@ -83,7 +83,8 @@ class DDxs:
     def from_Sab(cls, xs: Xs, Ein: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
                  **kwargs):
         """
-        Generate the Double Differential XS for elastic scattering from S(alpha, -beta) tables
+        Generate the Double Differential XS for elastic scattering from
+        S(alpha, -beta) tables
         ..math::
             \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{\sigma_b}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
@@ -166,8 +167,8 @@ class DDxs:
          0.173648  0.064789   3.495596  32.299618  20.447022  0.940610
          0.766044  0.000025   0.043670  23.461207  14.958094  0.011931
         """
-        # Get the scattering function:
-        scatfunction = ScatFunc.from_model(Ein, xs.M, T, Eout, theta, *args, **kwargs)
+        # Get the Dynamic structure factor:
+        scatfunction = DynamicStruc.from_model(Ein, xs.M, T, Eout, theta, *args, **kwargs)
 
         # Get the cross section in the correct energy grid:
         xs0Kinterp = xs.interp_Ein(Eout, T=0).loc[::, 0]
@@ -182,8 +183,8 @@ class DDxs:
                   theta: np.ndarray, *args, algorithm: str = "sigma1",
                   approx: bool = True, kind: str = "corrected", **kwargs):
         """
-        Generate the Double Differential XS for elastic scattering from Fourier double-Laplace transform of a 4-point
-        correlation function modified
+        Generate the Double Differential XS for elastic scattering from Fourier
+        double-Laplace transform of a 4-point correlation function
         ..math::
             \frac{d^2\sigma_T(E)}{dE^\prime d^\theta} = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T)) \sigma^{T(1+\mu)/2}((E^\prime+E + \frac{\alpha k_{B} T}{1-\mu})/2 - E \mu / A)
 
@@ -290,10 +291,10 @@ class DDxs:
 #        >>> ddxs_test.round(6)
         """
         # Generate Dynamic structure of the phonon dynamics:
-        scatfunc = ScatFunc.from_model(Ein, xs.M, T, Eout, theta,*args, **kwargs).data
+        dynamicStruc = DynamicStruc.from_model(Ein, xs.M, T, Eout, theta, *args, **kwargs).data
 
         # Use only Eout values with information for optimization:
-        Eout_ = scatfunc.columns.values
+        Eout_ = dynamicStruc.columns.values
 
         # Get nuclear interaction parameters:
         kwargs["algorithm"] = algorithm
@@ -305,19 +306,21 @@ class DDxs:
             xsMat = xs.get_4PCFxs(Ein, T, Eout_, theta, *args, **kwargs)
 
         # Convolve the scattering function with the cross section matrix:
-        ddxs = scatfunc * xsMat
+        ddxs = dynamicStruc * xsMat
 
         return cls(Ein, T, xs.M, ddxs)
 
     @property
-    def angular(self) -> Dxs:
+    def angular(self) -> ScatFunc:
         """
-        The angular distribution of the Double Differential XS for elastic scattering
+        The Scattering function of the Double Differential XS for inelastic
+        scattering
 
         Returns
         -------
-        Dxs
-            The angular distribution of the Double Differential XS for elastic scattering
+        ScatFunc
+            The Scattering function of the Double Differential XS for inelastic
+            scattering
 
         Examples
         --------
@@ -345,8 +348,9 @@ class DDxs:
         2.12032     2.920481
         dtype: float64
         """
-        dxs = self.data.apply(integrate, axis=0)
-        return Dxs(self.Ein, self.T, self.M,dxs)
+        scatfuncValues = self.data.apply(integrate, axis=0)
+        return ScatFunc(self.Ein, self.T, self.M, scatfuncValues)
+
     @property
     def integral(self) -> float:
         """
@@ -507,13 +511,15 @@ class DDxs:
 
     def shift(self, dx: [float, np.ndarray, pd.DataFrame], axis: [str, int] = "Eout"):
         """
-        Shift the Double Differential XS in the given axis and interpolate to get the values of the original axis
+        Shift the Double Differential XS in the given axis and interpolate to
+        get the values of the original axis
 
         Parameters
         ----------
         dx : float or np.ndarray or pd.Series or pd.DataFrame
-            The shift value in the given axis. If a pd.DataFrame is given, the shift value is calculated according to
-            the index or the columns of the pd.DataFrame (next argument to select).
+            The shift value in the given axis. If a pd.DataFrame is given, the
+            shift value is calculated according to the index or the columns of
+            the pd.DataFrame (next argument to select).
         axis : str, optional
             The axis to shift the Double Differential XS. The default is "Eout".
 
@@ -624,6 +630,7 @@ class DDxs:
         """
         # Copy original data to avoid changing the original data:
         ddxs = self.data.copy()
+
         # Check the dx:
         dx_ = check_dx(self.data, dx, axis)
         axis_ = 1 if axis == "Eout" else 0 if axis == "mu" else axis

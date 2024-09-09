@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_Pdos
 from solid_cinel.application.scatfunctApp import str_or_float
-from solid_cinel.core.xs.dxs import Dxs
+from solid_cinel.core.xs.scatfunc import ScatFunc
 from solid_cinel.core.xs.xs import Xs
 
 
@@ -57,11 +57,11 @@ def handle_DxsArgs(args: argparse.Namespace) -> np.array:
     xs0K = Xs.read_xs(args.xs0K)
 
     # Define the method to use
-    method = Dxs.from_theta if isinstance(theta, (int, float)) else Dxs.from_sab
+    method = ScatFunc.from_theta if isinstance(theta, (int, float)) else ScatFunc.from_sab
 
     # Get the extra arguments for Pdos
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
-    dictRecoil = {'recoil': args.recoil} if method == Dxs.from_sab else {}
+    dictRecoil = {'recoil': args.recoil} if method == ScatFunc.from_sab else {}
 
     # Compute the function:
     dxs = method(xs0K, args.Ein, args.M, args.T, Eout, theta, *argsPdos,

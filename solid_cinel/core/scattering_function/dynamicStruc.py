@@ -23,15 +23,14 @@ kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
 
-class ScatFunc:
+class DynamicStruc:
     """
-    Double Differencial (angle, Outgoing energy) scattering function base
-    class.
+    Dynamic structure factor class.
     """
 
     def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
         """
-        Initialize the TransferFunc class.
+        Initialize the DynamicStruc class.
 
         Parameters
         ----------
@@ -42,40 +41,40 @@ class ScatFunc:
         M : float
             Mass of the material in amu
         args : Iterable, (N, M)
-            The scattering function data for the pd.DataFrame
+            The Transfer function data for the pd.DataFrame
         kwargs : dict
             Optional arguments for the construction of the pd.DataFrame
         """
-        # Atributes of the scattering function (Change in these parameters will
-        # change the scattering function):
+        # Atributes of the Transfer function (Change in these parameters will
+        # change the Transfer function):
         self.Ein = Ein
         self.T = T
         self.M = M
 
-        # The scattering function data:
+        # The Transfer function data:
         self.data = pd.DataFrame(*args, **kwargs)
 
     @property
     def data(self) -> pd.DataFrame:
         """
-        Scattering function data.
+        Transfer function data.
 
         Returns
         -------
         pd.Series
-            The scattering function data
+            The Transfer function data
         """
         return self._data
 
     @data.setter
     def data(self, dd_pdf: Iterable):
         """
-        Set the scattering function data and check the normalization.
+        Set the Dynamic Structure Factor data and check the normalization.
 
         Parameters
         ----------
         dd_pdf : pd.Series
-            Double differential scattering function data
+            Transfer function data
 
         """
         # Sort and define the style of the dataframe:
@@ -93,8 +92,8 @@ class ScatFunc:
     def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: np.ndarray, ws: float = 1.0):
         """
-        Generate the double differential scattering function from a
-        S(alpha, -beta) table based on Free Gas Model.
+        Generate the Dynamic Structure Factor from a S(alpha, -beta) table based
+        on Free Gas Model.
 
         Parameters
         ----------
@@ -113,9 +112,9 @@ class ScatFunc:
 
         Returns
         -------
-        ScatFunc
-            Double differential scattering function from a S(alpha, -beta) table
-            based on Free Gas Model
+        DynamicStruc
+            Dynamic Structure Factor from a S(alpha, -beta) table based on Free
+            Gas Model
 
         Examples
         --------
@@ -125,7 +124,7 @@ class ScatFunc:
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> mu = np.cos(np.deg2rad(theta))
-        >>> ScatFunc.from_fgm(Ein, M, T, Eout, mu).data.round(6)
+        >>> DynamicStruc.from_fgm(Ein, M, T, Eout, mu).data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
@@ -140,7 +139,7 @@ class ScatFunc:
          8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
          9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
         """
-        # Get the scattering fucntion values:
+        # Get the Dynamic Structure Factor values:
         scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, T, ws)
 
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
@@ -149,8 +148,8 @@ class ScatFunc:
     def from_sct(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: np.ndarray, pdos: Pdos, ws: float = 1.0):
         """
-        Generate the double differential scattering function from a
-        S(alpha, -beta) table based on Short Collision Time model.
+        Generate tDynamic Structure Factor from a S(alpha, -beta) table based on
+        Short Collision Time model.
 
         Parameters
         ----------
@@ -171,9 +170,9 @@ class ScatFunc:
 
         Returns
         -------
-        ScatFunc
-            Double differential scattering function from a S(alpha, -beta) table
-            based on Short Collision Time model
+        DynamicStruc
+            Dynamic Structure Factor from a S(alpha, -beta) table based on Short
+            Collision Time model
 
         Examples
         --------
@@ -185,7 +184,7 @@ class ScatFunc:
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFunc.from_sct(Ein, M, T, Eout, mu, pdos).data.round(6)
+        >>> DynamicStruc.from_sct(Ein, M, T, Eout, mu, pdos).data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
@@ -203,7 +202,7 @@ class ScatFunc:
         # Get the effective temperature:
         Teff = pdos.fix_T(T).Teff
 
-        # Get the scattering fucntion values:
+        # Get the Dynamic Structure Factor values:
         scatfunc = get_ScatSctAngular(Eout, mu, Ein, T, M, Teff, ws)
 
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
@@ -213,8 +212,8 @@ class ScatFunc:
                  mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
                  DebyeWallerCoeff: float):
         """
-        Generate the double differential scattering function from tauN function
-        using the phonon expansion model.
+        Generate the Dynamic Structure Factor from tauN function using the
+        phonon expansion model.
 
         Parameters
         ----------
@@ -238,8 +237,8 @@ class ScatFunc:
 
         Returns
         -------
-        TransferFunc
-            Double differential scattering function
+        DynamicStruc
+            Dynamic Structure Factor
 
         Examples
         --------
@@ -257,7 +256,7 @@ class ScatFunc:
         >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu.min()), DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
         >>> tauNbeta = get_tauNbeta(pdos.beta.data, tauN.shape[1])
-        >>> ScatFunc.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff).data.loc[::, Eout_test].round(6)
+        >>> DynamicStruc.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -265,7 +264,7 @@ class ScatFunc:
          0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
-        # Get the scattering fucntion values:
+        # Get the Dynamic Structure Factor values:
         scatfunc = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
 
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
@@ -276,8 +275,8 @@ class ScatFunc:
                   decimal: float = 1.0e-6,
                   order_max: int = 5000, threshold: float = 0.0):
         """
-        Generate the double differential scattering function from a
-        S(alpha, -beta) table based on Phonon expansion model.
+        Generate the Dynamic Structure Factor from a S(alpha, -beta) table based
+        on Phonon expansion model.
 
         Parameters
         ----------
@@ -307,9 +306,9 @@ class ScatFunc:
 
         Returns
         -------
-        ScatFunc
-            Double differential scattering function from a S(alpha, -beta) table
-            based on Phonon expansion model.
+        DynamicStruc
+            Dynamic Structure Factor from a S(alpha, -beta) table based on
+            Phonon expansion model.
 
         Examples
         --------
@@ -323,7 +322,7 @@ class ScatFunc:
         >>> theta = np.array([40, 80, 120, 160])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[::, Eout_test].round(6)
+        >>> DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -349,15 +348,14 @@ class ScatFunc:
         tauN = Tpdos.tauN(nphonon, threshold, values=True)
         tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
 
-        # Get the scattering fucntion values:
+        # Get the Dynamic Structure Factor values:
         return cls.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
 
     @classmethod
     def from_model(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                    theta: np.ndarray, *args, model: str = "fgm", **kwargs):
         """
-        Generate the double differential scattering function from a
-         S(alpha, -beta) table.
+        Generate Dynamic Structure Factor from a S(alpha, -beta) table.
         ..math::
         S(\theta, E^\prime, E, M, T) = \frac{1}{2 * k_B * T}\sqrt{\frac{^\prime}{E}} S(\alpha(\theta, E^\prime, E, M, T), \beta( E^\prime, E, T))
 
@@ -407,8 +405,8 @@ class ScatFunc:
 
         Returns
         -------
-        TransferFunc
-            Double differential scattering scattering function
+        DynamicStruc
+            Dynamic Structure Factor from a S(alpha, -beta) table.
 
         Examples
         --------
@@ -419,7 +417,7 @@ class ScatFunc:
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
 
         # Using the Free Gas Model:
-        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, model="fgm").data.round(6)
+        >>> DynamicStruc.from_model(Ein, M, T, Eout, theta, model="fgm").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
@@ -437,7 +435,7 @@ class ScatFunc:
         # Using the Short Collision Time model:
         >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
+        >>> DynamicStruc.from_model(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
         Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
         mu
         -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
@@ -462,7 +460,7 @@ class ScatFunc:
         >>> M = 238.05077040419212
         >>> theta = np.array([40, 80, 120, 160])
 
-        >>> ScatFunc.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
+        >>> DynamicStruc.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
         -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
@@ -473,7 +471,7 @@ class ScatFunc:
         # Get the cosine of the angle of the distribution:
         mu = np.cos(np.deg2rad(theta))
 
-        # Get the scattering function:
+        # Get the Transfer function:
         if model.lower() == "pdos":
             return cls.from_pdos(Ein, M, T, Eout, mu, *args, **kwargs)
         elif model.lower() == "sct":
@@ -482,7 +480,7 @@ class ScatFunc:
             return cls.from_fgm(Ein, M, T, Eout, mu)
 
     @property
-    def to_transferFunc(self):
+    def to_ScatFunc(self):
         """
         Return the TransferFunc object.
 
@@ -499,8 +497,8 @@ class ScatFunc:
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> mu = np.cos(np.deg2rad(theta))
-        >>> scatfunc = ScatFunc.from_fgm(Ein, M, T, Eout, mu)
-        >>> scatfunc.to_transferFunc.data.round(6)
+        >>> scatfunc = DynamicStruc.from_fgm(Ein, M, T, Eout, mu)
+        >>> scatfunc.to_ScatFunc.data.round(6)
         Eout
         6.7554    0.031423
         6.9050    0.404638
@@ -511,15 +509,16 @@ class ScatFunc:
         dtype: float64
         """
         return TransferFunc(self.Ein, self.T, self.M, self.data.apply(integrate))
+
     @property
     def alpha0(self) -> float:
         """
-        The alpha0 parameter of the scattering function.
+        The $\alpha_0$ parameter of the Dynamic Structure Factor.
 
         Returns
         -------
         float
-            The alpha0 parameter of the scattering function
+            The $\alpha_0$ parameter of the Dynamic Structure Factor
 
         Examples
         --------
@@ -533,65 +532,65 @@ class ScatFunc:
         >>> theta = np.array([40, 80, 120, 160])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> float(round(ScatFunc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
+        >>> float(round(DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
         0.328006
         """
-        # Get the scattering fucntion:
-        scatfunc = self.data
+        # Get the Dynamic structure factor:
+        dynamicStruc = self.data
 
         # Get the alpha matrix:
-        alphaMat = get_alphaMat(scatfunc.columns.values, self.Ein, self.T, self.M,
-                                scatfunc.index.values)
+        alphaMat = get_alphaMat(dynamicStruc.columns.values, self.Ein, self.T, self.M,
+                                dynamicStruc.index.values)
 
         # Get the alpha0 parameter:
-        return integrate((scatfunc * alphaMat).apply(integrate)) / 2
+        return integrate((dynamicStruc * alphaMat).apply(integrate)) / 2
 
     @property
     def norm(self) -> float:
         """
-        Normalization of the scattering function.
+        Normalization of the Dynamic Structure Factor.
 
         Returns
         -------
         float
-            Normalization of the scattering function
+            Normalization of the Dynamic Structure Factor
         """
         return integrate(self.data.apply(integrate))
 
     @property
     def pdf(self) -> pd.DataFrame:
         """
-        Probability density function of the scattering function.
+        Probability density function of the Dynamic Structure Factor.
 
         Returns
         -------
         pd.Series
-            Probability density function of the scattering function
+            Probability density function of the Dynamic Structure Factor
         """
         return self.data / self.norm
 
     @property
     def cdf(self) -> pd.DataFrame:
         """
-        Cumulative distribution function of the scattering function.
+        Cumulative distribution function of the Dynamic Structure Factor.
 
         Returns
         -------
         pd.Series
-            Cumulative distribution function of the scattering function
+            Cumulative distribution function of the Dynamic Structure Factor
         """
         cdf = self.data.cumsum(axis=0).cumsum(axis=1)
         return cdf / cdf.iloc[-1, -1]
 
 class TransferFunc:
     """
-    Single Differencial (angle or Outgoing energy) scattering function base
+    Transfer function (angular integration of Dynamic Structure Factor) base
     class.
     """
 
     def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
         """
-        Initialize the TransferFunc class.
+        Initialize the ScatFunc class.
 
         Parameters
         ----------
@@ -602,40 +601,40 @@ class TransferFunc:
         M : float
             Mass of the material in amu
         args : Iterable, (N,)
-            The scattering function data for the pd.Series
+            The Transfer function data for the pd.Series
         kwargs : dict
             Optional arguments for the construction of the pd.Series
         """
-        # Atributes of the scattering function (Change in these parameters will
-        # change the scattering function):
+        # Atributes of the Transfer function (Change in these parameters will
+        # change the Transfer function):
         self.Ein = Ein
         self.T = T
         self.M = M
 
-        # The scattering function data:
+        # The Transfer function data:
         self.data = pd.Series(*args, **kwargs)
 
     @property
     def data(self) -> pd.Series:
         """
-        Scattering function data.
+        Transfer function data.
 
         Returns
         -------
         pd.Series
-            The scattering function data
+            The Transfer function data
         """
         return self._data
 
     @data.setter
     def data(self, pdf: Iterable):
         """
-        Set the scattering function data and check the normalization.
+        Set the Transfer function data and check the normalization.
 
         Parameters
         ----------
         pdf : pd.Series
-            The scattering function data
+            The Transfer function data
 
         """
         pdf_ = pd.Series(pdf).sort_index()
@@ -649,7 +648,7 @@ class TransferFunc:
     @classmethod
     def from_sigma1(cls, Ein: float, M: float, T: float, Eout: np.array):
         """
-        Calculate the scattering function using Maxwellian velocity distribution
+        Calculate the Transfer function using Maxwellian velocity distribution
         and angular integration
         .. math::
             S(E, E^\prime, M, T) = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
@@ -668,7 +667,7 @@ class TransferFunc:
         Returns
         -------
         TransferFunc
-            The scattering function for the given temperature, incident energy
+            The Transfer function for the given temperature, incident energy
             and mass using Maxwellian velocity distribution and angular
             integration
 
@@ -700,8 +699,7 @@ class TransferFunc:
     def from_theta(cls, Ein: float, M: float, T: float, Eout: np.array,
                    theta: float, *args, model: str = "fgm", **kwargs):
         """
-        Generate the Transfer function from a
-        S(alpha, -beta) table.
+        Generate the Transfer function from a S(alpha, -beta) table.
 
         Parameters
         ----------
@@ -750,7 +748,7 @@ class TransferFunc:
         Returns
         -------
         TransferFunc
-            Double differential scattering scattering function
+            Transfer function from a S(alpha, -beta) table.
 
         Examples
         --------
@@ -791,9 +789,9 @@ class TransferFunc:
         7.3157     0.000400
         Name: 15, dtype: float64
         """
-        # Get the scattering function values to the given angle:
-        scatFunc = ScatFunc.from_model(Ein, M, T, Eout, [theta],  *args,
-                                       model=model, **kwargs).data
+        # Get the Transfer function values to the given angle:
+        scatFunc = DynamicStruc.from_model(Ein, M, T, Eout, [theta], *args,
+                                           model=model, **kwargs).data
 
         # Erase angular normalization
         scatFunc *= 2
@@ -809,7 +807,7 @@ class TransferFunc:
         Parameters
         ----------
         alpha: float
-            The alpha parameter of the scattering function
+            The alpha parameter of the Transfer function
         Ein: float
             The incident energy of the neutron in eV
         M: float
@@ -902,7 +900,7 @@ class TransferFunc:
         EoutCalc = Ein + sab.index.values * kb * T
         scatfunc = np.interp(Eout, EoutCalc, sab.values)
 
-        # Normalize the scattering function to Eout:
+        # Normalize the Transfer function to Eout:
         scatfunc /= kb * T
 
         return cls(Ein, T, M, scatfunc, index=Eout)
@@ -911,8 +909,7 @@ class TransferFunc:
     def from_alpha0(cls, Ein: float, M: float, T: float, Eout: np.array,
                     *args, model: str = "fgm", **kwargs):
         """
-        Generate the Transfer function from gressier
-        recoil energy
+        Generate the Transfer function from gressier recoil energy
 
         Parameters
         ----------
@@ -1000,20 +997,27 @@ class TransferFunc:
         7.4480    0.003581
         dtype: float64
         """
+        # Define the beta grid:
         beta = Beta.from_default(T)
+
+        # Get the S(alpha, -beta) values to the beta:
         sab = Sab.from_alpha0(Ein, T, M, beta, *args, model=model,
                               **kwargs).full
+
+        # Interpolate to the outgoing energy grid:
         EoutCalc = Ein + sab.index.values * kb * T
         scatfunc = np.interp(Eout, EoutCalc, sab.values)
+
+        # Normalize the Transfer function to Eout:
         scatfunc /= kb * T
+
         return cls(Ein, T, M, scatfunc, index=Eout)
 
     @staticmethod
     def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
                    model: str = "fgm", **kwargs) -> pd.DataFrame:
-
         """
-        Calculate the alpha0 scattering function.
+        Calculate the alpha0 Transfer function.
 
         Parameters
         ----------
@@ -1059,7 +1063,7 @@ class TransferFunc:
         Returns
         -------
         pd.DataFrame
-            The alpha0 scattering function
+            The alpha0 Transfer function
 
         Examples
         --------
@@ -1097,20 +1101,24 @@ class TransferFunc:
         7.3157   0.122248   0.252190   0.189417   0.046847   0.000846
         7.4480   0.124680   0.250838   0.186655   0.046702   0.000881
         """
+        # Get the incident energy grid in appropriate format:
         Ein = np.unique(EinGrid) if hasattr(EinGrid, '__len__') else np.array([EinGrid])
-        # Scattering function calculation
+
+        # Transfer function calculation
         alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
         scatfunc = Sab.from_model(alpha, beta, T, *args,
                    model=model, **kwargs).full
+
         # Erase the columns with all zeros
         scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
+
         return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
 
 
     @property
     def norm(self) -> float:
         """
-        Normalization of the scattering function.
+        Normalization of the Transfer function.
 
         Returns
         -------
@@ -1133,23 +1141,23 @@ class TransferFunc:
     @property
     def pdf(self) -> pd.Series:
         """
-        Probability density function of the scattering function.
+        Probability density function of the Transfer function.
 
         Returns
         -------
         pd.Series
-            Probability density function of the scattering function
+            Probability density function of the Transfer function
         """
         return self.data / self.norm
     @property
     def cdf(self) -> pd.Series:
         """
-        Cumulative distribution function of the scattering function.
+        Cumulative distribution function of the Transfer function.
 
         Returns
         -------
         pd.Series
-            Cumulative distribution function of the scattering function
+            Cumulative distribution function of the Transfer function
         """
         cdf = self.data.cumsum()
         return cdf / cdf.iloc[-1]
@@ -1159,7 +1167,7 @@ class TransferFunc:
            target='parallel', cache=True, nopython=True)
 def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
-    Sigma1 function for Energy differential scattering function
+    Sigma1 function for Energy differential Transfer function
     ..math::
            S(E, E^\prime, M, T) = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
 
@@ -1177,7 +1185,7 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     Returns
     -------
     scatfunc : np.array
-        Scattering function based on sigma1 model
+        Transfer function based on sigma1 model
 
     Examples
     --------
@@ -1206,7 +1214,7 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     # Get the positive exponetiial part:
     expPositive = exp(- AkbT * (EinSqrt + EoutSqrt) ** 2)
 
-    # Calculate the scattering function:
+    # Calculate the Transfer function:
     transferFunc = 0.5 * (expNegative - expPositive)
     transferFunc *= sqrt(AkbT / pi) * EoutSqrt / Ein
 
@@ -1217,7 +1225,7 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
 def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
                        T: float, M: float, Teff: float, ws: float) -> np.ndarray:
     """
-    Calculate the scattering function from the Short Collision Time model using
+    Calculate the Transfer function from the Short Collision Time model using
     a single angle.
     ..math::
         S(\theta, E^\prime, E, M, T) = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} \frac{1}{\sqrt{4 \pi w_s \alpha T_{eff} / T}} exp\left(\frac{(w_s\alpha +\beta)^2}{4 \alpha w_s T_{eff}/T}\right)
@@ -1243,7 +1251,7 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
     Returns
     -------
     np.ndarray, (M, N)
-        The scattering function values for a single angle
+        The Transfer function values for a single angle
     """
     # Get the beta grid:
     beta = get_beta(Eout, Ein, T, abs=False)
@@ -1257,10 +1265,10 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
     else:
         alpha = get_alphaMat(Eout, Ein, T, M, mu)
 
-    # Get the scattering function values:
+    # Get the Transfer function values:
     sabValues = get_SabSct(alpha, beta, Tratio, ws)
 
-    # Apply normalization to the scattering function:
+    # Apply normalization to the Transfer function:
     return sabValues * normFactor(Eout, Ein, T, M)
 
 
@@ -1268,7 +1276,7 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
         nopython=True, cache=True)
 def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
-    Normalization factor for the scattering function calculation.
+    Normalization factor for the Transfer function calculation.
 
     Parameters
     ----------
@@ -1284,7 +1292,7 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     Returns
     -------
     'np.ndarray', (N,)
-        Normalization factor for the scattering function calculation.
+        Normalization factor for the Transfer function calculation.
     """
     M_div_m = M / m
     aws = ((M_div_m + 1) / M_div_m) ** 2
@@ -1297,7 +1305,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
                     mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
                     DebyeWallerCoeff: float,  alpha0: float = None) -> np.ndarray:
     """
-    Generate the scattering function from a S(alpha, -beta) table based on
+    Generate the Transfer function from a S(alpha, -beta) table based on
     the phonon expansion model.
 
     Parameters
@@ -1322,7 +1330,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     Returns
     -------
     S_diag : 'np.ndarray', (N,)
-        Scattering function values for a single angle.
+        Transfer function values for a single angle.
 
     Examples
     --------
@@ -1378,7 +1386,8 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     # Interpolation of tauN functions to reduce the number of calculations:
     tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
 
-    # Get the alpha matrix for the scattering function with the maximun outgoing energy:
+    # Get the alpha matrix for the Dynamic Structure Factor with the maximun
+    # outgoing energy:
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
     if alpha0 is None:
         alphaMat = get_alphaMat(Eout_, Ein, T, M, mu)
@@ -1389,11 +1398,11 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
     sabValues = phonon_expansion(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)
 
-    # Full Scattering function values calculation:
-    scatFuncValues = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]
+    # Full Dynamic Structure factor values calculation:
+    dynamicStruc = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]
 
     # Normalization constant
-    scatFuncValues *= normFactor(EoutCalc, Ein, T, M)
+    dynamicStruc *= normFactor(EoutCalc, Ein, T, M)
 
     # Interpolation for avoiding numerical fluctuations:
-    return interp_multyParallel(Eout, EoutCalc, scatFuncValues)
+    return interp_multyParallel(Eout, EoutCalc, dynamicStruc)

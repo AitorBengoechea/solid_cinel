@@ -9,8 +9,8 @@ import numba as nb
 from numba import vectorize
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
-from solid_cinel.core.scattering_function.scatfunc import ScatFunc
-from solid_cinel.core.xs.dxs import Dxs
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
+from solid_cinel.core.xs.scatfunc import ScatFunc
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import interpolation
 from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
@@ -510,7 +510,7 @@ class Xs:
         bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count())
 
         # Calculate xs using SIGMA1 to each element in the bag using the `map` function.
-        bag = bag.map(lambda x: Dxs.from_sigma1(self.xs0Kcomplete, x[1], self.M, x[0], default_Eout(x[1])).integral)
+        bag = bag.map(lambda x: ScatFunc.from_sigma1(self.xs0Kcomplete, x[1], self.M, x[0], default_Eout(x[1])).integral)
 
         # Trigger the parallel computation and collect the results into a list.
         return bag.compute()
@@ -597,10 +597,10 @@ class Xs:
             Eout = default_Eout(Ein)
 
             # Calculate the alpha0
-            alpha0 = ScatFunc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).alpha0
+            alpha0 = DynamicStruc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).alpha0
 
             # Calculate integral of the differential cross section for the outgoing energy
-            dxsIntegral.append(Dxs.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs).integral)
+            dxsIntegral.append(ScatFunc.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs).integral)
 
         # Return the results in the corresponding format
         return np.array(dxsIntegral)
@@ -1175,7 +1175,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     >>> Ein = 2.0
     >>> Eout = default_Eout(Ein)
     >>> M = 238.05077040419212
-    >>> float(round(Dxs.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
+    >>> float(round(ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
     9.09
     """
     EoutSmall = np.linspace(0,

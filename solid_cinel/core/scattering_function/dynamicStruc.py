@@ -22,6 +22,8 @@ import warnings
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
+class DynamicStrucValues:
+    pass
 
 class DynamicStruc:
     """
@@ -1405,4 +1407,4 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     dynamicStruc *= normFactor(EoutCalc, Ein, T, M)
 
     # Interpolation for avoiding numerical fluctuations:
-    return interp_multyParallel(Eout, EoutCalc, dynamicStruc)
+    return interp_multy

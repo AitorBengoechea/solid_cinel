@@ -18,6 +18,9 @@ from math import exp
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
+class AlphaMat:
+    pass
+
 
 class Alpha:
     """

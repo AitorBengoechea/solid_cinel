@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_Pdos
-from solid_cinel.core.scattering_function.scatfunc import ScatFunc, TransferFunc
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, TransferFunc
 
 
 def str_or_float(value):
@@ -54,7 +54,7 @@ def handle_ScatFuncArgs(args: argparse.Namespace) -> np.ndarray:
 
     # If theta is a single value, use the TransferFunc class -> 1D array
     # Otherwise, use the ScatFunc class -> 2D array
-    method = TransferFunc.from_theta if isinstance(theta, (int, float)) else ScatFunc.from_model
+    method = TransferFunc.from_theta if isinstance(theta, (int, float)) else DynamicStruc.from_model
 
     # Get the extra arguments for Pdos
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []

@@ -52,7 +52,7 @@ if __name__ == "__main__":
         ],
         keywords='solid_cinel, physics, materials, science',
         packages=find_packages(exclude=["tests"]),
-        install_requires=open('requirements.txt').read().splitlines(),
+        install_requires=open(requirements).read().splitlines(),
         extras_require={
             'gpu':  ['cupy'],  # general cupy package
             'docs': ['sphinx', 'sphinx-rtd-theme'],

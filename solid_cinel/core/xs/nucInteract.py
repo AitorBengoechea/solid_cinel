@@ -1,10 +1,15 @@
 import numpy as np
 import pandas as pd
+import numba as nb
+import os
+import dask.bag as db
 from scipy.constants import physical_constants as const
 from typing import Iterable
 from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
 from solid_cinel.core.xs.xs import Xs
 from solid_cinel.core.generic import interpolation
+from solid_cinel.core.xs.scatfunc import ScatFunc
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
 
 
 # constants
@@ -874,6 +879,75 @@ class NucInteract:
         method = InteractEnergy.from_4PCF
         return method(Ein, Eout, self.mu, self.M, approx, kind).data
 
+    def get_interactComb(self, Ein: float, Eout: np.ndarray,
+                         approx: bool = True, kind: str = "corrected") -> np.ndarray:
+        """
+        Get the incident energy and temperature combinations
+
+        Parameters
+        ----------
+        Tnew: Iterable
+            The new temperatures to calculate
+        EinGrid: Iterable, None
+            The incident energy grid in eV. If not provided, it will be taken
+            from the class attribute.
+
+        Returns
+        -------
+        list
+            The incident energy and temperature combinations
+
+        Examples
+        --------
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([90, 180])
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+
+        # Initialize the class
+        >>> nuclearInteraction = NucInteract(M, T, theta)
+        >>> nuclearInteraction.get_interactComb(Ein, Eout)
+        array([[(  0., 0.75617403), (  0., 0.95804507), (  0., 1.00847437),
+                (  0., 1.05889304), (  0., 1.26048595), (  0., 1.51234806)],
+               [(150., 0.75317789), (150., 0.95402532), (150., 1.00423718),
+                (150., 1.05444904), (150., 1.25529648), (150., 1.50635578)]],
+              dtype=[('first', '<f8'), ('second', '<f8')])
+
+        # Approximate modified 4PCF model
+        >>> nuclearInteraction.get_interactComb(Ein, Eout, approx=False)
+        array([[(  0.        , 0.71434011), (  0.        , 0.95694023),
+                (  0.        , 1.00847437), (  0.        , 1.05749003),
+                (  0.        , 1.23417152), (  0.        , 1.42444303)],
+               [(100.        , 0.67090385), (142.10526316, 0.95160561),
+                (150.        , 1.00423718), (157.14285714, 1.05185623),
+                (180.        , 1.20423718), (200.        , 1.33757052)]],
+              dtype=[('first', '<f8'), ('second', '<f8')])
+        """
+        # Get the interaction temperature of the material
+        Tinteraction = self.get_interactTemp(Ein, Eout, approx=approx)
+
+        # Get the interaction energy of the material
+        EinMat = self.get_interactEnergy(Ein, Eout, approx=approx, kind=kind).values
+
+        # Get the number of dimensions of Tinteraction
+        Tinteract_dim = Tinteraction.ndim
+
+        # Case 1: Both are 2D arrays
+        if Tinteract_dim == 2:
+            comb =  [(Tinteraction[i, j], EinMat[i, j]) for i in range(EinMat.shape[0])
+                    for j in range(EinMat.shape[1])]
+
+        # Case 2: EinGrid is 2D and Tnew is 1D
+        else:
+            comb = [(Tinteraction[i], EinMat[i, j]) for i in range(EinMat.shape[0])
+                    for j in range(EinMat.shape[1])]
+
+        # Define the data type for a structured array
+        dtype = [('first', 'f8'), ('second', 'f8')]  # f8: float64
+
+        return np.array(comb, dtype=dtype).reshape(EinMat.shape)
+
     def calc_interactionXs(self, xs: Xs, Tinteraction: np.ndarray,
                            EinMat: np.ndarray) -> np.ndarray:
         """
@@ -1006,3 +1080,53 @@ class NucInteract:
         # Calculate the cross section interaction:
         values = self.calc_interactionXs(xs, Tinteraction, EinMat.values)
         return pd.DataFrame(values, index=self.mu, columns=Eout)
+
+@nb.jit(nopython=True, cache=True)
+def default_Eout(Ein: float) -> np.ndarray:
+    """
+    Generate the default Eout grid for the convolution. The grid is tested with
+    NJOY values to ensure a relative difference smaller than 0.4%
+
+    Parameters
+    ----------
+    Ein : float
+        Incident energy in eV
+
+    Returns
+    -------
+    Eout : ndarray
+        Outgoing energy grid in eV
+
+    Examples
+    --------
+    Test the default Eout with NJOY values:
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs0K = Xs.read_xs("u238.0.2")
+    >>> os.chdir(wd)
+
+    # Generate Broadening test results:
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = default_Eout(Ein)
+    >>> M = 238.05077040419212
+    >>> float(round(ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
+    9.09
+    """
+    EoutSmall = np.linspace(0,
+                             0.99 * Ein,
+                             2000)
+    EoutMid = np.linspace(0.99 * Ein,
+                          Ein * 1.01,
+                              3000)
+    if Ein * 2 < 5.0:
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
+                                np.log10(5.0),
+                                 2000)
+    else:
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(2 * Ein),
+                                 2000)
+    return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))

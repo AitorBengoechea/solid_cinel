@@ -25,6 +25,91 @@ m = const["neutron mass in u"][0]
 # Avoid numba fast math:
 nb.config.FASTMATH_DEFAULT = False
 
+class Xs0K:
+    def __init__(self, M:float, *args, **kwargs):
+        self.M = M
+        self.data = pd.Series(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.Series:
+        return self._data
+
+    @data.setter
+    def data(self, xs: pd.Series):
+        # Sort the Series by index
+        xs_ = pd.Series(xs).sort_index()
+        xs_.index.name = "Ein"
+
+        # Drop duplicates, keeping the first occurrence
+        self._data = xs_.drop_duplicates(keep='first')
+
+    @property
+    def EinGrid(self) -> np.ndarray:
+        return self.data.index.values
+
+    @staticmethod
+    def read_xs(filename: str, header: [int, list] = None,
+                usecols: [int, list] = [0, 1], index_col: int = 0,
+                engine: str = "python") -> pd.Series:
+        """
+        Read the xs data from a file
+
+        Parameters
+        ----------
+        filename: str
+            The filename of the xs data
+        header: int, list, optional
+            The header of the file. The default is None, so no header is used.
+        usecols: int, list, optional
+            The columns to use. The default is [0, 1], so the first two columns
+            are used.
+        index_col: int, optional
+            The index column. The default is 0, so the first column is used as
+            index.
+        engine: str, optional
+            The engine to use. The default is "python".
+
+        Returns
+        -------
+        pd.Series
+            The xs data
+        """
+        # Read the data from the file into a pandas DataFrame
+        xsData = pd.read_csv(filename, sep='\s+', header=header, index_col=index_col,
+                             usecols=usecols, engine=engine).squeeze("columns")
+
+        xsData.index.name = "E"
+        # Ensure not duplicated index and if they are duplicated, take the first
+        xsData = xsData.reset_index().drop_duplicates(subset='E', keep='first')
+
+        return xsData.set_index('E').squeeze("columns")
+
+    @classmethod
+    def from_file(cls, filename: str, M: float, **kwargs):
+        return cls(M, cls.read_xs(filename, **kwargs))
+
+    def interpolate(self, EinSmall: [float, np.array], inplace:bool = False) -> pd.Series:
+        EinSmall_ = np.array(EinSmall)
+        return self.update(interpolation(self.data, EinSmall_), inplace=inplace)
+
+    def update(self, dataNew: pd.Series, inplace: bool) -> "Xs0K":
+        # Update the data in the object or return a new object
+        if inplace:
+            self.data = dataNew
+            return self
+        else:
+            return self.__class__(self.M, dataNew)
+
+    def calc_T(self, T: float, *args, **kwargs) -> [pd.Series, pd.DataFrame]:
+        # Calculate the elastic scattering cross section at temperature T using
+        # the selected algorithm.
+        results = self.compute([T], self.EinGrid, *args, **kwargs)
+
+        # Return the results in the corresponding format
+        return results[0]
+
+
+
 
 class Xs:
     """

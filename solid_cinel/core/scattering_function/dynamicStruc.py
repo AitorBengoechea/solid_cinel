@@ -265,8 +265,7 @@ class DynamicStruc:
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
         # Get the Dynamic Structure Factor values with correct type:
-        scatfunc = calc_DynStrucClm(float64(Ein), float64(M), float64(T),
-                                    Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
+        scatfunc = calc_DynStrucClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
 
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
@@ -1220,7 +1219,37 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     return exponetials * sqrt(AkbT / pi) * EoutSqrt / Ein / 2
 
 
-@nb.jit(nopython=True, cache=True)
+@nb.jit(float64[:](float64[:], float64, float64, float64),
+        nopython=True, cache=True)
+def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
+    """
+    Normalization factor for the Transfer function calculation.
+
+    Parameters
+    ----------
+    Eout: 'np.ndarray', (N,)
+        Outgoing energy grid in eV.
+    Ein: 'float'
+        Incident energy in eV.
+    T: 'float'
+        Temperature in K.
+    M: 'float'
+        Mass of the target in amu.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Normalization factor for the Transfer function calculation.
+    """
+    M_div_m = M / m
+    aws = ((M_div_m + 1) / M_div_m) ** 2
+    two_kb_T = 2 * kb * T
+    return aws * np.sqrt(Eout / Ein) / two_kb_T
+
+
+@nb.jit(float64[:, :](float64[:], float64[:], float64, float64,
+                      float64, float64, float64),
+    nopython=True, cache=True)
 def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
                        T: float, M: float, Teff: float, ws: float) -> np.ndarray:
     """
@@ -1267,33 +1296,6 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
     # Get the Transfer function values and apply normalization:
     return get_SabSct(alpha, beta, Tratio, ws) * normFactor(Eout, Ein, T, M)
 
-
-@nb.jit(float64[:](float64[:], float64, float64, float64),
-        nopython=True, cache=True)
-def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
-    """
-    Normalization factor for the Transfer function calculation.
-
-    Parameters
-    ----------
-    Eout: 'np.ndarray', (N,)
-        Outgoing energy grid in eV.
-    Ein: 'float'
-        Incident energy in eV.
-    T: 'float'
-        Temperature in K.
-    M: 'float'
-        Mass of the target in amu.
-
-    Returns
-    -------
-    'np.ndarray', (N,)
-        Normalization factor for the Transfer function calculation.
-    """
-    M_div_m = M / m
-    aws = ((M_div_m + 1) / M_div_m) ** 2
-    two_kb_T = 2 * kb * T
-    return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 @nb.jit(float64[:, :](float64, float64, float64, float64[:], float64[:],
                       float64[:, :], float64[:], float64),

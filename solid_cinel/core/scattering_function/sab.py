@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from math import pi
-from numba import prange, float64, int32
+from numba import float64, int32
 import warnings
 
 # Constants:
@@ -1331,52 +1331,23 @@ def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
     'xp.ndarray', (N, M)
         S(alpha, -beta) matrix values.
     """
+    # Common variables:
+    alphaDebye = alpha * DebyeWallerCoeff
+    alphaDebyeExp = np.exp(- alphaDebye)
+
     # Zero phonon expansion:
-    IterSum = np.log(alpha * DebyeWallerCoeff)
-    alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-    sabValues = alphaMul * tauNinterp[0]
+    IterSum = np.log(alphaDebye)
+    sabValues = alphaDebyeExp * np.exp(IterSum) * tauNinterp[0]
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
-        IterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alphaMul = np.exp(- alpha * DebyeWallerCoeff + IterSum)
-        sabValues += alphaMul * tauNinterp[n]
+        IterSum += np.log(alphaDebye / (n + 1))
+        sabValues += alphaDebyeExp * np.exp(IterSum) * tauNinterp[n]
     return sabValues
 
 
-@nb.jit(float64[:](float64[:], float64[:], float64, float64),
-        nopython=True, cache=True)
-def get_SabSctAlpha(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
-                    ws: float) -> np.ndarray:
-    """
-    Generate S(alpha, beta) matrix using Short Collision Time for a single
-    alpha value
-    .. math::
-        S(\alpha, \beta)=\dfrac{1}{\sqrt{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\mid\beta\mid - \omega_{s}\alpha)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T} - \frac{\mid\beta\mid - \beta}{2}\right)
-
-    Parameters
-    ----------
-    alpha: float
-        alpha grid value
-    beta: np.ndarray, (M,)
-        beta grid values
-    Tratio: float
-        Effective temperature divide by the temperature.
-    ws: float
-        normalization for continuous (vibrational) part. For solid is 1.
-
-    Returns
-    -------
-    'np.ndarray', (M,)
-        S(alpha, beta) matrix values for a single alpha value.
-    """
-    sabValues = np.exp(-(ws * alpha + beta) ** 2 / (4 * alpha * Tratio * ws))
-    return sabValues / np.sqrt(4 * pi * ws * alpha * Tratio)
-
-
-@nb.jit(float64[:, :](float64[:, :], float64[:], float64, float64),
-        nopython=True, nogil=True, parallel=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
                ws: float) -> np.ndarray:
     """
@@ -1400,8 +1371,6 @@ def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values.
     """
-    Nalpha = len(alpha)
-    Sab = np.zeros((Nalpha, len(beta)))
-    for i in prange(Nalpha):
-        Sab[i, :] = get_SabSctAlpha(alpha[i], beta, Tratio, ws)
-    return Sab
+    alphaCommon = 4 * alpha * Tratio * ws
+    sabValues = np.exp(-(ws * alpha + beta) ** 2 / alphaCommon)
+    return sabValues / np.sqrt(pi * alphaCommon)

@@ -905,9 +905,12 @@ class NucInteract:
         >>> Ein = 1
         >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
 
+        # Define the data type for a structured array
+        >>> dtype = [('first', 'f8'), ('second', 'f8')]
         # Initialize the class
         >>> nuclearInteraction = NucInteract(M, T, theta)
-        >>> nuclearInteraction.get_interactComb(Ein, Eout)
+        >>> comb = nuclearInteraction.get_interactComb(Ein, Eout)
+        >>> np.array(comb, dtype=dtype).reshape(EinMat.shape)
         array([[(  0., 0.75617403), (  0., 0.95804507), (  0., 1.00847437),
                 (  0., 1.05889304), (  0., 1.26048595), (  0., 1.51234806)],
                [(150., 0.75317789), (150., 0.95402532), (150., 1.00423718),
@@ -915,7 +918,8 @@ class NucInteract:
               dtype=[('first', '<f8'), ('second', '<f8')])
 
         # Approximate modified 4PCF model
-        >>> nuclearInteraction.get_interactComb(Ein, Eout, approx=False)
+        >>> comb = nuclearInteraction.get_interactComb(Ein, Eout, approx=False)
+        >>> np.array(comb, dtype=dtype).reshape(EinMat.shape)
         array([[(  0.        , 0.71434011), (  0.        , 0.95694023),
                 (  0.        , 1.00847437), (  0.        , 1.05749003),
                 (  0.        , 1.23417152), (  0.        , 1.42444303)],
@@ -935,18 +939,13 @@ class NucInteract:
 
         # Case 1: Both are 2D arrays
         if Tinteract_dim == 2:
-            comb =  [(Tinteraction[i, j], EinMat[i, j]) for i in range(EinMat.shape[0])
+            return  [(Tinteraction[i, j], EinMat[i, j]) for i in range(EinMat.shape[0])
                     for j in range(EinMat.shape[1])]
 
         # Case 2: EinGrid is 2D and Tnew is 1D
         else:
-            comb = [(Tinteraction[i], EinMat[i, j]) for i in range(EinMat.shape[0])
+            return [(Tinteraction[i], EinMat[i, j]) for i in range(EinMat.shape[0])
                     for j in range(EinMat.shape[1])]
-
-        # Define the data type for a structured array
-        dtype = [('first', 'f8'), ('second', 'f8')]  # f8: float64
-
-        return np.array(comb, dtype=dtype).reshape(EinMat.shape)
 
     def calc_interactionXs(self, xs: Xs, Tinteraction: np.ndarray,
                            EinMat: np.ndarray) -> np.ndarray:

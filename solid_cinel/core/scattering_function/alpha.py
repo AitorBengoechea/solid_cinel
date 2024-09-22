@@ -722,6 +722,8 @@ def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
         0.331180  0.331812  0.332445  0.333077  0.333710
     90   0.22629  0.226379  0.226468  0.226558  0.226647
     """
+    if alpha0 == 0 or DebyeWallerCoeff == 0:
+        return get_alphaMat(Eout, Ein, T, M, mu)
     # Define the constants for the calculation
     AkbT = M / m * kb * T
     expTerm = exp(- alpha0 * DebyeWallerCoeff)

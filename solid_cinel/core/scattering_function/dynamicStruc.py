@@ -6,7 +6,7 @@ Python file for working with scattering functions.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import vectorize, float64
+from numba import float64
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_beta, Beta
@@ -15,7 +15,7 @@ from solid_cinel.core.scattering_function.sab import get_SabSct, Sab, phonon_exp
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
 from typing import Iterable
-from math import sqrt, pi, exp
+from math import sqrt, pi
 import warnings
 
 # constants
@@ -264,8 +264,9 @@ class DynamicStruc:
          0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
          0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
         """
-        # Get the Dynamic Structure Factor values:
-        scatfunc = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
+        # Get the Dynamic Structure Factor values with correct type:
+        scatfunc = calc_DynStrucClm(float64(Ein), float64(M), float64(T),
+                                    Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
 
         return cls(Ein, T, M, scatfunc, index=mu, columns=Eout)
 
@@ -1163,8 +1164,8 @@ class TransferFunc:
         return cdf / cdf.iloc[-1]
 
 
-@vectorize([float64(float64, float64, float64, float64)],
-           target='parallel', cache=True, nopython=True)
+@nb.jit(float64[:](float64[:], float64, float64, float64),
+        nopython=True, cache=True)
 def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     Sigma1 function for Energy differential Transfer function
@@ -1206,19 +1207,17 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     # Define teh constants:
     AkbT = M / (m * kb * T)
     EinSqrt = sqrt(Ein)
-    EoutSqrt = sqrt(Eout)
+    EoutSqrt = np.sqrt(Eout)
 
-    # Get the negative exponetiial part:
-    expNegative = exp(- AkbT * (EinSqrt - EoutSqrt) ** 2)
+    # Get the negative exponential part:
+    exponetials = np.exp(- AkbT * (EinSqrt - EoutSqrt) ** 2)
 
-    # Get the positive exponetiial part:
-    expPositive = exp(- AkbT * (EinSqrt + EoutSqrt) ** 2)
+    # Get the positive exponential part:
+    exponetials -= np.exp(- AkbT * (EinSqrt + EoutSqrt) ** 2)
+
 
     # Calculate the Transfer function:
-    transferFunc = 0.5 * (expNegative - expPositive)
-    transferFunc *= sqrt(AkbT / pi) * EoutSqrt / Ein
-
-    return transferFunc
+    return exponetials * sqrt(AkbT / pi) * EoutSqrt / Ein / 2
 
 
 @nb.jit(nopython=True, cache=True)
@@ -1265,11 +1264,8 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
     else:
         alpha = get_alphaMat(Eout, Ein, T, M, mu)
 
-    # Get the Transfer function values:
-    sabValues = get_SabSct(alpha, beta, Tratio, ws)
-
-    # Apply normalization to the Transfer function:
-    return sabValues * normFactor(Eout, Ein, T, M)
+    # Get the Transfer function values and apply normalization:
+    return get_SabSct(alpha, beta, Tratio, ws) * normFactor(Eout, Ein, T, M)
 
 
 @nb.jit(float64[:](float64[:], float64, float64, float64),
@@ -1299,11 +1295,12 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     two_kb_T = 2 * kb * T
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
-
-@nb.jit(nopython=True, cache=True)
-def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
-                    mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
-                    DebyeWallerCoeff: float,  alpha0: float = None) -> np.ndarray:
+@nb.jit(float64[:, :](float64, float64, float64, float64[:], float64[:],
+                      float64[:, :], float64[:], float64),
+        nopython=True, cache=True)
+def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
+                    tauN: np.ndarray, tauNbeta: np.ndarray,
+                    DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the Transfer function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -1339,7 +1336,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
     >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-    >>> T = 1000
+    >>> T = 1000.0
     >>> M = 238.05077040419212
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
@@ -1348,7 +1345,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
     >>> tau1beta = pdos.beta.data
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-    >>> sd_pdf = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> sd_pdf = calc_DynStrucClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
     >>> pd.Series(sd_pdf[0], index=Eout).loc[Eout_test].round(6)
     6.7554    0.034510
     6.9050    0.426488
@@ -1357,6 +1354,88 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     7.3157    0.415630
     7.4480    0.042074
     dtype: float64
+    """
+    # Get the beta grid:
+    beta = get_beta(Eout, Ein, T)
+
+    # Eout calculation
+    EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
+
+    # Ensure the Eout values are positive:
+    positiveMask = EoutCalc > 0
+    EoutCalc = EoutCalc[positiveMask]
+
+    # Interpolation of tauN functions to reduce the number of calculations:
+    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
+
+    # Get the alpha matrix for the Dynamic Structure Factor with the maximun
+    # outgoing energy:
+    Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
+
+    # Get the S(alpha, -beta) values for the alpha and beta combinations:
+    sabValues = phonon_expansion(get_alphaMat(Eout_, Ein, T, M, mu),
+                                 tauN.shape[0],  # number of phonons
+                                 tauNinterp, DebyeWallerCoeff)
+
+    # Full Dynamic Structure factor values calculation:
+    dynamicStruc = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]
+
+    # Normalization constant
+    dynamicStruc *= normFactor(EoutCalc, Ein, T, M)
+
+    # Interpolation for avoiding numerical fluctuations:
+    return interp_multyParallel(Eout, EoutCalc, dynamicStruc)
+
+@nb.jit(float64[:, :](float64, float64, float64, float64[:], float64[:],
+                      float64[:, :], float64[:], float64, float64),
+        nopython=True, cache=True)
+def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
+                    tauN: np.ndarray, tauNbeta: np.ndarray,
+                    DebyeWallerCoeff: float, alpha0: float) -> np.ndarray:
+    """
+    Generate the Transfer function from a S(alpha, -beta) table based on
+    the phonon expansion model.
+
+    Parameters
+    ----------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray, (N,)
+        The neutron outgoing energy grid in eV
+    mu : float
+        Cosine of the scattering angle
+    tauN : 'np.ndarray', (M, T)
+        all tau n functions in one array.
+    tauNbeta : 'np.ndarray', (M,)
+        Space between beta grid points of tau n functions.
+    DebyeWallerCoeff : float
+        Debye Waller coefficient
+
+    Returns
+    -------
+    S_diag : 'np.ndarray', (N,)
+        Transfer function values for a single angle.
+
+    Examples
+    --------
+    >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
+    >>> Ein = 7.2
+    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+    >>> T = 1000.0
+    >>> M = 238.05077040419212
+    >>> mu = np.cos(np.deg2rad([120]))
+    >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
+    >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu), DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
+    >>> tau1beta = pdos.beta.data
+    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
 
     # Using the alpha0 parameter:
     >>> alpha0 = Ein / M / (kb * T)
@@ -1380,23 +1459,16 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray,
     positiveMask = EoutCalc > 0
     EoutCalc = EoutCalc[positiveMask]
 
-    # Get the number of phonon expansion:
-    nphonon = tauN.shape[0]
-
     # Interpolation of tauN functions to reduce the number of calculations:
     tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
 
     # Get the alpha matrix for the Dynamic Structure Factor with the maximun
     # outgoing energy:
     Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
-    if alpha0 is None:
-        alphaMat = get_alphaMat(Eout_, Ein, T, M, mu)
-    else:
-        alphaMat = get_alphaMatMod(Eout_, Ein, M, T, mu, DebyeWallerCoeff,
-                                   alpha0)
 
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = phonon_expansion(alphaMat, nphonon, tauNinterp, DebyeWallerCoeff)
+    sabValues = phonon_expansion(get_alphaMatMod(Eout_, Ein, M, T, mu, DebyeWallerCoeff, alpha0),
+                                 tauN.shape[0], tauNinterp, DebyeWallerCoeff)
 
     # Full Dynamic Structure factor values calculation:
     dynamicStruc = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]

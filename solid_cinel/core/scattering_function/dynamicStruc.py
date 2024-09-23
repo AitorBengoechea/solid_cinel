@@ -88,6 +88,97 @@ class DynamicStruc:
         # Save the data:
         self._data = dd_pdf_
 
+    @property
+    def values(self):
+        return self.data.values
+
+    @property
+    def Eout(self):
+        return self.data.columns.values
+
+    @property
+    def mu(self):
+        return self.data.index.values
+
+
+    def AlphaMat(self, values=True) -> [np.ndarray, pd.DataFrame]:
+        alphaMatrix = get_alphaMat(self.Eout, self.Ein, self.T, self.M, self.mu)
+        if values:
+            return alphaMatrix
+        else:
+            return pd.DataFrame(alphaMatrix, index=self.mu, columns=self.Eout)
+
+    def recoil(self, values=True) -> [np.ndarray, pd.DataFrame]:
+        return self.AlphaMat(values) * kb * self.T
+
+    @property
+    def alpha0(self) -> float:
+        """
+        The $\alpha_0$ parameter of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        float
+            The $\alpha_0$ parameter of the Dynamic Structure Factor
+
+        Examples
+        --------
+        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([40, 80, 120, 160])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+        >>> float(round(DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
+        0.328006
+        """
+        # Get the alpha matrix:
+        alphaMatValues = self.AlphaMat(values=True)
+
+        # Get the alpha0 parameter:
+        return integrate((self.data * alphaMatValues).apply(integrate)) / 2
+
+    @property
+    def norm(self) -> float:
+        """
+        Normalization of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        float
+            Normalization of the Dynamic Structure Factor
+        """
+        return integrate(self.data.apply(integrate))
+
+    @property
+    def pdf(self) -> pd.DataFrame:
+        """
+        Probability density function of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        pd.Series
+            Probability density function of the Dynamic Structure Factor
+        """
+        return self.data / self.norm
+
+    @property
+    def cdf(self) -> pd.DataFrame:
+        """
+        Cumulative distribution function of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        pd.Series
+            Cumulative distribution function of the Dynamic Structure Factor
+        """
+        cdf = self.data.cumsum(axis=0).cumsum(axis=1)
+        return cdf / cdf.iloc[-1, -1]
+
     @classmethod
     def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: np.ndarray, ws: float = 1.0):
@@ -510,78 +601,6 @@ class DynamicStruc:
         """
         return TransferFunc(self.Ein, self.T, self.M, self.data.apply(integrate))
 
-    @property
-    def alpha0(self) -> float:
-        """
-        The $\alpha_0$ parameter of the Dynamic Structure Factor.
-
-        Returns
-        -------
-        float
-            The $\alpha_0$ parameter of the Dynamic Structure Factor
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([40, 80, 120, 160])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> float(round(DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
-        0.328006
-        """
-        # Get the Dynamic structure factor:
-        dynamicStruc = self.data
-
-        # Get the alpha matrix:
-        alphaMat = get_alphaMat(dynamicStruc.columns.values, self.Ein, self.T, self.M,
-                                dynamicStruc.index.values)
-
-        # Get the alpha0 parameter:
-        return integrate((dynamicStruc * alphaMat).apply(integrate)) / 2
-
-    @property
-    def norm(self) -> float:
-        """
-        Normalization of the Dynamic Structure Factor.
-
-        Returns
-        -------
-        float
-            Normalization of the Dynamic Structure Factor
-        """
-        return integrate(self.data.apply(integrate))
-
-    @property
-    def pdf(self) -> pd.DataFrame:
-        """
-        Probability density function of the Dynamic Structure Factor.
-
-        Returns
-        -------
-        pd.Series
-            Probability density function of the Dynamic Structure Factor
-        """
-        return self.data / self.norm
-
-    @property
-    def cdf(self) -> pd.DataFrame:
-        """
-        Cumulative distribution function of the Dynamic Structure Factor.
-
-        Returns
-        -------
-        pd.Series
-            Cumulative distribution function of the Dynamic Structure Factor
-        """
-        cdf = self.data.cumsum(axis=0).cumsum(axis=1)
-        return cdf / cdf.iloc[-1, -1]
-
 class TransferFunc:
     """
     Transfer function (angular integration of Dynamic Structure Factor) base
@@ -644,6 +663,65 @@ class TransferFunc:
 
         # Save the data:
         self._data = pdf_
+
+    @property
+    def Eout(self) -> np.ndarray:
+        """
+        The outgoing energy grid.
+
+        Returns
+        -------
+        np.array
+            The outgoing energy grid
+        """
+        return self.data.index.values
+
+    @property
+    def norm(self) -> float:
+        """
+        Normalization of the Transfer function.
+
+        Returns
+        -------
+        float
+            Normalization of the transference function
+
+        Examples
+        --------
+        # Generate Broadening test results:
+        >>> Ein = 36.68723
+        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
+        >>> float(round(pdf.norm, 6))
+        1.000001
+        """
+        return integrate(self.data)
+
+    @property
+    def pdf(self) -> pd.Series:
+        """
+        Probability density function of the Transfer function.
+
+        Returns
+        -------
+        pd.Series
+            Probability density function of the Transfer function
+        """
+        return self.data / self.norm
+    @property
+    def cdf(self) -> pd.Series:
+        """
+        Cumulative distribution function of the Transfer function.
+
+        Returns
+        -------
+        pd.Series
+            Cumulative distribution function of the Transfer function
+        """
+        cdf = self.data.cumsum()
+        return cdf / cdf.iloc[-1]
 
     @classmethod
     def from_sigma1(cls, Ein: float, M: float, T: float, Eout: np.array):
@@ -1113,54 +1191,6 @@ class TransferFunc:
         scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
 
         return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
-
-
-    @property
-    def norm(self) -> float:
-        """
-        Normalization of the Transfer function.
-
-        Returns
-        -------
-        float
-            Normalization of the transference function
-
-        Examples
-        --------
-        # Generate Broadening test results:
-        >>> Ein = 36.68723
-        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
-        >>> float(round(pdf.norm, 6))
-        1.000001
-        """
-        return integrate(self.data)
-
-    @property
-    def pdf(self) -> pd.Series:
-        """
-        Probability density function of the Transfer function.
-
-        Returns
-        -------
-        pd.Series
-            Probability density function of the Transfer function
-        """
-        return self.data / self.norm
-    @property
-    def cdf(self) -> pd.Series:
-        """
-        Cumulative distribution function of the Transfer function.
-
-        Returns
-        -------
-        pd.Series
-            Cumulative distribution function of the Transfer function
-        """
-        cdf = self.data.cumsum()
-        return cdf / cdf.iloc[-1]
 
 
 @nb.jit(float64[:](float64[:], float64, float64, float64),

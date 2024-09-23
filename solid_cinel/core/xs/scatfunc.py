@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import TransferFunc, DynamicStruc
-from solid_cinel.core.scattering_function.alpha import get_alpha, get_alphaMat
+from solid_cinel.core.scattering_function.alpha import get_alpha
 from solid_cinel.core.generic import integrate, reshift, interpolation
 import os
 from typing import Iterable
@@ -83,8 +83,38 @@ class Xs0K:
     def from_file(cls, filename: str, M: float, **kwargs):
         return cls(M, cls.read_xs(filename, **kwargs))
 
-    def interpolate(self, EinSmall: [float, np.array], inplace:bool = False) -> ["Xs0K", pd.Series]:
-        xs0Kinterp = interpolation(self.data, np.array(EinSmall))
+    def interpolate(self, EinSmall: [float, np.array], inplace: bool = False,
+                    values: bool = False) -> ["Xs0K", pd.Series, np.ndarray]:
+        """
+
+        Parameters
+        ----------
+        EinSmall :
+        inplace :
+        values :
+
+        Returns
+        -------
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.from_file("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        >>> xs0K.interpolate(1., values=False)
+        1.0    9.269424
+        dtype: float64
+
+        >>> xs0K.interpolate([1.0, 2.0], values=False)
+        1.0    9.269424
+        2.0    9.085342
+        dtype: float64
+        """
+        if values and inplace:
+            raise ValueError("Values and inplace cannot be True at the same time")
+        EinSmall = np.array(EinSmall) if hasattr(EinSmall, "__len__") else np.array([EinSmall])
+        xs0Kinterp = interpolation(self.data, EinSmall, values=values)
         return self.update(xs0Kinterp) if inplace else xs0Kinterp
 
     def update(self, dataNew: pd.Series) -> "Xs0K":
@@ -97,7 +127,7 @@ class ScatFunc:
     """
     Class for the Scattering function of inelastic scattering
     """
-    def __init__(self, Ein: float, T: float, M: float, *args, **kwargs):
+    def __init__(self, xs0K: Xs0K, Ein: float, T: float, *args, **kwargs):
         """
         Class for the Scattering function of inelastic scattering
 
@@ -119,9 +149,9 @@ class ScatFunc:
         """
         # Atributes of the scattering function (Change in these parameters will
         # change the scattering function):
+        self.xs0K = xs0K
         self.Ein = Ein
         self.T = T
-        self.M = M
         # The dxs data:
         self.data = pd.Series(*args, **kwargs)
 
@@ -150,7 +180,137 @@ class ScatFunc:
         """
         pdf_ = pd.Series(pdf).sort_index()
         pdf_.index.name = "Eout"
-        self._data = pdf_
+        self._data = pdf_.drop_duplicates(keep='first')
+
+    def update(self, dataNew: pd.Series) -> "Xs0K":
+            self.data = dataNew
+            return self
+    @property
+    def integral(self) -> float:
+        """
+        The integral value of the Scattering function
+
+        Returns
+        -------
+        float
+            The integral value of the Diferential xs
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+
+        # SIGMA1 algorithm:
+        >>> float(round(ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
+        9.09
+
+        # DOPUSH algorithm:
+        >>> theta = np.arange(0, 180, 1)[1::]
+        >>> float(round(ScatFunc.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2))
+        9.09
+        """
+        return integrate(self.data)
+
+    @property
+    def prob(self) -> dict:
+        """
+        Get the upscattering and downscattering probabilities for the selected
+        Ein, T and M.
+
+        Returns
+        -------
+        dict
+            Dictionary with the upscattering and downscattering probabilities
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
+        >>> float(round(dxs.prob["upscattering"], 6))
+        0.505184
+        >>> float(round(dxs.prob["downscattering"], 6))
+        0.490636
+        >>> float(round(dxs.prob["Ein=Eout"], 6))
+        0.004179
+        """
+        # Get the integral value:
+        integral = self.integral
+
+        # Get the outgoig energy grid:
+        Eout = self.data.index.values
+
+        # Get the upscattering and downscattering probabilities:
+        up = integrate(self.data.loc[Eout > self.Ein]) / integral
+        down = integrate(self.data.loc[Eout < self.Ein]) / integral
+
+        return {"upscattering": up,  "downscattering": down, "Ein=Eout": 1.0 - up - down}
+
+    @property
+    def pdf(self) -> pd.Series:
+        """
+        Get the probability density function of the Scattering function
+
+        Returns
+        -------
+        pd.Series
+            The probability density function of the Scattering function
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("scatfunc.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
+        >>> os.chdir(wd)
+
+        # Generate Broadening test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
+
+        # SIGMA1 algorithm:
+        >>> dxs.pdf.iloc[::100]
+        Eout
+        1.80000     0.000005
+        1.84004     0.001091
+        1.88008     0.063339
+        1.92012     1.102673
+        1.96016     5.974293
+        2.00020    10.438638
+        2.04024     6.084029
+        2.08028     1.221555
+        2.12032     0.087118
+        2.16036     0.002272
+        dtype: float64
+        """
+        return self.data / self.integral
 
 
     @classmethod
@@ -181,18 +341,18 @@ class ScatFunc:
         Examples
         --------
         # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
+
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
 
         # SIGMA1 algorithm:
         >>> ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).data.iloc[::100]
@@ -209,13 +369,16 @@ class ScatFunc:
         2.16036     0.020645
         dtype: float64
         """
+        # Intiliaze the xs0K data:
+        xs0K = Xs0K(M, xs0K)
+
         # Get the transfer function:
-        transferFunc = TransferFunc.from_sigma1(Ein, M, T, Eout).data
+        transferFunc = TransferFunc.from_sigma1(Ein, M, T, Eout)
 
         # Get the Scattering function:
-        dxs = transferFunc * cls.interp_xs0K(xs0K, transferFunc.index.values)
+        dxs = transferFunc.data * xs0K.interpolate(transferFunc.Eout, values=True)
 
-        return cls(Ein, T, M, dxs)
+        return cls(xs0K, Ein, T,  dxs)
 
     @classmethod
     def from_alpha(cls, xs0K: pd.Series, alpha: float, Ein: float, M: float,
@@ -269,17 +432,16 @@ class ScatFunc:
         Examples
         --------
         # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
         >>> T = 1000
         >>> Ein = 2.0
-        >>> M = 238.05077040419212
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> alpha = Ein / (kb * T) / M
 
@@ -316,17 +478,20 @@ class ScatFunc:
         2.16036     0.005216
         dtype: float64
         """
+        # Intiliaze the xs0K data:
+        xs0K = Xs0K(M, xs0K)
+
         # Get the transfer function:
         transferFunc = TransferFunc.from_alpha(alpha, Ein, M, T, Eout, *args,
-                                               model=model, **kwargs).data
+                                               model=model, **kwargs)
 
         # Get the recoil energy:
         recoil = alpha * kb * T
 
         # Get the Scattering function:
-        dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
+        dxs = transferFunc.data * xs0K.interpolate(transferFunc.Eout + recoil, values=True)
 
-        return cls(Ein, T, M, dxs)
+        return cls(xs0K, Ein, T, dxs)
 
     @classmethod
     def from_alpha0(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -379,11 +544,11 @@ class ScatFunc:
         Examples
         --------
         # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -391,7 +556,6 @@ class ScatFunc:
         >>> Ein = 2.0
         >>> theta = np.arange(1, 180, 1)
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
 
         # alpha0 algorithm:
         >>> ScatFunc.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").data.iloc[::100]
@@ -508,19 +672,18 @@ class ScatFunc:
 
         Examples
         --------
-        >>> Ein = 7.2
-        >>> Eout = np.array([7.10, 7.15, 7.2, 7.25, 7.3157])
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = 15
-
         # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
         >>> os.chdir(wd)
+
+        >>> Ein = 7.2
+        >>> Eout = np.array([7.10, 7.15, 7.2, 7.25, 7.3157])
+        >>> T = 1000
+        >>> theta = 15
 
         # Using the Free Gas Model:
         >>> ScatFunc.from_theta(xs0K, Ein, M, T, Eout, theta, model="fgm").data.round(6)
@@ -532,18 +695,21 @@ class ScatFunc:
         7.3157      0.000001
         Name: 15, dtype: float64
         """
+        # Intiliaze the xs0K data:
+        xs0K = Xs0K(M, xs0K)
+
         # Get the transfer function:
         transferFunc = TransferFunc.from_theta(Ein, M, T, Eout, theta, *args,
-                                               model= model, **kwargs).data
+                                               model=model, **kwargs)
 
         # Get the recoil energy:
         recoil = get_alpha(Ein, T, M, Eout, np.cos(np.deg2rad(theta)))
         recoil *= kb * T
 
         # Get the Scattering function:
-        dxs = transferFunc * cls.interp_xs0K(xs0K, Eout, recoil)
+        dxs = transferFunc.data * xs0K.interpolate(transferFunc.Eout + recoil, values=True)
 
-        return cls(Ein, T, M, dxs)
+        return cls(xs0K, Ein, T, dxs)
 
     @classmethod
     def from_sab(cls, xs0K: pd.Series, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -602,11 +768,11 @@ class ScatFunc:
         Examples
         --------
         # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate Broadening test variables:
@@ -614,7 +780,6 @@ class ScatFunc:
         >>> Ein = 2.0
         >>> theta = np.arange(1, 180, 1)
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
 
         # Using the Free Gas Model(NO RECOIL):
         >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm", recoil=False)
@@ -637,17 +802,18 @@ class ScatFunc:
         >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, model="fgm")
         >>> dxs.data.iloc[::100]
         Eout
-        1.80000     0.768710
-        1.84004     3.231537
-        1.88008    10.449309
-        1.92012    26.573581
-        1.96016    54.502864
-        2.00020    91.763488
-        2.04024    34.493443
-        2.08028    10.971388
-        2.12032     2.919831
-        2.16036     0.643487
+        1.80000     0.768342
+        1.84004     3.230182
+        1.88008    10.445725
+        1.92012    26.567992
+        1.96016    54.502029
+        2.00020    91.788547
+        2.04024    34.492890
+        2.08028    10.968947
+        2.12032     2.918748
+        2.16036     0.643167
         dtype: float64
+
 
         # Using the Short Collision Time model:
         >>> from solid_cinel.core.material import Pdos
@@ -656,201 +822,50 @@ class ScatFunc:
         >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="sct")
         >>> dxs.data.iloc[::100]
         Eout
-        1.80000     0.776211
-        1.84004     3.249951
-        1.88008    10.476815
-        1.92012    26.585995
-        1.96016    54.453402
-        2.00020    91.615111
-        2.04024    34.517809
-        2.08028    11.011204
-        2.12032     2.940973
-        2.16036     0.650950
+        1.80000     0.775840
+        1.84004     3.248590
+        1.88008    10.473227
+        1.92012    26.580418
+        1.96016    54.452587
+        2.00020    91.640126
+        2.04024    34.517269
+        2.08028    11.008760
+        2.12032     2.939884
+        2.16036     0.650626
         dtype: float64
 
         # Using the Phonon Density of States model:
         >>> dxs = ScatFunc.from_sab(xs0K, Ein, M, T, Eout, theta, pdos, model="pdos")
         >>> dxs.data.iloc[::100]
         Eout
-        1.80000     1.171084
-        1.84004     3.942164
-        1.88008    11.189753
-        1.92012    26.706945
-        1.96016    53.726842
-        2.00020    80.755420
-        2.04024    34.121072
-        2.08028    10.825798
-        2.12032     2.897511
-        2.16036     0.652177
+        1.80000     1.170555
+        1.84004     3.940598
+        1.88008    11.186093
+        1.92012    26.701503
+        1.96016    53.725774
+        2.00020    80.771003
+        2.04024    34.120291
+        2.08028    10.823388
+        2.12032     2.896455
+        2.16036     0.651860
         dtype: float64
         """
-        mu = np.cos(np.deg2rad(theta))
+        # Intiliaze the xs0K data:
+        xs0K = Xs0K(M, xs0K)
+
         # Calculate the Dynamic Structure Factor:
-        scatFunc = DynamicStruc.from_model(Ein, M, T, Eout, theta, *args,
-                                           model= model, **kwargs)
+        dynStruc = DynamicStruc.from_model(Ein, M, T, Eout, theta, *args,
+                                           model=model, **kwargs)
 
         # Get the recoil energy if needed:
         if recoil:
-            alphaRecoil = get_alphaMat(Eout, Ein, T, M, mu) * kb * T
-            xs0Kinterp = cls.interp_xs0K(xs0K, Eout, recoil=alphaRecoil)
-            dxs = (scatFunc.data * xs0Kinterp).apply(integrate)
+            xs0Kinterp = xs0K.interpolate(Eout + dynStruc.recoil(), values=True)
+            dxs = (dynStruc.data * xs0Kinterp).apply(integrate)
         else:
-            transferFunc = scatFunc.to_ScatFunc.data
-            dxs = transferFunc * cls.interp_xs0K(xs0K, Eout)
+            transferFunc = dynStruc.to_ScatFunc
+            dxs = transferFunc.data * xs0K.interpolate(transferFunc.Eout, values=True)
 
-        return cls(Ein, T, M, dxs)
-
-    @staticmethod
-    def interp_xs0K(xs0K: pd.Series, Eout: np.ndarray,
-                    recoil: [None, int, float] = None) -> np.ndarray:
-        """
-        Interpolate the 0K cross section to the given Eout grid
-
-        Parameters
-        ----------
-        xs0K: pd.Series, (Z,)
-            0K xs data for the given material in barns
-        Eout: np.ndarray, (N,)
-            The neutron outgoing energy grid in eV
-        recoil: int, float, optional
-            The recoil energy of the target material in eV. The default is None.
-
-        Returns
-        -------
-        np.ndarray
-            The interpolated 0K cross section
-        """
-        if recoil is None:
-            return interpolation(xs0K, Eout, values=True)
-        else:
-            return interpolation(xs0K, Eout + recoil, values=True)
-
-    @property
-    def integral(self) -> float:
-        """
-        The integral value of the Scattering function
-
-        Returns
-        -------
-        float
-            The integral value of the Diferential xs
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("scatfunc.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
-        >>> os.chdir(wd)
-
-        # Generate Broadening test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
-
-        # SIGMA1 algorithm:
-        >>> float(round(ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
-        9.09
-
-        # DOPUSH algorithm:
-        >>> theta = np.arange(0, 180, 1)[1::]
-        >>> float(round(ScatFunc.from_alpha0(xs0K, Ein, M, T, Eout, theta, model="fgm").integral, 2))
-        9.09
-        """
-        return integrate(self.data)
-
-    @property
-    def prob(self) -> dict:
-        """
-        Get the upscattering and downscattering probabilities for the selected
-        Ein, T and M.
-
-        Returns
-        -------
-        dict
-            Dictionary with the upscattering and downscattering probabilities
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("scatfunc.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
-        >>> os.chdir(wd)
-
-        # Generate DDXS test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
-        >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
-        >>> float(round(dxs.prob["upscattering"], 6))
-        0.505184
-        >>> float(round(dxs.prob["downscattering"], 6))
-        0.490636
-        >>> float(round(dxs.prob["Ein=Eout"], 6))
-        0.004179
-        """
-        # Get the integral value:
-        integral = self.integral
-
-        # Get the outgoig energy grid:
-        Eout = self.data.index.values
-
-        # Get the upscattering and downscattering probabilities:
-        up = integrate(self.data.loc[Eout > self.Ein]) / integral
-        down = integrate(self.data.loc[Eout < self.Ein]) / integral
-
-        return {"upscattering": up,  "downscattering": down, "Ein=Eout": 1.0 - up - down}
-
-    @property
-    def pdf(self) -> pd.Series:
-        """
-        Get the probability density function of the Scattering function
-
-        Returns
-        -------
-        pd.Series
-            The probability density function of the Scattering function
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("scatfunc.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
-        >>> os.chdir(wd)
-
-        # Generate Broadening test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
-        >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
-
-        # SIGMA1 algorithm:
-        >>> dxs.pdf.iloc[::100]
-        Eout
-        1.80000     0.000005
-        1.84004     0.001091
-        1.88008     0.063339
-        1.92012     1.102673
-        1.96016     5.974293
-        2.00020    10.438638
-        2.04024     6.084029
-        2.08028     1.221555
-        2.12032     0.087118
-        2.16036     0.002272
-        dtype: float64
-        """
-        return self.data / self.integral
+        return cls(xs0K, Ein, T, dxs)
 
     def shift(self, dx: [float, np.ndarray, pd.DataFrame]):
         """
@@ -873,18 +888,17 @@ class ScatFunc:
         Examples
         --------
         # 0K xs data for U238:
-        >>> from solid_cinel.core.xs.xs import Xs
         >>> wd = os.getcwd()
         >>> os.chdir(__file__.replace("scatfunc.py", ""))
         >>> os.chdir("../../data/xs/U238/")
-        >>> xs0K = Xs.read_xs("u238.0.2")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.read_xs("u238.0.2")
         >>> os.chdir(wd)
 
         # Generate DDXS test variables:
         >>> T = 1000
         >>> Ein = 2.0
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> M = 238.05077040419212
         >>> dxs = ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout)
         >>> dxs.data.iloc[::200].round(6)
         Eout
@@ -910,11 +924,11 @@ class ScatFunc:
         >>> recoil = Eout * kb * T / M
         >>> dxs.shift(recoil).data.iloc[::200].round(6)
         Eout
-        1.80000     0.000000
-        1.88008     0.542661
-        1.96016    53.207633
-        2.04024    56.378145
-        2.12032     0.840643
+        1.800000     0.000000
+        1.880480     0.544490
+        1.960561    53.265537
+        2.040641    56.321152
+        2.120721     0.838164
         dtype: float64
         """
         # copy data to avoid changing the original data:
@@ -929,7 +943,7 @@ class ScatFunc:
         else:
             dxs.loc[dx_.index] = reshift(dxs.loc[dx_.index], dx_)
 
-        return ScatFunc(self.Ein, self.T, self.M, dxs)
+        return self.update(dxs)
 
 
 def check_dx(data: [pd.DataFrame, pd.Series],

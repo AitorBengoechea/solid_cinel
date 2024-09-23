@@ -101,7 +101,7 @@ class DynamicStruc:
         return self.data.index.values
 
 
-    def AlphaMat(self, values=True) -> [np.ndarray, pd.DataFrame]:
+    def alphaMat(self, values=True) -> [np.ndarray, pd.DataFrame]:
         alphaMatrix = get_alphaMat(self.Eout, self.Ein, self.T, self.M, self.mu)
         if values:
             return alphaMatrix
@@ -109,7 +109,7 @@ class DynamicStruc:
             return pd.DataFrame(alphaMatrix, index=self.mu, columns=self.Eout)
 
     def recoil(self, values=True) -> [np.ndarray, pd.DataFrame]:
-        return self.AlphaMat(values) * kb * self.T
+        return self.alphaMat(values) * kb * self.T
 
     @property
     def alpha0(self) -> float:
@@ -137,7 +137,7 @@ class DynamicStruc:
         0.328006
         """
         # Get the alpha matrix:
-        alphaMatValues = self.AlphaMat(values=True)
+        alphaMatValues = self.alphaMat(values=True)
 
         # Get the alpha0 parameter:
         return integrate((self.data * alphaMatValues).apply(integrate)) / 2
@@ -673,6 +673,17 @@ class TransferFunc:
         -------
         np.array
             The outgoing energy grid
+
+        # Generate Broadening test results:
+        >>> Ein = 36.68723
+        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
+        >>> M = 238.05077040419212
+        >>> T = 300
+        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
+        >>> pdf.Eout[0:10]
+        array([35.9534854 , 35.95495436, 35.95642332, 35.95789227, 35.95936123,
+               35.96083019, 35.96229915, 35.96376811, 35.96523707, 35.96670602])
+
         """
         return self.data.index.values
 

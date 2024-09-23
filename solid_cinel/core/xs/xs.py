@@ -6,10 +6,10 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import vectorize
+from numba import vectorize, prange
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
-from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, sigma1Vector
 from solid_cinel.core.xs.scatfunc import ScatFunc, Xs0K
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import interpolation
@@ -28,7 +28,7 @@ nb.config.FASTMATH_DEFAULT = False
 class XsData:
     def __init__(self, xs0K: Xs0K, xsData: pd.DataFrame = None):
         self.xs0K = xs0K
-        self.data = xsData if xsData is not None else xs0K.to_frame()
+        self.data = xsData if xsData is not None else xs0K.data.to_frame()
 
     @property
     def data(self) -> pd.DataFrame:
@@ -114,6 +114,32 @@ class XsData:
         else:
             return cls(xs0K)
 
+    def calc_Matrix(self, Ein, T):
+        """
+
+        Parameters
+        ----------
+        Ein :
+        T :
+
+        Returns
+        -------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("xs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.from_file("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        >>> xs = XsData(xs0K)
+        >>> Ein = np.array([1.0, 2.0])
+        >>> T = np.array([300, 100])
+        >>> xs.calc_Matrix(Ein, T)
+        array([[9.27057255, 9.27182968],
+               [9.08623706, 9.08695736]])
+        """
+        return XsMat_sigma1(Ein, T, self.xs0K.M, self.xs0K.values, self.xs0K.EinGrid)
 
 
 class Xs:
@@ -1284,6 +1310,46 @@ def default_Eout(Ein: float) -> np.ndarray:
                                  np.log10(2 * Ein),
                                  2000)
     return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
+
+@nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
+def XsMat_sigma1(Ein: float, T: float, M: float, xs0Kvalues: np.ndarray, xs0KEinGrid: np.ndarray):
+    """
+
+    Parameters
+    ----------
+    Ein :
+    T :
+    M :
+    xs0Kvalues :
+    xs0KEinGrid :
+
+    Returns
+    -------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs0K = Xs0K.read_xs("u238.0.2")
+    >>> os.chdir(wd)
+
+    >>> Ein = np.array([1.0, 2.0])
+    >>> T = np.array([300, 100])
+    >>> M = 238.05077040419212
+
+    >>> XsMat_sigma1(Ein, T, M, xs0K.values, xs0K.index)
+    array([[9.27057255, 9.27182968],
+           [9.08623706, 9.08695736]])
+    """
+    matrix = np.zeros((len(Ein), len(T)))
+    for i in prange(len(Ein)):
+        for j in range(len(T)):
+            Eout = default_Eout(Ein[i])
+            scatFunc = sigma1Vector(Eout, Ein[i], T[j], M)
+            scatFunc *= np.interp(Eout, xs0KEinGrid, xs0Kvalues)
+            matrix[i, j] += np.trapz(scatFunc, Eout)
+    return matrix
+
+
 
 
 @vectorize(["float64(float64, float64, float64, float64)"],

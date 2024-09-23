@@ -39,6 +39,9 @@ class Xs0K:
         self._data = xs_.drop_duplicates(keep='first')
 
     @property
+    def values(self) -> np.ndarray:
+        return self.data.values
+    @property
     def EinGrid(self) -> np.ndarray:
         return self.data.index.values
 

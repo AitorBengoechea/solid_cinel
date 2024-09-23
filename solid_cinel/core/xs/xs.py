@@ -37,7 +37,7 @@ class Xs0K:
     @data.setter
     def data(self, xs: pd.Series):
         # Sort the Series by index
-        xs_ = pd.Series(xs).sort_index()
+        xs_ = pd.Series(xs, name="0").sort_index()
         xs_.index.name = "Ein"
 
         # Drop duplicates, keeping the first occurrence
@@ -88,26 +88,103 @@ class Xs0K:
     def from_file(cls, filename: str, M: float, **kwargs):
         return cls(M, cls.read_xs(filename, **kwargs))
 
-    def interpolate(self, EinSmall: [float, np.array], inplace:bool = False) -> pd.Series:
-        EinSmall_ = np.array(EinSmall)
-        return self.update(interpolation(self.data, EinSmall_), inplace=inplace)
+    def interpolate(self, EinSmall: [float, np.array], inplace:bool = False) -> ["Xs0K", pd.Series]:
+        xs0Kinterp = interpolation(self.data, np.array(EinSmall))
+        return self.update(xs0Kinterp) if inplace else xs0Kinterp
 
-    def update(self, dataNew: pd.Series, inplace: bool) -> "Xs0K":
-        # Update the data in the object or return a new object
-        if inplace:
+    def update(self, dataNew: pd.Series) -> "Xs0K":
             self.data = dataNew
             return self
+
+
+class XsData:
+    def __init__(self, xs0K: Xs0K, xsData: pd.DataFrame = None):
+        self.xs0K = xs0K
+        self.data = xsData if xsData is not None else xs0K.to_frame()
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        Diferential xs data.
+
+        Returns
+        -------
+        pd.DataFrame
+            Diferential xs data
+        """
+        return self._data
+
+    @data.setter
+    def data(self, xs: Iterable):
+        """
+        Set the scattering function data and check the normalization.
+
+        Parameters
+        ----------
+        pdf : pd.Series
+            The scattering function data
+
+        """
+        # Set the data style
+        xs_ = pd.DataFrame(xs).sort_index(axis=0).sort_index(axis=1)
+        xs_.index.name = "Ein"
+        xs_.columns.name = "T"
+
+        # Drop duplicates, keeping the first occurrence
+        self._data = xs_[~xs_.index.duplicated(keep='first')]
+
+
+    def get_axis(self, axis: int, values: bool) -> pd.Index:
+        ax = self.data.index if axis == 0 else self.data.columns
+        return ax.values if values else ax
+
+
+    def EinGrid(self, values: bool = False) -> [pd.Index, np.ndarray]:
+        return self.get_axis(0, values)
+
+    def temp(self, values: bool = False) -> [pd.Index, np.ndarray]:
+        return self.get_axis(1, values)
+
+    def update(self, dataNew: pd.DataFrame):
+        self.data = dataNew
+        return self
+
+    def merge(self, dataNew: pd.DataFrame, axis: int = 1):
+        return self.update(pd.concat([self.data, dataNew], axis=axis))
+
+    @staticmethod
+    def check_InputValues(input: [float, Iterable[float]]) -> Iterable:
+        """
+        Check the incident energy input
+
+        Parameters
+        ----------
+        Ein: Union[float, Iterable[float]]
+            The incident energy in eV
+
+        Returns
+        -------
+        Union[float, Iterable[float]]
+            The incident energy in eV
+        """
+        if hasattr(input, "__len__"):
+            return input
+        elif isinstance(input, (int, float)):
+            return [input]
+        elif not all(isinstance(e, (int, float)) for e in input):
+            raise TypeError("All input values must be int or float")
+
+    @classmethod
+    def from_xs0K(cls, filename: str, M: float, Ein: [float, np.ndarray] = None,
+                  **kwargs):
+        # Read the 0K xs data
+        xs0K = Xs0K.from_file(filename, M, **kwargs)
+
+        # Interpolate the data for handling smaller incident energies grid
+        if Ein is not None:
+            return cls(xs0K, xs0K.interpolate(cls.check_InputValues(Ein)))
         else:
-            return self.__class__(self.M, dataNew)
-
-    def calc_T(self, T: float, *args, **kwargs) -> [pd.Series, pd.DataFrame]:
-        # Calculate the elastic scattering cross section at temperature T using
-        # the selected algorithm.
-        results = self.compute([T], self.EinGrid, *args, **kwargs)
-
-        # Return the results in the corresponding format
-        return results[0]
-
+            return cls(xs0K)
 
 
 

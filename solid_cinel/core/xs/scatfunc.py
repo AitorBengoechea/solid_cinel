@@ -9,7 +9,7 @@ import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.scattering_function import TransferFunc, DynamicStruc
 from solid_cinel.core.scattering_function.alpha import get_alpha
-from solid_cinel.core.generic import integrate, reshift, interpolation
+from solid_cinel.core.generic import integrate, reshift, interpolation, reshape_differential
 import os
 from typing import Iterable
 
@@ -117,8 +117,11 @@ class Xs0K:
         if values and inplace:
             raise ValueError("Values and inplace cannot be True at the same time")
         EinSmall = np.array(EinSmall) if hasattr(EinSmall, "__len__") else np.array([EinSmall])
-        xs0Kinterp = interpolation(self.data, EinSmall, values=values)
-        return self.update(xs0Kinterp) if inplace else xs0Kinterp
+        if values:
+            return reshape_differential(self.data, EinSmall)
+        else:
+            xs0Kinterp = interpolation(self.data, EinSmall, values=values)
+            return self.update(xs0Kinterp) if inplace else xs0Kinterp
 
     def update(self, dataNew: pd.Series) -> "Xs0K":
             self.data = dataNew

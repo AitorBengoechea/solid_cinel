@@ -562,7 +562,7 @@ def get_alpha(Eout: float, Ein: float, T: float, M: float, mu: float) -> float:
 
 
 @nb.jit(float64[:, :](float64[:], float64, float64, float64, float64[:]),
-        nopython=True, nogil=True, cache=True, parallel=True)
+        nopython=True, nogil=True)
 def get_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float,
                  mu: np.ndarray) -> np.ndarray:
     """

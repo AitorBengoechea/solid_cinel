@@ -782,7 +782,7 @@ class TransferFunc:
         37.275548    2.371152e-09
         dtype: float64
         """
-        return cls(Ein, T, M, sigma1Vector(Eout, Ein, T, M), index=Eout)
+        return cls(Ein, T, M, sigma1(Eout, Ein, T, M), index=Eout)
 
     @classmethod
     def from_theta(cls, Ein: float, M: float, T: float, Eout: np.array,
@@ -1204,9 +1204,8 @@ class TransferFunc:
         return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
 
 
-@nb.jit(float64[:](float64[:], float64, float64, float64),
-        nopython=True, cache=True)
-def sigma1Vector(Eout: float, Ein: float, T: float, M: float):
+@nb.jit(nopython=True, cache=True)
+def sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     Sigma1 function for Energy differential Transfer function
     ..math::
@@ -1234,7 +1233,7 @@ def sigma1Vector(Eout: float, Ein: float, T: float, M: float):
     >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
     >>> T = 1000
     >>> M = 238.05077040419212
-    >>> transferFunc = sigma1Vector(Eout, Ein, T, M)
+    >>> transferFunc = sigma1(Eout, Ein, T, M)
     >>> pd.Series(transferFunc, index=Eout).round(6)
     6.7554    0.000000
     6.9050    0.001153
@@ -1246,7 +1245,7 @@ def sigma1Vector(Eout: float, Ein: float, T: float, M: float):
     """
     # Define the constants:
     AkbT = M / (m * kb * T)
-    EinSqrt = sqrt(Ein)
+    EinSqrt = np.sqrt(Ein)
     EoutSqrt = np.sqrt(Eout)
 
     # Get the negative exponential part:
@@ -1256,7 +1255,7 @@ def sigma1Vector(Eout: float, Ein: float, T: float, M: float):
     exponetials -= np.exp(- AkbT * (EinSqrt + EoutSqrt) ** 2)
 
     # Calculate the Transfer function:
-    return exponetials * sqrt(AkbT / pi) * EoutSqrt / Ein / 2
+    return exponetials * np.sqrt(AkbT / pi) * EoutSqrt / Ein / 2
 
 
 @nb.jit(float64[:](float64[:], float64, float64, float64),

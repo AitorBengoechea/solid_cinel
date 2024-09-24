@@ -9,7 +9,7 @@ import numba as nb
 from numba import vectorize, prange
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
-from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, sigma1Vector
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, sigma1
 from solid_cinel.core.xs.scatfunc import ScatFunc, Xs0K
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import interpolation
@@ -1344,7 +1344,7 @@ def XsMat_sigma1(Ein: float, T: float, M: float, xs0Kvalues: np.ndarray, xs0KEin
     for i in prange(len(Ein)):
         for j in range(len(T)):
             Eout = default_Eout(Ein[i])
-            scatFunc = sigma1Vector(Eout, Ein[i], T[j], M)
+            scatFunc = sigma1(Eout, Ein[i], T[j], M)
             scatFunc *= np.interp(Eout, xs0KEinGrid, xs0Kvalues)
             matrix[i, j] += np.trapz(scatFunc, Eout)
     return matrix

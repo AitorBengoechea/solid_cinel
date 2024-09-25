@@ -336,3 +336,26 @@ def sampling(d: int, n: int) -> np.ndarray:
     """
     samples = qmc.LatinHypercube(d=d).random(n=n)
     return samples if d > 1 else samples[:, 0]
+
+
+def to_arrays(input: [float, Iterable[float]]) -> np.ndarray:
+    """
+    Convert the input to an array if it is not an array
+
+    Parameters
+    ----------
+    input: float, Iterable[float]
+        The input to convert to an array
+
+    Returns
+    -------
+    np.ndarray
+        The input as an array
+    """
+    if hasattr(input, "__len__"):
+        return input if isinstance(input, np.ndarray) else np.array(input)
+    elif isinstance(input, (int, float)):
+        return np.array([input])
+    elif not all(isinstance(e, (int, float)) for e in input):
+        raise TypeError("All input values must be int or float")
+

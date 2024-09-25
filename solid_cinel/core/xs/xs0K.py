@@ -6,12 +6,11 @@ Python for working with Diferential XS.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange, float64
+from numba import prange
 from scipy.constants import physical_constants as const
-from solid_cinel.core.generic import interpolation, reshape_differential
+from solid_cinel.core.generic import interpolation, reshape_differential, to_arrays
 import os
 from math import pi, log10
-from typing import Iterable
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -254,27 +253,16 @@ class Xs0K:
         else:
             return pd.DataFrame(XsMat, index=EinCalc, columns=Tcalc)
 
-
-def to_arrays(input: [float, Iterable[float]]) -> np.ndarray:
-    """
-    Convert the input to an array if it is not an array
-
-    Parameters
-    ----------
-    input: float, Iterable[float]
-        The input to convert to an array
-
-    Returns
-    -------
-    np.ndarray
-        The input as an array
-    """
-    if hasattr(input, "__len__"):
-        return input if isinstance(input, np.ndarray) else np.array(input)
-    elif isinstance(input, (int, float)):
-        return np.array([input])
-    elif not all(isinstance(e, (int, float)) for e in input):
-        raise TypeError("All input values must be int or float")
+    def nuclearInteract_sigma1(self, Tinteract: np.ndarray,
+                               EinMat: np.ndarray) -> np.ndarray:
+        XsMat = np.zeros(EinMat.shape)
+        if len(Tinteract.shape) == 2:
+            NucInteractStrict_sigma1(Tinteract, XsMat, self.M, self.values, self.EinGrid,
+                                    XsMat)
+        else:
+            NucInteractAprox_sigma1(Tinteract, XsMat, self.M, self.values, self.EinGrid,
+                                    XsMat)
+        return XsMat
 
 
 def check_dx(data: [pd.DataFrame, pd.Series],
@@ -370,6 +358,7 @@ def default_Eout(Ein: float) -> np.ndarray:
     # Return the unique Eout grid:
     return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
+
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
 def EoutMat(Ein:np.ndarray) -> np.ndarray:
     """
@@ -390,10 +379,12 @@ def EoutMat(Ein:np.ndarray) -> np.ndarray:
     1.0  0.0  0.990007  1.003344  2.251720
     2.0  0.0  1.980013  2.006689  3.181654
     """
-    result = np.empty((len(Ein), 6998))  # Preallocate the array with the expected size
+    # Prealocate with the expected size
+    result = np.zeros((len(Ein), 6998))
     for i in prange(len(Ein)):
-        result[i, :] = default_Eout(Ein[i])
+        result[i, :] += default_Eout(Ein[i])
     return result
+
 
 @nb.jit(nopython=True, cache=True)
 def sigma1(Eout: float, Ein: float, T: float, M: float):
@@ -505,3 +496,24 @@ def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray, EoutMat: np.ndarra
         XsMat[:, j] += np.trapz(
             sigma1(EoutMat, Eincalc, Tcalc[j], M) * xsOkinterp, x=EoutMat
         )
+
+def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
+                            M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray,
+                            XsMat: np.ndarray):
+    for i in range(XsMat.shape[0]):
+        for j in range(XsMat.shape[0]):
+            Eout = default_Eout(Eincalc[i, j])
+            transferFunc = sigma1(Eout, Eincalc[i, j], Tcalc[j], M)
+            transferFunc *= np.interp(Eout, xs0KEin, xs0Kvalues)
+            XsMat[i, j] += np.trapz(transferFunc, x=Eout)
+
+def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
+                            M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray,
+                            XsMat: np.ndarray):
+    for i in range(XsMat.shape[0]):
+        for j in range(XsMat.shape[0]):
+            Eout = default_Eout(Eincalc[i, j])
+            transferFunc = sigma1(Eout, Eincalc[i, j], Tcalc[i, j], M)
+            transferFunc *= np.interp(Eout, xs0KEin, xs0Kvalues)
+            XsMat[i, j] += np.trapz(transferFunc, x=Eout)
+

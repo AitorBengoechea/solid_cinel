@@ -6,10 +6,12 @@ Python for working with Angle integrated scattering xs at different temperature.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import vectorize, prange
+from numba import vectorize
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
-from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, sigma1
+
+from solid_cinel import default_Eout, XsMat_sigma1
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
 from solid_cinel.core.xs.scatfunc import Xs0K
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import interpolation
@@ -1265,96 +1267,6 @@ class Xs:
             xsCalcValues = self.compute(Tcalc, Ein4PCF[np.isin(T4PCF, Tcalc)], *args, **kwargs)
             xsCalc = pd.DataFrame(xsCalcValues, index=Tcalc, columns=Eout)
         return pd.concat([xsInterp, xsCalc]).set_axis(mu, axis=0)
-
-
-@nb.jit(nopython=True, cache=True)
-def default_Eout(Ein: float) -> np.ndarray:
-    """
-    Generate the default Eout grid for the convolution. The grid is tested with
-    NJOY values to ensure a relative difference smaller than 0.4%
-
-    Parameters
-    ----------
-    Ein : float
-        Incident energy in eV
-
-    Returns
-    -------
-    Eout : ndarray
-        Outgoing energy grid in eV
-
-    Examples
-    --------
-    Test the default Eout with NJOY values:
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("xs.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> xs0K = Xs.read_xs("u238.0.2")
-    >>> os.chdir(wd)
-
-    # Generate Broadening test results:
-    >>> T = 1000
-    >>> Ein = 2.0
-    >>> Eout = default_Eout(Ein)
-    >>> M = 238.05077040419212
-    >>> float(round(ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
-    9.09
-    """
-    EoutSmall = np.linspace(0,
-                             0.99 * Ein,
-                             2000)
-    EoutMid = np.linspace(0.99 * Ein,
-                          Ein * 1.01,
-                              3000)
-    if Ein * 2 < 5.0:
-        EoutGreat = np.logspace(np.log10(Ein * 1.01),
-                                np.log10(5.0),
-                                 2000)
-    else:
-        EoutGreat = np.logspace(np.log10(Ein * 1.01),
-                                 np.log10(2 * Ein),
-                                 2000)
-    return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
-
-@nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def XsMat_sigma1(Ein: float, T: float, M: float, xs0Kvalues: np.ndarray,
-                 xs0KEinGrid: np.ndarray, XsMat: np.ndarray) -> np.ndarray:
-    """
-
-    Parameters
-    ----------
-    Ein :
-    T :
-    M :
-    xs0Kvalues :
-    xs0KEinGrid :
-
-    Returns
-    -------
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("xs.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> xs0K = Xs0K.read_xs("u238.0.2")
-    >>> os.chdir(wd)
-
-    >>> Ein = np.array([1.0, 2.0])
-    >>> T = np.array([300, 100])
-    >>> M = 238.05077040419212
-
-    >>> XsMat_sigma1(Ein, T, M, xs0K.values, xs0K.index)
-    array([[9.27057255, 9.27182968],
-           [9.08623706, 9.08695736]])
-    """
-    for i in prange(XsMat.shape[0]):
-        for j in range(XsMat.shape[1]):
-            Eout = default_Eout(Ein[i])
-            scatFunc = sigma1(Eout, Ein[i], T[j], M)
-            scatFunc *= np.interp(Eout, xs0KEinGrid, xs0Kvalues)
-            XsMat[i, j] += np.trapz(scatFunc, Eout)
-
-
 
 
 @vectorize(["float64(float64, float64, float64, float64)"],

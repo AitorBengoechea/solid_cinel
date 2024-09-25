@@ -114,7 +114,7 @@ class XsData:
         else:
             return cls(xs0K)
 
-    def calc_Matrix(self, Ein, T):
+    def db_sigma1(self, Ein, T):
         """
 
         Parameters
@@ -135,11 +135,17 @@ class XsData:
         >>> xs = XsData(xs0K)
         >>> Ein = np.array([1.0, 2.0])
         >>> T = np.array([300, 100])
-        >>> xs.calc_Matrix(Ein, T)
+        >>> xs.db_sigma1(Ein, T)
         array([[9.27057255, 9.27182968],
                [9.08623706, 9.08695736]])
         """
-        return XsMat_sigma1(Ein, T, self.xs0K.M, self.xs0K.values, self.xs0K.EinGrid)
+        Ein, T = np.array(Ein), np.array(T)
+        # Create the matrix to store the results
+        xsDb = np.zeros((len(Ein), len(T)))
+        XsMat_sigma1(Ein, T, self.xs0K.M, self.xs0K.values, self.xs0K.EinGrid,
+                     xsDb)
+
+        return xsDb
 
 
 class Xs:
@@ -1312,7 +1318,8 @@ def default_Eout(Ein: float) -> np.ndarray:
     return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def XsMat_sigma1(Ein: float, T: float, M: float, xs0Kvalues: np.ndarray, xs0KEinGrid: np.ndarray):
+def XsMat_sigma1(Ein: float, T: float, M: float, xs0Kvalues: np.ndarray,
+                 xs0KEinGrid: np.ndarray, XsMat: np.ndarray) -> np.ndarray:
     """
 
     Parameters
@@ -1340,14 +1347,12 @@ def XsMat_sigma1(Ein: float, T: float, M: float, xs0Kvalues: np.ndarray, xs0KEin
     array([[9.27057255, 9.27182968],
            [9.08623706, 9.08695736]])
     """
-    matrix = np.zeros((len(Ein), len(T)))
-    for i in prange(len(Ein)):
-        for j in range(len(T)):
+    for i in prange(XsMat.shape[0]):
+        for j in range(XsMat.shape[1]):
             Eout = default_Eout(Ein[i])
             scatFunc = sigma1(Eout, Ein[i], T[j], M)
             scatFunc *= np.interp(Eout, xs0KEinGrid, xs0Kvalues)
-            matrix[i, j] += np.trapz(scatFunc, Eout)
-    return matrix
+            XsMat[i, j] += np.trapz(scatFunc, Eout)
 
 
 

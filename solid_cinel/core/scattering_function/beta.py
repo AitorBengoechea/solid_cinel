@@ -238,7 +238,7 @@ class Beta:
         >>> Beta.from_Eout(Eout, Ein, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
-        return cls(get_beta(Eout, Ein, T))
+        return cls(get_AbsBeta(Eout, Ein, T))
 
     @classmethod
     def from_Ein(cls, Eout: float, Ein: np.ndarray, T: float):
@@ -271,7 +271,7 @@ class Beta:
         >>> Beta.from_Ein(Eout, Ein, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
-        return cls(get_beta(Ein, Eout, T))
+        return cls(get_AbsBeta(Ein, Eout, T))
 
     @classmethod
     def from_file(cls, file_path: str, delimiter: str = None, skiprows: int = 0,
@@ -449,8 +449,34 @@ class Beta:
 
 
 @nb.jit(nopython=True, cache=True)
-def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
-             T: float, abs: bool = True) -> np.ndarray:
+def calc_Beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
+              T: float) -> np.ndarray:
+    """
+    Calculate the beta values from the parameters of the function:
+    .. math::
+        \beta=\dfrac{E_{out} - E_{in}}{k_BT}
+
+    Parameters
+    ----------
+    Eout : 'np.ndarray', (N,) or 'float'
+        Output energy of the neutron.
+    Ein : 'np.ndarray', (N,) or 'float'
+        Incidente energy of the neutron.
+    T : float
+        Temperature in K.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Array containing all posible beta values for the input parameters.
+    """
+    # Get the beta values:
+    return (Eout - Ein) / (kb * T)
+
+
+@nb.jit(nopython=True, cache=True)
+def get_AbsBeta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
+                T: float) -> np.ndarray:
     """
     Get the positive beta values from the parameters of the function:
     .. math::
@@ -470,14 +496,7 @@ def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
     'np.ndarray', (N,)
         Array containing all posible beta values for the input parameters.
     """
-    # Get the beta values:
-    beta = (Eout - Ein) / (kb * T)
-
-    # Return the absolute values if needed:
-    if abs:
-        return np.unique(np.absolute(beta))
-    else:
-        return np.unique(beta)
+    return np.unique(np.absolute(calc_Beta(Eout, Ein, T)))
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_absBeta(T: float) -> np.ndarray:

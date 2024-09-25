@@ -9,7 +9,7 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from typing import Iterable
-from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, DoubleDiffData
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.xs import Xs, NucInteract
 from solid_cinel.core.generic import integrate, reshift
@@ -23,7 +23,7 @@ m = const["neutron mass in u"][0]
 nb.config.FASTMATH_DEFAULT = False
 
 
-class DDxs:
+class DDxs(DoubleDiffData):
     """
     Class for the Double differential cross section for elastic scattering
     """
@@ -50,79 +50,7 @@ class DDxs:
         self.T = T
         self.M = M
         # The ddxs data:
-        self.data = pd.DataFrame(*args, **kwargs)
-
-    @property
-    def data(self) -> pd.DataFrame:
-        """
-        DDXS data.
-
-        Returns
-        -------
-        pd.DataFrame
-            DDXS data
-        """
-        return self._data
-
-    @data.setter
-    def data(self, dd_pdf: Iterable):
-        """
-        Set the diferential data.
-
-        Parameters
-        ----------
-        dd_pdf : pd.DataFrame
-            Double differential scattering function data
-        """
-        dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
-        dd_pdf_.index.name = "mu"
-        dd_pdf_.columns.name = "Eout"
-        self._data = dd_pdf_
-
-    @property
-    def values(self) -> np.ndarray:
-        return self.data.values
-
-    @property
-    def Eout(self) -> np.ndarray:
-        """
-        The outgoing energy grid
-
-        Returns
-        -------
-        np.ndarray
-            The outgoing energy grid
-        """
-        return self.data.columns.values
-
-    @property
-    def mu(self) -> np.ndarray:
-        """
-        The outgoing angle grid
-
-        Returns
-        -------
-        np.ndarray
-            The outgoing angle grid
-        """
-        return self.data.index.values
-
-
-    def integrate(self, axis: int) -> pd.Series:
-        """
-        Integrate the Dynamic Structure Factor.
-
-        Parameters
-        ----------
-        axis: int
-            The axis to integrate
-
-        Returns
-        -------
-        pd.Series
-            The integrated Dynamic Structure Factor
-        """
-        return self.data.apply(integrate, axis=axis)
+        super().__init__(*args, **kwargs)
 
     @property
     def scatFunc(self) -> pd.Series:
@@ -153,7 +81,7 @@ class DDxs:
         >>> theta = np.arange(0, 180, 1)[1::]
 
         # Angular distribution:
-        >>> DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").scatFunc.data.iloc[::200].round(6)
+        >>> DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").scatFunc.iloc[::200].round(6)
         Eout
         1.80000     0.768794
         1.88008    10.451361
@@ -162,7 +90,7 @@ class DDxs:
         2.12032     2.920481
         dtype: float64
         """
-        return self.integral(axis=0)
+        return super().columsIntegral
 
     @property
     def angleDist(self) -> pd.Series:
@@ -191,9 +119,22 @@ class DDxs:
         >>> theta = np.arange(0, 180, 15)[1::]
         >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
         >>> ddxs.angleDist.round(6)
+        mu
+        -9.659258e-01    4.455539
+        -8.660254e-01    4.469560
+        -7.071068e-01    4.489373
+        -5.000000e-01    4.510598
+        -2.588190e-01    4.529192
+         6.123234e-17    4.543335
+         2.588190e-01    4.554042
+         5.000000e-01    4.563068
+         7.071068e-01    4.570756
+         8.660254e-01    4.576664
+         9.659258e-01    4.580387
+        dtype: float64
 
         """
-        return self.integrate(axis=1)
+        return super().rowIntegral
 
     @property
     def angleIntegrated(self) -> float:
@@ -227,30 +168,16 @@ class DDxs:
         >>> float(round(DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").angleIntegrated, 2))
         9.07
         """
-        return integrate(self.scatFunc)
-
-    @property
-    def scatFuncNorm(self)-> pd.Series:
-        return self.scatFunc / self.angleIntegrated
+        return super().doubleIntegral
 
     @property
     def upscattering(self) -> float:
-        scatfunc = self.scatFunc/ self.angleIntegrated
-        return integrate(self.scatFuncNorm[self.Eout > self.Ein])
-
-    @property
-    def downscattering(self) -> float:
-        return integrate(self.scatFuncNorm[self.Eout < self.Ein])
-
-    @property
-    def pdf(self) -> pd.DataFrame:
         """
-        Get the probability density function of the Double Differential XS
-
+        Get the upscattering probability of the Double Differential XS
         Returns
         -------
-        pd.DataFrame
-            The probability density function of the Double Differential XS
+        float
+            The upscattering probability of the Double Differential XS
 
         Examples
         --------
@@ -268,22 +195,39 @@ class DDxs:
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> theta = np.arange(0, 180, 15)[1::]
         >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
-        >>> ddxs.pdf.iloc[::, ::200].round(6)
-        Eout            1.80000   1.88008   1.96016   2.04024   2.12032
-        mu
-        -9.659258e-01  0.199996  1.364426  2.730286  1.726349  0.368894
-        -8.660254e-01  0.169485  1.313193  2.795112  1.767512  0.356426
-        -7.071068e-01  0.124606  1.218890  2.904967  1.837268  0.333172
-        -5.000000e-01  0.074942  1.069553  3.061712  1.936798  0.295670
-        -2.588190e-01  0.032968  0.854101  3.265153  2.065984  0.240293
-         6.123234e-17  0.008520  0.575864  3.506323  2.219150  0.166594
-         2.588190e-01  0.000812  0.279307  3.747518  2.372410  0.084671
-         5.000000e-01  0.000009  0.066077  3.861538  2.445181  0.021837
-         7.071068e-01  0.000000  0.002427  3.457385  2.189727  0.000966
-         8.660254e-01  0.000000  0.000000  1.696249  1.074497  0.000000
-         9.659258e-01  0.000000  0.000000  0.008420  0.005334  0.000000
+        >>> assert round(ddxs.upscattering, 6) == 0.389484
         """
-        return self.data / self.angleIntegrated
+        return integrate(super().columsPdf[self.Eout > self.Ein])
+
+    @property
+    def downscattering(self) -> float:
+        """
+        Get the downscattering probability of the Double Differential XS
+
+        Returns
+        -------
+        float
+            The downscattering probability of the Double Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> theta = np.arange(0, 180, 15)[1::]
+        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
+        >>> assert round(ddxs.downscattering, 6) == 0.60678
+        """
+        return integrate(super().columsPdf[self.Eout < self.Ein])
 
     @classmethod
     def from_Sab(cls, xs: Xs, Ein: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,

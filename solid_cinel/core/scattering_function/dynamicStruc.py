@@ -9,21 +9,303 @@ import numba as nb
 from numba import float64
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
-from solid_cinel.core.scattering_function.beta import get_beta, Beta
+from solid_cinel.core.scattering_function.beta import get_AbsBeta, calc_Beta
 from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder, Alpha
-from solid_cinel.core.scattering_function.sab import get_SabSct, Sab, phonon_expansion
+from solid_cinel.core.scattering_function.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
 from typing import Iterable
-from math import sqrt, pi
+from math import pi
 import warnings
+from functools import cached_property
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
+class DoubleDiffData:
+    """
+    Abstract class for Double Differential data.
+    """
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the DoubleDiffData class.
 
-class DynamicStruc:
+        Parameters
+        ----------
+        args: Iterable
+            The values for the pd.DataFrame
+        kwargs: dict
+            Optional arguments for the construction of the pd.DataFrame
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.data
+        Eout  1  2  3
+        mu
+        1     1  2  3
+        2     4  5  6
+        """
+        self.data = pd.DataFrame(*args, **kwargs)
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        DataFrame
+
+        Returns
+        -------
+        pd.Series
+            Transfer function data
+        """
+        return self._data
+
+    @data.setter
+    def data(self, dd_pdf: Iterable):
+        """
+        Set the data and check the normalization.
+
+        Parameters
+        ----------
+        dd_pdf : pd.Series
+            Transfer function data
+
+        """
+        # Sort and define the style of the dataframe:
+        dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
+        dd_pdf_.index.name = "mu"
+        dd_pdf_.columns.name = "Eout"
+
+        # Save the data:
+        self._data = dd_pdf_
+
+    @property
+    def values(self) -> np.ndarray:
+        """
+        The values of the Double Differential data.
+
+        Returns
+        -------
+        np.ndarray
+            The values of the Double Differential data
+        """
+        return self.data.values
+
+    @property
+    def Eout(self) -> np.ndarray:
+        """
+        The outgoing energy grid.
+
+        Returns
+        -------
+        np.ndarray
+            The outgoing energy grid
+        """
+        return self.data.columns.values
+
+    @property
+    def mu(self) -> np.ndarray:
+        """
+        The cosine of the angle of the distribution in degrees.
+
+        Returns
+        -------
+        np.ndarray
+            The cosine of the angle of the distribution in degrees
+        """
+        return self.data.index.values
+
+    def integrate(self, axis: int) -> pd.Series:
+        """
+        Integrate the Double Differential data.
+
+        Parameters
+        ----------
+        axis: int
+            The axis to integrate
+
+        Returns
+        -------
+        pd.Series
+            The integrated Double Differential data
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.integrate(axis=0)
+        Eout
+        1    2.5
+        2    3.5
+        3    4.5
+        dtype: float64
+
+        >>> dd.integrate(axis=1)
+        mu
+        1     4.0
+        2    10.0
+        dtype: float64
+        """
+        return self.data.apply(integrate, axis=axis)
+
+    @cached_property
+    def rowIntegral(self) -> pd.Series:
+        """
+        Integral of the Double Differential data by row.
+
+        Returns
+        -------
+        pd.Series
+            Integral of the Double Differential data by row
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.rowIntegral
+                mu
+        1     4.0
+        2    10.0
+        dtype: float64
+        """
+        return self.integrate(axis=1)
+
+    @cached_property
+    def columsIntegral(self) -> pd.Series:
+        """
+        Integral of the Double Differential data by column.
+
+        Returns
+        -------
+        pd.Series
+            Integral of the Double Differential data by column
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.columsIntegral
+        Eout
+        1    2.5
+        2    3.5
+        3    4.5
+        dtype: float64
+        """
+        return self.integrate(axis=0)
+
+    @cached_property
+    def doubleIntegral(self) -> float:
+        """
+        Double integral of the Double Differential data.
+
+        Returns
+        -------
+        float
+            Double integral of the Double Differential data
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> assert dd.doubleIntegral == 7.0
+        """
+        return integrate(self.rowIntegral)
+
+    @property
+    def pdf(self) -> pd.DataFrame:
+        """
+        Probability density function of the Double Differential data.
+
+        Returns
+        -------
+        pd.Series
+            Probability density function of the Double Differential data
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.pdf
+        Eout         1         2         3
+        mu
+        1     0.142857  0.285714  0.428571
+        2     0.571429  0.714286  0.857143
+        """
+        return self.data / self.doubleIntegral
+
+    @property
+    def rowPdf(self) -> pd.Series:
+        """
+        Probability density function of the Double Differential data by row.
+
+        Returns
+        -------
+        pd.Series
+            Probability density function of the Double Differential data by row
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.rowPdf
+        mu
+        1    0.571429
+        2    1.428571
+        dtype: float64
+        """
+        return self.integrate(axis=1) / self.doubleIntegral
+
+    @property
+    def columsPdf(self) -> pd.Series:
+        """
+        Probability density function of the Double Differential data by column.
+
+        Returns
+        -------
+        pd.Series
+            Probability density function of the Double Differential data by column
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.columsPdf
+        Eout
+        1    0.357143
+        2    0.500000
+        3    0.642857
+        dtype: float64
+        """
+        return self.integrate(axis=0) / self.doubleIntegral
+
+    @property
+    def cdf(self) -> pd.DataFrame:
+        """
+        Cumulative distribution function of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        pd.Series
+            Cumulative distribution function of the Dynamic Structure Factor
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.cdf
+        Eout         1         2         3
+        mu
+        1     0.047619  0.142857  0.285714
+        2     0.238095  0.571429  1.000000
+
+        """
+        cdf = self.data.cumsum(axis=0).cumsum(axis=1)
+        return cdf / cdf.iloc[-1, -1]
+
+
+class DynamicStruc(DoubleDiffData):
     """
     Dynamic structure factor class.
     """
@@ -52,80 +334,14 @@ class DynamicStruc:
         self.M = M
 
         # The Dynamic Structure data:
-        self.data = pd.DataFrame(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
-    @property
-    def data(self) -> pd.DataFrame:
-        """
-        Transfer function data.
-
-        Returns
-        -------
-        pd.Series
-            The Transfer function data
-        """
-        return self._data
-
-    @data.setter
-    def data(self, dd_pdf: Iterable):
-        """
-        Set the Dynamic Structure Factor data and check the normalization.
-
-        Parameters
-        ----------
-        dd_pdf : pd.Series
-            Transfer function data
-
-        """
-        # Sort and define the style of the dataframe:
-        dd_pdf_ = pd.DataFrame(dd_pdf).sort_index(axis=0).sort_index(axis=1)
-        dd_pdf_.index.name = "mu"
-        dd_pdf_.columns.name = "Eout"
-
-        # Erase the columns with all zeros:
-        dd_pdf_ = dd_pdf_.loc[::, ~dd_pdf_.eq(0).all()]
-
-        # Save the data:
-        self._data = dd_pdf_
-
-    @property
-    def values(self) -> np.ndarray:
-        """
-        The values of the Dynamic Structure Factor.
-
-        Returns
-        -------
-        np.ndarray
-            The values of the Dynamic Structure Factor
-        """
-        return self.data.values
-
-    @property
-    def Eout(self) -> np.ndarray:
-        """
-        The outgoing energy grid.
-
-        Returns
-        -------
-        np.ndarray
-            The outgoing energy grid
-        """
-        return self.data.columns.values
-
-    @property
-    def mu(self) -> np.ndarray:
-        """
-        The cosine of the angle of the distribution in degrees.
-
-        Returns
-        -------
-        np.ndarray
-            The cosine of the angle of the distribution in degrees
-        """
-        return self.data.index.values
+        self.alphaMat = DoubleDiffData(
+            get_alphaMat(self.Eout, self.Ein, self.T, self.M, self.mu)
+        )
 
 
-    def alphaMat(self, values=True) -> [np.ndarray, pd.DataFrame]:
+    def get_alphaMat(self, values=True) -> DoubleDiffData:
         """
         Return the $\alpha$ matrix for the Dynamic Structure Factor.
 
@@ -140,11 +356,7 @@ class DynamicStruc:
         np.ndarray or pd.DataFrame
             The $\alpha$ matrix for the Dynamic Structure Factor
         """
-        alphaMatrix = get_alphaMat(self.Eout, self.Ein, self.T, self.M, self.mu)
-        if values:
-            return alphaMatrix
-        else:
-            return pd.DataFrame(alphaMatrix, index=self.mu, columns=self.Eout)
+        return self.alphaMat.values if values else self.alphaMat.data
 
     def recoil(self, values=True) -> [np.ndarray, pd.DataFrame]:
         """
@@ -161,7 +373,7 @@ class DynamicStruc:
         np.ndarray or pd.DataFrame
             The recoil energy for the Dynamic Structure Factor
         """
-        return self.alphaMat(values) * kb * self.T
+        return self.get_alphaMat(values) * kb * self.T
 
     @property
     def alpha0(self) -> float:
@@ -188,11 +400,8 @@ class DynamicStruc:
         >>> float(round(DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
         0.328006
         """
-        # Get the alpha matrix:
-        alphaMatValues = self.alphaMat(values=True)
-
         # Get the alpha0 parameter:
-        return integrate((self.data * alphaMatValues).apply(integrate)) / 2
+        return integrate((self.data * self.alphaMat.values).apply(integrate)) / 2
 
     @property
     def norm(self) -> float:
@@ -204,48 +413,7 @@ class DynamicStruc:
         float
             Normalization of the Dynamic Structure Factor
         """
-        return integrate(self.data.apply(integrate))
-
-    @property
-    def pdf(self) -> pd.DataFrame:
-        """
-        Probability density function of the Dynamic Structure Factor.
-
-        Returns
-        -------
-        pd.Series
-            Probability density function of the Dynamic Structure Factor
-        """
-        return self.data / self.norm
-
-    @property
-    def cdf(self) -> pd.DataFrame:
-        """
-        Cumulative distribution function of the Dynamic Structure Factor.
-
-        Returns
-        -------
-        pd.Series
-            Cumulative distribution function of the Dynamic Structure Factor
-        """
-        cdf = self.data.cumsum(axis=0).cumsum(axis=1)
-        return cdf / cdf.iloc[-1, -1]
-
-    def integrate(self, axis: int) -> pd.Series:
-        """
-        Integrate the Dynamic Structure Factor.
-
-        Parameters
-        ----------
-        axis: int
-            The axis to integrate
-
-        Returns
-        -------
-        pd.Series
-            The integrated Dynamic Structure Factor
-        """
-        return self.data.apply(integrate, axis=axis)
+        return super().doubleIntegral
 
     @property
     def transferFunc(self) -> pd.Series:
@@ -276,7 +444,7 @@ class DynamicStruc:
         7.4480    0.045257
         dtype: float64
         """
-        return self.integrate(axis=0)
+        return super().columsIntegral
 
     @property
     def angleDist(self):
@@ -312,7 +480,7 @@ class DynamicStruc:
          9.659258e-01    1.435551
         dtype: float64
         """
-        return self.integrate(axis=1)
+        return super().rowIntegral
 
     @classmethod
     def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -824,7 +992,7 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
         The Transfer function values for a single angle
     """
     # Get the beta grid:
-    beta = get_beta(Eout, Ein, T, abs=False)
+    beta = calc_Beta(Eout, Ein, T)
 
     # Get the temperature ratio:
     Tratio = Teff / T
@@ -900,7 +1068,7 @@ def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nd
     dtype: float64
     """
     # Get the beta grid:
-    betaAbs = get_beta(Eout, Ein, T)
+    betaAbs = get_AbsBeta(Eout, Ein, T)
 
     # Eout calculation for the absulote beta values:
     EoutCalc = np.sort(Ein + np.concatenate((-betaAbs[::-1], betaAbs[1::])) * kb * T)
@@ -993,7 +1161,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
     dtype: float64
     """
     # Get the beta grid:
-    beta = get_beta(Eout, Ein, T)
+    beta = get_AbsBeta(Eout, Ein, T)
 
     # Eout calculation
     EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)

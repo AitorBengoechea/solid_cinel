@@ -8,7 +8,6 @@ from typing import Iterable
 from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
 from solid_cinel.core.xs.xs import Xs
 from solid_cinel.core.generic import interpolation
-from solid_cinel.core.xs.scatfunc import ScatFunc
 from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
 
 

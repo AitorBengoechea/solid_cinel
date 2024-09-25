@@ -2,9 +2,8 @@ import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_PdosArgs, add_TeffArgs, handle_TeffArgs
 from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
-from solid_cinel.application.scatfunctApp import add_ScatFuncArgs, handle_ScatFuncArgs
-from solid_cinel.application.dxsApp import add_DxsArgs, handle_DxsArgs
-from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs
+from solid_cinel.application.dynamicStrucApp import add_DynamicStrucArgs, handle_DynamicStrucArgs, handle_TransFuncArgs
+from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs, handle_AngleDistrArgs, handle_ScatFuncArgs
 from solid_cinel.application.xscohApp import add_BraggEdgesArgs, handle_xsCohArgs, handle_BraggEdgesArgs
 
 # Map keywords to their respective functions
@@ -17,17 +16,25 @@ KEYWORD_TO_FUNCTION_MAP = {
         "add": add_SabArgs,
         "handle": handle_SabArgs,
     },
-    "scatfunc": {
-        "add": add_ScatFuncArgs,
-        "handle": handle_ScatFuncArgs,
-    },
-    "dxs": {
-        "add": add_DxsArgs,
-        "handle": handle_DxsArgs,
-    },
     "ddxs": {
         "add": add_DDxsArgs,
         "handle": handle_DDxsArgs,
+    },
+    "scatfunc": {
+        "add": add_DDxsArgs,
+        "handle": handle_ScatFuncArgs,
+    },
+    "angledistr": {
+        "add": add_DDxsArgs,
+        "handle": handle_AngleDistrArgs,
+    },
+    "dynamicstruc": {
+        "add": add_DynamicStrucArgs,
+        "handle": handle_DynamicStrucArgs,
+    },
+    "transferfunc": {
+        "add": add_DynamicStrucArgs,
+        "handle": handle_TransFuncArgs,
     },
     "xscoh": {
         "add": add_BraggEdgesArgs,

@@ -51,7 +51,7 @@ class DynamicStruc:
         self.T = T
         self.M = M
 
-        # The Transfer function data:
+        # The Dynamic Structure data:
         self.data = pd.DataFrame(*args, **kwargs)
 
     @property
@@ -89,19 +89,57 @@ class DynamicStruc:
         self._data = dd_pdf_
 
     @property
-    def values(self):
+    def values(self) -> np.ndarray:
+        """
+        The values of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        np.ndarray
+            The values of the Dynamic Structure Factor
+        """
         return self.data.values
 
     @property
-    def Eout(self):
+    def Eout(self) -> np.ndarray:
+        """
+        The outgoing energy grid.
+
+        Returns
+        -------
+        np.ndarray
+            The outgoing energy grid
+        """
         return self.data.columns.values
 
     @property
-    def mu(self):
+    def mu(self) -> np.ndarray:
+        """
+        The cosine of the angle of the distribution in degrees.
+
+        Returns
+        -------
+        np.ndarray
+            The cosine of the angle of the distribution in degrees
+        """
         return self.data.index.values
 
 
     def alphaMat(self, values=True) -> [np.ndarray, pd.DataFrame]:
+        """
+        Return the $\alpha$ matrix for the Dynamic Structure Factor.
+
+        Parameters
+        ----------
+        values: bool, optional
+            If True return the values of the $\alpha$ matrix. If False return
+            the $\alpha$ matrix as a pd.DataFrame. The default is True.
+
+        Returns
+        -------
+        np.ndarray or pd.DataFrame
+            The $\alpha$ matrix for the Dynamic Structure Factor
+        """
         alphaMatrix = get_alphaMat(self.Eout, self.Ein, self.T, self.M, self.mu)
         if values:
             return alphaMatrix
@@ -109,6 +147,20 @@ class DynamicStruc:
             return pd.DataFrame(alphaMatrix, index=self.mu, columns=self.Eout)
 
     def recoil(self, values=True) -> [np.ndarray, pd.DataFrame]:
+        """
+        Return the recoil energy for the Dynamic Structure Factor.
+
+        Parameters
+        ----------
+        values: bool, optional
+            If True return the values of the recoil energy. If False return
+            the recoil energy as a pd.DataFrame. The default is True.
+
+        Returns
+        -------
+        np.ndarray or pd.DataFrame
+            The recoil energy for the Dynamic Structure Factor
+        """
         return self.alphaMat(values) * kb * self.T
 
     @property
@@ -178,6 +230,89 @@ class DynamicStruc:
         """
         cdf = self.data.cumsum(axis=0).cumsum(axis=1)
         return cdf / cdf.iloc[-1, -1]
+
+    def integrate(self, axis: int) -> pd.Series:
+        """
+        Integrate the Dynamic Structure Factor.
+
+        Parameters
+        ----------
+        axis: int
+            The axis to integrate
+
+        Returns
+        -------
+        pd.Series
+            The integrated Dynamic Structure Factor
+        """
+        return self.data.apply(integrate, axis=axis)
+
+    @property
+    def transferFunc(self) -> pd.Series:
+        """
+        Return the Transference function of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        pd.Series
+            The transfer function
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> dynamicStructure = DynamicStruc.from_fgm(Ein, M, T, Eout, mu)
+        >>> dynamicStructure.transferFunc.round(6)
+        Eout
+        6.7554    0.031423
+        6.9050    0.404638
+        7.0439    1.888728
+        7.2000    4.340047
+        7.3157    0.688071
+        7.4480    0.045257
+        dtype: float64
+        """
+        return self.integrate(axis=0)
+
+    @property
+    def angleDist(self):
+        """
+        Return the angle distribution of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        pd.Series
+            The angle distribution
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
+        >>> mu = np.cos(np.deg2rad(theta))
+        >>> dynamicStructure = DynamicStruc.from_fgm(Ein, M, T, Eout, mu)
+        >>> dynamicStructure.angleDist.round(6)
+        mu
+        -9.659258e-01    0.480322
+        -8.660254e-01    0.482041
+        -7.071068e-01    0.484205
+        -5.000000e-01    0.485923
+        -2.588190e-01    0.486289
+         6.123234e-17    0.484720
+         2.588190e-01    0.481267
+         5.000000e-01    0.479932
+         7.071068e-01    0.515987
+         8.660254e-01    0.714575
+         9.659258e-01    1.435551
+        dtype: float64
+        """
+        return self.integrate(axis=1)
 
     @classmethod
     def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -570,638 +705,6 @@ class DynamicStruc:
         else:
             return cls.from_fgm(Ein, M, T, Eout, mu)
 
-    @property
-    def to_ScatFunc(self):
-        """
-        Return the TransferFunc object.
-
-        Returns
-        -------
-        TransferFunc
-            The TransferFunc object
-
-        Examples
-        --------
-        >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> scatfunc = DynamicStruc.from_fgm(Ein, M, T, Eout, mu)
-        >>> scatfunc.to_ScatFunc.data.round(6)
-        Eout
-        6.7554    0.031423
-        6.9050    0.404638
-        7.0439    1.888728
-        7.2000    4.340047
-        7.3157    0.688071
-        7.4480    0.045257
-        dtype: float64
-        """
-        return TransferFunc(self.Ein, self.T, self.M, self.data.apply(integrate))
-
-class TransferFunc:
-    """
-    Transfer function (angular integration of Dynamic Structure Factor) base
-    class.
-    """
-
-    def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
-        """
-        Initialize the ScatFunc class.
-
-        Parameters
-        ----------
-        Ein : float
-            The neutron incident energy in eV
-        T : float
-            Temperature of the material in K
-        M : float
-            Mass of the material in amu
-        args : Iterable, (N,)
-            The Transfer function data for the pd.Series
-        kwargs : dict
-            Optional arguments for the construction of the pd.Series
-        """
-        # Atributes of the Transfer function (Change in these parameters will
-        # change the Transfer function):
-        self.Ein = Ein
-        self.T = T
-        self.M = M
-
-        # The Transfer function data:
-        self.data = pd.Series(*args, **kwargs)
-
-    @property
-    def data(self) -> pd.Series:
-        """
-        Transfer function data.
-
-        Returns
-        -------
-        pd.Series
-            The Transfer function data
-        """
-        return self._data
-
-    @data.setter
-    def data(self, pdf: Iterable):
-        """
-        Set the Transfer function data and check the normalization.
-
-        Parameters
-        ----------
-        pdf : pd.Series
-            The Transfer function data
-
-        """
-        pdf_ = pd.Series(pdf).sort_index()
-
-        # Set index name:
-        pdf_.index.name = "Eout"
-
-        # Save the data:
-        self._data = pdf_
-
-    @property
-    def Eout(self) -> np.ndarray:
-        """
-        The outgoing energy grid.
-
-        Returns
-        -------
-        np.array
-            The outgoing energy grid
-
-        # Generate Broadening test results:
-        >>> Ein = 36.68723
-        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
-        >>> pdf.Eout[0:10]
-        array([35.9534854 , 35.95495436, 35.95642332, 35.95789227, 35.95936123,
-               35.96083019, 35.96229915, 35.96376811, 35.96523707, 35.96670602])
-
-        """
-        return self.data.index.values
-
-    @property
-    def norm(self) -> float:
-        """
-        Normalization of the Transfer function.
-
-        Returns
-        -------
-        float
-            Normalization of the transference function
-
-        Examples
-        --------
-        # Generate Broadening test results:
-        >>> Ein = 36.68723
-        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
-        >>> float(round(pdf.norm, 6))
-        1.000001
-        """
-        return integrate(self.data)
-
-    @property
-    def pdf(self) -> pd.Series:
-        """
-        Probability density function of the Transfer function.
-
-        Returns
-        -------
-        pd.Series
-            Probability density function of the Transfer function
-        """
-        return self.data / self.norm
-    @property
-    def cdf(self) -> pd.Series:
-        """
-        Cumulative distribution function of the Transfer function.
-
-        Returns
-        -------
-        pd.Series
-            Cumulative distribution function of the Transfer function
-        """
-        cdf = self.data.cumsum()
-        return cdf / cdf.iloc[-1]
-
-    @classmethod
-    def from_sigma1(cls, Ein: float, M: float, T: float, Eout: np.array):
-        """
-        Calculate the Transfer function using Maxwellian velocity distribution
-        and angular integration
-        .. math::
-            S(E, E^\prime, M, T) = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
-
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            Mass of the material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-
-        Returns
-        -------
-        TransferFunc
-            The Transfer function for the given temperature, incident energy
-            and mass using Maxwellian velocity distribution and angular
-            integration
-
-        Examples
-        --------
-        # Generate Broadening test results:
-        >>> Ein = 36.68723
-        >>> Eout = np.linspace(Ein * 0.98 , Ein * 1.02, 1000)
-        >>> M = 238.05077040419212
-        >>> T = 300
-        >>> pdf = TransferFunc.from_sigma1(Ein, M, T, Eout)
-        >>> pdf.data.iloc[::100]
-        Eout
-        35.953485    8.937086e-15
-        36.100381    1.841784e-09
-        36.247277    2.425252e-05
-        36.394173    2.074937e-02
-        36.541069    1.172637e+00
-        36.687964    4.449812e+00
-        36.834860    1.152331e+00
-        36.981756    2.069367e-02
-        37.128652    2.618312e-05
-        37.275548    2.371152e-09
-        dtype: float64
-        """
-        return cls(Ein, T, M, sigma1(Eout, Ein, T, M), index=Eout)
-
-    @classmethod
-    def from_theta(cls, Ein: float, M: float, T: float, Eout: np.array,
-                   theta: float, *args, model: str = "fgm", **kwargs):
-        """
-        Generate the Transfer function from a S(alpha, -beta) table.
-
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-        theta : float
-            The angle of the scattering in degrees
-        model : str
-            The model used to generate the S(alpha, beta) table. The available
-            models are:
-                - "pdos": Phonon expansion model
-                - "fgm" : Free Gas Model (Default)
-                - "sct" : Short Collision Time model
-
-        Parameters for SCT model
-        ------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-        twt: 'float', optional
-            twt for the effective temperature. For solid is 1.
-
-        Parameters for PDOS model
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        nphonon: 'int', optional
-            Phonon expansion order. The default is None and the order is
-            calculated using the get_expansionOrder function.
-        decimal: 'float', optional
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int', optional
-            Maximun expansion order. The default is 5000.
-        threshold: 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions
-
-        Returns
-        -------
-        TransferFunc
-            Transfer function from a S(alpha, -beta) table.
-
-        Examples
-        --------
-        >>> Ein = 7.2
-        >>> Eout = np.array([7.10, 7.15, 7.2, 7.25, 7.3157])
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = 15
-
-        # Using the Free Gas Model:
-        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, model="fgm").data.round(6)
-        Eout
-        7.1000     0.000030
-        7.1500     0.851083
-        7.2000    21.126578
-        7.2500     0.489767
-        7.3157     0.000000
-        Name: 15, dtype: float64
-
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, model="sct").data.round(6)
-        Eout
-        7.1000     0.000031
-        7.1500     0.859129
-        7.2000    21.090382
-        7.2500     0.495350
-        7.3157     0.000000
-        Name: 15, dtype: float64
-
-        # Using the Phonon expansion model:
-        >>> TransferFunc.from_theta(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.round(6)
-        Eout
-        7.1000     0.007187
-        7.1500     1.036528
-        7.2000    22.969304
-        7.2500     0.584262
-        7.3157     0.000400
-        Name: 15, dtype: float64
-        """
-        # Get the Transfer function values to the given angle:
-        scatFunc = DynamicStruc.from_model(Ein, M, T, Eout, [theta], *args,
-                                           model=model, **kwargs).data
-
-        # Erase angular normalization
-        scatFunc *= 2
-
-        return cls(Ein, T, M, scatFunc.iloc[0], name=theta)
-
-    @classmethod
-    def from_alpha(cls, alpha: float, Ein: float, M: float, T: float, Eout: np.array,
-                   *args, model: str = "fgm", **kwargs):
-        """
-        Generate the Transfer function from S(alpha, -beta) tables.
-
-        Parameters
-        ----------
-        alpha: float
-            The alpha parameter of the Transfer function
-        Ein: float
-            The incident energy of the neutron in eV
-        M: float
-            The mass of the target material in amu
-        T: float
-            Temperature of the material in K
-        Eout: np.array
-            The neutron outgoing energy grid in eV
-        model: str
-            The model used to generate the S(alpha, beta) table. The available
-            models are:
-                - "pdos": Phonon expansion model
-                - "fgm" : Free Gas Model (Default)
-                - "sct" : Short Collision Time model
-
-        Parameters for SCT model
-        ------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-        twt: 'float', optional
-            twt for the effective temperature. For solid is 1.
-
-        Parameters for PDOS model
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        TransferFunc
-            Transfer function using S(alpha, -beta) tables
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> alpha = Ein / M / (kb * T)
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> TransferFunc.from_alpha(alpha, Ein, M, T, Eout, model="fgm").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000000
-        6.9050    0.006646
-        7.0439    1.209391
-        7.2000    5.061384
-        7.3157    0.716275
-        7.4480    0.003292
-        dtype: float64
-
-        >>> TransferFunc.from_alpha(alpha, Ein, M, T, Eout, pdos, model="sct").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000000
-        6.9050    0.006791
-        7.0439    1.213667
-        7.2000    5.054144
-        7.3157    0.716771
-        7.4480    0.003338
-        dtype: float64
-
-        >>> TransferFunc.from_alpha(alpha, Ein, M, T, Eout, pdos, model="pdos").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000003
-        6.9050    0.009647
-        7.0439    1.196693
-        7.2000    5.103854
-        7.3157    0.705293
-        7.4480    0.003823
-        dtype: float64
-        """
-        # Get the S(alpha, -beta) values to the given alpha:
-        sab = Sab.from_model(alpha, Beta.from_default(T), T, *args,
-                             model=model, **kwargs).full
-
-        # Interpolate to the outgoing energy grid:
-        EoutCalc = Ein + sab.index.values * kb * T
-        scatfunc = np.interp(Eout, EoutCalc, sab.values)
-
-        # Normalize the Transfer function to Eout:
-        scatfunc /= kb * T
-
-        return cls(Ein, T, M, scatfunc, index=Eout)
-
-    @classmethod
-    def from_alpha0(cls, Ein: float, M: float, T: float, Eout: np.array,
-                    *args, model: str = "fgm", **kwargs):
-        """
-        Generate the Transfer function from gressier recoil energy
-
-        Parameters
-        ----------
-        Ein: float
-            The incident energy of the neutron in eV
-        M: float
-            The mass of the target material in amu
-        T: float
-            Temperature of the material in K
-        Eout: np.array
-            The neutron outgoing energy grid in eV
-        model: str
-            The model used to generate the S(alpha, beta) table. The available
-            models are:
-                - "pdos": Phonon expansion model
-                - "fgm" : Free Gas Model (Default)
-                - "sct" : Short Collision Time model
-
-        Parameters for SCT model
-        ------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-        twt: 'float', optional
-            twt for the effective temperature. For solid is 1.
-
-        Parameters for PDOS model
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        TransferFunc
-            Transfer function using S(alpha, -beta) table
-            based on the gressier recoil energy
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> TransferFunc.from_alpha0(Ein, M, T, Eout, model="fgm").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000000
-        6.9050    0.005971
-        7.0439    1.180445
-        7.2000    5.102312
-        7.3157    0.709375
-        7.4480    0.003059
-        dtype: float64
-
-        >>> TransferFunc.from_alpha0(Ein, M, T, Eout, pdos, model="sct").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000000
-        6.9050    0.006103
-        7.0439    1.184746
-        7.2000    5.094991
-        7.3157    0.709907
-        7.4480    0.003103
-        dtype: float64
-
-        >>> TransferFunc.from_alpha0(Ein, M, T, Eout, pdos, model="pdos").data.loc[Eout_test].round(6)
-        Eout
-        6.7554    0.000003
-        6.9050    0.008817
-        7.0439    1.168504
-        7.2000    5.145645
-        7.3157    0.698297
-        7.4480    0.003581
-        dtype: float64
-        """
-        # Define the beta grid:
-        beta = Beta.from_default(T)
-
-        # Get the S(alpha, -beta) values to the beta:
-        sab = Sab.from_alpha0(Ein, T, M, beta, *args, model=model,
-                              **kwargs).full
-
-        # Interpolate to the outgoing energy grid:
-        EoutCalc = Ein + sab.index.values * kb * T
-        scatfunc = np.interp(Eout, EoutCalc, sab.values)
-
-        # Normalize the Transfer function to Eout:
-        scatfunc /= kb * T
-
-        return cls(Ein, T, M, scatfunc, index=Eout)
-
-    @staticmethod
-    def get_alpha0(EinGrid: np.ndarray, M: float, T: float, *args,
-                   model: str = "fgm", **kwargs) -> pd.DataFrame:
-        """
-        Calculate the alpha0 Transfer function.
-
-        Parameters
-        ----------
-        EinGrid: np.ndarray
-            The incident energy grid in eV
-        M: float
-            The mass of the target material in amu
-        T: float
-            Temperature of the material in K
-        model: str
-            The model used to generate the S(alpha, beta) table. The available
-            models are:
-                - "pdos": Phonon expansion model
-                - "fgm" : Free Gas Model (Default)
-                - "sct" : Short Collision Time model
-        display: bool
-            If True, return a pd.DataFrame for visualization.
-            If False, return a xp.ndarray for computation.
-
-        Parameters for SCT model
-        ------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-        twt: 'float', optional
-            twt for the effective temperature. For solid is 1.
-
-        Parameters for PDOS model
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        decimal: 'float'
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int'
-            Maximun expansion order. The default is 5000.
-
-        Returns
-        -------
-        pd.DataFrame
-            The alpha0 Transfer function
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> index = pd.Index(Ein, name="Ein")
-        >>> T = 300
-        >>> M = 238.05077040419212
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> TransferFunc.get_alpha0(Ein, M, T, model="fgm").iloc[::, 1000::1000].round(6)
-        beta    -2.662634  -1.114591   0.433452   1.981495   9.902464
-        Ein
-        6.7554   0.153967   0.269409   0.158014   0.031065        0.0
-        6.9050   0.156781   0.266477   0.155477   0.031139        0.0
-        7.0439   0.159258   0.263776   0.153185   0.031192        0.0
-        7.2000   0.161892   0.260769   0.150679   0.031233        0.0
-        7.3157   0.163744   0.258559   0.148868   0.031253        0.0
-        7.4480   0.165761   0.256053   0.146842   0.031264        0.0
-        >>> TransferFunc.get_alpha0(Ein, M, T, pdos, model="sct").iloc[::, 1000::1000].round(6)
-        beta    -2.668826  -1.120783   0.427260   1.975303   9.739857
-        Ein
-        6.7554   0.153590   0.264466   0.156371   0.030960        0.0
-        6.9050   0.156257   0.261604   0.153885   0.031015        0.0
-        7.0439   0.158601   0.258970   0.151640   0.031051        0.0
-        7.2000   0.161088   0.256037   0.149185   0.031075        0.0
-        7.3157   0.162834   0.253884   0.147411   0.031082        0.0
-        7.4480   0.164732   0.251443   0.145427   0.031080        0.0
-        >>> TransferFunc.get_alpha0(Ein, M, T, pdos, model="pdos").iloc[::, 1000::1000].round(6)
-        beta    -2.998559  -1.450516   0.097527   1.645570   4.033176
-        Ein
-        6.7554   0.111171   0.257399   0.201964   0.047321   0.000699
-        6.9050   0.114250   0.256102   0.198472   0.047219   0.000738
-        7.0439   0.117031   0.254833   0.195325   0.047108   0.000774
-        7.2000   0.120064   0.253339   0.191893   0.046964   0.000815
-        7.3157   0.122248   0.252190   0.189417   0.046847   0.000846
-        7.4480   0.124680   0.250838   0.186655   0.046702   0.000881
-        """
-        # Get the incident energy grid in appropriate format:
-        Ein = np.unique(EinGrid) if hasattr(EinGrid, '__len__') else np.array([EinGrid])
-
-        # Transfer function calculation
-        alpha, beta = Alpha.from_recoil(Ein, T, M), Beta.from_default(T)
-        scatfunc = Sab.from_model(alpha, beta, T, *args,
-                   model=model, **kwargs).full
-
-        # Erase the columns with all zeros
-        scatfunc = scatfunc.loc[::, ~scatfunc.eq(0).all()]
-
-        return scatfunc.set_axis(pd.Index(Ein, name="Ein"), axis=0)
 
 
 @nb.jit(nopython=True, cache=True)
@@ -1397,29 +900,28 @@ def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nd
     dtype: float64
     """
     # Get the beta grid:
-    beta = get_beta(Eout, Ein, T)
+    betaAbs = get_beta(Eout, Ein, T)
 
-    # Eout calculation
-    EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
+    # Eout calculation for the absulote beta values:
+    EoutCalc = np.sort(Ein + np.concatenate((-betaAbs[::-1], betaAbs[1::])) * kb * T)
 
     # Ensure the Eout values are positive:
     positiveMask = EoutCalc > 0
     EoutCalc = EoutCalc[positiveMask]
 
     # Interpolation of tauN functions to reduce the number of calculations:
-    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
-
-    # Get the alpha matrix for the Dynamic Structure Factor with the maximun
-    # outgoing energy:
-    Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
+    tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
 
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = phonon_expansion(get_alphaMat(Eout_, Ein, T, M, mu),
+    # Correct alpha values for absolute beta values:
+    sabValues = phonon_expansion(get_alphaMat(Eout, Ein, T, M, mu),
                                  tauN.shape[0],  # number of phonons
                                  tauNinterp, DebyeWallerCoeff)
 
     # Full Dynamic Structure factor values calculation:
-    dynamicStruc = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]
+    dynamicStruc = np.concatenate(
+        (sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-betaAbs[1:])), axis=1
+    )[::, positiveMask]
 
     # Normalization constant
     dynamicStruc *= normFactor(EoutCalc, Ein, T, M)

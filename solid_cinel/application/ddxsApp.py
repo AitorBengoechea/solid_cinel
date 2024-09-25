@@ -33,29 +33,7 @@ def add_DDxsArgs(parser: argparse.ArgumentParser):
                         help='Grid for the scattering angle in degrees')
 
 
-def check_algorithm(algorithm: str):
-    """
-    Check if the algorithm is valid.
-
-    Parameters
-    ----------
-    algorithm : str
-        The algorithm to check.
-
-    Returns
-    -------
-    method
-        The method to use for the calculation.
-    """
-    if algorithm.lower() == "sab":
-        return DDxs.from_Sab
-    elif algorithm.lower() == "4pcf":
-        return DDxs.from_4PCF
-    else:
-        raise ValueError(f'Invalid algorithm: {algorithm}')
-
-
-def handle_DDxsArgs(args: argparse.Namespace) -> np.ndarray:
+def get_DDxs(args: argparse.Namespace) -> DDxs:
     """
     Handle the arguments for the calculation of the double differential scattering
     cross section.
@@ -77,14 +55,51 @@ def handle_DDxsArgs(args: argparse.Namespace) -> np.ndarray:
     # Initialize the Xs class with 0K cross section data
     xs = Xs.from_xs0K(args.xs0K, args.M)
 
-    # Define the method to use
-    method = check_algorithm(args.algorithm)
-
     # Get the extra arguments for Pdos
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
 
     # Compute the function:
-    ddxs = method(xs, args.Ein, args.T, Eout, theta, *argsPdos, model=args.model)
+    if args.algorithm.lower() == "sab":
+        return DDxs.from_Sab(xs, args.Ein, args.T, Eout, theta, *argsPdos,
+                             model=args.model)
+    elif args.algorithm.lower() == "4pcf":
+        return DDxs.from_4PCF(xs, args.Ein, args.T, Eout, theta, *argsPdos,
+                              model=args.model)
+def handle_DDxsArgs(args: argparse.Namespace) -> np.ndarray:
+    """
+    Handle the arguments for the calculation of the double differential scattering
+    cross section.
+
+    Parameters
+    ----------
+    args
+
+    Returns
+    -------
+    np.ndarray
+        An array containing the double differential scattering cross section
+        values.
+    """
 
     # Return the values of the scattering function
-    return ddxs.data.values
+    return get_DDxs(args).data.values
+
+def handle_ScatFuncArgs(args: argparse.Namespace) -> np.ndarray:
+    """
+    Handle the arguments for the calculation of the scattering function.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments.
+
+    Returns
+    -------
+    np.ndarray
+        An array containing the values of the scattering function.
+    """
+    # Return the values of the scattering function
+    return get_DDxs(args).scatFunc.values
+
+def handle_AngleDistrArgs(args: argparse.Namespace) -> np.ndarray:
+    return get_DDxs(args).angleDistr.values

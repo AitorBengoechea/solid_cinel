@@ -11,7 +11,7 @@ from scipy.constants import physical_constants as const
 from typing import Iterable
 from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
 from solid_cinel.core.material.pdos import Pdos
-from solid_cinel.core.xs import Xs, ScatFunc, NucInteract
+from solid_cinel.core.xs import Xs, NucInteract
 from solid_cinel.core.generic import integrate, reshift
 from solid_cinel.core.xs.scatfunc import check_dx
 
@@ -78,6 +78,212 @@ class DDxs:
         dd_pdf_.index.name = "mu"
         dd_pdf_.columns.name = "Eout"
         self._data = dd_pdf_
+
+    @property
+    def values(self) -> np.ndarray:
+        return self.data.values
+
+    @property
+    def Eout(self) -> np.ndarray:
+        """
+        The outgoing energy grid
+
+        Returns
+        -------
+        np.ndarray
+            The outgoing energy grid
+        """
+        return self.data.columns.values
+
+    @property
+    def mu(self) -> np.ndarray:
+        """
+        The outgoing angle grid
+
+        Returns
+        -------
+        np.ndarray
+            The outgoing angle grid
+        """
+        return self.data.index.values
+
+
+    def integrate(self, axis: int) -> pd.Series:
+        """
+        Integrate the Dynamic Structure Factor.
+
+        Parameters
+        ----------
+        axis: int
+            The axis to integrate
+
+        Returns
+        -------
+        pd.Series
+            The integrated Dynamic Structure Factor
+        """
+        return self.data.apply(integrate, axis=axis)
+
+    @property
+    def scatFunc(self) -> pd.Series:
+        """
+        The Scattering function of the Double Differential XS for inelastic
+        scattering
+
+        Returns
+        -------
+        ScatFunc
+            The Scattering function of the Double Differential XS for inelastic
+            scattering
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> theta = np.arange(0, 180, 1)[1::]
+
+        # Angular distribution:
+        >>> DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").scatFunc.data.iloc[::200].round(6)
+        Eout
+        1.80000     0.768794
+        1.88008    10.451361
+        1.96016    54.522950
+        2.04024    34.506930
+        2.12032     2.920481
+        dtype: float64
+        """
+        return self.integral(axis=0)
+
+    @property
+    def angleDist(self) -> pd.Series:
+        """
+        Get angular probability distribution of the Double Differential XS
+
+        Returns
+        -------
+        pd.Series
+            The angular probability distribution of the Double Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> theta = np.arange(0, 180, 15)[1::]
+        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
+        >>> ddxs.angleDist.round(6)
+
+        """
+        return self.integrate(axis=1)
+
+    @property
+    def angleIntegrated(self) -> float:
+        """
+        The integral value of the Double Differential XS
+
+        Returns
+        -------
+        float
+            The integral value of the Double Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> theta = np.arange(0, 180, 1)[1::]
+        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
+        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
+
+        # S(alpha, -beta) algorithm for FGM:
+        >>> float(round(DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").angleIntegrated, 2))
+        9.07
+        """
+        return integrate(self.scatFunc)
+
+    @property
+    def scatFuncNorm(self)-> pd.Series:
+        return self.scatFunc / self.angleIntegrated
+
+    @property
+    def upscattering(self) -> float:
+        scatfunc = self.scatFunc/ self.angleIntegrated
+        return integrate(self.scatFuncNorm[self.Eout > self.Ein])
+
+    @property
+    def downscattering(self) -> float:
+        return integrate(self.scatFuncNorm[self.Eout < self.Ein])
+
+    @property
+    def pdf(self) -> pd.DataFrame:
+        """
+        Get the probability density function of the Double Differential XS
+
+        Returns
+        -------
+        pd.DataFrame
+            The probability density function of the Double Differential XS
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("ddxs.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Generate DDXS test variables:
+        >>> T = 1000
+        >>> Ein = 2.0
+        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
+        >>> theta = np.arange(0, 180, 15)[1::]
+        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
+        >>> ddxs.pdf.iloc[::, ::200].round(6)
+        Eout            1.80000   1.88008   1.96016   2.04024   2.12032
+        mu
+        -9.659258e-01  0.199996  1.364426  2.730286  1.726349  0.368894
+        -8.660254e-01  0.169485  1.313193  2.795112  1.767512  0.356426
+        -7.071068e-01  0.124606  1.218890  2.904967  1.837268  0.333172
+        -5.000000e-01  0.074942  1.069553  3.061712  1.936798  0.295670
+        -2.588190e-01  0.032968  0.854101  3.265153  2.065984  0.240293
+         6.123234e-17  0.008520  0.575864  3.506323  2.219150  0.166594
+         2.588190e-01  0.000812  0.279307  3.747518  2.372410  0.084671
+         5.000000e-01  0.000009  0.066077  3.861538  2.445181  0.021837
+         7.071068e-01  0.000000  0.002427  3.457385  2.189727  0.000966
+         8.660254e-01  0.000000  0.000000  1.696249  1.074497  0.000000
+         9.659258e-01  0.000000  0.000000  0.008420  0.005334  0.000000
+        """
+        return self.data / self.angleIntegrated
 
     @classmethod
     def from_Sab(cls, xs: Xs, Ein: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
@@ -310,204 +516,8 @@ class DDxs:
 
         return cls(Ein, T, xs.M, ddxs)
 
-    @property
-    def angular(self) -> ScatFunc:
-        """
-        The Scattering function of the Double Differential XS for inelastic
-        scattering
 
-        Returns
-        -------
-        ScatFunc
-            The Scattering function of the Double Differential XS for inelastic
-            scattering
 
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("ddxs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> M = 238.05077040419212
-        >>> xs = Xs.from_xs0K("u238.0.2", M)
-        >>> os.chdir(wd)
-
-        # Generate DDXS test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> theta = np.arange(0, 180, 1)[1::]
-
-        # Angular distribution:
-        >>> DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").angular.data.iloc[::200].round(6)
-        Eout
-        1.80000     0.768794
-        1.88008    10.451361
-        1.96016    54.522950
-        2.04024    34.506930
-        2.12032     2.920481
-        dtype: float64
-        """
-        scatfuncValues = self.data.apply(integrate, axis=0)
-        return ScatFunc(self.Ein, self.T, self.M, scatfuncValues)
-
-    @property
-    def integral(self) -> float:
-        """
-        The integral value of the Double Differential XS
-
-        Returns
-        -------
-        float
-            The integral value of the Double Differential XS
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("ddxs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> M = 238.05077040419212
-        >>> xs = Xs.from_xs0K("u238.0.2", M)
-        >>> os.chdir(wd)
-
-        # Generate DDXS test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> theta = np.arange(0, 180, 1)[1::]
-        >>> from solid_cinel.tests.materials.UO2.examples import rho_in_energy_U238, interv_in_energy_U238
-        >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
-
-        # S(alpha, -beta) algorithm for FGM:
-        >>> float(round(DDxs.from_Sab(xs, Ein, T, Eout, theta, model="fgm").integral, 2))
-        9.07
-        """
-        return self.angular.integral
-
-    @property
-    def Eprob(self) -> dict:
-        """
-        Get the upscattering and downscattering probalities
-
-        Returns
-        -------
-        dict
-            Dictionary with the upscattering and downscattering probabilities
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("ddxs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> M = 238.05077040419212
-        >>> xs = Xs.from_xs0K("u238.0.2", M)
-        >>> os.chdir(wd)
-
-        # Generate DDXS test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
-        >>> probabilities = ddxs.Eprob
-        >>> float(round(probabilities["upscattering"], 6))
-        0.389484
-        >>> float(round(probabilities["downscattering"], 6))
-        0.60678
-        >>> float(round(probabilities["Ein=Eout"], 6))
-        0.003736
-        """
-        return self.angular.prob
-
-    @property
-    def AngleProb(self) -> pd.Series:
-        """
-        Get angular probability distribution of the Double Differential XS
-
-        Returns
-        -------
-        pd.Series
-            The angular probability distribution of the Double Differential XS
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("ddxs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> M = 238.05077040419212
-        >>> xs = Xs.from_xs0K("u238.0.2", M)
-        >>> os.chdir(wd)
-
-        # Generate DDXS test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
-        >>> angular_prob = ddxs.AngleProb
-        >>> angular_prob.round(6)
-        mu
-        -9.659258e-01    0.508586
-        -8.660254e-01    0.510186
-        -7.071068e-01    0.512448
-        -5.000000e-01    0.514870
-        -2.588190e-01    0.516993
-         6.123234e-17    0.518607
-         2.588190e-01    0.519829
-         5.000000e-01    0.520860
-         7.071068e-01    0.521737
-         8.660254e-01    0.522412
-         9.659258e-01    0.522836
-        dtype: float64
-        """
-        angular_prob = self.data.apply(integrate, axis=1)
-        return angular_prob / self.integral
-
-    @property
-    def pdf(self) -> pd.DataFrame:
-        """
-        Get the probability density function of the Double Differential XS
-
-        Returns
-        -------
-        pd.DataFrame
-            The probability density function of the Double Differential XS
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("ddxs.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> M = 238.05077040419212
-        >>> xs = Xs.from_xs0K("u238.0.2", M)
-        >>> os.chdir(wd)
-
-        # Generate DDXS test variables:
-        >>> T = 1000
-        >>> Ein = 2.0
-        >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
-        >>> theta = np.arange(0, 180, 15)[1::]
-        >>> ddxs = DDxs.from_Sab(xs, Ein, T, Eout, theta)
-        >>> ddxs.pdf.iloc[::, ::200].round(6)
-        Eout            1.80000   1.88008   1.96016   2.04024   2.12032
-        mu
-        -9.659258e-01  0.199996  1.364426  2.730286  1.726349  0.368894
-        -8.660254e-01  0.169485  1.313193  2.795112  1.767512  0.356426
-        -7.071068e-01  0.124606  1.218890  2.904967  1.837268  0.333172
-        -5.000000e-01  0.074942  1.069553  3.061712  1.936798  0.295670
-        -2.588190e-01  0.032968  0.854101  3.265153  2.065984  0.240293
-         6.123234e-17  0.008520  0.575864  3.506323  2.219150  0.166594
-         2.588190e-01  0.000812  0.279307  3.747518  2.372410  0.084671
-         5.000000e-01  0.000009  0.066077  3.861538  2.445181  0.021837
-         7.071068e-01  0.000000  0.002427  3.457385  2.189727  0.000966
-         8.660254e-01  0.000000  0.000000  1.696249  1.074497  0.000000
-         9.659258e-01  0.000000  0.000000  0.008420  0.005334  0.000000
-        """
-        return self.data / self.integral
 
     def shift(self, dx: [float, np.ndarray, pd.DataFrame], axis: [str, int] = "Eout"):
         """

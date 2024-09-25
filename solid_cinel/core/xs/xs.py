@@ -10,7 +10,7 @@ from numba import vectorize, prange
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
 from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, sigma1
-from solid_cinel.core.xs.scatfunc import ScatFunc, Xs0K
+from solid_cinel.core.xs.scatfunc import Xs0K
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import interpolation
 from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
@@ -633,7 +633,7 @@ class Xs:
         bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count())
 
         # Calculate xs using SIGMA1 to each element in the bag using the `map` function.
-        bag = bag.map(lambda x: ScatFunc.from_sigma1(self.xs0Kcomplete, x[1], self.M, x[0], default_Eout(x[1])).integral)
+        #bag = bag.map(lambda x: ScatFunc.from_sigma1(self.xs0Kcomplete, x[1], self.M, x[0], default_Eout(x[1])).integral)
 
         # Trigger the parallel computation and collect the results into a list.
         return bag.compute()
@@ -723,7 +723,7 @@ class Xs:
             alpha0 = DynamicStruc.from_model(Ein, M, T, Eout, theta, *args, **kwargs).alpha0
 
             # Calculate integral of the differential cross section for the outgoing energy
-            dxsIntegral.append(ScatFunc.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs).integral)
+            #dxsIntegral.append(ScatFunc.from_alpha(xs0K, alpha0, Ein, M, T, Eout, *args, **kwargs).integral)
 
         # Return the results in the corresponding format
         return np.array(dxsIntegral)

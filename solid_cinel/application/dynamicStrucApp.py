@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_Pdos
-from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, TransferFunc
+from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
 
 
 def str_or_float(value):
@@ -11,7 +11,7 @@ def str_or_float(value):
         return value
 
 
-def add_ScatFuncArgs(parser: argparse.ArgumentParser):
+def add_DynamicStrucArgs(parser: argparse.ArgumentParser):
     """
     Add arguments to the parser for the calculation of the scattering function.
 
@@ -33,8 +33,32 @@ def add_ScatFuncArgs(parser: argparse.ArgumentParser):
     parser.add_argument('theta', type=str_or_float,
                         help='Grid for the scattering angle in degrees')
 
+def get_DynamicStruc(args: argparse.Namespace) -> DynamicStruc:
+    """
+    Handle the arguments for the calculation of scattering function.
 
-def handle_ScatFuncArgs(args: argparse.Namespace) -> np.ndarray:
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments.
+
+    Returns
+    -------
+    DynamicStruc
+        The scattering function object.
+    """
+    # Read the data from files:
+    theta = np.loadtxt(args.theta) if isinstance(args.theta, str) else args.theta
+    Eout = np.loadtxt(args.Eout)
+
+    # Get the extra arguments for Pdos
+    argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
+
+    # Compute the function:
+    return DynamicStruc.from_model(args.Ein, args.M, args.T, Eout, theta,
+                                   *argsPdos, model=args.model)
+
+def handle_DynamicStrucArgs(args: argparse.Namespace) -> np.ndarray:
     """
     Handle the arguments for the calculation of scattering function.
 
@@ -48,20 +72,21 @@ def handle_ScatFuncArgs(args: argparse.Namespace) -> np.ndarray:
     np.ndarray
         An array containing the values of the scattering function.
     """
-    # Read the data from files:
-    theta = np.loadtxt(args.theta) if isinstance(args.theta, str) else args.theta
-    Eout = np.loadtxt(args.Eout)
+    return get_DynamicStruc(args).values
 
-    # If theta is a single value, use the TransferFunc class -> 1D array
-    # Otherwise, use the ScatFunc class -> 2D array
-    method = TransferFunc.from_theta if isinstance(theta, (int, float)) else DynamicStruc.from_model
 
-    # Get the extra arguments for Pdos
-    argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
+def handle_TransFuncArgs(args: argparse.Namespace) -> np.ndarray:
+    """
+    Handle the arguments for the calculation of scattering function.
 
-    # Compute the function:
-    scatfunc = method(args.Ein, args.M, args.T, Eout, theta, *argsPdos,
-                      model=args.model)
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed arguments.
 
-    # Return the values of the scattering function
-    return scatfunc.data.values
+    Returns
+    -------
+    np.ndarray
+        An array containing the values of the scattering function.
+    """
+    return get_DynamicStruc(args).transferFunc

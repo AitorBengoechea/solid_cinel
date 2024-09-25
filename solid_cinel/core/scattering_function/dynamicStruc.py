@@ -10,12 +10,11 @@ from numba import float64
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.scattering_function.beta import get_AbsBeta, calc_Beta
-from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder, Alpha
+from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder
 from solid_cinel.core.scattering_function.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
 from typing import Iterable
-from math import pi
 import warnings
 from functools import cached_property
 
@@ -872,61 +871,6 @@ class DynamicStruc(DoubleDiffData):
             return cls.from_sct(Ein, M, T, Eout, mu, *args, **kwargs)
         else:
             return cls.from_fgm(Ein, M, T, Eout, mu)
-
-
-
-@nb.jit(nopython=True, cache=True)
-def sigma1(Eout: float, Ein: float, T: float, M: float):
-    """
-    Sigma1 function for Energy differential Transfer function
-    ..math::
-           S(E, E^\prime, M, T) = \frac{1}{2}\sqrt{\frac{M}{m\pi k_BT}}\frac{\sqrt{E^\prime}}{E}\left(exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} - \sqrt{E^\prime}\right)^2 \right) - exp\left(\frac{-M}{m k_B T}\left(\sqrt{E} + \sqrt{E^\prime}\right)^2 \right)\right)
-
-    Parameters
-    ----------
-    Eout : np.array
-        Outgoing energy grid in eV
-    Ein : float
-        Incoming energy in eV
-    T : float
-        Temperature in K
-    M :
-        Mass of the target in amu
-
-    Returns
-    -------
-    scatfunc : np.array
-        Transfer function based on sigma1 model
-
-    Examples
-    --------
-    >>> Ein = 7.2
-    >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-    >>> T = 1000
-    >>> M = 238.05077040419212
-    >>> transferFunc = sigma1(Eout, Ein, T, M)
-    >>> pd.Series(transferFunc, index=Eout).round(6)
-    6.7554    0.000000
-    6.9050    0.001153
-    7.0439    0.522804
-    7.2000    5.501786
-    7.3157    1.568599
-    7.4480    0.017808
-    dtype: float64
-    """
-    # Define the constants:
-    AkbT = M / (m * kb * T)
-    EinSqrt = np.sqrt(Ein)
-    EoutSqrt = np.sqrt(Eout)
-
-    # Get the negative exponential part:
-    exponetials = np.exp(- AkbT * (EinSqrt - EoutSqrt) ** 2)
-
-    # Get the positive exponential part:
-    exponetials -= np.exp(- AkbT * (EinSqrt + EoutSqrt) ** 2)
-
-    # Calculate the Transfer function:
-    return exponetials * np.sqrt(AkbT / pi) * EoutSqrt / Ein / 2
 
 
 @nb.jit(float64[:](float64[:], float64, float64, float64),

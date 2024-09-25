@@ -13,7 +13,7 @@ from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, Doub
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.xs import Xs, NucInteract
 from solid_cinel.core.generic import integrate, reshift
-from solid_cinel.core.xs.scatfunc import check_dx
+from solid_cinel.core.xs.xs0K import check_dx
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]

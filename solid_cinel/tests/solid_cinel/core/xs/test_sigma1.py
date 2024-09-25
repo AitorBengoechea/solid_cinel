@@ -2,7 +2,7 @@ import pytest
 import os
 import pandas as pd
 from solid_cinel import default_Eout
-from solid_cinel.core.xs.scatfunc import ScatFunc
+from solid_cinel.core.xs.xs0K import ScatFunc
 
 
 @pytest.mark.parametrize("T", [300, 1000])

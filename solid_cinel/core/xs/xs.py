@@ -9,10 +9,8 @@ import numba as nb
 from numba import vectorize
 from scipy.constants import physical_constants as const
 from typing import Iterable, Union
-
-from solid_cinel import default_Eout, XsMat_sigma1
 from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
-from solid_cinel.core.xs.scatfunc import Xs0K
+from solid_cinel.core.xs.xs0K import Xs0K
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import interpolation
 from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
@@ -144,8 +142,8 @@ class XsData:
         Ein, T = np.array(Ein), np.array(T)
         # Create the matrix to store the results
         xsDb = np.zeros((len(Ein), len(T)))
-        XsMat_sigma1(Ein, T, self.xs0K.M, self.xs0K.values, self.xs0K.EinGrid,
-                     xsDb)
+        #XsMat_sigma1(Ein, T, self.xs0K.M, self.xs0K.values, self.xs0K.EinGrid,
+        #             xsDb)
 
         return xsDb
 
@@ -1310,3 +1308,53 @@ def EinMat4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
     """
     EinArno = (Eout + Ein + get_alphaRecoil(Eout, Ein, M, mu) / (1 - mu)) / 2
     return EinArno - Ein * mu * m / M
+
+@nb.jit(nopython=True, cache=True)
+def default_Eout(Ein: float) -> np.ndarray:
+    """
+    Generate the default Eout grid for the convolution. The grid is tested with
+    NJOY values to ensure a relative difference smaller than 0.4%
+
+    Parameters
+    ----------
+    Ein : float
+        Incident energy in eV
+
+    Returns
+    -------
+    Eout : ndarray
+        Outgoing energy grid in eV
+
+    Examples
+    --------
+    Test the default Eout with NJOY values:
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> xs0K = Xs.read_xs("u238.0.2")
+    >>> os.chdir(wd)
+
+    # Generate Broadening test results:
+    >>> T = 1000
+    >>> Ein = 2.0
+    >>> Eout = default_Eout(Ein)
+    >>> M = 238.05077040419212
+    >>> float(round(ScatFunc.from_sigma1(xs0K, Ein, M, T, Eout).integral, 2))
+    9.09
+    """
+    EoutSmall = np.linspace(0,
+                             0.99 * Ein,
+                             2000)
+    EoutMid = np.linspace(0.99 * Ein,
+                          Ein * 1.01,
+                              3000)
+    if Ein * 2 < 5.0:
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
+                                np.log10(5.0),
+                                 2000)
+    else:
+        EoutGreat = np.logspace(np.log10(Ein * 1.01),
+                                 np.log10(2 * Ein),
+                                 2000)
+    return np.unique(np.concatenate((EoutGreat, EoutSmall, EoutMid)))

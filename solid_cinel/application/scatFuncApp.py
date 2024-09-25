@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_Pdos
 from solid_cinel.application.dynamicStrucApp import str_or_float
-from solid_cinel.core.xs.scatfunc import ScatFunc
+from solid_cinel.core.xs.xs0K import ScatFunc
 from solid_cinel.core.xs.xs import Xs
 
 

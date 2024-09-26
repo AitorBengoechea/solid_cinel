@@ -446,7 +446,7 @@ class DynamicStruc(DoubleDiffData):
         return super().columsIntegral
 
     @property
-    def angleDist(self):
+    def angularDistr(self):
         """
         Return the angle distribution of the Dynamic Structure Factor.
 
@@ -464,7 +464,7 @@ class DynamicStruc(DoubleDiffData):
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> mu = np.cos(np.deg2rad(theta))
         >>> dynamicStructure = DynamicStruc.from_fgm(Ein, M, T, Eout, mu)
-        >>> dynamicStructure.angleDist.round(6)
+        >>> dynamicStructure.angularDistr.round(6)
         mu
         -9.659258e-01    0.480322
         -8.660254e-01    0.482041

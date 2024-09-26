@@ -455,10 +455,8 @@ class DDxs(DoubleDiffData):
         else:
             xsMat = xs.get_4PCFxs(Ein, T, Eout_, theta, *args, **kwargs)
 
-        # Convolve the scattering function with the cross section matrix:
-        ddxs = dynamicStruc * xsMat
-
-        return cls(Ein, T, xs.M, ddxs)
+        # Convolve the dynamic structure with the nuclear Interaction:
+        return cls(Ein, T, xs.M, dynamicStruc * xsMat)
 
 
 

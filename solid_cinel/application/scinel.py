@@ -2,8 +2,8 @@ import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_PdosArgs, add_TeffArgs, handle_TeffArgs
 from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
-from solid_cinel.application.dynamicStrucApp import add_DynamicStrucArgs, handle_DynamicStrucArgs, handle_TransFuncArgs
-from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs, handle_AngleDistrArgs, handle_ScatFuncArgs
+from solid_cinel.application.dynamicStrucApp import add_DynamicStrucArgs, handle_DynamicStrucArgs
+from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs
 from solid_cinel.application.xscohApp import add_BraggEdgesArgs, handle_xsCohArgs, handle_BraggEdgesArgs
 
 # Map keywords to their respective functions
@@ -16,25 +16,13 @@ KEYWORD_TO_FUNCTION_MAP = {
         "add": add_SabArgs,
         "handle": handle_SabArgs,
     },
-    "ddxs": {
-        "add": add_DDxsArgs,
-        "handle": handle_DDxsArgs,
-    },
-    "scatfunc": {
-        "add": add_DDxsArgs,
-        "handle": handle_ScatFuncArgs,
-    },
-    "angledistr": {
-        "add": add_DDxsArgs,
-        "handle": handle_AngleDistrArgs,
-    },
     "dynamicstruc": {
         "add": add_DynamicStrucArgs,
         "handle": handle_DynamicStrucArgs,
     },
-    "transferfunc": {
-        "add": add_DynamicStrucArgs,
-        "handle": handle_TransFuncArgs,
+    "ddxs": {
+        "add": add_DDxsArgs,
+        "handle": handle_DDxsArgs,
     },
     "xscoh": {
         "add": add_BraggEdgesArgs,
@@ -96,7 +84,7 @@ def handle_args(keyword: str, args: argparse.Namespace) -> np.ndarray:
         raise ValueError(f'Invalid keyword: {keyword}')
 
 
-def merge_namespaces(ns1, ns2):
+def merge_namespaces(ns1, ns2) -> argparse.Namespace:
     """
     Merge two argparse.Namespace objects.
 
@@ -157,7 +145,7 @@ def get_results(args: argparse.Namespace, remaining_args: list) -> np.ndarray:
     return handle_args(args.keyword, argsDyn)
 
 
-def write_results(results: np.array, keyword: str):
+def write_results(results: np.array, keyword: str) -> None:
     """
     Write the results to a file.
 
@@ -175,9 +163,12 @@ def write_results(results: np.array, keyword: str):
     if keyword.lower() == 'teff':
         # Reshape your 1D array into a 2D array with one row
         results = results[np.newaxis, ::]
-
-    # Save the results in a file
-    np.savetxt(f'{keyword}', results)
+    if isinstance(results, dict):
+        for key, value in results.items():
+            # Save the results in a file
+            np.savetxt(f'{keyword}_{key}', value)
+    else:
+        np.savetxt(f'{keyword}', results)
 
 
 def main(*command_manual_args: list, write_to_file=True):

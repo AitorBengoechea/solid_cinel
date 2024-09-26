@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_Pdos
-from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc
+from solid_cinel.core.dynamic_structure.dynamicStruc import DynamicStruc
 
 
 def str_or_float(value):
@@ -32,6 +32,10 @@ def add_DynamicStrucArgs(parser: argparse.ArgumentParser):
                         help='Grid for the output energy in eV')
     parser.add_argument('theta', type=str_or_float,
                         help='Grid for the scattering angle in degrees')
+    parser.add_argument('--output', type=str, nargs='+',
+                        choices=['dynamicStruc', 'transferFunc', 'angularDistr'],
+                        default=['dynamicStruc'],
+                        help='What to return: dynamicStruc, transferFunc, angularDistr')
 
 def get_DynamicStruc(args: argparse.Namespace) -> DynamicStruc:
     """
@@ -58,7 +62,7 @@ def get_DynamicStruc(args: argparse.Namespace) -> DynamicStruc:
     return DynamicStruc.from_model(args.Ein, args.M, args.T, Eout, theta,
                                    *argsPdos, model=args.model)
 
-def handle_DynamicStrucArgs(args: argparse.Namespace) -> np.ndarray:
+def handle_DynamicStrucArgs(args: argparse.Namespace) -> dict:
     """
     Handle the arguments for the calculation of scattering function.
 
@@ -72,21 +76,12 @@ def handle_DynamicStrucArgs(args: argparse.Namespace) -> np.ndarray:
     np.ndarray
         An array containing the values of the scattering function.
     """
-    return get_DynamicStruc(args).values
-
-
-def handle_TransFuncArgs(args: argparse.Namespace) -> np.ndarray:
-    """
-    Handle the arguments for the calculation of scattering function.
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        The parsed arguments.
-
-    Returns
-    -------
-    np.ndarray
-        An array containing the values of the scattering function.
-    """
-    return get_DynamicStruc(args).transferFunc
+    result = {}
+    dynamicStructure = get_DynamicStruc(args)
+    if 'dynamicStruc' in args.output:
+        result['values'] = dynamicStructure.values
+    if 'transferFunc' in args.output:
+        result['transferFunc'] = dynamicStructure.transferFunc
+    if 'angleDistr' in args.output:
+        result['angleDistr'] = dynamicStructure.angularDistr
+    return result

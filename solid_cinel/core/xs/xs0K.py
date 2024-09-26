@@ -6,7 +6,7 @@ Python for working with Diferential XS.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange, float64
+from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import interpolation, reshape_differential, to_arrays
 import os

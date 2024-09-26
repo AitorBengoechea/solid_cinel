@@ -9,9 +9,9 @@ import numba as nb
 from numba import float64
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
-from solid_cinel.core.scattering_function.beta import get_AbsBeta, calc_Beta
-from solid_cinel.core.scattering_function.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder
-from solid_cinel.core.scattering_function.sab import get_SabSct, phonon_expansion
+from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_Beta
+from solid_cinel.core.dynamic_structure.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder
+from solid_cinel.core.dynamic_structure.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
 from typing import Iterable

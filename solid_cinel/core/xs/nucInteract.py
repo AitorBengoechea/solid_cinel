@@ -4,10 +4,10 @@ import numba as nb
 import os
 from scipy.constants import physical_constants as const
 from typing import Iterable
-from solid_cinel.core.scattering_function.alpha import get_alphaRecoil
+from solid_cinel.core.dynamic_structure.alpha import get_alphaRecoil
 from solid_cinel.core.xs.xs0K import Xs0K
 from solid_cinel.core.generic import interpolation, to_arrays
-from solid_cinel.core.scattering_function.dynamicStruc import DoubleDiffData
+from solid_cinel.core.dynamic_structure.dynamicStruc import DoubleDiffData
 
 
 # constants

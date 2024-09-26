@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import os
 import pandas as pd
-from solid_cinel.core.scattering_function import DynamicStruc
+from solid_cinel.core.dynamic_structure import DynamicStruc
 from solid_cinel.core.generic import integrate
 
 

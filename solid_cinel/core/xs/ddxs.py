@@ -8,7 +8,7 @@ import pandas as pd
 import numba as nb
 import os
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function.dynamicStruc import DynamicStruc, DoubleDiffData
+from solid_cinel.core.dynamic_structure.dynamicStruc import DynamicStruc, DoubleDiffData
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.xs.nucInteract import NucInteract
 from solid_cinel.core.generic import integrate, reshift

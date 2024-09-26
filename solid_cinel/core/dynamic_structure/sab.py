@@ -7,8 +7,8 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential, interp_multyParallel
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNfunc, get_tauNbeta
-from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.scattering_function.alpha import Alpha, get_expansionOrder
+from solid_cinel.core.dynamic_structure.beta import Beta
+from solid_cinel.core.dynamic_structure.alpha import Alpha, get_expansionOrder
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -96,28 +96,6 @@ class Sab:
         """
         return Alpha(self.data.index.values)
 
-    @staticmethod
-    def check_alpha(alpha: Union[Alpha, Iterable, str]) -> Alpha:
-        """
-        Generate the Alpha class for the creation of S(alpha, beta) table.
-
-        Parameters
-        ----------
-        alpha : Union[Alpha, Iterable, str]
-            Alpha grid information in different formats.
-
-        Returns
-        -------
-        Alpha
-            Alpha class with the alpha grid information.
-        """
-        if isinstance(alpha, Alpha):
-            return alpha
-        elif isinstance(alpha, str):
-            return Alpha.from_file(alpha)
-        else:
-            return Alpha(alpha)
-
     @property
     def beta(self) -> Beta:
         """
@@ -125,56 +103,6 @@ class Sab:
         matrix
         """
         return Beta(self.data.columns.values)
-
-    @staticmethod
-    def check_beta(beta: Union[Beta, Iterable, str]) -> Beta:
-        """
-        Generate the Beta class for the creation of S(alpha, beta) table.
-
-        Parameters
-        ----------
-        beta : Union[Beta, Iterable, str]
-            Beta grid information in different formats.
-
-        Returns
-        -------
-        Beta
-            Beta class with the beta grid information in absolute values.
-        """
-        # Create the Beta class:
-        if isinstance(beta, Beta):
-            beta_ = beta
-        elif isinstance(beta, str):
-            beta_ = Beta.from_file(beta)
-        else:
-            beta_ = Beta(beta)
-
-        # Check if the beta grid is absolute or not:
-        if beta_.kind == "abs":
-            return beta_
-        else:
-            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
-
-    @classmethod
-    def setup_alpha_beta(cls, alpha: Union[Beta, Iterable, str],
-                          beta: Union[Beta, Iterable, str]) -> [np.array, np.array]:
-        """
-        Setup the Alpha and Beta grids for the calculation of S(alpha, -beta) matrix.
-
-        Parameters
-        ----------
-        alpha : Union[Beta, Iterable, str]
-            Alpha grid information in different formats.
-        beta : Union[Beta, Iterable, str]
-            Beta grid information in different formats.
-
-        Returns
-        -------
-        np.array, np.array
-            Alpha and Beta grid arrays.
-        """
-        # Get the Alpha and Beta classes:
-        return cls.check_alpha(alpha).data, cls.check_beta(beta).data
 
     @property
     def data(self) -> pd.DataFrame:
@@ -204,41 +132,62 @@ class Sab:
         # save the data:
         self._data = df_
 
-    def to_sym(self, detail_balance: bool = True) -> pd.DataFrame:
+    @property
+    def values(self) -> np.ndarray:
+        """Return the values of the S(alpha, -beta) matrix."""
+        return self.data.values
+
+
+    @staticmethod
+    def check_alpha(alpha: Union[Alpha, Iterable, str]) -> Alpha:
         """
-        Generate the symmetric S(alpha, -beta) matrix from the asymmetric
-        S(alpha, -beta) matrix.
+        Generate the Alpha class for the creation of S(alpha, beta) table.
 
         Parameters
         ----------
-        detail_balance : 'bool', optional
-            Relationships between upscatter and downscatter. The default is
-            True.
+        alpha : Union[Alpha, Iterable, str]
+            Alpha grid information in different formats.
 
         Returns
         -------
-        "pd.DataFrame"
-            Dataframe containing the symmetric S(alpha, -beta) matrix.
-
-        Example:
-        --------
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        beta      0.000000  0.012894  0.025788  0.038682  0.051576
-        alpha
-        0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
-        0.001087  8.553363  8.232522  7.340419  6.063184  4.639515
-        0.001125  8.407781  8.102844  7.252800  6.029567  4.655632
-        0.001164  8.264674  7.974859  7.164978  5.993787  4.668553
-        0.001205  8.124000  7.848564  7.077028  5.955964  4.678361
-        0.001247  7.985718  7.723951  6.989018  5.916214  4.685142
-        0.001291  7.849787  7.601016  6.901017  5.874652  4.688985
-        0.001336  7.716166  7.479752  6.813088  5.831389  4.689983
-        0.001382  7.584817  7.360149  6.725291  5.786534  4.688230
-        0.001431  7.455701  7.242199  6.637682  5.740191  4.683821
+        Alpha
+            Alpha class with the alpha grid information.
         """
-        return self.data * np.exp(- self.beta.data / 2) if detail_balance else self.data
+        if isinstance(alpha, Alpha):
+            return alpha
+        elif isinstance(alpha, str):
+            return Alpha.from_file(alpha)
+        else:
+            return Alpha(alpha)
+
+    @staticmethod
+    def check_beta(beta: Union[Beta, Iterable, str]) -> Beta:
+        """
+        Generate the Beta class for the creation of S(alpha, beta) table.
+
+        Parameters
+        ----------
+        beta : Union[Beta, Iterable, str]
+            Beta grid information in different formats.
+
+        Returns
+        -------
+        Beta
+            Beta class with the beta grid information in absolute values.
+        """
+        # Create the Beta class:
+        if isinstance(beta, Beta):
+            beta_ = beta
+        elif isinstance(beta, str):
+            beta_ = Beta.from_file(beta)
+        else:
+            beta_ = Beta(beta)
+
+        # Check if the beta grid is absolute or not:
+        if beta_.kind == "abs":
+            return beta_
+        else:
+            raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
 
     @property
     def full(self) -> [pd.Series, pd.DataFrame]:
@@ -307,6 +256,102 @@ class Sab:
                 return 1.0
             else:
                 return ratio
+
+    @staticmethod
+    def SumRule_check(S: pd.DataFrame) -> None:
+        """
+        Check if the S(alpha, beta) matrix satifies the sum rule constrain.
+        .. math::
+            \int_{-\infty}^{\infty}\beta S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(1-\exp(-\beta))d\beta = \alpha
+
+        For SCT and for phonon expansion, the normalization is only satisfy to
+        large alpha values, for the rest:
+        .. math::
+            \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(-1+\exp(-\beta))d\beta = -\alpha
+
+        Parameters
+        ----------
+        S : 'pd.DataFrame', (N, M)
+            S(alpha, beta) matrix.
+
+        Returns
+        -------
+        "None"
+            If the sum rule is not satisfied with good accuracy a warning is
+            raise. If the accuracy is very low, a ValueError will be raise.
+
+        Raises
+        ------
+        ValueError
+            The sum rule constrain is not satified.
+
+        """
+        # Check the sum rule:
+        SumRule = S.apply(_SumRule, axis="columns")
+        SumRule /= S.index.values
+        if (abs(1 - abs(SumRule)) > 0.6).any():
+            raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
+        if (abs(1 - abs(SumRule)) > 1.0e-3).any():
+            warnings.warn(
+                "Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
+        return
+
+    def NormCheck(self, S: pd.DataFrame) -> None:
+        """
+        Check if the S(alpha, beta) matrix satifies the normalization constrain.
+        .. math::
+            \int_{-\infty}^{\infty}S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}S(\alpha,\,-\beta)(1+\exp(-\beta))d\beta = 1
+
+        For SCT and for phonon expansion, the normalization is only satisfy to
+        large alpha values, for the rest:
+        .. math::
+            \int_{0}^{\infty}S(\alpha,\,-\beta)(1+\exp(-\beta))d\beta = 1 - \exp(-\alpha\lambda)
+
+        Parameters
+        ----------
+        S : 'pd.DataFrame', (N, M)
+            S(alpha, beta) matrix.
+
+        Returns
+        -------
+        "None"
+            If the normalization is not satisfied with good accuracy a warning
+            is raise. If the accuracy is very low, a ValueError will be raise.
+
+        Raises
+        ------
+        ValueError
+            The normalization constrain is not satified.
+
+        """
+        # Check the normalization:
+        norm = S.apply(_norm, axis="columns")
+        norm /= 1 - np.exp(- S.index.values * self.DebyeWallerCoeff)
+        if (abs(norm - 1.0) > 1.0e-2).any():
+            warnings.warn(
+                "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
+        return
+
+    @classmethod
+    def setup_alpha_beta(cls, alpha: Union[Beta, Iterable, str],
+                          beta: Union[Beta, Iterable, str]) -> [np.array, np.array]:
+        """
+        Setup the Alpha and Beta grids for the calculation of S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        alpha : Union[Beta, Iterable, str]
+            Alpha grid information in different formats.
+        beta : Union[Beta, Iterable, str]
+            Beta grid information in different formats.
+
+        Returns
+        -------
+        np.array, np.array
+            Alpha and Beta grid arrays.
+        """
+        # Get the Alpha and Beta classes:
+        return cls.check_alpha(alpha).data, cls.check_beta(beta).data
 
     @classmethod
     def from_fgm(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
@@ -810,80 +855,42 @@ class Sab:
         alpha = Alpha.from_recoil(Ein, T, M)
         return cls.from_model(alpha, beta, T, *args, model=model, **kwargs)
 
-    @staticmethod
-    def SumRule_check(S: pd.DataFrame) -> None:
+    def to_sym(self, detail_balance: bool = True) -> pd.DataFrame:
         """
-        Check if the S(alpha, beta) matrix satifies the sum rule constrain.
-        .. math::
-            \int_{-\infty}^{\infty}\beta S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(1-\exp(-\beta))d\beta = \alpha
-
-        For SCT and for phonon expansion, the normalization is only satisfy to
-        large alpha values, for the rest:
-        .. math::
-            \int_{0}^{\infty}\beta S(\alpha,\,-\beta)(-1+\exp(-\beta))d\beta = -\alpha
+        Generate the symmetric S(alpha, -beta) matrix from the asymmetric
+        S(alpha, -beta) matrix.
 
         Parameters
         ----------
-        S : 'pd.DataFrame', (N, M)
-            S(alpha, beta) matrix.
+        detail_balance : 'bool', optional
+            Relationships between upscatter and downscatter. The default is
+            True.
 
         Returns
         -------
-        "None"
-            If the sum rule is not satisfied with good accuracy a warning is
-            raise. If the accuracy is very low, a ValueError will be raise.
+        "pd.DataFrame"
+            Dataframe containing the symmetric S(alpha, -beta) matrix.
 
-        Raises
-        ------
-        ValueError
-            The sum rule constrain is not satified.
-
+        Example:
+        --------
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha = Alpha.generate_grid(300, 26).data
+        >>> Sab.from_fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
+        0.001087  8.553363  8.232522  7.340419  6.063184  4.639515
+        0.001125  8.407781  8.102844  7.252800  6.029567  4.655632
+        0.001164  8.264674  7.974859  7.164978  5.993787  4.668553
+        0.001205  8.124000  7.848564  7.077028  5.955964  4.678361
+        0.001247  7.985718  7.723951  6.989018  5.916214  4.685142
+        0.001291  7.849787  7.601016  6.901017  5.874652  4.688985
+        0.001336  7.716166  7.479752  6.813088  5.831389  4.689983
+        0.001382  7.584817  7.360149  6.725291  5.786534  4.688230
+        0.001431  7.455701  7.242199  6.637682  5.740191  4.683821
         """
-        # Check the sum rule:
-        SumRule = S.apply(_SumRule, axis="columns")
-        SumRule /= S.index.values
-        if (abs(1 - abs(SumRule)) > 0.6).any():
-            raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
-        if (abs(1 - abs(SumRule)) > 1.0e-3).any():
-            warnings.warn(
-                "Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
-        return
+        return self.data * np.exp(- self.beta.data / 2) if detail_balance else self.data
 
-    def NormCheck(self, S: pd.DataFrame) -> None:
-        """
-        Check if the S(alpha, beta) matrix satifies the normalization constrain.
-        .. math::
-            \int_{-\infty}^{\infty}S(\alpha,\,\beta)d\beta = \int_{0}^{\infty}S(\alpha,\,-\beta)(1+\exp(-\beta))d\beta = 1
-
-        For SCT and for phonon expansion, the normalization is only satisfy to
-        large alpha values, for the rest:
-        .. math::
-            \int_{0}^{\infty}S(\alpha,\,-\beta)(1+\exp(-\beta))d\beta = 1 - \exp(-\alpha\lambda)
-
-        Parameters
-        ----------
-        S : 'pd.DataFrame', (N, M)
-            S(alpha, beta) matrix.
-
-        Returns
-        -------
-        "None"
-            If the normalization is not satisfied with good accuracy a warning
-            is raise. If the accuracy is very low, a ValueError will be raise.
-
-        Raises
-        ------
-        ValueError
-            The normalization constrain is not satified.
-
-        """
-        # Check the normalization:
-        norm = S.apply(_norm, axis="columns")
-        norm /= 1 - np.exp(- S.index.values * self.DebyeWallerCoeff)
-        if (abs(norm - 1.0) > 1.0e-2).any():
-            warnings.warn(
-                "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
-        return
 
     def update_data(self, sabNew: pd.DataFrame, inplace: bool, axis: int):
         """

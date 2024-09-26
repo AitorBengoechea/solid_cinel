@@ -5,7 +5,7 @@ Python file for working with alpha function.
 @author: AB272525
 """
 from scipy.constants import physical_constants as const
-from solid_cinel.core.scattering_function.beta import Beta
+from solid_cinel.core.dynamic_structure.beta import Beta
 from solid_cinel.core.material.pdos import Pdos
 from typing import Iterable, Union
 import numpy as np

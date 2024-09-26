@@ -103,12 +103,10 @@ class BaseTestScinel(unittest.TestCase):
         # Check the results
         expected_result.check_results(self.get_results(*command_line))
 
+
 class Expected_result:
     def __init__(self, expected_result):
         self.expected_result = expected_result
-        self.check_method = {
-            "values": self.expected_result.values,
-        }
 
     @classmethod
     def from_method(cls, method, *args, **kwargs):
@@ -121,8 +119,8 @@ class Expected_result:
     def check_results(self, other):
         if isinstance(other, dict):
             for key, value in other.items():
-                if key in self.check_method:
-                    np.testing.assert_array_equal(self.check_method[key], value)
+                expected_value = getattr(self.expected_result, key)
+                np.testing.assert_array_equal(expected_value, value)
         else:
             np.testing.assert_array_equal(self.expected_result, other)
 
@@ -411,10 +409,13 @@ class TestScinelBraggEdges(BaseTestScinel):
         Test the coherent cross section calculation
         """
         # Generate the expected result
-        expected_result = self.calc_BraggEdges()
+        expected_result = Expected_result.from_array(self.calc_BraggEdges())
+
+        # Get the results
+        results = self.get_results(*self.get_command)
 
         # Check the results
-        self.check_results(expected_result, *self.get_command)
+        expected_result.check_results(results)
 
 
 class TestScinelXsCoh(TestScinelBraggEdges):
@@ -440,10 +441,13 @@ class TestScinelXsCoh(TestScinelBraggEdges):
         Test the coherent cross section calculation
         """
         # Generate the expected result
-        expected_result = self.calc_xsCoh()
+        expected_result = Expected_result.from_array(self.calc_xsCoh())
+
+        # Get the results
+        results = self.get_results(*self.get_command)
 
         # Check the results
-        self.check_results(expected_result, *self.get_command)
+        expected_result.check_results(results)
 
 
 if __name__ == '__main__':

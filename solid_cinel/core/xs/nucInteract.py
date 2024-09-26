@@ -30,10 +30,7 @@ def apply_mod(func):
         The 4PCF model energy interaction function with the modification factor
     """
     def wrapper(Ein: float, Eout: np.ndarray, mu: np.ndarray, M: float) -> np.ndarray:
-        mu_ = InteractEnergy.check_mu(mu)
-        recoilMod = InteractEnergy.get_4PCFmod(Ein, Eout, mu_, M)
-        EinMat = func(Ein, Eout, mu_, M)
-        return EinMat + recoilMod
+        return func(Ein, Eout, mu, M) + InteractEnergy.get_4PCFmod(Ein, Eout, mu, M)
     return wrapper
 
 
@@ -115,7 +112,8 @@ class InteractTemp:
         return Tstar
 
     @staticmethod
-    def from_4PCF(T: float, theta: np.ndarray, *args, approx: bool = True) -> np.ndarray:
+    def from_4PCF(T: float, mu: np.ndarray, *args,
+                  approx: bool = True) -> [pd.DataFrame, pd.Series]:
         """
         Calculate the interaction temperature from the 4PCF model.
 
@@ -171,10 +169,28 @@ class InteractTemp:
             return InteractTemp.from_strict4PCF(T, mu[::, np.newaxis], *args)
 
 
-class InteractEnergy:
+class InteractEnergy(DoubleDiffData):
     """
     Class to calculate the interaction energy of a material.
     """
+
+    def __init__(self, approx: bool, kind: bool, *args, **kwargs):
+        """
+        Initialize the interaction energy data.
+
+        Parameters
+        ----------
+        data: Iterable
+            The interaction energy data
+        kind: str
+            The type of calculation performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
+        """
+        super().__init__(*args, **kwargs)
+        self.kind = kind
+        self.approx = approx
 
     @staticmethod
     def check_mu(mu: np.ndarray) -> np.ndarray:
@@ -474,8 +490,7 @@ class InteractEnergy:
          0.50  0.751680  0.952015  1.002119  1.052227  1.252702  1.503360
          0.75  0.750931  0.951011  1.001059  1.051116  1.251404  1.501862
         """
-        mu_ = InteractEnergy.check_mu(mu)
-        return (InteractEnergy.correct_Eout(Eout, Ein, M, mu_) + Ein) / 2
+        return (InteractEnergy.correct_Eout(Eout, Ein, M, mu) + Ein) / 2
 
     @staticmethod
     def corr4PCFstrict(Ein: float, Eout: np.ndarray, mu: np.ndarray,
@@ -515,16 +530,16 @@ class InteractEnergy:
          0.50  0.595089  0.946971  1.002119  1.047259  1.153623  1.185940
          0.75  0.467472  0.940740  1.001059  1.041413  1.061775  0.930707
         """
-        mu_ = InteractEnergy.check_mu(mu)
         Esqrt = np.sqrt(Ein * Eout)
-        Ediff = InteractEnergy.correct_Eout(Eout, Ein, M, mu_) - Ein
+        Ediff = InteractEnergy.correct_Eout(Eout, Ein, M, mu) - Ein
+        mu_ = InteractEnergy.check_mu(mu)
         EinMat = Ein - Ediff * (mu_ * Esqrt - Ein) / (Ein + Eout - 2 * mu_ * Esqrt)
         return EinMat
 
-    @staticmethod
-    def from_4PCF(Ein: float, Eout: np.ndarray, mu: np.ndarray,
+    @classmethod
+    def from_4PCF(cls, Ein: float, Eout: np.ndarray, mu: np.ndarray,
                   M: float, approx: bool = True,
-                  kind: str = "corrected") -> np.ndarray:
+                  kind: str = "corrected") -> "InteractEnergy":
         """
         Calculate the interaction energy from the 4PCF model.
 
@@ -561,8 +576,9 @@ class InteractEnergy:
 
         # Approximate original 4PCF model
         >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, kind="original")
-        >>> EinMat
-                    0.5       0.9       1.0       1.1       1.5       2.0
+        >>> EinMat.data
+        Eout        0.5       0.9       1.0       1.1       1.5       2.0
+        mu
         -1.00  0.754237  0.954237  1.004237  1.054237  1.254237  1.504237
         -0.50  0.752119  0.952119  1.002119  1.052119  1.252119  1.502119
          0.00  0.750000  0.950000  1.000000  1.050000  1.250000  1.500000
@@ -571,8 +587,9 @@ class InteractEnergy:
 
         # Approximate modified 4PCF model
         >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, kind="modified")
-        >>> EinMat
-                    0.5       0.9       1.0       1.1       1.5       2.0
+        >>> EinMat.data
+        Eout        0.5       0.9       1.0       1.1       1.5       2.0
+        mu
         -1.00  0.757324  0.958260  1.008474  1.058684  1.259480  1.510411
         -0.50  0.755236  0.956142  1.006356  1.056566  1.257379  1.508353
          0.00  0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
@@ -581,8 +598,9 @@ class InteractEnergy:
 
         # Approximate corrected 4PCF model
         >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, kind="corrected")
-        >>> EinMat
-                    0.5       0.9       1.0       1.1       1.5       2.0
+        >>> EinMat.data
+        Eout        0.5       0.9       1.0       1.1       1.5       2.0
+        mu
         -1.00  0.756174  0.958045  1.008474  1.058893  1.260486  1.512348
         -0.50  0.754676  0.956035  1.006356  1.056671  1.257891  1.509352
          0.00  0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
@@ -591,8 +609,9 @@ class InteractEnergy:
 
         # Strict original 4PCF model
         >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, approx=False, kind="original")
-        >>> EinMat
-                    0.5       0.9       1.0       1.1       1.5       2.0
+        >>> EinMat.data
+        Eout        0.5       0.9       1.0       1.1       1.5       2.0
+        mu
         -1.00  0.708592  0.950676  1.002100  1.051012  1.227317  1.417184
         -0.50  0.694107  0.949241  1.001050  1.049514  1.217727  1.388215
          0.00  0.666667  0.947368  1.000000  1.047619  1.200000  1.333333
@@ -601,8 +620,9 @@ class InteractEnergy:
 
         # Strict modified 4PCF model
         >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, approx=False, kind="modified")
-        >>> EinMat
-                    0.5       0.9       1.0       1.1       1.5       2.0
+        >>> EinMat.data
+        Eout        0.5       0.9       1.0       1.1       1.5       2.0
+        mu
         -1.00  0.711679  0.954698  1.006338  1.055458  1.232560  1.423358
         -0.50  0.697225  0.953265  1.005287  1.053961  1.222988  1.394449
          0.00  0.669845  0.951394  1.004237  1.052068  1.205296  1.339689
@@ -611,8 +631,9 @@ class InteractEnergy:
 
         # Strict corrected 4PCF model
         >>> EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu, M, approx=False, kind="corrected")
-        >>> EinMat
-                    0.5       0.9       1.0       1.1       1.5       2.0
+        >>> EinMat.data
+        Eout        0.5       0.9       1.0       1.1       1.5       2.0
+        mu
         -1.00  0.714340  0.956940  1.008474  1.057490  1.234172  1.424443
         -0.50  0.699100  0.954492  1.006356  1.054871  1.223273  1.393963
          0.00  0.670904  0.951606  1.004237  1.051856  1.204237  1.337571
@@ -620,22 +641,24 @@ class InteractEnergy:
          0.75  0.467472  0.940740  1.001059  1.041413  1.061775  0.930707
         """
         method_dict = {
-                       (True, "corrected"): InteractEnergy.corr4PCFapprox,
-                       (True, "modified"): InteractEnergy.mod4PCFapprox,
-                       (True, "original"): InteractEnergy.original4PCFapprox,
-                       (False, "corrected"): InteractEnergy.corr4PCFstrict,
-                       (False, "modified"): InteractEnergy.mod4PCFstrict,
-                       (False, "original"): InteractEnergy.original4PCFstrict
+                       (True, "corrected"): cls.corr4PCFapprox,
+                       (True, "modified"): cls.mod4PCFapprox,
+                       (True, "original"): cls.original4PCFapprox,
+                       (False, "corrected"): cls.corr4PCFstrict,
+                       (False, "modified"): cls.mod4PCFstrict,
+                       (False, "original"): cls.original4PCFstrict
         }
-        Einteract = method_dict[(approx, kind.lower())](Ein, Eout, mu, M)
-        return pd.DataFrame(Einteract, index=mu, columns=Eout)
+        kind = kind.lower()
+        Einteract = method_dict[(approx, kind)](Ein, Eout, mu, M)
+        return cls(approx, kind, Einteract, index=mu, columns=Eout)
 
 
 class NucInteract(DoubleDiffData):
     """
     Class to calculate the nuclear interaction of the material with the neutron.
     """
-    def __init__(self, xs0K: Xs0K, approx: bool, kind: bool, *args, **kwargs):
+    def __init__(self, xs0K: Xs0K, EinMat: InteractEnergy, *args,
+                 Tinteract: InteractTemp = None, **kwargs):
         """
         Initialize the class with the data.
         Parameters
@@ -643,112 +666,15 @@ class NucInteract(DoubleDiffData):
         data: Iterable
             The data to be stored in the class
         """
-        self.approx = approx
-        self.kind = kind
         self.xs0K = xs0K
-        super.__init__(*args, **kwargs)
-
-    def get_interactEnergy(self, Ein: float, Eout: np.ndarray, approx: bool = True,
-                           kind: str = "corrected") -> pd.DataFrame:
-        """
-        Get the interaction energy of the material in eV.
-
-        Parameters
-        ----------
-        Ein: float
-            The energy of the incident particle in eV
-        Eout: np.ndarray
-            The energy of the outgoing particles in eV
-        mu: np.ndarray
-            The cosine of the angle between the incident and outgoing particles
-        M: float
-            The mass of the target nucleus in amu
-        approx: bool
-            Whether to use the approximation or strict calculation
-        kind: str
-            The type of calculation to be performed. The options are:
-            - "original": Original 4PCF model
-            - "modified": Modified original 4PCF model
-            - "corrected": Corrected 4PCF model
-
-        Returns
-        -------
-        pd.DataFrame
-            The interaction energy of the material in eV
-
-        Examples
-        --------
-        # Example data:
-        >>> T = 300
-        >>> M = 238.05077040419212
-        >>> theta = np.array([30, 60, 90, 120, 150])
-        >>> Ein = 1
-        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
-
-        # Initialize the class
-        >>> nuclearInteraction = NucInteract(M, T, theta)
-
-        # Nuclear interaction energy from original 4PCF model
-        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, kind="original").set_axis(theta[::-1], axis=0)
-                  0.5       0.9       1.0       1.1       1.5       2.0
-        150  0.753670  0.953670  1.003670  1.053670  1.253670  1.503670
-        120  0.752119  0.952119  1.002119  1.052119  1.252119  1.502119
-        90   0.750000  0.950000  1.000000  1.050000  1.250000  1.500000
-        60   0.747881  0.947881  0.997881  1.047881  1.247881  1.497881
-        30   0.746330  0.946330  0.996330  1.046330  1.246330  1.496330
-
-        # Approximate modified 4PCF model
-        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, kind="modified").set_axis(theta[::-1], axis=0)
-                  0.5       0.9       1.0       1.1       1.5       2.0
-        150  0.756763  0.957692  1.007907  1.058116  1.258916  1.509857
-        120  0.755236  0.956142  1.006356  1.056566  1.257379  1.508353
-        90   0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
-        60   0.751241  0.951912  1.002119  1.052335  1.253285  1.504601
-        30   0.750683  0.950392  1.000568  1.050812  1.252319  1.505036
-
-        # Approximate corrected 4PCF model
-        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, kind="corrected").set_axis(theta[::-1], axis=0)
-                  0.5       0.9       1.0       1.1       1.5       2.0
-        150  0.755773  0.957507  1.007907  1.058298  1.259791  1.511545
-        120  0.754676  0.956035  1.006356  1.056671  1.257891  1.509352
-        90   0.753178  0.954025  1.004237  1.054449  1.255296  1.506356
-        60   0.751680  0.952015  1.002119  1.052227  1.252702  1.503360
-        30   0.750583  0.950544  1.000568  1.050600  1.250802  1.501166
-
-        # Strict original 4PCF model
-        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, approx=False, kind="original").set_axis(theta[::-1], axis=0)
-                  0.5       0.9       1.0       1.1       1.5       2.0
-        150  0.705410  0.950314  1.001819  1.050631  1.225179  1.410821
-        120  0.694107  0.949241  1.001050  1.049514  1.217727  1.388215
-        90   0.666667  0.947368  1.000000  1.047619  1.200000  1.333333
-        60   0.591607  0.943748  0.998950  1.044142  1.150694  1.183214
-        30   0.294590  0.928806  0.998181  1.030450  0.917678  0.589179
-
-        # Strict modified 4PCF model
-        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, approx=False, kind="modified").set_axis(theta[::-1], axis=0)
-                  0.5       0.9       1.0       1.1       1.5       2.0
-        150  0.708504  0.954337  1.006056  1.055078  1.230426  1.417008
-        120  0.697225  0.953265  1.005287  1.053961  1.222988  1.394449
-        90   0.669845  0.951394  1.004237  1.052068  1.205296  1.339689
-        60   0.594967  0.947779  1.003187  1.048596  1.156098  1.189933
-        30   0.298942  0.932868  1.002418  1.034932  0.923666  0.597885
-
-        # Strict corrected 4PCF model
-        >>> nuclearInteraction.get_interactEnergy(Ein, Eout, approx=False, kind="corrected").set_axis(theta[::-1], axis=0)
-                  0.5       0.9       1.0       1.1       1.5       2.0
-        150  0.710956  0.956307  1.007907  1.056809  1.231683  1.417675
-        120  0.699100  0.954492  1.006356  1.054871  1.223273  1.393963
-        90   0.670904  0.951606  1.004237  1.051856  1.204237  1.337571
-        60   0.595089  0.946971  1.002119  1.047259  1.153623  1.185940
-        30   0.297518  0.931288  1.000568  1.032746  0.919649  0.590799
-        """
-        # Define the method to calculate the interaction energy in the material
-        # from InteractEnergy class
-        return InteractEnergy.from_4PCF(Ein, Eout, self.mu, self.M, approx, kind)
+        self.EinMat = EinMat
+        self.Tinteract = Tinteract
+        super().__init__(*args, **kwargs)
 
     @classmethod
     def from_sigma(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,
-                  theta: np.ndarray, approx: bool = True, kind: str = "corrected") -> "NucInteract":
+                   theta: np.ndarray, approx: bool = True,
+                   kind: str = "corrected") -> "NucInteract":
         """
         Calculate the cross section from the nuclear interaction of the material.
 
@@ -785,7 +711,7 @@ class NucInteract(DoubleDiffData):
         >>> os.chdir(__file__.replace("nucInteract.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> M = 238.05077040419212
-        >>> xs0K = Xs0K.from_xs0K("u238.0.2", M)
+        >>> xs0K = Xs0K.from_file("u238.0.2", M)
         >>> os.chdir(wd)
 
         # Example data:
@@ -796,15 +722,15 @@ class NucInteract(DoubleDiffData):
         >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
 
         # Initialize the class
-        >>> nuclearInteraction = NucInteract(M, T, theta)
-        >>> nuclearInteraction.from_sigma(xs, Ein, Eout)
-                            0.5       0.9       1.0       1.1       1.5       2.0
+        >>> NucInteract.from_sigma(xs0K, Ein, T, Eout, theta).data
+        Eout                0.5       0.9       1.0       1.1       1.5       2.0
+        mu
         -1.000000e+00  9.308729  9.276303  9.268018  9.259652  9.225313  9.180326
-        -8.660254e-01  9.312016  9.278274  9.269748  9.261169  9.226225  9.180848
-        -5.000000e-01  9.312039  9.279556  9.271239  9.262833  9.228322  9.183091
-         6.123234e-17  9.310983  9.278747  9.270498  9.262162  9.227947  9.183081
-         5.000000e-01  9.310813  9.278633  9.270400  9.262083  9.227958  9.183225
-         8.660254e-01  9.310884  9.278735  9.270511  9.262204  9.228123  9.183458
+        -8.660254e-01  9.327982  9.291117  9.281986  9.272849  9.236044  9.188854
+        -5.000000e-01  9.337630  9.298626  9.289092  9.279592  9.241624  9.193404
+         6.123234e-17  9.347393  9.306268  9.296335  9.286476  9.247357  9.198128
+         5.000000e-01  9.357197  9.313943  9.303611  9.293390  9.253116  9.202873
+         8.660254e-01  9.366945  9.321536  9.310798  9.300210  9.258757  9.207473
         """
         # Calculate mu:
         theta_ = to_arrays(theta)
@@ -819,10 +745,11 @@ class NucInteract(DoubleDiffData):
 
         # Calculate the cross section interaction:
         if 180 in theta_:
-            values0K = xs0K.interpolate(EinMat[0], values=True)
-            valuesTstar = xs0K.nuclearInteract_sigma1(Tinteraction[1:], EinMat[1:])
+            values0K = xs0K.interpolate(EinMat.values[0], values=True)
+            valuesTstar = xs0K.nuclearInteract_sigma1(Tinteraction[1:], EinMat.values[1:])
             interactValues = np.vstack((values0K, valuesTstar))
         else:
-            interactValues = xs0K.nuclearInteract_sigma1(Tinteraction, EinMat)
+            interactValues = xs0K.nuclearInteract_sigma1(Tinteraction, EinMat.values)
 
-        return cls(xs0K, approx, kind, interactValues, index=mu, columns=Eout)
+        return cls(xs0K, EinMat, interactValues, index=mu, columns=Eout,
+                   Tinteract=Tinteraction)

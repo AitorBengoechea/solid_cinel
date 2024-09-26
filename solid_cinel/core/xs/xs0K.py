@@ -512,7 +512,7 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     exponetials -= np.exp(- AkbT * (EinSqrt + EoutSqrt) ** 2)
 
     # Calculate the Transfer function:
-    return exponetials * np.sqrt(AkbT / pi) * EoutSqrt / Ein / 2
+    return 0.5 * exponetials * np.sqrt(AkbT / pi) * EoutSqrt / Ein
 
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
@@ -619,7 +619,7 @@ def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     XsMat[0] += np.trapz(transferFunc, x=EoutMatrix)
 
     # Next interactions with the same Eout grid:
-    for i in range(1, XsMat.shape[1]):
+    for i in range(1, XsMat.shape[0]):
         EoutMatrix[:] = EoutMat(Eincalc[i])
         transferFunc[:] = sigma1(EoutMatrix, Eincalc[i][::, np.newaxis], Tcalc[i], M)
         transferFunc *= np.interp(EoutMatrix, xs0KEin, xs0Kvalues)

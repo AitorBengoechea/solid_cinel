@@ -116,6 +116,30 @@ class DoubleDiffData:
         """
         return self.data.index.values
 
+    @property
+    def shape(self) -> tuple:
+        """
+        The shape of the Double Differential data.
+
+        Returns
+        -------
+        tuple
+            The shape of the Double Differential data
+        """
+        return self.data.shape
+
+    @property
+    def theta(self) -> np.ndarray:
+        """
+        The angle of the distribution in degrees.
+
+        Returns
+        -------
+        np.ndarray
+            The angle of the distribution in degrees
+        """
+        return np.rad2deg(np.arccos(self.mu)).round(6)
+
     def integrate(self, axis: int) -> pd.Series:
         """
         Integrate the Double Differential data.

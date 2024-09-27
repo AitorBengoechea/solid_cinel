@@ -979,8 +979,8 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
                       float64[:, :], float64[:], float64),
         nopython=True, cache=True)
 def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
-                    tauN: np.ndarray, tauNbeta: np.ndarray,
-                    DebyeWallerCoeff: float) -> np.ndarray:
+                     tauN: np.ndarray, tauNbeta: np.ndarray,
+                     DebyeWallerCoeff: float) -> np.ndarray:
     """
     Generate the Transfer function from a S(alpha, -beta) table based on
     the phonon expansion model.
@@ -1038,13 +1038,6 @@ def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nd
     # Get the beta grid:
     betaAbs = get_AbsBeta(Eout, Ein, T)
 
-    # Eout calculation for the absulote beta values:
-    EoutCalc = np.sort(Ein + np.concatenate((-betaAbs[::-1], betaAbs[1::])) * kb * T)
-
-    # Ensure the Eout values are positive:
-    positiveMask = EoutCalc > 0
-    EoutCalc = EoutCalc[positiveMask]
-
     # Interpolation of tauN functions to reduce the number of calculations:
     tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
 
@@ -1053,6 +1046,13 @@ def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nd
     sabValues = phonon_expansion(get_alphaMat(Eout, Ein, T, M, mu),
                                  tauN.shape[0],  # number of phonons
                                  tauNinterp, DebyeWallerCoeff)
+
+    # Eout calculation for the absulote beta values:
+    EoutCalc = np.sort(Ein + np.concatenate((-betaAbs[::-1], betaAbs[1::])) * kb * T)
+
+    # Ensure the Eout values are positive:
+    positiveMask = EoutCalc > 0
+    EoutCalc = EoutCalc[positiveMask]
 
     # Full Dynamic Structure factor values calculation:
     dynamicStruc = np.concatenate(

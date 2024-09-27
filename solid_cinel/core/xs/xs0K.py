@@ -10,6 +10,7 @@ from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import interpolation, reshape_differential, to_arrays
 import os
+import dask.bag as db
 from math import pi, log10
 
 # constants
@@ -216,8 +217,84 @@ class Xs0K:
         self.data = dataNew
         return self
 
-    def XsMat_from_sigma1(self, T: [float, np.ndarray], Ein: [float, np.ndarray] = None,
-               values: bool = False) -> [pd.DataFrame, np.ndarray]:
+    def get_comb(self, T: np.ndarray, Ein: np.ndarray = None) -> list:
+        """
+        Get the combination of temperature and incident energy grid
+        for the calculation of the angle-integrated cross section matrix
+
+        Parameters
+        ----------
+        T: np.ndarray
+            The temperature grid in K
+        Ein: np.ndarray, optional
+            The incoming energy grid in eV. The default is None.
+
+        Returns
+        -------
+        list
+            The combination of temperature and incident energy grid
+
+        Examples
+        --------
+        >>> xs = Xs0K(238.05077040419212, [1, 2, 3], index=[1, 2, 3])
+        >>> T = np.array([300, 1000])
+        >>> EinGrid = np.array([2.0, 6.67])
+        >>> pd.Series(xs.get_comb(T, EinGrid))
+        0      (300, 2.0)
+        1     (300, 6.67)
+        2     (1000, 2.0)
+        3    (1000, 6.67)
+        dtype: object
+
+        >>> EinGrid = np.array([[2.0, 6.67], [3.0, 7.0]])
+        >>> pd.Series(xs.get_comb(T, EinGrid))
+        0     (300, 2.0)
+        1    (300, 6.67)
+        2    (1000, 3.0)
+        3    (1000, 7.0)
+        dtype: object
+
+        >>> T = np.array([[300, 1000], [500, 700]])
+        >>> pd.Series(xs.get_comb(T, EinGrid))
+        0      (300, 2.0)
+        1    (1000, 6.67)
+        2      (500, 3.0)
+        3      (700, 7.0)
+        dtype: object
+        """
+        Ein_ = to_arrays(Ein) if Ein is not None else self.EinGrid
+        T_ = to_arrays(T)
+        if Ein_.ndim == 1 and T_.ndim == 1:
+            return [(Tcalc, Ein_Calc) for Tcalc in T_ for Ein_Calc in Ein_]
+        elif Ein_.ndim == 1 and T_.ndim == 2:
+            rows, cols = T_.shape
+            return [(T_[i, j], Ein_) for i in range(rows) for j in range(cols)]
+        elif Ein_.ndim == 2 and T_.ndim == 1:
+            rows, cols = Ein_.shape
+            return [(T_[i], Ein_[i, j]) for i in range(rows) for j in range(cols)]
+        else:
+            rows, cols = Ein_.shape
+            return [(T_[i, j], Ein_[i, j]) for i in range(rows) for j in range(cols)]
+
+
+    def compute_dask_for_sigma1(self, T: [float, np.ndarray],
+                                Ein: [float, np.ndarray] = None) -> np.ndarray:
+        # Convert the input to arrays
+        EinTcomb = self.get_comb(T, Ein)
+
+        # Create dask bag from the combinations
+        bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count())
+
+        # Calculate the bag usign SIGMA1 to each element in the bag using dask
+        bag = bag.map(lambda x:
+                      calc_sigma1(x[1], x[0], self.M, self.EinGrid, self.values)
+                      )
+
+        # Compute the bag:
+        return np.array(bag.compute())
+
+    def sigma1(self, T: [float, np.ndarray], Ein: [float, np.ndarray] = None,
+               values: bool = False) -> [pd.DataFrame, pd.DataFrame, np.ndarray]:
         """
         Calculate the angle-integrated cross section matrix based on SIGMA1 model
 
@@ -246,34 +323,42 @@ class Xs0K:
 
         >>> T = 300
         >>> EinGrid = [2.0, 6.67]
-        >>> xs0K.XsMat_from_sigma1(T, EinGrid)
-                       300
+        >>> xs0K.sigma1(T, EinGrid)
         2.00      9.086237
         6.67    455.670534
+        Name: 300, dtype: float64
 
         >>> T = [300, 1000]
-        >>> xs0K.XsMat_from_sigma1(T, EinGrid)
-                    300         1000
-        2.00    9.086237    9.086042
-        6.67  455.670534  282.297098
+        >>> xs0K.sigma1(T, EinGrid)
+                  2.00        6.67
+        300   9.086237  455.670534
+        1000  9.086042  282.297098
 
+        >>> T = np.array([100, 300])
+        >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
+        >>> pd.DataFrame(xs0K.sigma1(T, EinMat, values=True), index=T).round(6)
+                    0           1
+        100  9.086957   19.893739
+        300  8.843855  455.670534
+
+        >>> T = np.array([[500, 1000], [100, 300]])
+        >>> pd.DataFrame(xs0K.sigma1(T, EinMat, values=True)).round(6)
+                  0           1
+        0  9.086010   20.673028
+        1  8.844076  455.670534
         """
-        # Convert the input to arrays
-        Tcalc = to_arrays(T)
-        EinCalc = to_arrays(Ein) if Ein is not None else self.EinGrid
+        # Compute the angle-integrated cross section matrix using dask:
+        xsDb = self.compute_dask_for_sigma1(T, Ein)
 
-        # Calculate the Eout grid matrix:
-        EoutMatrix = EoutMat(EinCalc)
+        # Reshape the data to a the correct format:
+        shape = to_arrays(Ein).shape if Ein is not None else (len(self.EinGrid),)
 
-        # Calculate the Transfer function matrix:
-        XsMat = np.zeros((len(EinCalc), len(Tcalc)))
-        calc_XsMat_sigma1(Tcalc, EinCalc, EoutMatrix, self.M,
-                          self.interpolate(EoutMatrix, values=True),
-                          XsMat)
         if values:
-            return XsMat
+            return xsDb if len(shape) == 1 else xsDb.reshape(shape[0], -1)
+        elif len(shape) == 1 and len(to_arrays(T)) == 1:
+            return pd.Series(xsDb, index=Ein, name=T)
         else:
-            return pd.DataFrame(XsMat, index=EinCalc, columns=Tcalc)
+            return pd.DataFrame(xsDb.reshape(shape[0], -1), index=T, columns=Ein)
 
     def nuclearInteract_sigma1(self, Tinteract: np.ndarray,
                                EinMat: np.ndarray) -> np.ndarray:
@@ -456,7 +541,7 @@ def EoutMat(Ein:np.ndarray) -> np.ndarray:
 
 
 @nb.jit(nopython=True, cache=True)
-def sigma1(Eout: float, Ein: float, T: float, M: float):
+def transferFunc_sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     Sigma1 function for Energy differential Transfer function
     ..math::
@@ -484,7 +569,7 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
     >>> T = 1000
     >>> M = 238.05077040419212
-    >>> transferFunc = sigma1(Eout, Ein, T, M)
+    >>> transferFunc = transferFunc_sigma1(Eout, Ein, T, M)
     >>> pd.Series(transferFunc, index=Eout).round(6)
     6.7554    0.000000
     6.9050    0.001153
@@ -495,7 +580,7 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     dtype: float64
 
     >>> Ein = np.array([7.0, 7.2])
-    >>> transferFunc = sigma1(Eout, Ein[::, np.newaxis], T, M)
+    >>> transferFunc = transferFunc_sigma1(Eout, Ein[::, np.newaxis], T, M)
     >>> pd.DataFrame(transferFunc, index=Ein, columns=Eout).round(6)
            6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
     7.0  0.014191  2.278534  4.638397  0.119514  0.000412  0.000000
@@ -515,6 +600,40 @@ def sigma1(Eout: float, Ein: float, T: float, M: float):
     # Calculate the Transfer function:
     return 0.5 * exponetials * np.sqrt(AkbT / pi) * EoutSqrt / Ein
 
+@nb.jit(nopython=True, cache=True)
+def calc_sigma1(Ein: float, T: float, M: float, xs0KEin, xs0Kvalues) -> np.ndarray:
+    """
+    Calculate the angle-integrated cross section based on sigma1 model
+    Parameters
+    ----------
+    Ein
+    T
+    M
+    xs0KEin
+    xs0Kvalues
+
+    Returns
+    -------
+
+    Examples
+    --------
+    # 0K xs data for U238:
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xs0K.py", ""))
+    >>> os.chdir("../../data/xs/U238/")
+    >>> M = 238.05077040419212
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> os.chdir(wd)
+
+    >>> Ein = 6.67
+    >>> T = 300
+    >>> xsdb = calc_sigma1(Ein, T, M, xs0K.EinGrid, xs0K.values)
+    >>> assert round(xsdb, 2) == 455.67
+    """
+    Eout = default_Eout(Ein)
+    transferFunc = transferFunc_sigma1(Eout, Ein, T, M)
+    transferFunc *= np.interp(Eout, xs0KEin, xs0Kvalues)
+    return np.trapz(transferFunc, x=Eout)
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
 def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray, EoutMat: np.ndarray,
@@ -563,7 +682,7 @@ def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray, EoutMat: np.ndarra
     Eincalc = Eincalc[::, np.newaxis]
     for j in prange(len(Tcalc)):
         XsMat[:, j] += np.trapz(
-            sigma1(EoutMat, Eincalc, Tcalc[j], M) * xsOkinterp, x=EoutMat
+            transferFunc_sigma1(EoutMat, Eincalc, Tcalc[j], M) * xsOkinterp, x=EoutMat
         )
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
@@ -615,14 +734,14 @@ def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     """
     # 1 iteration to allocate the matrix and modify in place:
     EoutMatrix = EoutMat(Eincalc[0])
-    transferFunc = sigma1(EoutMatrix, Eincalc[0][::, np.newaxis], Tcalc[0], M)
+    transferFunc = transferFunc_sigma1(EoutMatrix, Eincalc[0][::, np.newaxis], Tcalc[0], M)
     transferFunc *= np.interp(EoutMatrix, xs0KEin, xs0Kvalues)
     XsMat[0] += np.trapz(transferFunc, x=EoutMatrix)
 
     # Next interactions with the same Eout grid:
-    for i in range(1, XsMat.shape[0]):
+    for i in prange(1, XsMat.shape[0]):
         EoutMatrix[:] = EoutMat(Eincalc[i])
-        transferFunc[:] = sigma1(EoutMatrix, Eincalc[i][::, np.newaxis], Tcalc[i], M)
+        transferFunc[:] = transferFunc_sigma1(EoutMatrix, Eincalc[i][::, np.newaxis], Tcalc[i], M)
         transferFunc *= np.interp(EoutMatrix, xs0KEin, xs0Kvalues)
         XsMat[i] += np.trapz(transferFunc, x=EoutMatrix)
 
@@ -677,7 +796,7 @@ def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     for i in prange(XsMat.shape[0]):
         for j in range(XsMat.shape[1]):
             Eout = default_Eout(Eincalc[i, j])
-            transferFunc = sigma1(Eout, Eincalc[i, j], Tcalc[i, j], M)
+            transferFunc = transferFunc_sigma1(Eout, Eincalc[i, j], Tcalc[i, j], M)
             transferFunc *= np.interp(Eout, xs0KEin, xs0Kvalues)
             XsMat[i, j] += np.trapz(transferFunc, x=Eout)
 

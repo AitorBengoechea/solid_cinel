@@ -693,10 +693,10 @@ class NucInteract(DoubleDiffData):
         """
         if is0K:
             values0K = xs0K.interpolate(EinMat[0], values=True)
-            valuesTstar = xs0K.nuclearInteract_sigma1(Tinteraction[1:], EinMat[1:])
+            valuesTstar = xs0K.sigma1(Tinteraction[1:], EinMat[1:], values=True)
             return np.vstack((values0K, valuesTstar))
         else:
-            return xs0K.nuclearInteract_sigma1(Tinteraction, EinMat)
+            return xs0K.sigma1(Tinteraction, EinMat, values=True)
 
     @classmethod
     def from_sigma(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,

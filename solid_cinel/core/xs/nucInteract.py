@@ -671,6 +671,35 @@ class NucInteract(DoubleDiffData):
         self.Tinteract = Tinteract
         super().__init__(*args, **kwargs)
 
+    @staticmethod
+    def XsMat_sigma1(xs0K: Xs0K, EinMat: np.ndarray, Tinteraction: np.ndarray,
+                     is0K: bool) -> np.ndarray:
+        """
+        Calculate the cross section of the material from the nuclear interaction.
+
+        Parameters
+        ----------
+        xs0K: Xs0K
+            The cross section class with 0K data in barns
+        EinMat: np.ndarray
+            The interaction energy of the material in eV
+        Tinteraction: np.ndarray
+            The interaction temperature of the material in Kelvin
+        is0K: bool
+            Whether the data is at 0K or not
+
+        Returns
+        -------
+        np.ndarray
+            The cross section of the material in barns
+        """
+        if is0K:
+            values0K = xs0K.interpolate(EinMat[0], values=True)
+            valuesTstar = xs0K.nuclearInteract_sigma1(Tinteraction[1:], EinMat[1:])
+            return np.vstack((values0K, valuesTstar))
+        else:
+            return xs0K.nuclearInteract_sigma1(Tinteraction, EinMat)
+
     @classmethod
     def from_sigma(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,
                    theta: np.ndarray, approx: bool = True,
@@ -744,12 +773,8 @@ class NucInteract(DoubleDiffData):
                                           kind=kind)
 
         # Calculate the cross section interaction:
-        if 180 in theta_:
-            values0K = xs0K.interpolate(EinMat.values[0], values=True)
-            valuesTstar = xs0K.nuclearInteract_sigma1(Tinteraction[1:], EinMat.values[1:])
-            interactValues = np.vstack((values0K, valuesTstar))
-        else:
-            interactValues = xs0K.nuclearInteract_sigma1(Tinteraction, EinMat.values)
+        interactValues = cls.calc_sigma(xs0K, EinMat.values, Tinteraction,
+                                        180 in theta_)
 
         return cls(xs0K, EinMat, interactValues, index=mu, columns=Eout,
                    Tinteract=Tinteraction)

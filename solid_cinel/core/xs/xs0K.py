@@ -19,6 +19,7 @@ m = const["neutron mass in u"][0]
 # Avoid numba fast math:
 nb.config.FASTMATH_DEFAULT = False
 
+
 class Xs0K:
     def __init__(self, M:float, *args, **kwargs):
         """
@@ -565,7 +566,7 @@ def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray, EoutMat: np.ndarra
             sigma1(EoutMat, Eincalc, Tcalc[j], M) * xsOkinterp, x=EoutMat
         )
 
-#@nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
+@nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
 def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
                             M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray,
                             XsMat: np.ndarray):

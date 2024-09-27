@@ -773,8 +773,8 @@ class NucInteract(DoubleDiffData):
                                           kind=kind)
 
         # Calculate the cross section interaction:
-        interactValues = cls.calc_sigma(xs0K, EinMat.values, Tinteraction,
-                                        180 in theta_)
+        interactValues = cls.XsMat_sigma1(xs0K, EinMat.values, Tinteraction,
+                                          180 in theta_)
 
         return cls(xs0K, EinMat, interactValues, index=mu, columns=Eout,
                    Tinteract=Tinteraction)

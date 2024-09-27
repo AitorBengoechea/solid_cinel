@@ -11,8 +11,8 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.dynamic_structure.dynamicStruc import DynamicStruc, DoubleDiffData
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.xs.nucInteract import NucInteract
-from solid_cinel.core.generic import integrate, reshift
-from solid_cinel.core.xs.xs0K import Xs0K, check_dx
+from solid_cinel.core.generic import integrate
+from solid_cinel.core.xs.xs0K import Xs0K
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]

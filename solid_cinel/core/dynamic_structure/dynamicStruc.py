@@ -6,7 +6,6 @@ Python file for working with scattering functions.
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import float64
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_Beta
@@ -897,8 +896,7 @@ class DynamicStruc(DoubleDiffData):
             return cls.from_fgm(Ein, M, T, Eout, mu)
 
 
-@nb.jit(float64[:](float64[:], float64, float64, float64),
-        nopython=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     """
     Normalization factor for the Transfer function calculation.
@@ -925,9 +923,7 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 
-@nb.jit(float64[:, :](float64[:], float64[:], float64, float64,
-                      float64, float64, float64),
-    nopython=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
                        T: float, M: float, Teff: float, ws: float) -> np.ndarray:
     """
@@ -975,9 +971,7 @@ def get_ScatSctAngular(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
     return get_SabSct(alpha, beta, Tratio, ws) * normFactor(Eout, Ein, T, M)
 
 
-@nb.jit(float64[:, :](float64, float64, float64, float64[:], float64[:],
-                      float64[:, :], float64[:], float64),
-        nopython=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
                      tauN: np.ndarray, tauNbeta: np.ndarray,
                      DebyeWallerCoeff: float) -> np.ndarray:
@@ -1065,9 +1059,7 @@ def calc_DynStrucClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nd
     # Interpolation for avoiding numerical fluctuations:
     return interp_multyParallel(Eout, EoutCalc, dynamicStruc)
 
-@nb.jit(float64[:, :](float64, float64, float64, float64[:], float64[:],
-                      float64[:, :], float64[:], float64, float64),
-        nopython=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
                     tauN: np.ndarray, tauNbeta: np.ndarray,
                     DebyeWallerCoeff: float, alpha0: float) -> np.ndarray:

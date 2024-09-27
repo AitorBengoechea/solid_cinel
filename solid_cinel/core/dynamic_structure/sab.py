@@ -1308,8 +1308,7 @@ def proportionality_factor(alpha: float, alpha_i: float,
     return q
 
 
-@nb.jit(float64[:, :](float64[:, :], int32, float64[:, :], float64),
-        nopython=True, cache=True)
+@nb.jit(nopython=True, cache=True)
 def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
                      DebyeWallerCoeff: float) -> np.ndarray:
     """

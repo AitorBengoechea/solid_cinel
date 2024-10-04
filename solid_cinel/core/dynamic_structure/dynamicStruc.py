@@ -1383,8 +1383,9 @@ class DynamicStruc(DoubleDiffData):
 
         return cls(Ein, T, M, dynamicStructure, index=mu, columns=Eout)
 
-    def update(self, Ein: float, Eout: np.ndarray, *args,
-               model: str = "fgm", **kwargs) -> None:
+    def update(self, Ein: float, *args, model: str = "fgm",  M: float = None,
+               T: float = None, Eout: np.ndarray = None, mu: np.ndarray = None,
+               **kwargs) -> None:
         """
         Update the Dynamic Structure Factor object with new values.
 
@@ -1463,8 +1464,7 @@ class DynamicStruc(DoubleDiffData):
          9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
 
         >>> Ein = 10.0
-        >>> Eout = np.array([9.7554, 9.905 , 10.0439, 10.2   , 10.3157, 10.448 ])
-        >>> test.update(Ein, Eout)
+        >>> test.update(Ein, Eout = np.array([9.7554, 9.905 , 10.0439, 10.2   , 10.3157, 10.448 ]))
         >>> test.data.round(6)
         Eout            9.7554    9.9050    10.0439   10.2000   10.3157   10.4480
         mu
@@ -1480,8 +1480,7 @@ class DynamicStruc(DoubleDiffData):
          8.660254e-01  0.000003  0.750993  2.088814  0.000056  0.000000  0.000000
          9.659258e-01  0.000000  0.001715  1.005235  0.000000  0.000000  0.000000
 
-        >>> Eout = np.array([9.7554, 9.905])
-        >>> test.update(Ein, Eout)
+        >>> test.update(Ein, Eout=np.array([9.7554, 9.905]))
         >>> test.data.round(6)
         Eout             9.7554    9.9050
         mu
@@ -1497,20 +1496,38 @@ class DynamicStruc(DoubleDiffData):
          8.660254e-01  0.000003  0.750993
          9.659258e-01  0.000000  0.001715
         """
-        # Update the Ein value:
+        # Calculate Eout/mu values if is needed:
+        if Eout is None:
+            dE = self.data.columns.values - self.Ein
+            Eout = Ein + dE
+
+        if mu is None:
+            mu = self.data.index.values
+
+        # Update the atributes:
         self.Ein = Ein
+        if M is not None:
+            self.M = M
+        if T is not None:
+            self.T = T
 
         # Get the new values:
-        dynamicStructure = self.get_values(Ein, self.M, self.T, Eout,
-                                           self.data.index.values, *args,
+        dynamicStructure = self.get_values(Ein, self.M, self.T, Eout, mu, *args,
                                            model=model, **kwargs)
-        if len(self.Eout) == len(Eout):
+
+        # Update the values
+        if dynamicStructure.shape == self.data.shape:
             # Update the values:
             super().update(dynamicStructure)
+
             # Update the Eout values:
             super().update_axis(Eout, axis=1)
+
+            # Update the mu values if they change:
+            if mu is not None:
+                super().update_axis(mu, axis=0)
         else:
-            super().inplace(pd.DataFrame(dynamicStructure, index=self.data.index, columns=Eout))
+            super().inplace(pd.DataFrame(dynamicStructure, index=mu, columns=Eout))
 
 
 @nb.jit(nopython=True, cache=True)

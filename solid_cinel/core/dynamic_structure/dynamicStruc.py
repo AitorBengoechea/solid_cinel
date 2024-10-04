@@ -327,8 +327,7 @@ class DoubleDiffData:
         return self.data.apply(integrate, axis=axis)
 
 
-    def update_axis(self, newAxis:[pd.Index, np.ndarray],
-                    axis: int = 0)-> "DoubleDiffData":
+    def update_axis(self, newAxis:[pd.Index, np.ndarray], axis: int = 0) -> None:
         """
         Update the axis of the Double Differential data.
 
@@ -357,9 +356,9 @@ class DoubleDiffData:
             self.data.columns.name = axisName
 
 
-    def update(self, newValues: [np.ndarray, pd.DataFrame]) -> "DoubleDiffData":
+    def update(self, newValues: [np.ndarray, pd.DataFrame]) -> None:
         """
-        Update the Double Differential data.
+        Update the Double Differential data with data of the same dimensions.
 
         Parameters
         ----------
@@ -408,6 +407,69 @@ class DoubleDiffData:
 
         else:
             np.copyto(self.data.values, newValues)
+
+    def inplace(self, NewData: pd.DataFrame) -> None:
+        """
+        Make the Double Differential data in place for changing the dimensions
+        of the data.
+        """
+        self.data = NewData
+
+    def cut_axis(self, threshold: float = 0.0, axis: int = 0,
+                 inplace: bool = False) -> [pd.DataFrame, None]:
+        """
+        Drop the axis of the Double Differential data where the maximum value is
+        below the threshold.
+
+        Parameters
+        ----------
+        threshold : float, optional
+            The threshold to drop the axis. The default is 0.0.
+        axis : int, optional
+            The axis to drop. The default is 0.
+        inplace : bool, optional
+            If True, do operation in place. The default is False.
+
+        Returns
+        -------
+        pd.DataFrame or None
+            The Double Differential data with the axis dropped
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.cut_axis(threshold=3, axis=0)
+        Eout  1  2  3
+        mu
+        2     4  5  6
+
+        >>> dd.cut_axis(threshold=4, axis=1)
+        Eout  2  3
+        mu
+        1     2  3
+        2     5  6
+
+        >>> dd.cut_axis(threshold=3, axis=0, inplace=True)
+        >>> dd.data
+        Eout  1  2  3
+        mu
+        2     4  5  6
+        """
+        axis_pd = 1 if axis == 0 else 0
+
+        # Identify axis where the maximum value is below the threshold
+        mask = (self.data.max(axis=axis_pd) <= threshold).values
+
+        # Drop the axis
+        if axis == 0:
+            dataCut = self.data.drop(index=self.data.index[mask])
+        elif axis == 1:
+            dataCut = self.data.drop(columns=self.data.columns[mask])
+        else:
+            raise ValueError("Axis must be 0 (rows) or 1 (columns).")
+
+        return self.inplace(dataCut) if inplace else dataCut
 
 
 class DynamicStruc(DoubleDiffData):

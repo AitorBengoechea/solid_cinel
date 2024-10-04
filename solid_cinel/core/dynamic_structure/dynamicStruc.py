@@ -139,39 +139,6 @@ class DoubleDiffData:
         """
         return np.rad2deg(np.arccos(self.mu)).round(6)
 
-    def integrate(self, axis: int) -> pd.Series:
-        """
-        Integrate the Double Differential data.
-
-        Parameters
-        ----------
-        axis: int
-            The axis to integrate
-
-        Returns
-        -------
-        pd.Series
-            The integrated Double Differential data
-
-        Examples
-        --------
-        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
-        >>> dd = DoubleDiffData(data)
-        >>> dd.integrate(axis=0)
-        Eout
-        1    2.5
-        2    3.5
-        3    4.5
-        dtype: float64
-
-        >>> dd.integrate(axis=1)
-        mu
-        1     4.0
-        2    10.0
-        dtype: float64
-        """
-        return self.data.apply(integrate, axis=axis)
-
     @cached_property
     def rowIntegral(self) -> pd.Series:
         """
@@ -325,6 +292,122 @@ class DoubleDiffData:
         """
         cdf = self.data.cumsum(axis=0).cumsum(axis=1)
         return cdf / cdf.iloc[-1, -1]
+
+    def integrate(self, axis: int) -> pd.Series:
+        """
+        Integrate the Double Differential data.
+
+        Parameters
+        ----------
+        axis: int
+            The axis to integrate
+
+        Returns
+        -------
+        pd.Series
+            The integrated Double Differential data
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> dd.integrate(axis=0)
+        Eout
+        1    2.5
+        2    3.5
+        3    4.5
+        dtype: float64
+
+        >>> dd.integrate(axis=1)
+        mu
+        1     4.0
+        2    10.0
+        dtype: float64
+        """
+        return self.data.apply(integrate, axis=axis)
+
+
+    def update_axis(self, newAxis:[pd.Index, np.ndarray],
+                    axis: int = 0)-> "DoubleDiffData":
+        """
+        Update the axis of the Double Differential data.
+
+        Parameters
+        ----------
+        newAxis : pd.Index or np.ndarray
+            The new axis for the Double Differential data
+        axis : int, optional
+            The axis to update. The default is 0.
+
+        Returns
+        -------
+        DoubleDiffData
+            The updated Double Differential data
+        """
+        axisName = self.data.index.name if axis == 0 else self.data.columns.name
+
+        if not isinstance(newAxis, pd.Index):
+            newAxis = pd.Index(newAxis)
+
+        if axis == 0:
+            self.data.index = newAxis
+            self.data.index.name = axisName
+        else:
+            self.data.columns = newAxis
+            self.data.columns.name = axisName
+
+
+    def update(self, newValues: [np.ndarray, pd.DataFrame]) -> "DoubleDiffData":
+        """
+        Update the Double Differential data.
+
+        Parameters
+        ----------
+        newValues : np.ndarray or pd.DataFrame
+            The new values for the Double Differential data
+
+        Returns
+        -------
+        DoubleDiffData
+            The updated Double Differential data
+
+        Examples
+        --------
+        >>> data = pd.DataFrame([[1, 2, 3], [4, 5, 6]], index=[1, 2], columns=[1, 2, 3])
+        >>> dd = DoubleDiffData(data)
+        >>> newValues = pd.DataFrame([[2, 4, 6], [8, 10, 12]], index=[2, 4], columns=[2, 4, 6])
+        >>> dd.update(newValues)
+        >>> dd.data
+        Eout  2   4   6
+        mu
+        2     2   4   6
+        4     8  10  12
+
+        >>> newValues = np.array([[1, 2, 3], [4, 5, 6]])
+        >>> dd.update(newValues)
+        >>> dd.data
+        Eout  2  4  6
+        mu
+        2     1  2  3
+        4     4  5  6
+        """
+        # Check if the dimensions match before performing any operation
+        if newValues.shape != self.data.shape:
+            raise ValueError(
+                f"The dimension of the new values must be {self.data.shape} and they are {newValues.shape}")
+
+        # If it's a DataFrame, optimize the copy of values, index, and columns
+        if isinstance(newValues, pd.DataFrame):
+            # Copy the values without creating a new matrix
+            np.copyto(self.data.values, newValues.values)
+
+            # Assign index and columns directly to avoid the overhead of np.copyto
+            # Mantaining the names:
+            self.update_axis(newValues.index, axis=0)
+            self.update_axis(newValues.columns, axis=1)
+
+        else:
+            np.copyto(self.data.values, newValues)
 
 
 class DynamicStruc(DoubleDiffData):

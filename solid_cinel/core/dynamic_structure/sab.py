@@ -204,7 +204,7 @@ class Sab:
         -------
         >>> beta_grid = Beta.generate_grid(300)
         >>> alpha = Alpha.generate_grid(300, 26)
-        >>> Sab_matrix = Sab.fgm(alpha, beta_grid)
+        >>> Sab_matrix = Sab.from_fgm(alpha, beta_grid)
         >>> Sab_matrix_norm = Sab_matrix.data.apply(_norm, axis=1)
         >>> Sab_matrix_full = Sab_matrix.full
         >>> assert (Sab_matrix_full.apply(integrate, axis=1).round(6) == Sab_matrix_norm.round(6)).all()
@@ -382,7 +382,7 @@ class Sab:
         FGM:
         >>> beta = Beta.generate_grid(300).data
         >>> alpha = Alpha.generate_grid(300, 26).data
-        >>> Sab.fgm(alpha, beta).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> Sab.from_fgm(alpha, beta).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
         0.001050	  8.701463	8.417992     7.524148	6.213536	4.740815
@@ -442,7 +442,7 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> beta = Beta.generate_grid(T)
         >>> alpha = Alpha.generate_grid(T, 26)
-        >>> S = Sab.sct(alpha, beta, T, pdos)
+        >>> S = Sab.from_sct(alpha, beta, T, pdos)
         >>> S.data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -518,7 +518,7 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
-        >>> S_mat = Sab.pdos(alpha, beta, T, pdos)
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos)
         >>> S_mat.data.round(6).iloc[:10, :5]
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -602,7 +602,7 @@ class Sab:
         >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tauN = get_tauNfunc(tau1, tau1beta, nphonon, 0.0)
         >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-        >>> S_mat = Sab.tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
+        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
         >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -875,7 +875,7 @@ class Sab:
         --------
         >>> beta_grid = Beta.generate_grid(300).data
         >>> alpha = Alpha.generate_grid(300, 26).data
-        >>> Sab.fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        >>> Sab.from_fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
         0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
@@ -956,7 +956,7 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> alpha = Alpha(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
-        >>> S_mat = Sab.pdos(alpha, beta, T, pdos, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> betaNew = 0.01
         >>> S_mat.interp_beta(betaNew).data.iloc[1, 0:10].round(6)
         beta
@@ -1036,7 +1036,7 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> betaTest = beta_grid.data[0:5]
         >>> alphaNew = 0.00013
         >>> S_mat.interp_alpha(alphaNew).data.loc[alphaNew, betaTest] #doctest: +NORMALIZE_WHITESPACE
@@ -1105,7 +1105,7 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alphaNew = 0.00013
         >>> alphaVec = S_mat._interp_alpha(alphaNew)
         >>> alphaVec.iloc[0:10]  #doctest: +NORMALIZE_WHITESPACE
@@ -1199,7 +1199,7 @@ class Sab:
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
         >>> alpha = Alpha(alpha0_U238).scale(T)
-        >>> S_mat = Sab.pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
+        >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alphaNew = [1.25e-4, 1.35e-4]
         >>> betaNew = [0.01, 0.03, -0.01, -0.03]
         >>> S_mat.interp_alphaBeta(alphaNew, betaNew) #doctest: +NORMALIZE_WHITESPACE
@@ -1242,7 +1242,7 @@ def _SumRule(x: pd.Series) -> float:
     -------
     >>> beta_grid = Beta.generate_grid(300)
     >>> alpha = Alpha.generate_grid(300, 26)
-    >>> s = Sab.fgm(alpha, beta_grid).data
+    >>> s = Sab.from_fgm(alpha, beta_grid).data
     >>> float(_SumRule(s.iloc[1, ::]).round(6))
     0.001087
     """
@@ -1268,7 +1268,7 @@ def _norm(x: pd.Series) -> float:
     -------
     >>> beta_grid = Beta.generate_grid(300)
     >>> alpha = Alpha.generate_grid(300, 26)
-    >>> s = Sab.fgm(alpha, beta_grid).data
+    >>> s = Sab.from_fgm(alpha, beta_grid).data
     >>> float(_norm(s.iloc[0, ::]).round(6))
     1.0
     """

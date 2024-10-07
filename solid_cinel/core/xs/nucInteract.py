@@ -745,26 +745,26 @@ class NucInteract(DoubleDiffData):
         >>> T = 300
         >>> M = 238.05077040419212
         >>> theta = np.array([30, 60, 90, 120, 150, 180])
-        >>> Ein = 1
-        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+        >>> Ein = 6.67
+        >>> Eout = np.array([6.5, 6.6, 6.67, 6.8, 6.9])
 
         # Initialize the class
         >>> NucInteract.from_sigma(xs0K, Ein, T, Eout, theta).data
-        Eout                0.5       0.9       1.0       1.1       1.5       2.0
+        Eout                 6.50        6.60        6.67        6.80       6.90
         mu
-        -1.000000e+00  9.308729  9.276303  9.268018  9.259652  9.225313  9.180326
-        -8.660254e-01  9.327982  9.291117  9.281986  9.272849  9.236044  9.188854
-        -5.000000e-01  9.337630  9.298626  9.289092  9.279592  9.241624  9.193404
-         6.123234e-17  9.347393  9.306268  9.296335  9.286476  9.247357  9.198128
-         5.000000e-01  9.357197  9.313943  9.303611  9.293390  9.253116  9.202873
-         8.660254e-01  9.366945  9.321536  9.310798  9.300210  9.258757  9.207473
+        -1.000000e+00  109.429067  578.174610  132.000620   47.804039  33.258262
+        -8.660254e-01  114.424855  797.111411  158.423511   50.115934  34.138420
+        -5.000000e-01  111.529220  749.375088  314.215063   58.499214  36.945805
+         6.123234e-17   85.702705  542.581865  491.664735   82.203465  42.255244
+         5.000000e-01   62.495084  387.510240  511.456837  140.088731  51.371004
+         8.660254e-01   49.379282  304.044914  474.211771  201.620717  64.069957
         """
         # Calculate mu:
         theta_ = to_arrays(theta)
         mu = np.sort(np.cos(np.deg2rad(theta_)))
 
         # Get the interaction temperature of the material
-        Tinteraction = InteractTemp.from_4PCF(T, theta, Ein, Eout, approx=approx)
+        Tinteraction = InteractTemp.from_4PCF(T, mu, Ein, Eout, approx=approx)
 
         # Get the interaction energy of the material
         EinMat = InteractEnergy.from_4PCF(Ein, Eout, mu,  xs0K.M, approx=approx,

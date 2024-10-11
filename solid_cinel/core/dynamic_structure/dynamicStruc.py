@@ -706,7 +706,7 @@ class Sab_to_DynamicStruc:
         betaAbs = get_AbsBeta(Eout, Ein, T, unique=False, sort=False)
 
         # Define the dowscattering mask:
-        mask = Eout <= Ein
+        mask = (Eout <= Ein).sum()
 
         # Interpolation of tauN functions to reduce the number of calculations:
         tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
@@ -719,8 +719,8 @@ class Sab_to_DynamicStruc:
 
         # Dynamic Structure factor values selection:
         dynamicStruc = np.concatenate(
-            (sabValues[::, mask],
-             np.exp(-betaAbs[~mask]) * sabValues[::, ~mask]),
+            (sabValues[::, :mask],
+             np.exp(-betaAbs[mask:]) * sabValues[::, mask:]),
             axis=1
         )
         # Normalization constant

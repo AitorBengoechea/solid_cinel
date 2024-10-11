@@ -697,13 +697,16 @@ class Sab_to_DynamicStruc:
         >>> pd.DataFrame(values, index=index, columns=columns).loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
-        -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
-        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
-         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
-         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
+        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
+        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
+         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
+         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
         """
         # Get the beta grid:
-        betaAbs = get_AbsBeta(Eout, Ein, T)
+        betaAbs = get_AbsBeta(Eout, Ein, T, unique=False, sort=False)
+
+        # Define the dowscattering mask:
+        mask = Eout <= Ein
 
         # Interpolation of tauN functions to reduce the number of calculations:
         tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
@@ -714,25 +717,14 @@ class Sab_to_DynamicStruc:
                                      tauN.shape[0],  # number of phonons
                                      tauNinterp, DebyeWallerCoeff)
 
-        # Eout calculation for the absulote beta values:
-        EoutCalc = np.sort(
-            Ein + np.concatenate((-betaAbs[::-1], betaAbs[1::])) * kb * T)
-
-        # Ensure the Eout values are positive:
-        positiveMask = EoutCalc > 0
-        EoutCalc = EoutCalc[positiveMask]
-
-        # Full Dynamic Structure factor values calculation:
+        # Dynamic Structure factor values selection:
         dynamicStruc = np.concatenate(
-            (sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-betaAbs[1:])),
+            (sabValues[::, mask],
+             np.exp(-betaAbs[~mask]) * sabValues[::, ~mask]),
             axis=1
-        )[::, positiveMask]
-
+        )
         # Normalization constant
-        dynamicStruc *= normFactor(EoutCalc, Ein, T, M)
-
-        # Interpolation for avoiding numerical fluctuations:
-        return interp_multyParallel(Eout, EoutCalc, dynamicStruc)
+        return dynamicStruc * normFactor(Eout, Ein, T, M)
 
     @staticmethod
     def pdos(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
@@ -792,10 +784,10 @@ class Sab_to_DynamicStruc:
         >>> pd.DataFrame(values, index=index, columns=columns).loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
-        -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
-        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
-         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
-         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
+        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
+        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
+         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
+         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
         """
         # Get Tpdos:
         Tpdos = pdos.fix_T(T)
@@ -912,7 +904,7 @@ class DynamicStruc(DoubleDiffData):
         >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> float(round(DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
-        0.328006
+        0.32328
         """
         # Get the alpha0 parameter:
         return integrate((self.data * self.alphaMat.values).apply(integrate)) / 2
@@ -1164,10 +1156,10 @@ class DynamicStruc(DoubleDiffData):
         >>> DynamicStruc.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
-        -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
-        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
-         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
-         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
+        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
+        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
+         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
+         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
         """
         # Get the Dynamic Structure Factor values with correct type:
         dynamicStructure = Sab_to_DynamicStruc.tau(Ein, M, T, Eout, mu, tauN,
@@ -1231,10 +1223,10 @@ class DynamicStruc(DoubleDiffData):
         >>> DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
-        -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
-        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
-         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
-         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
+        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
+        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
+         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
+         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
         """
         # Get the Dynamic Structure Factor values with correct type:
         dynamicStructure = Sab_to_DynamicStruc.pdos(Ein, M, T, Eout, mu, pdos,
@@ -1370,10 +1362,10 @@ class DynamicStruc(DoubleDiffData):
         >>> DynamicStruc.from_model(Ein, M, T, Eout, theta, pdos, threshold=1.0e-14, model="pdos").data.loc[::, Eout_test].round(6)
         Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
         mu
-        -0.939693  0.109061  0.644157  1.346117  1.029210  0.373643  0.053219
-        -0.500000  0.034511  0.426488  1.383082  1.262613  0.415630  0.042074
-         0.173648  0.000519  0.073364  1.103240  1.912878  0.440892  0.013328
-         0.766044  0.000000  0.000012  0.077506  4.022814  0.127645  0.000019
+        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
+        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
+         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
+         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
         """
         # Get the cosine of the angle of the distribution:
         mu = np.cos(np.deg2rad(theta))
@@ -1618,31 +1610,23 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
     dtype: float64
     """
     # Get the beta grid:
-    beta = get_AbsBeta(Eout, Ein, T)
+    betaAbs = get_AbsBeta(Eout, Ein, T, unique=False, sort=False)
 
-    # Eout calculation
-    EoutCalc = np.sort(Ein + np.concatenate((-beta[::-1], beta[1::])) * kb * T)
-
-    # Ensure the Eout values are positive:
-    positiveMask = EoutCalc > 0
-    EoutCalc = EoutCalc[positiveMask]
+    # Define the dowscattering mask:
+    mask = Eout <= Ein
 
     # Interpolation of tauN functions to reduce the number of calculations:
-    tauNinterp = interp_multyParallel(beta, tauNbeta, tauN)
-
-    # Get the alpha matrix for the Dynamic Structure Factor with the maximun
-    # outgoing energy:
-    Eout_ = beta * kb * T + Ein if len(beta) < len(Eout) else Eout
+    tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
 
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = phonon_expansion(get_alphaMatMod(Eout_, Ein, M, T, mu, DebyeWallerCoeff, alpha0),
+    sabValues = phonon_expansion(get_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0),
                                  tauN.shape[0], tauNinterp, DebyeWallerCoeff)
 
-    # Full Dynamic Structure factor values calculation:
-    dynamicStruc = np.concatenate((sabValues[::, ::-1], sabValues[::, 1:] * np.exp(-beta[1:])), axis=1)[::, positiveMask]
-
+    # Dynamic Structure factor values selection:
+    dynamicStruc = np.concatenate(
+        (sabValues[::, mask],
+         np.exp(-betaAbs[~mask]) * sabValues[::, ~mask]),
+        axis=1
+    )
     # Normalization constant
-    dynamicStruc *= normFactor(EoutCalc, Ein, T, M)
-
-    # Interpolation for avoiding numerical fluctuations:
-    return interp_multyParallel(Eout, EoutCalc, dynamicStruc)
+    return dynamicStruc * normFactor(Eout, Ein, T, M)

@@ -475,28 +475,40 @@ def calc_Beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
 
 
 @nb.jit(nopython=True, cache=True)
-def get_AbsBeta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
-                T: float) -> np.ndarray:
+def get_AbsBeta(Eout: Union[np.ndarray, float], Ein: Union[np.ndarray, float],
+                T: float, unique: bool = True, sort: bool = True) -> np.ndarray:
     """
     Get the positive beta values from the parameters of the function:
     .. math::
-        \beta=\dfrac{E_{out} - E_{in}}{k_BT}
+        \beta = \left| \dfrac{E_{out} - E_{in}}{k_B T} \right|
 
     Parameters
     ----------
-    Eout : 'np.ndarray', (N,) or 'float'
+    Eout : np.ndarray or float
         Output energy of the neutron.
-    Ein : 'np.ndarray', (N,) or 'float'
-        Incidente energy of the neutron.
+    Ein : np.ndarray or float
+        Incident energy of the neutron.
     T : float
         Temperature in K.
+    unique : bool, optional
+        If True, return unique beta values. Default is True.
+    sort : bool, optional
+        If True, return sorted beta values. Default is True.
 
     Returns
     -------
-    'np.ndarray', (N,)
-        Array containing all posible beta values for the input parameters.
+    np.ndarray
+        Array containing all possible positive beta values for the input parameters.
     """
-    return np.unique(np.absolute(calc_Beta(Eout, Ein, T)))
+    kb = 8.617333262145e-5  # Boltzmann constant in eV/K
+    betaAbs = np.abs((Eout - Ein) / (kb * T))
+
+    if unique:
+        betaAbs = np.unique(betaAbs)
+    elif sort:
+        betaAbs = np.sort(betaAbs)
+
+    return betaAbs
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_absBeta(T: float) -> np.ndarray:

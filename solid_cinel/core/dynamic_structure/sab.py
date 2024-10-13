@@ -8,7 +8,7 @@ from solid_cinel.core.generic import integrate, reshape_differential, interp_mul
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNfunc, get_tauNbeta
 from solid_cinel.core.dynamic_structure.beta import Beta
-from solid_cinel.core.dynamic_structure.alpha import Alpha, get_expansionOrder
+from solid_cinel.core.dynamic_structure.alpha import AlphaVect, AlphaDynamic, AlphaBase
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -89,12 +89,12 @@ class Sab:
 
 
     @property
-    def alpha(self) -> Alpha:
+    def alpha(self) -> AlphaVect:
         """
         Initialize the Alpha class with the information of S(alpha, beta)
         matrix.
         """
-        return Alpha(self.data.index.values)
+        return AlphaVect(self.data.index.values)
 
     @property
     def beta(self) -> Beta:
@@ -139,7 +139,7 @@ class Sab:
 
 
     @staticmethod
-    def check_alpha(alpha: Union[Alpha, Iterable, str]) -> Alpha:
+    def check_alpha(alpha: Union[AlphaVect, Iterable, str]) -> AlphaVect:
         """
         Generate the Alpha class for the creation of S(alpha, beta) table.
 
@@ -153,12 +153,12 @@ class Sab:
         Alpha
             Alpha class with the alpha grid information.
         """
-        if isinstance(alpha, Alpha):
+        if isinstance(alpha, AlphaVect):
             return alpha
         elif isinstance(alpha, str):
-            return Alpha.from_file(alpha)
+            return AlphaVect.from_file(alpha)
         else:
-            return Alpha(alpha)
+            return AlphaVect(alpha)
 
     @staticmethod
     def check_beta(beta: Union[Beta, Iterable, str]) -> Beta:
@@ -203,7 +203,7 @@ class Sab:
         Example
         -------
         >>> beta_grid = Beta.generate_grid(300)
-        >>> alpha = Alpha.generate_grid(300, 26)
+        >>> alpha = AlphaVect.generate_grid(300, 26)
         >>> Sab_matrix = Sab.from_fgm(alpha, beta_grid)
         >>> Sab_matrix_norm = Sab_matrix.data.apply(_norm, axis=1)
         >>> Sab_matrix_full = Sab_matrix.full
@@ -354,7 +354,7 @@ class Sab:
         return cls.check_alpha(alpha).data, cls.check_beta(beta).data
 
     @classmethod
-    def from_fgm(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+    def from_fgm(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
                  T: float = None, wt: float = 1):
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
@@ -381,7 +381,7 @@ class Sab:
         -------
         FGM:
         >>> beta = Beta.generate_grid(300).data
-        >>> alpha = Alpha.generate_grid(300, 26).data
+        >>> alpha = AlphaVect.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha, beta).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
         alpha
@@ -408,7 +408,7 @@ class Sab:
         return cls(S_values, index=alpha_, columns=beta_)
 
     @classmethod
-    def from_sct(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+    def from_sct(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
                  T: float, pdos: Pdos, ws: float = 1):
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
@@ -441,7 +441,7 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> beta = Beta.generate_grid(T)
-        >>> alpha = Alpha.generate_grid(T, 26)
+        >>> alpha = AlphaVect.generate_grid(T, 26)
         >>> S = Sab.from_sct(alpha, beta, T, pdos)
         >>> S.data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
@@ -469,7 +469,7 @@ class Sab:
         return cls(S_values, index=alpha_, columns=beta_)
 
     @classmethod
-    def from_pdos(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+    def from_pdos(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
                   T: float, pdos: Pdos, nphonon: int = None, decimal: float = 1.0e-6,
                   orderMax: int = 5000, threshold: float = 0.0):
         """
@@ -516,7 +516,7 @@ class Sab:
         >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 800
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> alpha = AlphaVect(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos)
         >>> S_mat.data.round(6).iloc[:10, :5]
@@ -546,7 +546,7 @@ class Sab:
         if nphonon is not None:
             warnings.warn("Is posible that the expansion order is not enough to get the correct results")
         else:
-            nphonon = get_expansionOrder(alpha_, DebyeWallerCoeff, decimal, orderMax)
+            nphonon = AlphaBase(alpha_).expansionOrder(DebyeWallerCoeff, decimal, orderMax)
 
         # Get tauN function:
         tauN = Tpdos.tauN(nphonon, threshold=threshold, values=True)
@@ -557,7 +557,7 @@ class Sab:
         return cls.from_tau(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
 
     @classmethod
-    def from_tau(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
+    def from_tau(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
                  tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float):
         """
         Generate S(alpha, -beta) matrix using tauN functions.
@@ -594,7 +594,7 @@ class Sab:
         >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 800
         >>> pdos = Pdos.from_dE(T, rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> alpha = AlphaVect(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
         >>> tau1 = pdos.tau1.values
@@ -704,7 +704,7 @@ class Sab:
         FGM:
         >>> T = 300
         >>> beta = Beta.generate_grid(T).data
-        >>> alpha = Alpha.generate_grid(T, 26).data
+        >>> alpha = AlphaVect.generate_grid(T, 26).data
         >>> Sab.from_model(alpha, beta, model="fgm").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta	      0.000000	0.012894	0.025788	0.038682	0.051576
         alpha
@@ -738,7 +738,7 @@ class Sab:
         Phonon Expansion:
         >>> T = 800
         >>> beta = Beta(beta0_).scale(T).data
-        >>> alpha = Alpha(alpha0_).scale(T).data
+        >>> alpha = AlphaVect(alpha0_).scale(T).data
         >>> Sab.from_model(alpha, beta, T, pdos, model="pdos", nphonon=700).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.009175  0.018350  0.027524  0.036699
         alpha
@@ -761,7 +761,7 @@ class Sab:
             return cls.from_pdos(*args, **kwargs)
 
     @classmethod
-    def from_alpha0(cls, Ein: [int, float, np.ndarray], T: float, M: float,
+    def from_capt(cls, Ein: [int, float, np.ndarray], T: float, M: float,
                     beta: Union[Beta, Iterable], *args,
                     model: str = "pdos", **kwargs):
         """
@@ -813,46 +813,46 @@ class Sab:
         >>> beta = Beta.generate_grid(T).data
         >>> Ein = np.array([6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0])
         >>> M = 26
-        >>> Sab.from_alpha0(Ein, T, M, beta, model="fgm").data.iloc[::, :5].round(6)
+        >>> Sab.from_capt(Ein, T, M, beta, model="fgm").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
-        9.045004   0.009776  0.009839  0.009902  0.009966  0.010030
-        9.189465   0.009354  0.009415  0.009476  0.009537  0.009598
-        9.333925   0.008953  0.009010  0.009069  0.009127  0.009186
-        9.478386   0.008569  0.008624  0.008680  0.008736  0.008792
-        9.622847   0.008203  0.008256  0.008309  0.008363  0.008416
-        9.767307   0.007853  0.007904  0.007955  0.008006  0.008058
-        9.911768   0.007519  0.007568  0.007616  0.007666  0.007715
-        10.056229  0.007200  0.007247  0.007293  0.007340  0.007388
+        9.454095   0.008632  0.008688  0.008744  0.008800  0.008857
+        9.604160   0.008249  0.008302  0.008356  0.008410  0.008464
+        9.754225   0.007884  0.007935  0.007986  0.008038  0.008089
+        9.904290   0.007536  0.007585  0.007634  0.007683  0.007732
+        10.054355  0.007204  0.007251  0.007297  0.007345  0.007392
+        10.204420  0.006888  0.006932  0.006977  0.007022  0.007067
+        10.354485  0.006586  0.006628  0.006671  0.006714  0.006757
+        10.504550  0.006298  0.006339  0.006379  0.006421  0.006462
 
         SCT:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Sab.from_alpha0(Ein, T, M, beta, pdos, model="sct").data.iloc[::, :5].round(6)
+        >>> Sab.from_capt(Ein, T, M, beta, pdos, model="sct").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
-        9.045004   0.011253  0.011320  0.011387  0.011455  0.011522
-        9.189465   0.010800  0.010864  0.010929  0.010993  0.011058
-        9.333925   0.010366  0.010428  0.010490  0.010552  0.010614
-        9.478386   0.009951  0.010010  0.010070  0.010129  0.010189
-        9.622847   0.009554  0.009610  0.009667  0.009725  0.009782
-        9.767307   0.009173  0.009228  0.009282  0.009337  0.009393
-        9.911768   0.008809  0.008861  0.008914  0.008966  0.009019
-        10.056229  0.008460  0.008510  0.008560  0.008611  0.008662
+        9.454095   0.010020  0.010079  0.010139  0.010199  0.010259
+        9.604160   0.009604  0.009661  0.009718  0.009776  0.009834
+        9.754225   0.009207  0.009262  0.009317  0.009372  0.009427
+        9.904290   0.008827  0.008880  0.008932  0.008985  0.009038
+        10.054355  0.008464  0.008514  0.008565  0.008616  0.008667
+        10.204420  0.008117  0.008165  0.008214  0.008262  0.008311
+        10.354485  0.007785  0.007831  0.007878  0.007924  0.007971
+        10.504550  0.007467  0.007511  0.007556  0.007601  0.007646
 
         Phonon Expansion:
-        >>> Sab.from_alpha0(Ein, T, M, beta, pdos, model="pdos").data.iloc[::, :5].round(6)
+        >>> Sab.from_capt(Ein, T, M, beta, pdos, model="pdos").data.iloc[::, :5].round(6)
         beta       0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
-        9.045004   0.010582  0.010650  0.010719  0.010788  0.010857
-        9.189465   0.010132  0.010198  0.010264  0.010330  0.010396
-        9.333925   0.009703  0.009766  0.009829  0.009893  0.009956
-        9.478386   0.009294  0.009354  0.009414  0.009475  0.009536
-        9.622847   0.008903  0.008960  0.009018  0.009076  0.009135
-        9.767307   0.008529  0.008584  0.008639  0.008695  0.008751
-        9.911768   0.008172  0.008225  0.008278  0.008331  0.008385
-        10.056229  0.007830  0.007881  0.007932  0.007983  0.008034
+        9.454095   0.009361  0.009422  0.009483  0.009544  0.009605
+        9.604160   0.008952  0.009010  0.009068  0.009127  0.009186
+        9.754225   0.008562  0.008617  0.008673  0.008729  0.008785
+        9.904290   0.008190  0.008243  0.008296  0.008349  0.008403
+        10.054355  0.007835  0.007885  0.007936  0.007987  0.008039
+        10.204420  0.007496  0.007544  0.007593  0.007642  0.007691
+        10.354485  0.007172  0.007219  0.007265  0.007312  0.007359
+        10.504550  0.006864  0.006908  0.006953  0.006997  0.007043
         """
-        alpha = Alpha.from_recoil(Ein, T, M)
+        alpha = AlphaDynamic.from_capt(Ein, M, T).data
         return cls.from_model(alpha, beta, T, *args, model=model, **kwargs)
 
     def to_sym(self, detail_balance: bool = True) -> pd.DataFrame:
@@ -874,7 +874,7 @@ class Sab:
         Example:
         --------
         >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha = Alpha.generate_grid(300, 26).data
+        >>> alpha = AlphaVect.generate_grid(300, 26).data
         >>> Sab.from_fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
         beta      0.000000  0.012894  0.025788  0.038682  0.051576
         alpha
@@ -954,7 +954,7 @@ class Sab:
         >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> alpha = AlphaVect(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> betaNew = 0.01
@@ -1035,7 +1035,7 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> alpha = AlphaVect(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> betaTest = beta_grid.data[0:5]
         >>> alphaNew = 0.00013
@@ -1104,7 +1104,7 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> alpha = AlphaVect(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alphaNew = 0.00013
         >>> alphaVec = S_mat._interp_alpha(alphaNew)
@@ -1198,7 +1198,7 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> alpha = AlphaVect(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alphaNew = [1.25e-4, 1.35e-4]
         >>> betaNew = [0.01, 0.03, -0.01, -0.03]
@@ -1241,7 +1241,7 @@ def _SumRule(x: pd.Series) -> float:
     Example
     -------
     >>> beta_grid = Beta.generate_grid(300)
-    >>> alpha = Alpha.generate_grid(300, 26)
+    >>> alpha = AlphaVect.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha, beta_grid).data
     >>> float(_SumRule(s.iloc[1, ::]).round(6))
     0.001087
@@ -1267,7 +1267,7 @@ def _norm(x: pd.Series) -> float:
     Example
     -------
     >>> beta_grid = Beta.generate_grid(300)
-    >>> alpha = Alpha.generate_grid(300, 26)
+    >>> alpha = AlphaVect.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha, beta_grid).data
     >>> float(_norm(s.iloc[0, ::]).round(6))
     1.0

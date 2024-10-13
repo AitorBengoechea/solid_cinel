@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.constants import physical_constants as const
 from typing import Iterable
-from solid_cinel.core.dynamic_structure.alpha import get_alphaRecoil
+from solid_cinel.core.dynamic_structure.alpha import calc_alphaRecoil
 from solid_cinel.core.xs.xs0K import Xs0K
 from solid_cinel.core.generic import to_arrays
 from solid_cinel.core.dynamic_structure.dynamicStruc import DoubleDiffData
@@ -240,7 +240,7 @@ class InteractEnergy(DoubleDiffData):
             The modification factor for the interaction energy
         """
         mu_ = InteractEnergy.check_mu(mu)
-        recoilMod = get_alphaRecoil(Eout, Ein, M, mu_)
+        recoilMod = calc_alphaRecoil(Eout, Ein, M, mu_)
         recoilMod /= 2 * (1 - mu_)
         return recoilMod
 
@@ -449,7 +449,7 @@ class InteractEnergy(DoubleDiffData):
          0.75  0.501862  0.902021  1.002119  1.102232  1.502809  2.003723
         """
         mu_ = InteractEnergy.check_mu(mu)
-        return Eout + get_alphaRecoil(Eout, Ein, M, mu_)
+        return Eout + calc_alphaRecoil(Eout, Ein, M, mu_)
 
     @staticmethod
     def corr4PCFapprox(Ein: float, Eout: np.ndarray, mu: np.ndarray,

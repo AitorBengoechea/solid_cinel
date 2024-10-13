@@ -9,13 +9,12 @@ import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_Beta
-from solid_cinel.core.dynamic_structure.alpha import get_alphaMat, get_alphaMatMod, get_alphaFromEout, get_expansionOrder
+from solid_cinel.core.dynamic_structure.alpha import get_alphaMatMod, AlphaBase, calc_alpha
 from solid_cinel.core.dynamic_structure.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
 from typing import Iterable
 import warnings
-from functools import cached_property
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
@@ -139,7 +138,7 @@ class DoubleDiffData:
         """
         return np.rad2deg(np.arccos(self.mu)).round(6)
 
-    @cached_property
+    @property
     def rowIntegral(self) -> pd.Series:
         """
         Integral of the Double Differential data by row.
@@ -161,7 +160,7 @@ class DoubleDiffData:
         """
         return self.integrate(axis=1)
 
-    @cached_property
+    @property
     def columsIntegral(self) -> pd.Series:
         """
         Integral of the Double Differential data by column.
@@ -184,7 +183,7 @@ class DoubleDiffData:
         """
         return self.integrate(axis=0)
 
-    @cached_property
+    @property
     def doubleIntegral(self) -> float:
         """
         Double integral of the Double Differential data.
@@ -476,60 +475,10 @@ class Sab_to_DynamicStruc:
     """
     Abstract class for Dynamic Structure Factor calculations.
     """
-    @staticmethod
-    @nb.jit(nopython=True, cache=True)
-    def from_SabSct(Eout: np.ndarray, mu: [float, np.ndarray], Ein: float,
-                    T: float, M: float, Teff: float, ws: float) -> np.ndarray:
+    def __init__(self, Ein: float, M: float, T: float, Eout: np.ndarray,
+            mu: np.ndarray):
         """
-        Calculate the Transfer function from the Short Collision Time model using
-        a single angle.
-        ..math::
-            S(\theta, E^\prime, E, M, T) = \frac{1}{2 * k_B * T}\sqrt{\frac{E^\prime}{E}} \frac{1}{\sqrt{4 \pi w_s \alpha T_{eff} / T}} exp\left(\frac{(w_s\alpha +\beta)^2}{4 \alpha w_s T_{eff}/T}\right)
-
-        Parameters
-        ----------
-        Eout : np.ndarray, (N,)
-            The neutron outgoing energy grid in eV
-        mu : np.ndarray, (M,)
-            Cosine of the angle between the incident neutron direction and
-            the outgoing neutron direction
-        Ein : float
-            The incident energy of the neutron in eV
-        T : float
-            Temperature of the material in K
-        M : float
-            The mass of the target material in amu
-        Teff : float
-            Effective temperature of the material in K
-        ws : float
-            Normalization for continuous (vibrational) part. For solid is 1.
-
-        Returns
-        -------
-        np.ndarray, (M, N)
-            The Transfer function values for a single angle
-        """
-        # Get the beta grid:
-        beta = calc_Beta(Eout, Ein, T)
-
-        # Get the temperature ratio:
-        Tratio = Teff / T
-
-        # Get the alpha grid:
-        if isinstance(mu, (int, float)):
-            alpha = get_alphaFromEout(Eout, Ein, T, M, mu)[::, np.newaxis]
-        else:
-            alpha = get_alphaMat(Eout, Ein, T, M, mu)
-
-        # Get the Transfer function values and apply normalization:
-        return get_SabSct(alpha, beta, Tratio, ws) * normFactor(Eout, Ein, T, M)
-
-    @staticmethod
-    def fgm(Ein: float, M: float, T: float, Eout: np.ndarray,
-            mu: np.ndarray, ws: float = 1.0) -> np.ndarray:
-        """
-        Calculate the Dynamic Structure Factor from a S(alpha, -beta) table based
-        on Free Gas Model.
+        Initialize the Sab_to_DynamicStruc class.
 
         Parameters
         ----------
@@ -540,67 +489,123 @@ class Sab_to_DynamicStruc:
         T : float
             Temperature of the material in K
         Eout : np.array
-            The neutron outgoing energy grid in eV
+            The neutron outgoing energy
         mu : np.ndarray
             The cosine of the angle of the distribution in degrees
-        ws : float, optional
-            Normalization for continuous (vibrational) part. For solid is 1.
+        """
+        self.Ein = Ein
+        self.M = M
+        self.T = T
+        self.Eout = np.unique(Eout)
+        self.mu = np.unique(mu)
+    @property
+    def A(self) -> float:
+        """
+        The mass ratio of the neutron to the target material.
+
+        Returns
+        -------
+        float
+            The mass ratio of the neutron to the target material
+        """
+        return self.M / m
+
+    @property
+    def aws(self) -> float:
+        """
+        The average atomic weight of the target material.
+
+        Returns
+        -------
+        float
+            The average atomic weight of the target material
+        """
+        return ((self.A + 1) / self.A) ** 2
+    @property
+    def beta(self) -> np.ndarray:
+        """
+        Calculate the beta values.
 
         Returns
         -------
         np.ndarray
-            The Dynamic Structure Factor values from a S(alpha, -beta) table
-            based on Free Gas Model
-
-        Examples
-        --------
-        >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> mu = np.cos(np.deg2rad(theta))[::-1]
-        >>> values = Sab_to_DynamicStruc.fgm(Ein, M, T, Eout, mu)
-        >>> index = pd.Index(mu, name="mu")
-        >>> columns = pd.Index(Eout, name="Eout")
-        >>> pd.DataFrame(values, index=index, columns=columns).round(6)
-        Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
-        mu
-        -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
-        -8.660254e-01  0.074800  0.591841  1.360299   1.032095  0.376520  0.052584
-        -7.071068e-01  0.049539  0.515196  1.379332   1.109853  0.392419  0.049014
-        -5.000000e-01  0.024994  0.404827  1.387900   1.228207  0.412767  0.043015
-        -2.588190e-01  0.008241  0.268643  1.360778   1.399190  0.433942  0.033969
-         6.123234e-17  0.001317  0.132279  1.255634   1.643445  0.447804  0.022111
-         2.588190e-01  0.000054  0.036774  1.013814   1.998435  0.436944  0.009862
-         5.000000e-01  0.000000  0.002991  0.600838   2.539266  0.368245  0.001932
-         7.071068e-01  0.000000  0.000010  0.155387   3.441598  0.204433  0.000045
-         8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
-         9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
+            The beta values
         """
-        return Sab_to_DynamicStruc.from_SabSct(Eout, mu, Ein, T, M, T, ws)
+        return calc_Beta(self.Eout, self.Ein, self.T)
 
-    @staticmethod
-    def sct(Ein: float, M: float, T: float, Eout: np.ndarray,
-            mu: np.ndarray, pdos: Pdos, ws: float = 1.0) -> np.ndarray:
+    @property
+    def betaAbs(self) -> np.ndarray:
+        """
+        Calculate the absolute beta values.
+
+        Returns
+        -------
+        np.ndarray
+            The absolute beta values
+        """
+        return np.absolute(self.beta)
+
+    @property
+    def downScatIndex(self) -> int:
+        """
+        Calculate the downscattering index.
+
+        Returns
+        -------
+        int
+            The downscattering index
+        """
+        return (self.beta <= 0.0).sum()
+
+    @property
+    def alpha(self) -> np.ndarray:
+        """
+        Calculate the alpha values.
+
+        Returns
+        -------
+        np.ndarray
+            The alpha values
+        """
+        return calc_alpha(self.Ein, self.M, self.T, self.Eout, self.mu[::, np.newaxis])
+
+    @property
+    def normFactor(self) -> np.ndarray:
+        """
+        Calculate the normalization factor.
+
+        Returns
+        -------
+        np.ndarray
+            The normalization factor
+        """
+        return self.aws / (2 * kb * self.T) * np.sqrt(self.Eout / self.Ein)
+
+    def apply_norm(self, dynamicStructure: np.ndarray):
+        """
+        Normalize the Dynamic Structure Factor.
+
+        Parameters
+        ----------
+        dynamicStructure : np.ndarray
+            The Dynamic Structure Factor values
+
+        Returns
+        -------
+        np.ndarray
+            The normalized Dynamic Structure Factor values
+        """
+        return dynamicStructure * self.normFactor
+
+    def sct(self, Tratio: float, ws: float = 1.0) -> np.ndarray:
         """
         Calculate the Dynamic Structure Factor from a S(alpha, -beta) table based
         on Short Collision Time model.
 
         Parameters
         ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-        mu : np.ndarray
-            The cosine of the angle of the distribution in degrees
-        pdos : Pdos
-            Pdos object
+        Tratio: float
+            Ratio of the effective temperature to the real temperature
         ws : float, optional
             Normalization for continuous (vibrational) part. For solid is 1.
 
@@ -620,7 +625,8 @@ class Sab_to_DynamicStruc:
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
         >>> mu = np.cos(np.deg2rad(theta))[::-1]
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> values = Sab_to_DynamicStruc.sct(Ein, M, T, Eout, mu, pdos)
+        >>> sabValues = Sab_to_DynamicStruc(Ein, M, T, Eout, mu)
+        >>> values = sabValues.sct(pdos.fix_T(T).Teff / T, ws=1)
         >>> index = pd.Index(mu, name="mu")
         >>> columns = pd.Index(Eout, name="Eout")
         >>> pd.DataFrame(values, index=index, columns=columns).round(6)
@@ -638,12 +644,10 @@ class Sab_to_DynamicStruc:
          8.660254e-01  0.000000  0.000000  0.002116   5.225195  0.024538  0.000000
          9.659258e-01  0.000000  0.000000  0.000000  10.545191  0.000000  0.000000
         """
-        return Sab_to_DynamicStruc.from_SabSct(Eout, mu, Ein, T, M, pdos.fix_T(T).Teff, ws)
+        return self.apply_norm(get_SabSct(self.alpha, self.beta, Tratio, ws))
 
-    @staticmethod
-    @nb.jit(nopython=True, cache=True)
-    def tau(Ein: float, M: float, T: float, Eout: np.ndarray,
-            mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
+
+    def tau(self, tauN: np.ndarray, tauNbeta: np.ndarray,
             DebyeWallerCoeff: float) -> np.ndarray:
         """
         Calculate the Dynamic Structure Factor from a S(alpha, -beta) table based
@@ -651,16 +655,6 @@ class Sab_to_DynamicStruc:
 
         Parameters
         ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.ndarray, (M,)
-            The neutron outgoing energy grid in eV
-        theta : np.ndarray, (N,)
-            Grid of angle of the scattering angle
         tauN: np.ndarray, (Z, T)
             tauN function. Z is the number of phonon expansion order and T is
             the number of beta grid points.
@@ -678,6 +672,7 @@ class Sab_to_DynamicStruc:
         Examples
         --------
         >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
+        >>> from solid_cinel import calc_alpha, AlphaBase
         >>> Ein = 7.2
         >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
         >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -688,10 +683,12 @@ class Sab_to_DynamicStruc:
         >>> mu = np.cos(np.deg2rad(theta))[::-1]
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
         >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-        >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu.min()), DebyeWallerCoeff, 1.0e-6, 5000)
+        >>> alpha = AlphaBase(calc_alpha(Ein, M, T, Eout, mu.min()))
+        >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
         >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
         >>> tauNbeta = get_tauNbeta(pdos.beta.data, tauN.shape[1])
-        >>> values = Sab_to_DynamicStruc.tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
+        >>> sabValues = Sab_to_DynamicStruc(Ein, M, T, Eout, mu)
+        >>> values = sabValues.tau(tauN, tauNbeta, DebyeWallerCoeff)
         >>> index = pd.Index(mu, name="mu")
         >>> columns = pd.Index(Eout, name="Eout")
         >>> pd.DataFrame(values, index=index, columns=columns).loc[::, Eout_test].round(6)
@@ -702,51 +699,40 @@ class Sab_to_DynamicStruc:
          0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
          0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
         """
-        # Get the beta grid:
-        betaAbs = get_AbsBeta(Eout, Ein, T, unique=False, sort=False)
-
-        # Define the dowscattering mask:
-        mask = (Eout <= Ein).sum()
-
         # Interpolation of tauN functions to reduce the number of calculations:
-        tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
+        tauNinterp = interp_multyParallel(self.betaAbs, tauNbeta, tauN)
 
         # Get the S(alpha, -beta) values for the alpha and beta combinations:
         # Correct alpha values for absolute beta values:
-        sabValues = phonon_expansion(get_alphaMat(Eout, Ein, T, M, mu),
-                                     tauN.shape[0],  # number of phonons
+        sabValues = phonon_expansion(self.alpha, tauN.shape[0],
                                      tauNinterp, DebyeWallerCoeff)
 
         # Dynamic Structure factor values selection:
         dynamicStruc = np.concatenate(
-            (sabValues[::, :mask],
-             np.exp(-betaAbs[mask:]) * sabValues[::, mask:]),
+            (sabValues[::, :self.downScatIndex],
+             np.exp(-self.betaAbs[self.downScatIndex:]) * sabValues[::, self.downScatIndex:]),
             axis=1
         )
         # Normalization constant
-        return dynamicStruc * normFactor(Eout, Ein, T, M)
+        return self.apply_norm(dynamicStruc)
 
-    @staticmethod
-    def pdos(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
-             pdos: Pdos, nphonon: int = None, decimal: float = 1.0e-6,
-             order_max: int = 5000, threshold: float = 0.0) -> np.ndarray:
+    def calc_values(self, *args, model: str = "fgm", **kwargs) -> np.ndarray:
         """
-        Calculate the Dynamic Structure Factor from a S(alpha, -beta) table based
-        on phonon expansion tau functions.
+        Calculate the Dynamic Structure Factor values. If no model is introduced,
+        is going to be suposed that the values are precomputed tau functions.
 
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-        mu : np.ndarray
-            The cosine of the angle of the distribution in degrees
-        pdos: 'solid_cinel.core.material.Pdos'
+        Parameters for SCT model
+        ------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+        twt: 'float', optional
+            twt for the effective temperature. For solid is 1.
+
+        Parameters for PDOS model
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
             Pdos object.
         nphonon: 'int', optional
             Phonon expansion order. The default is None and the order is
@@ -760,55 +746,73 @@ class Sab_to_DynamicStruc:
             Minimun value to take into account in the creation of tauN
             functions
 
+        Parameters for precomputed tau functions
+        ----------------------------------------
+        tauN: np.ndarray, (Z, T)
+            tauN function. Z is the number of phonon expansion order and T is
+            the number of beta grid points.
+        tauNbeta: np.ndarray, (T,)
+            Beta grid for the tauN function
+        DebyeWallerCoeff: float
+            Debye-Waller coefficient in LEAPR formalism
+
         Returns
         -------
         np.ndarray
-            The Dynamic Structure Factor values from a S(alpha, -beta) table
-            based on phonon expansion tau functions
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([40, 80, 120, 160])
-        >>> mu = np.cos(np.deg2rad(theta))[::-1]
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> values = Sab_to_DynamicStruc.pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14)
-        >>> index = pd.Index(mu, name="mu")
-        >>> columns = pd.Index(Eout, name="Eout")
-        >>> pd.DataFrame(values, index=index, columns=columns).loc[::, Eout_test].round(6)
-        Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
-        mu
-        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
-        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
-         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
-         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
+            The Dynamic Structure Factor values
         """
-        # Get Tpdos:
-        Tpdos = pdos.fix_T(T)
+        # FGM:
+        if model.lower() == "fgm":
+            return self.sct(1.0, kwargs.get("ws", 1.0))
 
-        # Get the Debye-Waller coefficient:
-        DebyeWallerCoeff = Tpdos.DebyeWallerCoeff
+        # SCT:
+        elif model.lower() == "sct":
+            Teff = args[0].fix_T(self.T).Teff
+            return self.sct(Teff / self.T, kwargs.get("ws", 1.0))
 
-        # Get the expansion order:
-        if nphonon:
-            warnings.warn(
-                "Is posible that the expansion order is not enough to get the correct results")
+        # PDOS:
+        elif model.lower() == "pdos":
+            # Get Tpdos:
+            Tpdos = args[0].fix_T(self.T)
+
+            # Get the Debye-Waller coefficient:
+            DebyeWallerCoeff = Tpdos.DebyeWallerCoeff
+
+            # Get the expansion order:
+            if kwargs.get("nphonon"):
+                warnings.warn(
+                    "Is posible that the expansion order is not enough to get the correct results")
+            else:
+                nphonon = AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff,
+                                                    kwargs.get("decimal", 1.0e-6),
+                                                    kwargs.get("order_max", 5000))
+
+            # Get tauN function:
+            tauN = Tpdos.tauN(nphonon, kwargs.get("threshold", 0.0), values=True)
+            tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
+            return self.tau(tauN, tauNbeta, DebyeWallerCoeff)
+
+        # Use precomputed tau functions
         else:
-            alphaMax = get_alphaFromEout(Eout, Ein, M, T, mu.min())
-            nphonon = get_expansionOrder(alphaMax, DebyeWallerCoeff, decimal, order_max)
+            return self.tau(*args)
 
-        # Get tauN function:
-        tauN = Tpdos.tauN(nphonon, threshold, values=True)
-        tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
+    def update(self, Ein: float, M: float = None, T: float = None,
+               Eout: np.ndarray = None, mu: np.ndarray = None):
+        # Update Ein and consequently Eout:
+        self.Ein = Ein
+        if Eout is None:
+            dE = self.Eout - self.Ein
+            self.Eout = Ein + dE
+        else:
+            self.Eout = Eout
 
-        return Sab_to_DynamicStruc.tau(Ein, M, T, Eout, mu, tauN, tauNbeta,
-                                       DebyeWallerCoeff)
+        # Update the rest of attributes if is needed:
+        if M is not None:
+            self.M = M
+        if T is not None:
+            self.T = T
+        if mu is not None:
+            self.mu = mu
 
 
 class DynamicStruc(DoubleDiffData):
@@ -816,7 +820,8 @@ class DynamicStruc(DoubleDiffData):
     Dynamic structure factor class.
     """
 
-    def __init__(self, Ein: float, T: float, M: float,  *args, **kwargs):
+    def __init__(self, *args, sabValues: Sab_to_DynamicStruc = None,
+                 **kwargs):
         """
         Initialize the DynamicStruc class.
 
@@ -833,36 +838,9 @@ class DynamicStruc(DoubleDiffData):
         kwargs : dict
             Optional arguments for the construction of the pd.DataFrame
         """
-        # Atributes of the Transfer function (Change in these parameters will
-        # change the Transfer function):
-        self.Ein = Ein
-        self.T = T
-        self.M = M
-
         # The Dynamic Structure data:
+        self.sabValues = sabValues
         super().__init__(*args, **kwargs)
-
-        self.alphaMat = DoubleDiffData(
-            get_alphaMat(self.Eout, self.Ein, self.T, self.M, self.mu)
-        )
-
-
-    def get_alphaMat(self, values=True) -> DoubleDiffData:
-        """
-        Return the $\alpha$ matrix for the Dynamic Structure Factor.
-
-        Parameters
-        ----------
-        values: bool, optional
-            If True return the values of the $\alpha$ matrix. If False return
-            the $\alpha$ matrix as a pd.DataFrame. The default is True.
-
-        Returns
-        -------
-        np.ndarray or pd.DataFrame
-            The $\alpha$ matrix for the Dynamic Structure Factor
-        """
-        return self.alphaMat.values if values else self.alphaMat.data
 
     def recoil(self, values=True) -> [np.ndarray, pd.DataFrame]:
         """
@@ -879,7 +857,10 @@ class DynamicStruc(DoubleDiffData):
         np.ndarray or pd.DataFrame
             The recoil energy for the Dynamic Structure Factor
         """
-        return self.get_alphaMat(values) * kb * self.T
+        if values:
+            return self.sabValues.alpha * kb * self.sabValues.T
+        else:
+            return pd.DataFrame(self.alpha.recoil, index=self.mu, columns=self.Eout)
 
     @property
     def alpha0(self) -> float:
@@ -901,13 +882,12 @@ class DynamicStruc(DoubleDiffData):
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([40, 80, 120, 160])
-        >>> mu = np.cos(np.deg2rad(theta))
         >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> float(round(DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).alpha0, 6))
+        >>> float(round(DynamicStruc.from_model(Ein, M, T, Eout, theta, pdos, model="pdos", threshold=1.0e-14).alpha0, 6))
         0.32328
         """
         # Get the alpha0 parameter:
-        return integrate((self.data * self.alphaMat.values).apply(integrate)) / 2
+        return integrate((self.data * self.sabValues.alpha).apply(integrate)) / 2
 
     @property
     def norm(self) -> float:
@@ -938,8 +918,7 @@ class DynamicStruc(DoubleDiffData):
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> dynamicStructure = DynamicStruc.from_fgm(Ein, M, T, Eout, mu)
+        >>> dynamicStructure = DynamicStruc.from_model(Ein, M, T, Eout, theta)
         >>> dynamicStructure.transferFunc.round(6)
         Eout
         6.7554    0.031423
@@ -969,8 +948,7 @@ class DynamicStruc(DoubleDiffData):
         >>> T = 1000
         >>> M = 238.05077040419212
         >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> dynamicStructure = DynamicStruc.from_fgm(Ein, M, T, Eout, mu)
+        >>> dynamicStructure = DynamicStruc.from_model(Ein, M, T, Eout, theta)
         >>> dynamicStructure.angularDistr.round(6)
         mu
         -9.659258e-01    0.480322
@@ -987,268 +965,6 @@ class DynamicStruc(DoubleDiffData):
         dtype: float64
         """
         return super().rowIntegral
-
-    @classmethod
-    def from_fgm(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 mu: np.ndarray, ws: float = 1.0):
-        """
-        Generate the Dynamic Structure Factor from a S(alpha, -beta) table based
-        on Free Gas Model.
-
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-        mu : np.ndarray
-            The cosine of the angle of the distribution in degrees
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Returns
-        -------
-        DynamicStruc
-            Dynamic Structure Factor from a S(alpha, -beta) table based on Free
-            Gas Model
-
-        Examples
-        --------
-        >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> DynamicStruc.from_fgm(Ein, M, T, Eout, mu).data.round(6)
-        Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
-        mu
-        -9.659258e-01  0.093290  0.635800  1.344517   0.987905  0.366598  0.054415
-        -8.660254e-01  0.074800  0.591841  1.360299   1.032095  0.376520  0.052584
-        -7.071068e-01  0.049539  0.515196  1.379332   1.109853  0.392419  0.049014
-        -5.000000e-01  0.024994  0.404827  1.387900   1.228207  0.412767  0.043015
-        -2.588190e-01  0.008241  0.268643  1.360778   1.399190  0.433942  0.033969
-         6.123234e-17  0.001317  0.132279  1.255634   1.643445  0.447804  0.022111
-         2.588190e-01  0.000054  0.036774  1.013814   1.998435  0.436944  0.009862
-         5.000000e-01  0.000000  0.002991  0.600838   2.539266  0.368245  0.001932
-         7.071068e-01  0.000000  0.000010  0.155387   3.441598  0.204433  0.000045
-         8.660254e-01  0.000000  0.000000  0.002062   5.233842  0.024125  0.000000
-         9.659258e-01  0.000000  0.000000  0.000000  10.563289  0.000000  0.000000
-        """
-        # Get the Dynamic Structure Factor values:
-        dynamicStructure = Sab_to_DynamicStruc.fgm(Ein, M, T, Eout, mu, ws=ws)
-
-        return cls(Ein, T, M, dynamicStructure, index=mu, columns=Eout)
-
-    @classmethod
-    def from_sct(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 mu: np.ndarray, pdos: Pdos, ws: float = 1.0):
-        """
-        Generate tDynamic Structure Factor from a S(alpha, -beta) table based on
-        Short Collision Time model.
-
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-        mu : np.ndarray
-            The cosine of the angle of the distribution in degrees
-        pdos: 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Returns
-        -------
-        DynamicStruc
-            Dynamic Structure Factor from a S(alpha, -beta) table based on Short
-            Collision Time model
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> DynamicStruc.from_sct(Ein, M, T, Eout, mu, pdos).data.round(6)
-        Eout             6.7554    6.9050    7.0439     7.2000    7.3157    7.4480
-        mu
-        -9.659258e-01  0.094001  0.636412  1.342345   0.987382  0.367669  0.054937
-        -8.660254e-01  0.075434  0.592611  1.358169   1.031486  0.377620  0.053100
-        -7.071068e-01  0.050039  0.516194  1.377318   1.109089  0.393570  0.049515
-        -5.000000e-01  0.025312  0.406041  1.386155   1.227206  0.413997  0.043483
-        -2.588190e-01  0.008381  0.269913  1.359573   1.397842  0.435292  0.034377
-         6.123234e-17  0.001348  0.133285  1.255372   1.641602  0.449328  0.022419
-         2.588190e-01  0.000056  0.037238  1.014880   1.995877  0.438696  0.010033
-         5.000000e-01  0.000000  0.003057  0.602973   2.535640  0.370193  0.001978
-         7.071068e-01  0.000000  0.000011  0.156817   3.436247  0.206125  0.000047
-         8.660254e-01  0.000000  0.000000  0.002116   5.225195  0.024538  0.000000
-         9.659258e-01  0.000000  0.000000  0.000000  10.545191  0.000000  0.000000
-        """
-        # Get the Dynamic Structure Factor values:
-        dynamicStructure = Sab_to_DynamicStruc.sct(Ein, M, T, Eout, mu, pdos, ws=ws)
-
-        return cls(Ein, T, M, dynamicStructure, index=mu, columns=Eout)
-
-    @classmethod
-    def from_tau(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                 mu: np.ndarray, tauN: np.ndarray, tauNbeta: np.ndarray,
-                 DebyeWallerCoeff: float):
-        """
-        Generate the Dynamic Structure Factor from tauN function using the
-        phonon expansion model.
-
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.ndarray, (M,)
-            The neutron outgoing energy grid in eV
-        theta : np.ndarray, (N,)
-            Grid of angle of the scattering angle
-        tauN: np.ndarray, (Z, T)
-            tauN function. Z is the number of phonon expansion order and T is
-            the number of beta grid points.
-        tauNbeta: np.ndarray, (T,)
-            Beta grid for the tauN function
-        DebyeWallerCoeff: float
-            Debye-Waller coefficient in LEAPR formalism
-
-        Returns
-        -------
-        DynamicStruc
-            Dynamic Structure Factor
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([40, 80, 120, 160])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-        >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu.min()), DebyeWallerCoeff, 1.0e-6, 5000)
-        >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
-        >>> tauNbeta = get_tauNbeta(pdos.beta.data, tauN.shape[1])
-        >>> DynamicStruc.from_tau(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff).data.loc[::, Eout_test].round(6)
-        Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
-        mu
-        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
-        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
-         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
-         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
-        """
-        # Get the Dynamic Structure Factor values with correct type:
-        dynamicStructure = Sab_to_DynamicStruc.tau(Ein, M, T, Eout, mu, tauN,
-                                                   tauNbeta, DebyeWallerCoeff)
-
-        return cls(Ein, T, M, dynamicStructure, index=mu, columns=Eout)
-
-    @classmethod
-    def from_pdos(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                  mu: np.ndarray, pdos: Pdos, nphonon: int = None,
-                  decimal: float = 1.0e-6,
-                  order_max: int = 5000, threshold: float = 0.0):
-        """
-        Generate the Dynamic Structure Factor from a S(alpha, -beta) table based
-        on Phonon expansion model.
-
-        Parameters
-        ----------
-        Ein : float
-            The incident energy of the neutron in eV
-        M : float
-            The mass of the target material in amu
-        T : float
-            Temperature of the material in K
-        Eout : np.array
-            The neutron outgoing energy grid in eV
-        mu : np.ndarray
-            The cosine of the angle of the distribution in degrees
-        pdos: 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        nphonon: 'int', optional
-            Phonon expansion order. The default is None and the order is
-            calculated using the get_expansionOrder function.
-        decimal: 'float', optional
-            Decimal precision for the calculation of the expansion order.
-            The default is 1.0e-6.
-        order_max: 'int', optional
-            Maximun expansion order. The default is 5000.
-        threshold: 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions
-
-        Returns
-        -------
-        DynamicStruc
-            Dynamic Structure Factor from a S(alpha, -beta) table based on
-            Phonon expansion model.
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
-        >>> Ein = 7.2
-        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
-        >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
-        >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
-        >>> T = 1000
-        >>> M = 238.05077040419212
-        >>> theta = np.array([40, 80, 120, 160])
-        >>> mu = np.cos(np.deg2rad(theta))
-        >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
-        >>> DynamicStruc.from_pdos(Ein, M, T, Eout, mu, pdos, threshold=1.0e-14).data.loc[::, Eout_test].round(6)
-        Eout         6.7554    6.9050    7.0439    7.2000    7.3157    7.4480
-        mu
-        -0.939693  0.090037  0.621304  1.346632  1.002256  0.369299  0.053688
-        -0.500000  0.026675  0.403624  1.383023  1.232575  0.412462  0.042739
-         0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
-         0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
-        """
-        # Get the Dynamic Structure Factor values with correct type:
-        dynamicStructure = Sab_to_DynamicStruc.pdos(Ein, M, T, Eout, mu, pdos,
-                                                    nphonon=nphonon,
-                                                    decimal=decimal,
-                                                    order_max=order_max,
-                                                    threshold=threshold)
-
-        return cls(Ein, T, M, dynamicStructure, index=mu, columns=Eout)
-
-    @staticmethod
-    def get_values(Ein: float, M: float, T: float, Eout: np.ndarray,
-                   mu: np.ndarray, *args, model: str = "fgm", **kwargs):
-        # Get the new values:
-        if model.lower() == "fgm":
-            return Sab_to_DynamicStruc.fgm(Ein, M, T, Eout, mu, *args, **kwargs)
-        elif model.lower() == "sct":
-            return Sab_to_DynamicStruc.sct(Ein, M, T, Eout, mu, *args, **kwargs)
-        elif model.lower() == "pdos":
-            return Sab_to_DynamicStruc.pdos(Ein, M, T, Eout, mu, *args, **kwargs)
-        elif model.lower() == "tau":
-            return Sab_to_DynamicStruc.tau(Ein, M, T, Eout, mu, *args, **kwargs)
 
     @classmethod
     def from_model(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
@@ -1370,10 +1086,11 @@ class DynamicStruc(DoubleDiffData):
         # Get the cosine of the angle of the distribution:
         mu = np.cos(np.deg2rad(theta))
 
-        # Get the values:
-        dynamicStructure = cls.get_values(Ein, M, T, Eout, mu, *args, model=model, **kwargs)
+        # Create the object for the calculation of the Dynamic Structure Factor:
+        sabValues = Sab_to_DynamicStruc(Ein, M, T, Eout, mu)
 
-        return cls(Ein, T, M, dynamicStructure, index=mu, columns=Eout)
+        return cls(sabValues.calc_values(*args, model=model, **kwargs),
+                   sabValues=sabValues, index=sabValues.mu, columns=sabValues.Eout)
 
     def update(self, Ein: float, *args, model: str = "fgm",  M: float = None,
                T: float = None, Eout: np.ndarray = None, mu: np.ndarray = None,
@@ -1432,8 +1149,6 @@ class DynamicStruc(DoubleDiffData):
 
         Examples
         --------
-        Examples
-        --------
         >>> Ein = 7.2
         >>> Eout = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
         >>> T = 1000
@@ -1488,24 +1203,12 @@ class DynamicStruc(DoubleDiffData):
          8.660254e-01  0.000003  0.750993
          9.659258e-01  0.000000  0.001715
         """
-        # Calculate Eout/mu values if is needed:
-        if Eout is None:
-            dE = self.data.columns.values - self.Ein
-            Eout = Ein + dE
-
-        if mu is None:
-            mu = self.data.index.values
-
-        # Update the atributes:
-        self.Ein = Ein
-        if M is not None:
-            self.M = M
-        if T is not None:
-            self.T = T
+        # Update the calculation class:
+        self.sabValues.update(Ein, M=M, T=T, Eout=Eout, mu=mu)
 
         # Get the new values:
-        dynamicStructure = self.get_values(Ein, self.M, self.T, Eout, mu, *args,
-                                           model=model, **kwargs)
+        dynamicStructure = self.sabValues.calc_values(*args, model=model,
+                                                      **kwargs)
 
         # Update the values
         if dynamicStructure.shape == self.data.shape:
@@ -1519,6 +1222,8 @@ class DynamicStruc(DoubleDiffData):
             if mu is not None:
                 super().update_axis(mu, axis=0)
         else:
+            if mu is None:
+                mu = self.mu
             super().inplace(pd.DataFrame(dynamicStructure, index=mu, columns=Eout))
 
 
@@ -1583,6 +1288,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
     Examples
     --------
     >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
+    >>> from solid_cinel import AlphaBase, calc_alpha
     >>> Ein = 7.2
     >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
     >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
@@ -1592,7 +1298,8 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
     >>> mu = np.cos(np.deg2rad([120]))
     >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
     >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-    >>> nphonon = get_expansionOrder(get_alphaFromEout(Eout, Ein, M, T, mu), DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> alpha = AlphaBase(calc_alpha(Ein, M, T, Eout, mu.min()))
+    >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
     >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
     >>> tau1beta = pdos.beta.data
     >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])

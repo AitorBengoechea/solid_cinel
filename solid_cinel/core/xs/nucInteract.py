@@ -240,7 +240,7 @@ class InteractEnergy(DoubleDiffData):
             The modification factor for the interaction energy
         """
         mu_ = InteractEnergy.check_mu(mu)
-        recoilMod = calc_alphaRecoil(Eout, Ein, M, mu_)
+        recoilMod = calc_alphaRecoil(Ein, M, Eout, mu_)
         recoilMod /= 2 * (1 - mu_)
         return recoilMod
 
@@ -449,7 +449,7 @@ class InteractEnergy(DoubleDiffData):
          0.75  0.501862  0.902021  1.002119  1.102232  1.502809  2.003723
         """
         mu_ = InteractEnergy.check_mu(mu)
-        return Eout + calc_alphaRecoil(Eout, Ein, M, mu_)
+        return Eout + calc_alphaRecoil(Ein, M, Eout, mu_)
 
     @staticmethod
     def corr4PCFapprox(Ein: float, Eout: np.ndarray, mu: np.ndarray,

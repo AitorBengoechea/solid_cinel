@@ -9,20 +9,135 @@ import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_Beta
-from solid_cinel.core.dynamic_structure.alpha import get_alphaMatMod, AlphaBase, calc_alpha
+from solid_cinel.core.dynamic_structure.alpha import get_alphaMatMod, AlphaBase, calc_alpha, calc_alphaRecoil
 from solid_cinel.core.dynamic_structure.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
 from typing import Iterable
 import warnings
+from dataclasses import dataclass
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
+
+@dataclass
+class DoubleDiff:
+    """
+    Abstract class for the creation of Double Diff Data.
+
+    Parameters
+    ----------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray
+        The neutron outgoing energy
+    mu : np.ndarray
+        The cosine of the angle of the distribution in degrees
+    """
+    Ein: float
+    M: float
+    T: float
+    Eout: np.ndarray
+    mu: np.ndarray
+
+    def __post_init__(self):
+        self.Eout = np.unique(self.Eout)
+        self.mu = np.unique(self.mu)
+        self.mu2D = self.mu[::, np.newaxis]
+
+    @property
+    def A(self) -> float:
+        """
+        The mass ratio of the neutron to the target material.
+
+        Returns
+        -------
+        float
+            The mass ratio of the neutron to the target material
+        """
+        return self.M / m
+
+    @property
+    def aws(self) -> float:
+        """
+        The average atomic weight of the target material.
+
+        Returns
+        -------
+        float
+            The average atomic weight of the target material
+        """
+        return ((self.A + 1) / self.A) ** 2
+    @property
+    def beta(self) -> np.ndarray:
+        """
+        Calculate the beta values.
+
+        Returns
+        -------
+        np.ndarray
+            The beta values
+        """
+        return calc_Beta(self.Eout, self.Ein, self.T)
+
+    @property
+    def betaAbs(self) -> np.ndarray:
+        """
+        Calculate the absolute beta values.
+
+        Returns
+        -------
+        np.ndarray
+            The absolute beta values
+        """
+        return np.absolute(self.beta)
+
+    @property
+    def downScatIndex(self) -> int:
+        """
+        Calculate the downscattering index.
+
+        Returns
+        -------
+        int
+            The downscattering index
+        """
+        return (self.Eout <= self.Ein).sum()
+
+    @property
+    def alpha(self) -> np.ndarray:
+        """
+        Calculate the alpha values.
+
+        Returns
+        -------
+        np.ndarray
+            The alpha values
+        """
+        return calc_alpha(self.Ein, self.M, self.T, self.Eout, self.mu2D)
+
+    @property
+    def recoil(self) -> np.ndarray:
+        """
+        Calculate the recoil energy.
+
+        Returns
+        -------
+        np.ndarray
+            The recoil energy
+        """
+        return calc_alphaRecoil(self.Ein, self.M, self.Eout, self.mu2D)
+
+
 class DoubleDiffData:
     """
-    Abstract class for Double Differential data.
+    Abstract class for handeling Double Differential data.
     """
     def __init__(self, *args, **kwargs):
         """
@@ -471,12 +586,11 @@ class DoubleDiffData:
         return self.inplace(dataCut) if inplace else dataCut
 
 
-class Sab_to_DynamicStruc:
+class Sab_to_DynamicStruc(DoubleDiff):
     """
     Abstract class for Dynamic Structure Factor calculations.
     """
-    def __init__(self, Ein: float, M: float, T: float, Eout: np.ndarray,
-            mu: np.ndarray):
+    def __init__(self, *args):
         """
         Initialize the Sab_to_DynamicStruc class.
 
@@ -493,81 +607,7 @@ class Sab_to_DynamicStruc:
         mu : np.ndarray
             The cosine of the angle of the distribution in degrees
         """
-        self.Ein = Ein
-        self.M = M
-        self.T = T
-        self.Eout = np.unique(Eout)
-        self.mu = np.unique(mu)
-    @property
-    def A(self) -> float:
-        """
-        The mass ratio of the neutron to the target material.
-
-        Returns
-        -------
-        float
-            The mass ratio of the neutron to the target material
-        """
-        return self.M / m
-
-    @property
-    def aws(self) -> float:
-        """
-        The average atomic weight of the target material.
-
-        Returns
-        -------
-        float
-            The average atomic weight of the target material
-        """
-        return ((self.A + 1) / self.A) ** 2
-    @property
-    def beta(self) -> np.ndarray:
-        """
-        Calculate the beta values.
-
-        Returns
-        -------
-        np.ndarray
-            The beta values
-        """
-        return calc_Beta(self.Eout, self.Ein, self.T)
-
-    @property
-    def betaAbs(self) -> np.ndarray:
-        """
-        Calculate the absolute beta values.
-
-        Returns
-        -------
-        np.ndarray
-            The absolute beta values
-        """
-        return np.absolute(self.beta)
-
-    @property
-    def downScatIndex(self) -> int:
-        """
-        Calculate the downscattering index.
-
-        Returns
-        -------
-        int
-            The downscattering index
-        """
-        return (self.beta <= 0.0).sum()
-
-    @property
-    def alpha(self) -> np.ndarray:
-        """
-        Calculate the alpha values.
-
-        Returns
-        -------
-        np.ndarray
-            The alpha values
-        """
-        return calc_alpha(self.Ein, self.M, self.T, self.Eout, self.mu[::, np.newaxis])
+        super().__init__(*args)
 
     @property
     def normFactor(self) -> np.ndarray:
@@ -708,9 +748,10 @@ class Sab_to_DynamicStruc:
                                      tauNinterp, DebyeWallerCoeff)
 
         # Dynamic Structure factor values selection:
+        col = self.downScatIndex
         dynamicStruc = np.concatenate(
-            (sabValues[::, :self.downScatIndex],
-             np.exp(-self.betaAbs[self.downScatIndex:]) * sabValues[::, self.downScatIndex:]),
+            (sabValues[::, :col],
+             np.exp(-self.betaAbs[col:]) * sabValues[::, col:]),
             axis=1
         )
         # Normalization constant
@@ -780,8 +821,7 @@ class Sab_to_DynamicStruc:
 
             # Get the expansion order:
             if kwargs.get("nphonon"):
-                warnings.warn(
-                    "Is posible that the expansion order is not enough to get the correct results")
+                warnings.warn("Is posible that the expansion order is not enough to get the correct results")
                 nphonon = kwargs.get("nphonon")
             else:
                 nphonon = AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff,
@@ -843,6 +883,26 @@ class DynamicStruc(DoubleDiffData):
         self.sabValues = sabValues
         super().__init__(*args, **kwargs)
 
+    def alpha(self, values=True) -> [np.ndarray, pd.DataFrame]:
+        """
+        Return the alpha values for the Dynamic Structure Factor.
+
+        Parameters
+        ----------
+        values: bool, optional
+            If True return the values of the alpha. If False return
+            the alpha as a pd.DataFrame. The default is True.
+
+        Returns
+        -------
+        np.ndarray or pd.DataFrame
+            The alpha values for the Dynamic Structure Factor
+        """
+        if values:
+            return self.sabValues.alpha
+        else:
+            return pd.DataFrame(self.sabValues.alpha, index=self.mu, columns=self.Eout)
+
     def recoil(self, values=True) -> [np.ndarray, pd.DataFrame]:
         """
         Return the recoil energy for the Dynamic Structure Factor.
@@ -859,9 +919,9 @@ class DynamicStruc(DoubleDiffData):
             The recoil energy for the Dynamic Structure Factor
         """
         if values:
-            return self.sabValues.alpha * kb * self.sabValues.T
+            return self.sabValues.recoil
         else:
-            return pd.DataFrame(self.alpha.recoil, index=self.mu, columns=self.Eout)
+            return pd.DataFrame(self.sabValues.recoil, index=self.mu, columns=self.Eout)
 
     @property
     def alpha0(self) -> float:

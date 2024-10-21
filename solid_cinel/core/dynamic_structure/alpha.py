@@ -161,8 +161,8 @@ class AlphaBase:
         >>> alpha_grid = AlphaVect(alpha0_).scale(T)
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> debye_waller = pdos.DebyeWallerCoeff(T)
-        >>> alpha_grid.expansionOrder(debye_waller, 1.0e-6, 5000)
-        798
+        >>> expan = alpha_grid.expansionOrder(debye_waller, 1.0e-6, 5000)
+        >>> assert expan == 798
         """
         # Get the cumulative sum of the alpha values
         alphaCumsum = self.mulCumSum(DebyeWallerCoeff, orderMax)

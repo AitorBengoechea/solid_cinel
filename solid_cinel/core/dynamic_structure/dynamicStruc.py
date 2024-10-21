@@ -782,6 +782,7 @@ class Sab_to_DynamicStruc:
             if kwargs.get("nphonon"):
                 warnings.warn(
                     "Is posible that the expansion order is not enough to get the correct results")
+                nphonon = kwargs.get("nphonon")
             else:
                 nphonon = AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff,
                                                     kwargs.get("decimal", 1.0e-6),

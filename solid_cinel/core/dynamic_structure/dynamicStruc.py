@@ -776,9 +776,10 @@ class Sab_to_DynamicStruc(DoubleDiff):
         # Dynamic Structure factor values selection:
         col = self.downScatIndex
         dynamicStruc = np.concatenate(
-            (sabValues[::, :col],
-             np.exp(-self.betaAbs[col:]) * sabValues[::, col:]),
-            axis=1
+            (
+                sabValues[::, :col],
+                np.exp(-self.betaAbs[col:]) * sabValues[::, col:]
+            ), axis=1
         )
         # Normalization constant
         return self.apply_norm(dynamicStruc)

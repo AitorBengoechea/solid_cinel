@@ -447,6 +447,28 @@ class Beta:
         scale_grid = self.data * therm / (kb * T)
         return Beta(scale_grid)
 
+@nb.jit(nopython=True, cache=True)
+def calc_dE(Eout: [np.ndarray, float], Ein: [np.ndarray, float]) -> np.ndarray:
+    """
+    Calculate the dE values from the parameters of the function:
+    .. math::
+        dE = \beta k_B T
+
+    Parameters
+    ----------
+    beta : 'np.ndarray', (N,) or 'float'
+        Beta values.
+    T : float
+        Temperature in K.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Array containing all posible dE values for the input parameters.
+    """
+    # Get the dE values:
+    return Eout - Ein
+
 
 @nb.jit(nopython=True, cache=True)
 def calc_Beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
@@ -471,7 +493,7 @@ def calc_Beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
         Array containing all posible beta values for the input parameters.
     """
     # Get the beta values:
-    return (Eout - Ein) / (kb * T)
+    return calc_dE(Eout, Ein) / (kb * T)
 
 
 @nb.jit(nopython=True, cache=True)

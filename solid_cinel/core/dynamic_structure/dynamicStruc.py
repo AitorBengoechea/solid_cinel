@@ -8,8 +8,8 @@ import pandas as pd
 import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
-from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_Beta
-from solid_cinel.core.dynamic_structure.alpha import get_alphaMatMod, AlphaBase, calc_alpha, calc_alphaRecoil
+from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_dE
+from solid_cinel.core.dynamic_structure.alpha import get_alphaMatMod, AlphaBase, calc_alphaRecoil
 from solid_cinel.core.dynamic_structure.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
@@ -42,7 +42,6 @@ class DoubleDiff:
     """
     Ein: float
     M: float
-    T: float
     Eout: np.ndarray
     mu: np.ndarray
 
@@ -74,29 +73,6 @@ class DoubleDiff:
             The average atomic weight of the target material
         """
         return ((self.A + 1) / self.A) ** 2
-    @property
-    def beta(self) -> np.ndarray:
-        """
-        Calculate the beta values.
-
-        Returns
-        -------
-        np.ndarray
-            The beta values
-        """
-        return calc_Beta(self.Eout, self.Ein, self.T)
-
-    @property
-    def betaAbs(self) -> np.ndarray:
-        """
-        Calculate the absolute beta values.
-
-        Returns
-        -------
-        np.ndarray
-            The absolute beta values
-        """
-        return np.absolute(self.beta)
 
     @property
     def downScatIndex(self) -> int:
@@ -111,18 +87,6 @@ class DoubleDiff:
         return (self.Eout <= self.Ein).sum()
 
     @property
-    def alpha(self) -> np.ndarray:
-        """
-        Calculate the alpha values.
-
-        Returns
-        -------
-        np.ndarray
-            The alpha values
-        """
-        return calc_alpha(self.Ein, self.M, self.T, self.Eout, self.mu2D)
-
-    @property
     def recoil(self) -> np.ndarray:
         """
         Calculate the recoil energy.
@@ -133,6 +97,18 @@ class DoubleDiff:
             The recoil energy
         """
         return calc_alphaRecoil(self.Ein, self.M, self.Eout, self.mu2D)
+
+    @property
+    def dE(self):
+        """
+        Calculate the energy transfer.
+
+        Returns
+        -------
+        np.ndarray
+            The energy transfer
+        """
+        return calc_dE(self.Eout, self.Ein)
 
 
 class DoubleDiffData:
@@ -590,7 +566,8 @@ class Sab_to_DynamicStruc(DoubleDiff):
     """
     Abstract class for Dynamic Structure Factor calculations.
     """
-    def __init__(self, *args):
+    def __init__(self, Ein: float, M: float, T: float, Eout: np.ndarray,
+                 mu: np.ndarray):
         """
         Initialize the Sab_to_DynamicStruc class.
 
@@ -607,7 +584,20 @@ class Sab_to_DynamicStruc(DoubleDiff):
         mu : np.ndarray
             The cosine of the angle of the distribution in degrees
         """
-        super().__init__(*args)
+        self.T = T
+        super().__init__(Ein, M, Eout, mu)
+
+    @property
+    def kbT(self) -> float:
+        """
+        Calculate the product of the Boltzmann constant and the temperature.
+
+        Returns
+        -------
+        float
+            The product of the Boltzmann constant and the temperature
+        """
+        return kb * self.T
 
     @property
     def normFactor(self) -> np.ndarray:
@@ -619,7 +609,43 @@ class Sab_to_DynamicStruc(DoubleDiff):
         np.ndarray
             The normalization factor
         """
-        return self.aws / (2 * kb * self.T) * np.sqrt(self.Eout / self.Ein)
+        return self.aws / (2 * self.kbT) * np.sqrt(self.Eout / self.Ein)
+
+    @property
+    def beta(self) -> np.ndarray:
+        """
+        Calculate the beta values.
+
+        Returns
+        -------
+        np.ndarray
+            The beta values
+        """
+        return self.dE / self.kbT
+
+    @property
+    def alpha(self) -> np.ndarray:
+        """
+        Calculate the alpha values.
+
+        Returns
+        -------
+        np.ndarray
+            The alpha values
+        """
+        return self.recoil / self.kbT
+
+    @property
+    def betaAbs(self) -> np.ndarray:
+        """
+        Calculate the absolute beta values.
+
+        Returns
+        -------
+        np.ndarray
+            The absolute beta values
+        """
+        return np.absolute(self.beta)
 
     def apply_norm(self, dynamicStructure: np.ndarray):
         """

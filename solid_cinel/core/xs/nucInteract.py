@@ -708,7 +708,8 @@ class NucInteractBase:
 
 
 class NucInteract(DoubleDiffData):
-    def __init__(self, approx: bool, *args, **kwargs):
+    def __init__(self, approx: bool, kind: str,
+                 *args, nuc: NucInteractBase = None, **kwargs):
         """
         Initialize the class with the data.
         Parameters
@@ -716,8 +717,29 @@ class NucInteract(DoubleDiffData):
         data: Iterable
             The data to be stored in the class
         """
+        # Atributes of the Nuclear Interaction class:
         self.approx = approx
+        self.kind = kind
+
+        # Initialize the parent class:
         super().__init__(*args, **kwargs)
+
+        # Llamar a __post_init__ para inicialización adicional
+        if nuc is not None:
+            self.__post_init__(nuc)
+
+    def __post_init__(self, nuc: NucInteractBase):
+        # Extract the values
+        self.Ein = nuc.EinMat.Ein
+        self.T = nuc.Tinteract.T
+
+        # Extract the class data:
+        self.xs0K = nuc.xs0K
+        self.EinMat = nuc.EinMat.to_4PCF(self.approx, self.kind)
+        if not self.approx:
+            self.Tinteract = nuc.Tinteract.to_4PCF(self.Ein, self.Eout)
+        else:
+            self.Tinteract = nuc.Tinteract.to_4PCF()
 
     @classmethod
     def from_sigma(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,
@@ -784,5 +806,182 @@ class NucInteract(DoubleDiffData):
         nuc = NucInteractBase.from_theta(xs0K, Ein, T, Eout, theta)
 
         # Calculate the cross section:
-        return cls(approx, nuc.calc_sigma1(approx, kind),
-                   index=nuc.EinMat.mu, columns=nuc.EinMat.Eout)
+        return cls(approx, kind, nuc.calc_sigma1(approx, kind),
+                   index=nuc.EinMat.mu, columns=nuc.EinMat.Eout, nuc=nuc)
+
+    @property
+    def norm(self) -> float:
+        """
+        Normalization of the Dynamic Structure Factor.
+
+        Returns
+        -------
+        float
+            Normalization of the Dynamic Structure Factor
+        """
+        return super().doubleIntegral
+
+    @property
+    def transferFunc(self) -> pd.Series:
+        """
+        Return the Transference function of the Nuclear interaction.
+
+        Returns
+        -------
+        pd.Series
+            The transfer function
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("nucInteract.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.from_file("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150, 180])
+        >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+        >>> Ein = 6.67
+        >>> Eout = np.array([6.5, 6.6, 6.67, 6.8, 6.9])
+        >>> nuc = NucInteract.from_sigma(xs0K, Ein, T, Eout, theta)
+        >>> nuc.transferFunc.round(6)
+        Eout
+        6.50     163.179694
+        6.60    1057.229009
+        6.67     738.593808
+        6.80     179.723234
+        6.90      81.858024
+        dtype: float64
+        """
+        return super().columsIntegral
+
+    @property
+    def angularDistr(self) -> pd.Series:
+        """
+        Return the angle distribution of the Nuclear interaction.
+
+        Returns
+        -------
+        pd.Series
+            The angle distribution
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("nucInteract.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.from_file("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150, 180])
+        >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+        >>> Ein = 6.67
+        >>> Eout = np.array([6.5, 6.6, 6.67, 6.8, 6.9])
+        >>> nuc = NucInteract.from_sigma(xs0K, Ein, T, Eout, theta)
+        >>> nuc.angularDistr.round(6)
+        mu
+        -1.000000e+00     74.976735
+        -8.660254e-01     96.788317
+        -5.000000e-01    109.269550
+         6.123234e-17    111.137228
+         5.000000e-01    105.887563
+         8.660254e-01    102.123839
+        dtype: float64
+        """
+        return super().rowIntegral
+
+    def updateApprox(self, Ein: float, kind: str = "corrected",
+                     Eout: np.ndarray = None):
+        """
+        Update the approximation of the interaction energy of the material.
+
+        Parameters
+        ----------
+        Ein : float
+            The energy of the incident particle in eV
+        kind : bool
+            The type of calculation to be performed. Default is True.
+        Eout : np.ndarray
+            The energy of the outgoing particles in eV
+
+        Returns
+        -------
+        np.ndarray
+            The interaction energy of the material in eV
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("nucInteract.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.from_file("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150, 180])
+        >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+        >>> Ein = 6.67
+        >>> Eout = np.array([6.5, 6.6, 6.67, 6.8, 6.9])
+        >>> nucOriginal = NucInteract.from_sigma(xs0K, Ein, T, Eout, theta)
+        >>> nucOriginal.data
+        Eout                 6.50        6.60        6.67        6.80       6.90
+        mu
+        -1.000000e+00  109.429067  578.174610  132.000620   47.804039  33.258262
+        -8.660254e-01  114.424855  797.111411  158.423511   50.115934  34.138420
+        -5.000000e-01  111.529220  749.375088  314.215063   58.499214  36.945805
+         6.123234e-17   85.702705  542.581865  491.664735   82.203465  42.255244
+         5.000000e-01   62.495084  387.510240  511.456837  140.088731  51.371004
+         8.660254e-01   49.379282  304.044914  474.211771  201.620717  64.069957
+
+        >>> nucOriginal.updateApprox(6.8)
+                             6.63        6.73       6.80       6.93       7.03
+        -1.000000e+00   73.712425   39.075815  33.258262  33.258262  33.258262
+        -8.660254e-01   83.443289   40.528704  34.138420  34.138420  34.138420
+        -5.000000e-01  137.183671   45.566606  36.945805  36.945805  36.945805
+         6.123234e-17  208.191548   58.234533  42.255244  42.255244  42.255244
+         5.000000e-01  254.351965   86.860419  51.371004  51.371004  51.371004
+         8.660254e-01  285.489953  119.096513  64.069957  64.069957  64.069957
+        """
+        if Eout is None:
+            dE = self.Eout - self.Ein
+            Eout_ = Ein + dE
+        else:
+            Eout_ = Eout
+
+        # Get the incident energy matrix:
+        EinMat = self.EinMat
+        XsMat = self.data.values
+        Tinteract = self.Tinteract
+
+        # Generate the new incide energy matrix:
+        EinMatNew = InteractEnergy(Ein, self.xs0K.M, Eout_, self.mu).to_4PCF(self.approx, kind)
+
+        XsMatNew = np.zeros(EinMat.shape)
+        for i in range(EinMat.shape[0]):
+            # Define the limits of the interpolation:
+            col = (EinMatNew[i, :] > EinMat[i, :]).sum()
+
+            # Perform the interpolation:
+            XsMatNew[i, :col] = np.interp(EinMatNew[i, :col], EinMat[i, :col], XsMat[i, :col])
+
+            # Perform the calculations:
+            XsMatNew[i, col:] = self.xs0K.sigma1(Tinteract[i], EinMatNew[i, col:])
+
+        return pd.DataFrame(XsMatNew, columns=Eout_, index=self.mu)

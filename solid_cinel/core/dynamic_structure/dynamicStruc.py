@@ -865,7 +865,7 @@ class Sab_to_DynamicStruc(DoubleDiff):
             return self.tau(*args)
 
     def update(self, Ein: float, M: float = None, T: float = None,
-               Eout: np.ndarray = None, mu: np.ndarray = None):
+               Eout: np.ndarray = None, mu: np.ndarray = None) -> None:
         # Update Ein and consequently Eout:
         self.Ein = Ein
         if Eout is None:

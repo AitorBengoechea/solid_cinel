@@ -951,7 +951,9 @@ class NucInteract(DoubleDiffData):
          8.660254e-01   49.379282  304.044914  474.211771  201.620717  64.069957
 
         >>> nucOriginal.updateApprox(6.8)
-                             6.63        6.73       6.80       6.93       7.03
+        >>> nucOriginal.data
+        Eout                 6.63        6.73       6.80       6.93       7.03
+        mu
         -1.000000e+00   73.712425   39.075815  33.258262  33.258262  33.258262
         -8.660254e-01   83.443289   40.528704  34.138420  34.138420  34.138420
         -5.000000e-01  137.183671   45.566606  36.945805  36.945805  36.945805
@@ -984,4 +986,6 @@ class NucInteract(DoubleDiffData):
             # Perform the calculations:
             XsMatNew[i, col:] = self.xs0K.sigma1(Tinteract[i], EinMatNew[i, col:])
 
-        return pd.DataFrame(XsMatNew, columns=Eout_, index=self.mu)
+        # Update the EinMat with the new values:
+        self.EinMat[:] = EinMatNew
+        super().inplace(pd.DataFrame(XsMatNew, columns=Eout_, index=self.mu))

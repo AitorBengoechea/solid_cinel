@@ -1377,6 +1377,8 @@ def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values.
     """
+    # Common variables:
     alphaCommon = 4 * alpha * Tratio * ws
-    sabValues = np.exp(-(ws * alpha + beta) ** 2 / alphaCommon)
-    return sabValues / np.sqrt(pi * alphaCommon)
+
+    # S(alpha, beta) matrix values:
+    return np.exp(-(ws * alpha + beta) ** 2 / alphaCommon) / np.sqrt(pi * alphaCommon)

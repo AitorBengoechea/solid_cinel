@@ -524,5 +524,4 @@ def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
     alphaMat = np.full((len(mu), len(Eout)), Ein / AkbT)
 
     # Modify the alpha matrix with outgoing energy and cosine of the scattering angle modification
-    alphaMat += (Eout - 2 * mu[:, np.newaxis] * np.sqrt(Eout * Ein)) / AkbT * expTerm
-    return alphaMat
+    return alphaMat + (Eout - 2 * mu[:, np.newaxis] * np.sqrt(Eout * Ein)) / AkbT * expTerm

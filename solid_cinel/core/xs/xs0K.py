@@ -532,11 +532,11 @@ def EoutMat(Ein:np.ndarray) -> np.ndarray:
     # 1 iteration to allocate the matrix:
     Eout = default_Eout(Ein[0])
     result = np.zeros((EinLen, len(Eout)))
-    result[0, :] += Eout
+    result[0, :] = Eout
 
     # Next iteration to fill the matrix:
     for i in range(1, EinLen):
-        result[i, :] += default_Eout(Ein[i])
+        result[i, :] = default_Eout(Ein[i])
     return result
 
 
@@ -681,7 +681,7 @@ def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray, EoutMat: np.ndarra
     """
     Eincalc = Eincalc[::, np.newaxis]
     for j in prange(len(Tcalc)):
-        XsMat[:, j] += np.trapz(
+        XsMat[:, j] = np.trapz(
             transferFunc_sigma1(EoutMat, Eincalc, Tcalc[j], M) * xsOkinterp, x=EoutMat
         )
 
@@ -736,14 +736,14 @@ def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     EoutMatrix = EoutMat(Eincalc[0])
     transferFunc = transferFunc_sigma1(EoutMatrix, Eincalc[0][::, np.newaxis], Tcalc[0], M)
     transferFunc *= np.interp(EoutMatrix, xs0KEin, xs0Kvalues)
-    XsMat[0] += np.trapz(transferFunc, x=EoutMatrix)
+    XsMat[0] = np.trapz(transferFunc, x=EoutMatrix)
 
     # Next interactions with the same Eout grid:
     for i in prange(1, XsMat.shape[0]):
         EoutMatrix[:] = EoutMat(Eincalc[i])
         transferFunc[:] = transferFunc_sigma1(EoutMatrix, Eincalc[i][::, np.newaxis], Tcalc[i], M)
         transferFunc *= np.interp(EoutMatrix, xs0KEin, xs0Kvalues)
-        XsMat[i] += np.trapz(transferFunc, x=EoutMatrix)
+        XsMat[i] = np.trapz(transferFunc, x=EoutMatrix)
 
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
@@ -798,5 +798,5 @@ def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
             Eout = default_Eout(Eincalc[i, j])
             transferFunc = transferFunc_sigma1(Eout, Eincalc[i, j], Tcalc[i, j], M)
             transferFunc *= np.interp(Eout, xs0KEin, xs0Kvalues)
-            XsMat[i, j] += np.trapz(transferFunc, x=Eout)
+            XsMat[i, j] = np.trapz(transferFunc, x=Eout)
 

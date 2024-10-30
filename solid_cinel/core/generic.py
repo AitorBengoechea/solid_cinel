@@ -70,9 +70,12 @@ def trapz_parallel(data: np.ndarray, x: np.ndarray) -> np.ndarray:
     -------
     np.ndarray, (N,)
     """
+    # Allocate the memory for the result
     result = np.zeros(data.shape[0])
+
+    # Integrate the data
     for i in prange(data.shape[0]):
-        result[i] += np.trapz(data[i], x)
+        result[i] = np.trapz(data[i], x)
     return result
 
 
@@ -169,9 +172,12 @@ def interp_xnewParallel(xnew: np.ndarray, xnewShape: tuple,
     'np.ndarray', (M, Z)
         Interpolated values.
     """
+    # Allocate the memory for the interpolated values
     yinterp = np.zeros(xnewShape)
+
+    # Interpolate the values
     for n in prange(xnewShape[0]):
-        yinterp[n] += np.interp(xnew[n], x, y)
+        yinterp[n] = np.interp(xnew[n], x, y)
     return yinterp
 
 @nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
@@ -195,11 +201,16 @@ def interp_multyParallel(xnew: np.ndarray, x: np.ndarray, y: np.ndarray):
     'np.ndarray', (Z, M)
         Interpolated values.
     """
+    # Allocate the memory for the interpolated values
     Nrow, Ncolumn = y.shape[0], len(xnew)
     yinterp = np.zeros((Nrow, Ncolumn))
+
+    # Interpolate the values
     for n in prange(Nrow):
-        yinterp[n] += np.interp(xnew, x, y[n])
+        yinterp[n] = np.interp(xnew, x, y[n])
     return yinterp
+
+
 def interpolation(data: pd.Series, xnew: np.array,
                   values: bool = False, parallel=False,
                   **kwargs) -> [np.ndarray, pd.Series]:

@@ -569,9 +569,9 @@ class NucInteractBase:
         data: Iterable
             The data to be stored in the class
         """
-        self.xs0K = xs0K
-        self.Tinteract = Tinteract
-        self.EinMat = EinMat
+        self._xs0K = xs0K
+        self._Tinteract = Tinteract
+        self._EinMat = EinMat
 
     @classmethod
     def from_theta(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,
@@ -655,18 +655,18 @@ class NucInteractBase:
          8.660254e-01   49.379282  304.044914  474.211771  201.620717  64.069957
         """
         # Get the interaction temperature of the material
-        args = [] if approx else [self.EinMat.Ein, self.EinMat.Eout]
-        Tinteraction = self.Tinteract.to_4PCF(*args)
+        args = [] if approx else [self._EinMat.Ein, self._EinMat.Eout]
+        Tinteraction = self._Tinteract.to_4PCF(*args)
 
         # Get the interaction energy of the material
-        EinMat = self.EinMat.to_4PCF(approx, kind)
+        EinMat = self._EinMat.to_4PCF(approx, kind)
 
         # Calculate the interaction cross section:
         if approx and Tinteraction[0] == 0:
             return np.vstack(
                 (
-                    self.xs0K.interpolate(EinMat[0], values=True),
-                    self.xs0K.sigma1(Tinteraction[1:], EinMat[1:], values=True)
+                    self._xs0K.interpolate(EinMat[0], values=True),
+                    self._xs0K.sigma1(Tinteraction[1:], EinMat[1:], values=True)
                 )
             )
         elif not approx:
@@ -675,7 +675,7 @@ class NucInteractBase:
             # Check if the first value is zero (mu = -1):
             if Tinteraction[0, 0] == 0:
                 start = 1
-                result.append(self.xs0K.interpolate(EinMat[0], values=True))
+                result.append(self._xs0K.interpolate(EinMat[0], values=True))
             else:
                 start = 0
 
@@ -685,15 +685,15 @@ class NucInteractBase:
 
             # Sigma1 algorithm calculation for intermediate values
             result.append(
-                self.xs0K.sigma1(Tinteraction[start:end], EinMat[start:end],
+                self._xs0K.sigma1(Tinteraction[start:end], EinMat[start:end],
                                  values=True))
 
             # Add the last value if mu = 1
             if ismu1:
-                result.append(self.xs0K.interpolate(EinMat[-1], values=True))
+                result.append(self._xs0K.interpolate(EinMat[-1], values=True))
             return np.vstack(result)
         else:
-            return self.xs0K.sigma1(Tinteraction, EinMat, values=True)
+            return self._xs0K.sigma1(Tinteraction, EinMat, values=True)
 
     def calc_alpha0(self) -> np.ndarray:
         """
@@ -734,12 +734,12 @@ class NucInteract(DoubleDiffData):
         self.T = nuc.Tinteract.T
 
         # Extract the class data:
-        self.xs0K = nuc.xs0K
-        self.EinMat = nuc.EinMat.to_4PCF(self.approx, self.kind)
+        self._xs0K = nuc.xs0K
+        self._EinMat = nuc.EinMat.to_4PCF(self.approx, self.kind)
         if not self.approx:
-            self.Tinteract = nuc.Tinteract.to_4PCF(self.Ein, self.Eout)
+            self._Tinteract = nuc.Tinteract.to_4PCF(self.Ein, self.Eout)
         else:
-            self.Tinteract = nuc.Tinteract.to_4PCF()
+            self._Tinteract = nuc.Tinteract.to_4PCF()
 
     @classmethod
     def from_sigma(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,
@@ -968,12 +968,12 @@ class NucInteract(DoubleDiffData):
             Eout_ = Eout
 
         # Get the incident energy matrix:
-        EinMat = self.EinMat
+        EinMat = self._EinMat
         XsMat = self.data.values
-        Tinteract = self.Tinteract
+        Tinteract = self._Tinteract
 
         # Generate the new incide energy matrix:
-        EinMatNew = InteractEnergy(Ein, self.xs0K.M, Eout_, self.mu).to_4PCF(self.approx, kind)
+        EinMatNew = InteractEnergy(Ein, self._xs0K.M, Eout_, self.mu).to_4PCF(self.approx, kind)
 
         XsMatNew = np.zeros(EinMat.shape)
         for i in range(EinMat.shape[0]):
@@ -984,8 +984,8 @@ class NucInteract(DoubleDiffData):
             XsMatNew[i, :col] = np.interp(EinMatNew[i, :col], EinMat[i, :col], XsMat[i, :col])
 
             # Perform the calculations:
-            XsMatNew[i, col:] = self.xs0K.sigma1(Tinteract[i], EinMatNew[i, col:])
+            XsMatNew[i, col:] = self._xs0K.sigma1(Tinteract[i], EinMatNew[i, col:])
 
         # Update the EinMat with the new values:
-        self.EinMat[:] = EinMatNew
+        self._EinMat[:] = EinMatNew
         super().inplace(pd.DataFrame(XsMatNew, columns=Eout_, index=self.mu))

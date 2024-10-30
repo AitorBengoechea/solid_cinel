@@ -765,8 +765,11 @@ class Sab_to_DynamicStruc(DoubleDiff):
          0.173648  0.000332  0.065453  1.101820  1.874502  0.442317  0.013838
          0.766044  0.000000  0.000009  0.077047  3.956722  0.133747  0.000021
         """
+        # Compute the absolute beta values:
+        betaAbs = self.betaAbs
+
         # Interpolation of tauN functions to reduce the number of calculations:
-        tauNinterp = interp_multyParallel(self.betaAbs, tauNbeta, tauN)
+        tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
 
         # Get the S(alpha, -beta) values for the alpha and beta combinations:
         # Correct alpha values for absolute beta values:
@@ -778,7 +781,7 @@ class Sab_to_DynamicStruc(DoubleDiff):
         dynamicStruc = np.concatenate(
             (
                 sabValues[::, :col],
-                np.exp(-self.betaAbs[col:]) * sabValues[::, col:]
+                np.exp(-betaAbs[col:]) * sabValues[::, col:]
             ), axis=1
         )
         # Normalization constant
@@ -907,7 +910,7 @@ class DynamicStruc(DoubleDiffData):
             Optional arguments for the construction of the pd.DataFrame
         """
         # The Dynamic Structure data:
-        self.sabValues = sabValues
+        self._sabValues = sabValues
         super().__init__(*args, **kwargs)
 
     def alpha(self, values=True) -> [np.ndarray, pd.DataFrame]:
@@ -926,9 +929,9 @@ class DynamicStruc(DoubleDiffData):
             The alpha values for the Dynamic Structure Factor
         """
         if values:
-            return self.sabValues.alpha
+            return self._sabValues.alpha
         else:
-            return pd.DataFrame(self.sabValues.alpha, index=self.mu, columns=self.Eout)
+            return pd.DataFrame(self._sabValues.alpha, index=self.mu, columns=self.Eout)
 
     def recoil(self, values=True) -> [np.ndarray, pd.DataFrame]:
         """
@@ -946,9 +949,9 @@ class DynamicStruc(DoubleDiffData):
             The recoil energy for the Dynamic Structure Factor
         """
         if values:
-            return self.sabValues.recoil
+            return self._sabValues.recoil
         else:
-            return pd.DataFrame(self.sabValues.recoil, index=self.mu, columns=self.Eout)
+            return pd.DataFrame(self._sabValues.recoil, index=self.mu, columns=self.Eout)
 
     @property
     def alpha0(self) -> float:
@@ -975,7 +978,7 @@ class DynamicStruc(DoubleDiffData):
         0.32328
         """
         # Get the alpha0 parameter:
-        return integrate((self.data * self.sabValues.alpha).apply(integrate)) / 2
+        return integrate((self.data * self._sabValues.alpha).apply(integrate)) / 2
 
     @property
     def norm(self) -> float:
@@ -1292,10 +1295,10 @@ class DynamicStruc(DoubleDiffData):
          9.659258e-01  0.000000  0.001715
         """
         # Update the calculation class:
-        self.sabValues.update(Ein, M=M, T=T, Eout=Eout, mu=mu)
+        self._sabValues.update(Ein, M=M, T=T, Eout=Eout, mu=mu)
 
         # Get the new values:
-        dynamicStructure = self.sabValues.calc_values(*args, model=model,
+        dynamicStructure = self._sabValues.calc_values(*args, model=model,
                                                       **kwargs)
 
         # Update the values

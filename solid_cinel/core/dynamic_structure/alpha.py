@@ -112,6 +112,8 @@ class AlphaBase:
 
         Returns
         -------
+        'np.ndarray'
+            Cumulative sum of the alpha values.
         """
         # Define the constant:
         alphaMul = np.zeros(orderMax)
@@ -128,6 +130,54 @@ class AlphaBase:
             iterSum += log_alphaDebye - log(n + 1)
             alphaMul[n] += exp(iterSum)
         return exp(- alphaDebye) * alphaMul.cumsum()
+
+    def _expansionOrderMax(self, alphaCumsum: np.ndarray, decimal: float,
+                       orderMax: int) -> int:
+        """
+        Get the expansion order for the phonon expansion method using the maximun
+        alpha value and the decimal precision.
+
+        Parameters
+        ----------
+        alphaCumsum : np.ndarray
+            Cumulative sum of the alpha values.
+        decimal : float
+            Decimal precision.
+        orderMax : int
+            Maximun order for the expansion.
+
+        Returns
+        -------
+        int
+            Expansion order.
+        """
+        # Check the decimal precision
+        nMin = np.argmax((1 - alphaCumsum) <= decimal)
+
+        # If the decimal precision is not reached, the difference between the
+        # cumulative sum of the alpha values will identify the order of the
+        # expansion.
+        return nMin if nMin > 0 else self.checkDiff(alphaCumsum, decimal, orderMax)
+
+    def _expansionOrderMin(self, alphaCumsum: np.ndarray,
+                           decimal: float) -> int:
+        """
+        Get the expansion order for the phonon expansion method using the maximun
+
+        Parameters
+        ----------
+        alphaCumsum : np.ndarray
+            Cumulative sum of the alpha values.
+        decimal : float
+            Decimal precision.
+
+        Returns
+        -------
+        int
+            Expansion order.
+        """
+        # Check the decimal precision
+        return np.searchsorted(alphaCumsum, decimal, side='right')
 
     def expansionOrder(self, DebyeWallerCoeff: float, decimal: float,
                        orderMax: int) -> int:
@@ -167,13 +217,22 @@ class AlphaBase:
         # Get the cumulative sum of the alpha values
         alphaCumsum = self.mulCumSum(DebyeWallerCoeff, orderMax)
 
-        # Check the decimal precision
-        nMin = np.argmax((1 - alphaCumsum) <= decimal)
+        # Get the expansion order
+        return self._expansionOrderMax(alphaCumsum, decimal, orderMax)
 
-        # If the decimal precision is not reached, the difference between the
-        # cumulative sum of the alpha values will identify the order of the
-        # expansion.
-        return nMin if nMin > 0 else self.checkDiff(alphaCumsum, decimal, orderMax)
+    def expansionRange(self,  DebyeWallerCoeff: float, decimal: float,
+                       orderMax: int) -> (int, int):
+        # Get the cumulative sum of the alpha values
+        alphaCumsum = self.mulCumSum(DebyeWallerCoeff, orderMax)
+
+        # Get the expansion order
+        nMax = self._expansionOrderMax(alphaCumsum, decimal, orderMax)
+
+        # Get the expansion range
+        nMin = self._expansionOrderMin(alphaCumsum, decimal)
+
+        # Return the expansion range
+        return nMin, nMax
 
     def update(self, newValues):
         np.copyto(self.data, newValues)

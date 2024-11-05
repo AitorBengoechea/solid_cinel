@@ -478,12 +478,42 @@ class Xs:
         2    (100, 3)
         3    (100, 4)
         dtype: object
+
+        >>> Tnew = np.array([[300, 100], [200, 150]])
+        >>> EinGrid = np.array([1, 2])
+        >>> pd.Series(xs.get_EinTcomb(Tnew, EinGrid))
+        0    (300, 1)
+        1    (200, 1)
+        2    (100, 2)
+        3    (150, 2)
+        dtype: object
+
+        >>> Tnew = np.array([[300, 100], [200, 150]])
+        >>> EinGrid = np.array([[1, 2], [3, 4]])
+        >>> pd.Series(xs.get_EinTcomb(Tnew, EinGrid))
+        0    (300, 1)
+        1    (200, 3)
+        2    (100, 2)
+        3    (150, 4)
+        dtype: object
         """
+        # Get the temperature and the incident energy combinations: (T, Ein)
         EinGrid_, Tnew_ = np.array(EinGrid), np.array(Tnew)
-        if len(EinGrid_.shape) == 2:
-            return [(Tnew[i], EinGrid[i, j]) for i in range(EinGrid.shape[0])
+
+        # Check the shape of the data
+        EinGridShape, TnewShape = EinGrid_.ndim, Tnew_.ndim
+
+        # Get the incident energy and temperature combinations
+        if EinGridShape == 2 and TnewShape == 2:
+            return [(Tnew_[i, j], EinGrid_[i, j]) for j in range(EinGrid_.shape[1])
+                    for i in range(EinGrid_.shape[0])]
+        elif EinGridShape == 1 and TnewShape == 2:
+            return [(Tnew_[i, j], EinGrid_[j]) for j in range(Tnew_.shape[1])
+                    for i in range(Tnew_.shape[0])]
+        elif EinGridShape == 2 and TnewShape == 1:
+            return [(Tnew_[i], EinGrid_[i, j]) for i in range(EinGrid_.shape[0])
                     for j in range(EinGrid_.shape[1])]
-        else:
+        elif EinGridShape == 1 and TnewShape == 1:
             return [(T, Ein) for T in Tnew for Ein in EinGrid]
 
     def _compute_sigma1(self, Tnew: Iterable, EinGrid: [Iterable, None]) -> list:
@@ -698,11 +728,11 @@ class Xs:
         >>> os.chdir(__file__.replace("xs.py", ""))
         >>> os.chdir("../../data/xs/U238/")
         >>> M = 238.05077040419212
-        >>> EinGrid = np.array([2.0, 6.67])
-        >>> xs = Xs.from_xs0K("u238.0.2", M, EinGrid)
+        >>> xs = Xs.from_xs0K("u238.0.2", M)
         >>> os.chdir(wd)
 
         >>> Tnew = [300, 100]
+        >>> EinGrid = np.array([2.0, 6.67])
         >>> pd.DataFrame(xs.compute(Tnew, EinGrid, algorithm="sigma1"), index=Tnew, columns=EinGrid)
                  2.00        6.67
         300  9.086237  455.670534
@@ -724,17 +754,35 @@ class Xs:
                  2.00        6.67
         300  8.602954  469.614362
         100  5.835051  646.772904
+
+        >>> Tnew = np.array([[300, 200], [150, 100]])
+        >>> EinGrid = np.array([6.6, 6.67])
+        >>> pd.DataFrame(xs.compute(Tnew, EinGrid, algorithm="sigma1"), columns=EinGrid)
+                6.60        6.67
+        0  88.553888  528.059912
+        1  40.168511  664.556512
+
+        >>> Tnew = np.array([[300, 200], [150, 100]])
+        >>> EinGrid = np.array([[6.6, 6.67], [2, 7]])
+        >>> pd.DataFrame(xs.compute(Tnew, EinGrid, algorithm="sigma1"))
+                   0           1
+        0  88.553888  528.059912
+        1   9.086760   19.893739
         """
+        Tnew_ = np.array(Tnew)
         # Calculate the cross section for the new temperatures
         if algorithm == "sigma1":
-            results = self._compute_sigma1(Tnew, EinGrid)
+            results = self._compute_sigma1(Tnew_, EinGrid)
         elif algorithm == "alpha0":
-            results = self._compute_alpha0(Tnew, EinGrid, *args, **kwargs)
+            results = self._compute_alpha0(Tnew_, EinGrid, *args, **kwargs)
         else:
             raise ValueError("invalid algorithm")
 
         # Return the results in the corresponding format
-        return np.array(results).reshape(len(Tnew), -1)
+        if Tnew_.ndim == 1:
+            return np.array(results).reshape(len(Tnew_), -1)
+        else:
+            return np.array(results).reshape(Tnew_.shape[0], -1).T
 
     def calc_T(self, T: float, *args, inplace: bool = False, **kwargs):
         """

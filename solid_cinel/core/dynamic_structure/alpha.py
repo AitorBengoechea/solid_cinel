@@ -471,7 +471,7 @@ class AlphaVect(AlphaBase):
 
 @nb.jit(nopython=True, cache=True)
 def calc_alphaRecoil(Ein: [float, np.ndarray], M: float, Eout: np.ndarray,
-                     mu: np.ndarray) -> np.ndarray:
+                     mu: np.ndarray) -> [float, np.ndarray]:
     """
     Get the alpha recoil value from the parameters of the function:
     .. math::
@@ -495,9 +495,10 @@ def calc_alphaRecoil(Ein: [float, np.ndarray], M: float, Eout: np.ndarray,
     """
     return (Eout + Ein - 2 * mu * np.sqrt(Eout * Ein)) / (M / m)
 
+
 @nb.jit(nopython=True, cache=True)
 def calc_alpha(Ein: [float, np.ndarray], M: float, T: float, Eout: np.ndarray,
-               mu: np.ndarray) -> np.ndarray:
+               mu: np.ndarray) -> [np.ndarray, float]:
     """
     Get the alpha recoil value from the parameters of the function:
     .. math::
@@ -520,6 +521,7 @@ def calc_alpha(Ein: [float, np.ndarray], M: float, T: float, Eout: np.ndarray,
         Array containing all posible alpha values for the input parameters.
     """
     return calc_alphaRecoil(Ein, M, Eout, mu) / (kb * T)
+
 
 @nb.jit(nopython=True, cache=True)
 def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
@@ -576,10 +578,12 @@ def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
     mu_ = mu[::, np.newaxis]
     if alpha0 == 0 or DebyeWallerCoeff == 0:
         return calc_alpha(Eout, Ein, T, M, mu_)
+    else:
+        # Define the constants for the calculation
+        AkbT = M / m * kb * T
+        expTerm = exp(- alpha0 * DebyeWallerCoeff)
 
-    # Define the constants for the calculation
-    AkbT = M / m * kb * T
-    expTerm = exp(- alpha0 * DebyeWallerCoeff)
+        # Modify the alpha matrix with outgoing energy and cosine of the
+        # scattering angle modification
+        return (Ein + (Eout - 2 * mu_ * np.sqrt(Eout * Ein) * expTerm)) / AkbT
 
-    # Modify the alpha matrix with outgoing energy and cosine of the scattering angle modification
-    return (Ein + (Eout - 2 * mu_ * np.sqrt(Eout * Ein) * expTerm)) / AkbT

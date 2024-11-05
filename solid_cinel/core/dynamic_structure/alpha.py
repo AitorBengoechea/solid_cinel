@@ -573,14 +573,13 @@ def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
         0.331180  0.331812  0.332445  0.333077  0.333710
     90   0.22629  0.226379  0.226468  0.226558  0.226647
     """
+    mu_ = mu[::, np.newaxis]
     if alpha0 == 0 or DebyeWallerCoeff == 0:
-        return calc_alpha(Eout, Ein, T, M, mu[::, np.newaxis])
+        return calc_alpha(Eout, Ein, T, M, mu_)
+
     # Define the constants for the calculation
     AkbT = M / m * kb * T
     expTerm = exp(- alpha0 * DebyeWallerCoeff)
 
-    # Crete the alpha matrix filled with alpha capture:
-    alphaMat = np.full((len(mu), len(Eout)), Ein / AkbT)
-
     # Modify the alpha matrix with outgoing energy and cosine of the scattering angle modification
-    return alphaMat + (Eout - 2 * mu[:, np.newaxis] * np.sqrt(Eout * Ein)) / AkbT * expTerm
+    return (Ein + (Eout - 2 * mu_ * np.sqrt(Eout * Ein) * expTerm)) / AkbT

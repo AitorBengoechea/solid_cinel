@@ -522,15 +522,13 @@ def get_AbsBeta(Eout: Union[np.ndarray, float], Ein: Union[np.ndarray, float],
     np.ndarray
         Array containing all possible positive beta values for the input parameters.
     """
-    kb = 8.617333262145e-5  # Boltzmann constant in eV/K
-    betaAbs = np.abs((Eout - Ein) / (kb * T))
-
+    betaAbs = np.abs(calc_Beta(Eout, Ein, T))
     if unique:
-        betaAbs = np.unique(betaAbs)
+        return np.unique(betaAbs)
     elif sort:
-        betaAbs = np.sort(betaAbs)
-
-    return betaAbs
+        return np.sort(betaAbs)
+    else:
+        return betaAbs
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_absBeta(T: float) -> np.ndarray:

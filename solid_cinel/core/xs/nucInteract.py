@@ -734,7 +734,7 @@ class NucInteract(DoubleDiffData):
         self.T = nuc._Tinteract.T
 
         # Extract the class data:
-        self._xs0K = nuc.xs0K
+        self._xs0K = nuc._xs0K
         self._EinMat = nuc._EinMat.to_4PCF(self.approx, self.kind)
         if not self.approx:
             self._Tinteract = nuc._Tinteract.to_4PCF(self.Ein, self.Eout)

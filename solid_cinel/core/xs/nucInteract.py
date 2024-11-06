@@ -730,16 +730,16 @@ class NucInteract(DoubleDiffData):
 
     def __post_init__(self, nuc: NucInteractBase):
         # Extract the values
-        self.Ein = nuc.EinMat.Ein
-        self.T = nuc.Tinteract.T
+        self.Ein = nuc._EinMat.Ein
+        self.T = nuc._Tinteract.T
 
         # Extract the class data:
         self._xs0K = nuc.xs0K
-        self._EinMat = nuc.EinMat.to_4PCF(self.approx, self.kind)
+        self._EinMat = nuc._EinMat.to_4PCF(self.approx, self.kind)
         if not self.approx:
-            self._Tinteract = nuc.Tinteract.to_4PCF(self.Ein, self.Eout)
+            self._Tinteract = nuc._Tinteract.to_4PCF(self.Ein, self.Eout)
         else:
-            self._Tinteract = nuc.Tinteract.to_4PCF()
+            self._Tinteract = nuc._Tinteract.to_4PCF()
 
     @classmethod
     def from_sigma(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,
@@ -807,7 +807,7 @@ class NucInteract(DoubleDiffData):
 
         # Calculate the cross section:
         return cls(approx, kind, nuc.calc_sigma1(approx, kind),
-                   index=nuc.EinMat.mu, columns=nuc.EinMat.Eout, nuc=nuc)
+                   index=nuc._EinMat.mu, columns=nuc._EinMat.Eout, nuc=nuc)
 
     @property
     def norm(self) -> float:

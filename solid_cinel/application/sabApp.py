@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 from solid_cinel.application.pdosApp import get_Pdos
-from solid_cinel.core.scattering_function.sab import Sab
+from solid_cinel.core.dynamic_structure.sab import Sab
 
 
 def add_SabArgs(parser: argparse.ArgumentParser):
@@ -21,9 +21,25 @@ def add_SabArgs(parser: argparse.ArgumentParser):
                         help='beta grid')
     parser.add_argument('T', type=float,
                         help='Temperature in Kelvin')
+    parser.add_argument('--output', type=str, nargs='+',
+                        choices=['values'],
+                        default=['values'],
+                        help='What to return: values')
 
+def get_sab(args: argparse.Namespace) -> Sab:
+    # Validate temperature
+    if args.T < 0:
+        raise ValueError("Temperature must be greater than 0")
 
-def handle_SabArgs(args: argparse.Namespace) -> np.ndarray:
+    # Get Sab class based on the model
+    if args.model == "pdos":
+        return Sab.from_pdos(args.alpha, args.beta, args.T, get_Pdos(args))
+    elif args.model == "sct":
+        return Sab.from_sct(args.alpha, args.beta, args.T, get_Pdos(args))
+    else:
+        return Sab.from_fgm(args.alpha, args.beta, args.T)
+
+def handle_SabArgs(args: argparse.Namespace) -> dict:
     """
     Handle the arguments for the calculation of the S(alpha, -beta) tables.
 
@@ -37,17 +53,11 @@ def handle_SabArgs(args: argparse.Namespace) -> np.ndarray:
     np.ndarray
         An array containing the values of the S(alpha, -beta) table.
     """
-    # Validate temperature
-    if args.T < 0:
-        raise ValueError("Temperature must be greater than 0")
+    results = {}
+    # Get the S(alpha, -beta) table
+    sab = get_sab(args)
 
-    # Get Sab class based on the model
-    if args.model == "pdos":
-        sab = Sab.from_pdos(args.alpha, args.beta, args.T, get_Pdos(args))
-    elif args.model == "sct":
-        sab = Sab.from_sct(args.alpha, args.beta, args.T, get_Pdos(args))
-    else:
-        sab = Sab.from_fgm(args.alpha, args.beta, args.T)
+    if "values" in args.output:
+        results["values"] = sab.data.values
 
-    # Return the values of the S(alpha, -beta) table
-    return sab.data.values
+    return results

@@ -1,5 +1,4 @@
-from .scatfunc import *
-from .xs import *
+from .xs0K import *
 from .nucInteract import *
 from .ddxs import *
 

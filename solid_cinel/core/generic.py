@@ -70,9 +70,12 @@ def trapz_parallel(data: np.ndarray, x: np.ndarray) -> np.ndarray:
     -------
     np.ndarray, (N,)
     """
+    # Allocate the memory for the result
     result = np.zeros(data.shape[0])
+
+    # Integrate the data
     for i in prange(data.shape[0]):
-        result[i] += np.trapz(data[i], x)
+        result[i] = np.trapz(data[i], x)
     return result
 
 
@@ -169,9 +172,12 @@ def interp_xnewParallel(xnew: np.ndarray, xnewShape: tuple,
     'np.ndarray', (M, Z)
         Interpolated values.
     """
+    # Allocate the memory for the interpolated values
     yinterp = np.zeros(xnewShape)
+
+    # Interpolate the values
     for n in prange(xnewShape[0]):
-        yinterp[n] += np.interp(xnew[n], x, y)
+        yinterp[n] = np.interp(xnew[n], x, y)
     return yinterp
 
 @nb.jit(nopython=True, cache=True, parallel=True, nogil=True)
@@ -195,11 +201,16 @@ def interp_multyParallel(xnew: np.ndarray, x: np.ndarray, y: np.ndarray):
     'np.ndarray', (Z, M)
         Interpolated values.
     """
+    # Allocate the memory for the interpolated values
     Nrow, Ncolumn = y.shape[0], len(xnew)
     yinterp = np.zeros((Nrow, Ncolumn))
+
+    # Interpolate the values
     for n in prange(Nrow):
-        yinterp[n] += np.interp(xnew, x, y[n])
+        yinterp[n] = np.interp(xnew, x, y[n])
     return yinterp
+
+
 def interpolation(data: pd.Series, xnew: np.array,
                   values: bool = False, parallel=False,
                   **kwargs) -> [np.ndarray, pd.Series]:
@@ -336,3 +347,26 @@ def sampling(d: int, n: int) -> np.ndarray:
     """
     samples = qmc.LatinHypercube(d=d).random(n=n)
     return samples if d > 1 else samples[:, 0]
+
+
+def to_arrays(input: [float, Iterable[float]]) -> np.ndarray:
+    """
+    Convert the input to an array if it is not an array
+
+    Parameters
+    ----------
+    input: float, Iterable[float]
+        The input to convert to an array
+
+    Returns
+    -------
+    np.ndarray
+        The input as an array
+    """
+    if hasattr(input, "__len__"):
+        return input if isinstance(input, np.ndarray) else np.array(input)
+    elif isinstance(input, (int, float)):
+        return np.array([input])
+    elif not all(isinstance(e, (int, float)) for e in input):
+        raise TypeError("All input values must be int or float")
+

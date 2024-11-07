@@ -238,7 +238,7 @@ class Beta:
         >>> Beta.from_Eout(Eout, Ein, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
-        return cls(get_beta(Eout, Ein, T))
+        return cls(get_AbsBeta(Eout, Ein, T))
 
     @classmethod
     def from_Ein(cls, Eout: float, Ein: np.ndarray, T: float):
@@ -271,7 +271,7 @@ class Beta:
         >>> Beta.from_Ein(Eout, Ein, T).data.round(6)
         array([0.      , 0.009168, 0.01835 , 0.027517, 0.036699])
         """
-        return cls(get_beta(Ein, Eout, T))
+        return cls(get_AbsBeta(Ein, Eout, T))
 
     @classmethod
     def from_file(cls, file_path: str, delimiter: str = None, skiprows: int = 0,
@@ -447,12 +447,34 @@ class Beta:
         scale_grid = self.data * therm / (kb * T)
         return Beta(scale_grid)
 
+@nb.jit(nopython=True, cache=True)
+def calc_dE(Eout: [np.ndarray, float], Ein: [np.ndarray, float]) -> np.ndarray:
+    """
+    Calculate the dE values from the parameters of the function:
+    .. math::
+        dE = \beta k_B T
+
+    Parameters
+    ----------
+    beta : 'np.ndarray', (N,) or 'float'
+        Beta values.
+    T : float
+        Temperature in K.
+
+    Returns
+    -------
+    'np.ndarray', (N,)
+        Array containing all posible dE values for the input parameters.
+    """
+    # Get the dE values:
+    return Eout - Ein
+
 
 @nb.jit(nopython=True, cache=True)
-def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
-             T: float, abs: bool = True) -> np.ndarray:
+def calc_Beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
+              T: float) -> np.ndarray:
     """
-    Get the positive beta values from the parameters of the function:
+    Calculate the beta values from the parameters of the function:
     .. math::
         \beta=\dfrac{E_{out} - E_{in}}{k_BT}
 
@@ -471,13 +493,42 @@ def get_beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
         Array containing all posible beta values for the input parameters.
     """
     # Get the beta values:
-    beta = (Eout - Ein) / (kb * T)
+    return calc_dE(Eout, Ein) / (kb * T)
 
-    # Return the absolute values if needed:
-    if abs:
-        return np.unique(np.absolute(beta))
+
+@nb.jit(nopython=True, cache=True)
+def get_AbsBeta(Eout: Union[np.ndarray, float], Ein: Union[np.ndarray, float],
+                T: float, unique: bool = True, sort: bool = True) -> np.ndarray:
+    """
+    Get the positive beta values from the parameters of the function:
+    .. math::
+        \beta = \left| \dfrac{E_{out} - E_{in}}{k_B T} \right|
+
+    Parameters
+    ----------
+    Eout : np.ndarray or float
+        Output energy of the neutron.
+    Ein : np.ndarray or float
+        Incident energy of the neutron.
+    T : float
+        Temperature in K.
+    unique : bool, optional
+        If True, return unique beta values. Default is True.
+    sort : bool, optional
+        If True, return sorted beta values. Default is True.
+
+    Returns
+    -------
+    np.ndarray
+        Array containing all possible positive beta values for the input parameters.
+    """
+    betaAbs = np.abs(calc_Beta(Eout, Ein, T))
+    if unique:
+        return np.unique(betaAbs)
+    elif sort:
+        return np.sort(betaAbs)
     else:
-        return np.unique(beta)
+        return betaAbs
 
 @nb.jit(nopython=True, nogil=False, cache=True)
 def default_absBeta(T: float) -> np.ndarray:

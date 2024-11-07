@@ -7,8 +7,8 @@ from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, reshape_differential, interp_multyParallel
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNfunc, get_tauNbeta
-from solid_cinel.core.scattering_function.beta import Beta
-from solid_cinel.core.scattering_function.alpha import Alpha, get_expansionOrder
+from solid_cinel.core.dynamic_structure.beta import Beta
+from solid_cinel.core.dynamic_structure.alpha import AlphaVect, AlphaDynamic, AlphaBase
 from typing import Iterable, Union
 import numpy as np
 import pandas as pd
@@ -89,15 +89,57 @@ class Sab:
 
 
     @property
-    def alpha(self) -> Alpha:
+    def alpha(self) -> AlphaVect:
         """
         Initialize the Alpha class with the information of S(alpha, beta)
         matrix.
         """
-        return Alpha(self.data.index.values)
+        return AlphaVect(self.data.index.values)
+
+    @property
+    def beta(self) -> Beta:
+        """
+        Initialize the Beta class with the information of S(alpha, -beta).
+        matrix
+        """
+        return Beta(self.data.columns.values)
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """Dataframe with the S(alpha, -beta) matrix values."""
+        return self._data
+
+    @data.setter
+    def data(self, df: Iterable):
+        """
+        Construct the S(alpha, -beta) matrix and check if the data achieve the
+        normalization and sum rule constrain.
+
+        Parameters
+        ----------
+        df : 2D iterable, (N, M)
+            Iterable containing the S(alpha, -beta) matrix.
+        """
+        # Sort and define the style of the dataframe:
+        df_ = pd.DataFrame(df).sort_index(axis=0).sort_index(axis=1)
+        df_.index.name = "alpha"
+        df_.columns.name = "beta"
+
+        # Normalization constrains:
+        self.NormCheck(df_)
+        self.SumRule_check(df_)
+
+        # save the data:
+        self._data = df_
+
+    @property
+    def values(self) -> np.ndarray:
+        """Return the values of the S(alpha, -beta) matrix."""
+        return self.data.values
+
 
     @staticmethod
-    def check_alpha(alpha: Union[Alpha, Iterable, str]) -> Alpha:
+    def check_alpha(alpha: Union[AlphaVect, Iterable, str]) -> AlphaVect:
         """
         Generate the Alpha class for the creation of S(alpha, beta) table.
 
@@ -111,20 +153,12 @@ class Sab:
         Alpha
             Alpha class with the alpha grid information.
         """
-        if isinstance(alpha, Alpha):
+        if isinstance(alpha, AlphaVect):
             return alpha
         elif isinstance(alpha, str):
-            return Alpha.from_file(alpha)
+            return AlphaVect.from_file(alpha)
         else:
-            return Alpha(alpha)
-
-    @property
-    def beta(self) -> Beta:
-        """
-        Initialize the Beta class with the information of S(alpha, -beta).
-        matrix
-        """
-        return Beta(self.data.columns.values)
+            return AlphaVect(alpha)
 
     @staticmethod
     def check_beta(beta: Union[Beta, Iterable, str]) -> Beta:
@@ -155,91 +189,6 @@ class Sab:
         else:
             raise ValueError("The beta grid contains negative values and the input is the absolute beta grid")
 
-    @classmethod
-    def setup_alpha_beta(cls, alpha: Union[Beta, Iterable, str],
-                          beta: Union[Beta, Iterable, str]) -> [np.array, np.array]:
-        """
-        Setup the Alpha and Beta grids for the calculation of S(alpha, -beta) matrix.
-
-        Parameters
-        ----------
-        alpha : Union[Beta, Iterable, str]
-            Alpha grid information in different formats.
-        beta : Union[Beta, Iterable, str]
-            Beta grid information in different formats.
-
-        Returns
-        -------
-        np.array, np.array
-            Alpha and Beta grid arrays.
-        """
-        # Get the Alpha and Beta classes:
-        return cls.check_alpha(alpha).data, cls.check_beta(beta).data
-
-    @property
-    def data(self) -> pd.DataFrame:
-        """Dataframe with the S(alpha, -beta) matrix values."""
-        return self._data
-
-    @data.setter
-    def data(self, df: Iterable):
-        """
-        Construct the S(alpha, -beta) matrix and check if the data achieve the
-        normalization and sum rule constrain.
-
-        Parameters
-        ----------
-        df : 2D iterable, (N, M)
-            Iterable containing the S(alpha, -beta) matrix.
-        """
-        # Sort and define the style of the dataframe:
-        df_ = pd.DataFrame(df).sort_index(axis=0).sort_index(axis=1)
-        df_.index.name = "alpha"
-        df_.columns.name = "beta"
-
-        # Normalization constrains:
-        self.NormCheck(df_)
-        self.SumRule_check(df_)
-
-        # save the data:
-        self._data = df_
-
-    def to_sym(self, detail_balance: bool = True) -> pd.DataFrame:
-        """
-        Generate the symmetric S(alpha, -beta) matrix from the asymmetric
-        S(alpha, -beta) matrix.
-
-        Parameters
-        ----------
-        detail_balance : 'bool', optional
-            Relationships between upscatter and downscatter. The default is
-            True.
-
-        Returns
-        -------
-        "pd.DataFrame"
-            Dataframe containing the symmetric S(alpha, -beta) matrix.
-
-        Example:
-        --------
-        >>> beta_grid = Beta.generate_grid(300).data
-        >>> alpha = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        beta      0.000000  0.012894  0.025788  0.038682  0.051576
-        alpha
-        0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
-        0.001087  8.553363  8.232522  7.340419  6.063184  4.639515
-        0.001125  8.407781  8.102844  7.252800  6.029567  4.655632
-        0.001164  8.264674  7.974859  7.164978  5.993787  4.668553
-        0.001205  8.124000  7.848564  7.077028  5.955964  4.678361
-        0.001247  7.985718  7.723951  6.989018  5.916214  4.685142
-        0.001291  7.849787  7.601016  6.901017  5.874652  4.688985
-        0.001336  7.716166  7.479752  6.813088  5.831389  4.689983
-        0.001382  7.584817  7.360149  6.725291  5.786534  4.688230
-        0.001431  7.455701  7.242199  6.637682  5.740191  4.683821
-        """
-        return self.data * np.exp(- self.beta.data / 2) if detail_balance else self.data
-
     @property
     def full(self) -> [pd.Series, pd.DataFrame]:
         """
@@ -254,7 +203,7 @@ class Sab:
         Example
         -------
         >>> beta_grid = Beta.generate_grid(300)
-        >>> alpha = Alpha.generate_grid(300, 26)
+        >>> alpha = AlphaVect.generate_grid(300, 26)
         >>> Sab_matrix = Sab.from_fgm(alpha, beta_grid)
         >>> Sab_matrix_norm = Sab_matrix.data.apply(_norm, axis=1)
         >>> Sab_matrix_full = Sab_matrix.full
@@ -307,508 +256,6 @@ class Sab:
                 return 1.0
             else:
                 return ratio
-
-    @classmethod
-    def from_fgm(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
-                 T: float = None, wt: float = 1):
-        """
-        Generate S(alpha, -beta) matrix using Free Gas Model.
-        .. math::
-            S_t(\alpha,\,-\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)\end{equation}
-
-        Parameters
-        ----------
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
-            Absolute beta grid.
-        model : 'str', optional
-            The model to calculate matrix values. The default is "FGM".
-        wt: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Returns
-        -------
-        "Sab", (N, M)
-            S(alpha, -beta) based on Free Gas Model.
-
-        Example
-        -------
-        FGM:
-        >>> beta = Beta.generate_grid(300).data
-        >>> alpha = Alpha.generate_grid(300, 26).data
-        >>> Sab.from_fgm(alpha, beta).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
-        alpha
-        0.001050	  8.701463	8.417992     7.524148	6.213536	4.740815
-        0.001087      8.553363	8.285768	 7.435678	6.181592	4.760714
-        0.001125	  8.407781	8.155251	 7.346923	6.147319	4.777252
-        0.001164	  8.264674	8.026439	 7.257961	6.110841	4.790511
-        0.001205	  8.124000	7.899326	 7.168869	6.072279	4.800575
-        0.001247	  7.985718	7.773908	 7.079717	6.031753	4.807533
-        0.001291	  7.849787	7.650178	 6.990574	5.989379	4.811476
-        0.001336	  7.716166	7.528129	 6.901504	5.945271	4.812500
-        0.001382	  7.584817	7.407753	 6.812568	5.899540	4.810701
-        0.001431	  7.455701	7.289040	 6.723822	5.852292	4.806177
-        """
-        # Set the beta grid and the alpha grid:
-        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
-
-        # Get the temperature ratio (1):
-        Tratio = cls.get_Tratio(T)
-
-        # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, Tratio, wt)
-
-        return cls(S_values, index=alpha_, columns=beta_)
-
-    @classmethod
-    def from_sct(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
-                 T: float, pdos: Pdos, ws: float = 1):
-        """
-        Generate S(alpha, -beta) matrix using Short Collision Time.
-        .. math::
-            S(\alpha,\,-\beta)=\sqrt{\dfrac{1}{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\omega_{s}\alpha-\beta)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T}\right)
-
-        Parameters
-        ----------
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
-            beta grid.
-        T : 'float'
-            Temperature in K.
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Returns
-        -------
-        "Sab", (N, M)
-            S(alpha, -beta) based on Short Collision Time
-
-        Example
-        -------
-        SCT:
-        Dont fit the normalization and sum rule with the correct precision
-        >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
-        >>> T = 300
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> beta = Beta.generate_grid(T)
-        >>> alpha = Alpha.generate_grid(T, 26)
-        >>> S = Sab.from_sct(alpha, beta, T, pdos)
-        >>> S.data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        beta      0.000000  0.012894  0.025788  0.038682  0.051576
-        alpha
-        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
-        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
-        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
-        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
-        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
-        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
-        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
-        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
-        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
-        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
-        """
-        # Set the beta grid and the alpha grid:
-        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
-
-        # Get the temperature ratio (1):
-        Tratio = cls.get_Tratio(T, pdos)
-
-        # Get the S(alpha, -beta) matrix:
-        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, Tratio, ws)
-
-        return cls(S_values, index=alpha_, columns=beta_)
-
-    @classmethod
-    def from_pdos(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
-                  T: float, pdos: Pdos, nphonon: int = None, decimal: float = 1.0e-6,
-                  orderMax: int = 5000, threshold: float = 0.0):
-        """
-        Generate S(alpha, -beta) matrix using phonon expansion.
-        .. math::
-            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
-
-        Numerical appoximation to get convergence in large exponentiation and
-        factorial numbers. Each element of the array is related with one alpha
-        and represent the following term of the previous equation:
-        ..math::
-           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
-
-        Parameters
-        ----------
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta : 1D iterable or "Beta", (M,)
-            beta grid.
-        T : 'float'
-            Temperature in K.
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        nphonon : 'int', optional
-            Phonon expansion order. The default is calculated with the function
-            get_expansionOrder.
-        decimal : 'float', optional
-            Decimal precision to calculate the expansion order. The default is
-            1.0e-6.
-        order_max : 'int', optional
-            Maximum expansion order. The default is 5000.
-
-        Returns
-        -------
-        "Sab", (N, M)
-            S(alpha, -beta) based on Phonon Density Of States model.
-
-        Example
-        -------
-        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
-        >>> T = 800
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T)
-        >>> beta = Beta(beta0_).scale(T)
-        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos)
-        >>> S_mat.data.round(6).iloc[:10, :5]
-        beta      0.000000  0.009175  0.018350  0.027524  0.036699
-        alpha
-        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
-        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
-        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
-        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
-        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
-        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
-        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
-        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
-        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
-        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
-        """
-        # Set the beta grid and the alpha grid:
-        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
-
-        # Fix the pdos to the temperature:
-        Tpdos = pdos.fix_T(T)
-
-        # Get the Debye-Waller coefficient:
-        DebyeWallerCoeff = Tpdos.DebyeWallerCoeff
-
-        # Get the Expansion order:
-        if nphonon is not None:
-            warnings.warn("Is posible that the expansion order is not enough to get the correct results")
-        else:
-            nphonon = get_expansionOrder(alpha_, DebyeWallerCoeff, decimal, orderMax)
-
-        # Get tauN function:
-        tauN = Tpdos.tauN(nphonon, threshold=threshold, values=True)
-
-        # Get tauN beta grid values:
-        tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
-
-        return cls.from_tau(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
-
-    @classmethod
-    def from_tau(cls, alpha: Union[Alpha, Iterable, str], beta: Union[Beta, Iterable, str],
-                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float):
-        """
-        Generate S(alpha, -beta) matrix using tauN functions.
-        .. math::
-            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
-
-        Numerical appoximation to get convergence in large exponentiation and
-        factorial numbers. Each element of the array is related with one alpha
-        and represent the following term of the previous equation:
-        ..math::
-           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
-
-        Parameters
-        ----------
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
-            beta grid.
-        tauN: np.ndarray, (Z, T)
-            tauN functions. The first dimension is the number of the expansion
-            and the second dimension is the number of the beta grid.
-        delta_beta: float
-            Delta beta value.
-        DebyeWallerCoeff: float
-            Debye Waller coefficient.
-
-        Returns
-        -------
-        "Sab", (N, M)
-            S(alpha, -beta) based on Phonon Density Of States model.
-
-        Example
-        -------
-        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
-        >>> T = 800
-        >>> pdos = Pdos.from_dE(T, rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T)
-        >>> beta = Beta(beta0_).scale(T)
-        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
-        >>> tau1 = pdos.tau1.values
-        >>> tau1beta = pdos.beta.data
-        >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
-        >>> tauN = get_tauNfunc(tau1, tau1beta, nphonon, 0.0)
-        >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
-        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
-        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
-        beta      0.000000  0.009175  0.018350  0.027524  0.036699
-        alpha
-        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
-        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
-        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
-        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
-        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
-        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
-        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
-        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
-        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
-        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
-        """
-        # Set the beta grid and the alpha grid:
-        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
-
-        # Get the number of phonon expansion:
-        nphonon = tauN.shape[0]
-
-        # Interpolation of the tauN functions to avoid extra calculations:
-        tauNinterp = interp_multyParallel(beta_, tauNbeta, tauN)
-
-        # Get the S(alpha, -beta) matrix (alpha in matrix form to avoid using
-        # outer product):
-        S_values = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
-                                    DebyeWallerCoeff)
-
-        return cls(S_values, DebyeWallerCoeff=DebyeWallerCoeff,
-                   columns=beta_, index=alpha_)
-
-    @classmethod
-    def from_model(cls, *args, model: str = "pdos", **kwargs):
-        """
-        Create Sab object from different models. The models available are:
-            - "phonon expansion": Phonon expansion model.
-            - "fgm": Free Gas Model.
-            - "sct": Short Collision Time model.
-
-        Parameters
-        ----------
-        model : 'str'
-            The model to calculate matrix values. The default is "pdos". The
-            available models are:
-                - "pdos": Phonon expansion model
-                - "fgm" : Free Gas Model
-                - "sct" : Short Collision Time model
-
-        Parameters for FGM model:
-        -------------------------
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
-            Absolute beta grid.
-        model : 'str', optional
-            The model to calculate matrix values. The default is "FGM".
-        wt: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Parameters for SCT model:
-        -------------------------
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
-            beta grid.
-        T : 'float'
-            Temperature in K.
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Parameters for Phonon Expansion model:
-        --------------------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        T : 'float'
-            Temperature in K.
-        alpha : 1D iterable or "Alpha", (N,)
-            Alpha grid.
-        beta_grid : 1D iterable or "Beta", (M,)
-            beta grid.
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        nphonon : 'int', optional
-            Phonon expansion order. The default is 1000.
-
-        Returns
-        -------
-        Sab
-            S(alpha, -beta) matrix based on the chosen model.
-
-        Examples
-        --------
-        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
-
-        FGM:
-        >>> T = 300
-        >>> beta = Beta.generate_grid(T).data
-        >>> alpha = Alpha.generate_grid(T, 26).data
-        >>> Sab.from_model(alpha, beta, model="fgm").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
-        alpha
-        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
-        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
-        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
-        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
-        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
-        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
-        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
-        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
-        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
-        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
-
-        SCT:
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Sab.from_model(alpha, beta, T, pdos, model="sct").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        beta      0.000000  0.012894  0.025788  0.038682  0.051576
-        alpha
-        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
-        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
-        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
-        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
-        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
-        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
-        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
-        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
-        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
-        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
-
-        Phonon Expansion:
-        >>> T = 800
-        >>> beta = Beta(beta0_).scale(T).data
-        >>> alpha = Alpha(alpha0_).scale(T).data
-        >>> Sab.from_model(alpha, beta, T, pdos, model="pdos", nphonon=700).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
-        beta      0.000000  0.009175  0.018350  0.027524  0.036699
-        alpha
-        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
-        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
-        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
-        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
-        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
-        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
-        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
-        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
-        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
-        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
-        """
-        if model.lower() == "fgm":
-            return cls.from_fgm(*args, **kwargs)
-        elif model.lower() == "sct":
-            return cls.from_sct(*args, **kwargs)
-        elif model.lower() == "pdos":
-            return cls.from_pdos(*args, **kwargs)
-
-    @classmethod
-    def from_alpha0(cls, Ein: [int, float, np.ndarray], T: float, M: float,
-                    beta: Union[Beta, Iterable], *args,
-                    model: str = "pdos", **kwargs):
-        """
-        Generate S(alpha, -beta) matrix using gressier recoil energy alpha grid.
-
-        Parameters
-        ----------
-        Ein: 'float' or 'np.ndarray'
-            Incident neutron energy in eV.
-        T: 'float'
-            Temperature in K.
-        M: 'float'
-            Mass of the target in amu.
-        beta: 'Beta' or 'Iterable'
-            Beta grid.
-        model: 'str'
-            Model to calculate the S(alpha, -beta) matrix.
-
-        Parameters for FGM model:
-        -------------------------
-        wt: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Parameters for SCT model:
-        -------------------------
-        pdos : 'solid_cinel.core.material.Pdos'
-            Pdos object.
-        ws: 'float', optional
-            normalization for continuous (vibrational) part. For solid is 1.
-
-        Parameters for Phonon Expansion model:
-        --------------------------------------
-        threshold : 'float', optional
-            Minimun value to take into account in the creation of tauN
-            functions. For T>200 is convenient to set into 1.0e-14 to speed up
-            the calculations. The default is 0.0.
-        nphonon : 'int', optional
-            Phonon expansion order. The default is 1000.
-
-        Returns
-        -------
-        "Sab", (N, M)
-            S(alpha, -beta) matrix.
-
-        Example
-        -------
-        >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
-        >>> T = 300
-        >>> beta = Beta.generate_grid(T).data
-        >>> Ein = np.array([6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0])
-        >>> M = 26
-        >>> Sab.from_alpha0(Ein, T, M, beta, model="fgm").data.iloc[::, :5].round(6)
-        beta       0.000000  0.012894  0.025788  0.038682  0.051576
-        alpha
-        9.045004   0.009776  0.009839  0.009902  0.009966  0.010030
-        9.189465   0.009354  0.009415  0.009476  0.009537  0.009598
-        9.333925   0.008953  0.009010  0.009069  0.009127  0.009186
-        9.478386   0.008569  0.008624  0.008680  0.008736  0.008792
-        9.622847   0.008203  0.008256  0.008309  0.008363  0.008416
-        9.767307   0.007853  0.007904  0.007955  0.008006  0.008058
-        9.911768   0.007519  0.007568  0.007616  0.007666  0.007715
-        10.056229  0.007200  0.007247  0.007293  0.007340  0.007388
-
-        SCT:
-        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> Sab.from_alpha0(Ein, T, M, beta, pdos, model="sct").data.iloc[::, :5].round(6)
-        beta       0.000000  0.012894  0.025788  0.038682  0.051576
-        alpha
-        9.045004   0.011253  0.011320  0.011387  0.011455  0.011522
-        9.189465   0.010800  0.010864  0.010929  0.010993  0.011058
-        9.333925   0.010366  0.010428  0.010490  0.010552  0.010614
-        9.478386   0.009951  0.010010  0.010070  0.010129  0.010189
-        9.622847   0.009554  0.009610  0.009667  0.009725  0.009782
-        9.767307   0.009173  0.009228  0.009282  0.009337  0.009393
-        9.911768   0.008809  0.008861  0.008914  0.008966  0.009019
-        10.056229  0.008460  0.008510  0.008560  0.008611  0.008662
-
-        Phonon Expansion:
-        >>> Sab.from_alpha0(Ein, T, M, beta, pdos, model="pdos").data.iloc[::, :5].round(6)
-        beta       0.000000  0.012894  0.025788  0.038682  0.051576
-        alpha
-        9.045004   0.010582  0.010650  0.010719  0.010788  0.010857
-        9.189465   0.010132  0.010198  0.010264  0.010330  0.010396
-        9.333925   0.009703  0.009766  0.009829  0.009893  0.009956
-        9.478386   0.009294  0.009354  0.009414  0.009475  0.009536
-        9.622847   0.008903  0.008960  0.009018  0.009076  0.009135
-        9.767307   0.008529  0.008584  0.008639  0.008695  0.008751
-        9.911768   0.008172  0.008225  0.008278  0.008331  0.008385
-        10.056229  0.007830  0.007881  0.007932  0.007983  0.008034
-        """
-        alpha = Alpha.from_recoil(Ein, T, M)
-        return cls.from_model(alpha, beta, T, *args, model=model, **kwargs)
 
     @staticmethod
     def SumRule_check(S: pd.DataFrame) -> None:
@@ -885,6 +332,605 @@ class Sab:
                 "Normalization of S(alpha, -beta) not satisfied with an precision of 1.0e-2")
         return
 
+    @classmethod
+    def setup_alpha_beta(cls, alpha: Union[Beta, Iterable, str],
+                          beta: Union[Beta, Iterable, str]) -> [np.array, np.array]:
+        """
+        Setup the Alpha and Beta grids for the calculation of S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        alpha : Union[Beta, Iterable, str]
+            Alpha grid information in different formats.
+        beta : Union[Beta, Iterable, str]
+            Beta grid information in different formats.
+
+        Returns
+        -------
+        np.array, np.array
+            Alpha and Beta grid arrays.
+        """
+        # Get the Alpha and Beta classes:
+        return cls.check_alpha(alpha).data, cls.check_beta(beta).data
+
+    @classmethod
+    def from_fgm(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
+                 T: float = None, wt: float = 1):
+        """
+        Generate S(alpha, -beta) matrix using Free Gas Model.
+        .. math::
+            S_t(\alpha,\,-\beta)=\dfrac{1}{\sqrt{4\pi w_t\alpha}}\exp\left(-\dfrac{(w_t\alpha+\beta)^2}{4w_t\alpha}\right)\end{equation}
+
+        Parameters
+        ----------
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            Absolute beta grid.
+        model : 'str', optional
+            The model to calculate matrix values. The default is "FGM".
+        wt: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) based on Free Gas Model.
+
+        Example
+        -------
+        FGM:
+        >>> beta = Beta.generate_grid(300).data
+        >>> alpha = AlphaVect.generate_grid(300, 26).data
+        >>> Sab.from_fgm(alpha, beta).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta	      0.000000	0.012894	 0.025788	0.038682 	0.051576
+        alpha
+        0.001050	  8.701463	8.417992     7.524148	6.213536	4.740815
+        0.001087      8.553363	8.285768	 7.435678	6.181592	4.760714
+        0.001125	  8.407781	8.155251	 7.346923	6.147319	4.777252
+        0.001164	  8.264674	8.026439	 7.257961	6.110841	4.790511
+        0.001205	  8.124000	7.899326	 7.168869	6.072279	4.800575
+        0.001247	  7.985718	7.773908	 7.079717	6.031753	4.807533
+        0.001291	  7.849787	7.650178	 6.990574	5.989379	4.811476
+        0.001336	  7.716166	7.528129	 6.901504	5.945271	4.812500
+        0.001382	  7.584817	7.407753	 6.812568	5.899540	4.810701
+        0.001431	  7.455701	7.289040	 6.723822	5.852292	4.806177
+        """
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
+
+        # Get the temperature ratio (1):
+        Tratio = cls.get_Tratio(T)
+
+        # Get the S(alpha, -beta) matrix:
+        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, Tratio, wt)
+
+        return cls(S_values, index=alpha_, columns=beta_)
+
+    @classmethod
+    def from_sct(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
+                 T: float, pdos: Pdos, ws: float = 1):
+        """
+        Generate S(alpha, -beta) matrix using Short Collision Time.
+        .. math::
+            S(\alpha,\,-\beta)=\sqrt{\dfrac{1}{4\pi\omega_{s}\alpha T_{\textrm{eff}}/T}}\exp\left(-\dfrac{(\omega_{s}\alpha-\beta)^2}{4\omega_{s}\alpha T_{\textrm{eff}}/T}\right)
+
+        Parameters
+        ----------
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) based on Short Collision Time
+
+        Example
+        -------
+        SCT:
+        Dont fit the normalization and sum rule with the correct precision
+        >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
+        >>> T = 300
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> beta = Beta.generate_grid(T)
+        >>> alpha = AlphaVect.generate_grid(T, 26)
+        >>> S = Sab.from_sct(alpha, beta, T, pdos)
+        >>> S.data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
+        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
+        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
+        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
+        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
+        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
+        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
+        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
+        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
+        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
+        """
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
+
+        # Get the temperature ratio (1):
+        Tratio = cls.get_Tratio(T, pdos)
+
+        # Get the S(alpha, -beta) matrix:
+        S_values = get_SabSct(alpha_[::, np.newaxis], - beta_, Tratio, ws)
+
+        return cls(S_values, index=alpha_, columns=beta_)
+
+    @classmethod
+    def from_pdos(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
+                  T: float, pdos: Pdos, nphonon: int = None, decimal: float = 1.0e-6,
+                  orderMax: int = 5000, threshold: float = 0.0, p0: bool = False):
+        """
+        Generate S(alpha, -beta) matrix using phonon expansion.
+        .. math::
+            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+        Numerical appoximation to get convergence in large exponentiation and
+        factorial numbers. Each element of the array is related with one alpha
+        and represent the following term of the previous equation:
+        ..math::
+           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+        Parameters
+        ----------
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta : 1D iterable or "Beta", (M,)
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is calculated with the function
+            get_expansionOrder.
+        decimal : 'float', optional
+            Decimal precision to calculate the expansion order. The default is
+            1.0e-6.
+        order_max : 'int', optional
+            Maximum expansion order. The default is 5000.
+        p0 : 'bool', optional
+            If True, the S(alpha, -beta) matrix will have the zero phonon term.
+            The default is False.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) based on Phonon Density Of States model.
+
+        Example
+        -------
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> T = 800
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> alpha = AlphaVect(alpha0_).scale(T)
+        >>> beta = Beta(beta0_).scale(T)
+        >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos)
+        >>> S_mat.data.round(6).iloc[:10, :5]
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+        """
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
+
+        # Fix the pdos to the temperature:
+        Tpdos = pdos.fix_T(T)
+
+        # Get the Debye-Waller coefficient:
+        DebyeWallerCoeff = Tpdos.DebyeWallerCoeff
+
+        # Get the Expansion order:
+        if nphonon is not None:
+            warnings.warn("Is posible that the expansion order is not enough to get the correct results")
+        else:
+            nphonon = AlphaBase(alpha_).expansionOrder(DebyeWallerCoeff, decimal, orderMax)
+
+        # Get tauN function:
+        tauN = Tpdos.tauN(nphonon, threshold=threshold, values=True)
+
+        # Get tauN beta grid values:
+        tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
+
+        return cls.from_tau(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff, p0)
+
+    @classmethod
+    def from_tau(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
+                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float,
+                 p0: bool = False):
+        """
+        Generate S(alpha, -beta) matrix using tauN functions.
+        .. math::
+            S(\alpha,\,-\beta)=\exp(-\alpha\lambda)\sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n\mathcal{T}_n(-\beta)
+
+        Numerical appoximation to get convergence in large exponentiation and
+        factorial numbers. Each element of the array is related with one alpha
+        and represent the following term of the previous equation:
+        ..math::
+           \sum_{n=0}^{\infty}\dfrac{1}{n!}(\alpha\lambda)^n = \exp(\log(\dfrac{1}{1}(\alpha\lambda)) + \log(\dfrac{1}{2}(\alpha\lambda)) + ...)
+
+        Parameters
+        ----------
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        tauN: np.ndarray, (Z, T)
+            tauN functions. The first dimension is the number of the expansion
+            and the second dimension is the number of the beta grid.
+        delta_beta: float
+            Delta beta value.
+        DebyeWallerCoeff: float
+            Debye Waller coefficient.
+        p0: bool, optional
+            If True, the S(alpha, -beta) matrix will have the zero phonon term.
+            The default is False.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) based on Phonon Density Of States model.
+
+        Example
+        -------
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> T = 800
+        >>> pdos = Pdos.from_dE(T, rho_in_energy, interv_in_energy)
+        >>> alpha = AlphaVect(alpha0_).scale(T)
+        >>> beta = Beta(beta0_).scale(T)
+        >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
+        >>> tau1 = pdos.tau1.values
+        >>> tau1beta = pdos.beta.data
+        >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
+        >>> tauN = get_tauNfunc(tau1, tau1beta, nphonon, 0.0)
+        >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff)
+        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+
+        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff, p0=True)
+        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.994173  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.988959  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.984288  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.980094  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.976319  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.972908  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.969812  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.966985  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.964388  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.961982  0.324156  0.324758  0.325158  0.325425
+
+        >>> S_mat = Sab.from_tau(alpha, beta.data[1::], tauN, tauNbeta, DebyeWallerCoeff, p0=True)
+        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.994165  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.988929  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.984222  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.979983  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.976152  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.972678  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.969512  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.966610  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.963933  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.961446  0.324156  0.324758  0.325158  0.325425
+        """
+        # Set the beta grid and the alpha grid:
+        alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
+
+        # Get the number of phonon expansion:
+        nphonon = tauN.shape[0]
+
+        # Interpolation of the tauN functions to avoid extra calculations:
+        tauNinterp = interp_multyParallel(beta_, tauNbeta, tauN)
+
+        # Get the S(alpha, -beta) matrix (alpha in matrix form to avoid using
+        # outer product):
+        SabValues = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
+                                    DebyeWallerCoeff)
+        if p0:
+            SabValues, beta_ = addP0(SabValues, alpha_, beta_, DebyeWallerCoeff)
+            return cls(SabValues, columns=beta_, index=alpha_)
+        return cls(SabValues, DebyeWallerCoeff=DebyeWallerCoeff,
+                    columns=beta_, index=alpha_)
+
+    @classmethod
+    def from_model(cls, *args, model: str = "pdos", **kwargs):
+        """
+        Create Sab object from different models. The models available are:
+            - "phonon expansion": Phonon expansion model.
+            - "fgm": Free Gas Model.
+            - "sct": Short Collision Time model.
+
+        Parameters
+        ----------
+        model : 'str'
+            The model to calculate matrix values. The default is "pdos". The
+            available models are:
+                - "pdos": Phonon expansion model
+                - "fgm" : Free Gas Model
+                - "sct" : Short Collision Time model
+
+        Parameters for FGM model:
+        -------------------------
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            Absolute beta grid.
+        model : 'str', optional
+            The model to calculate matrix values. The default is "FGM".
+        wt: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for SCT model:
+        -------------------------
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        T : 'float'
+            Temperature in K.
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for Phonon Expansion model:
+        --------------------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        T : 'float'
+            Temperature in K.
+        alpha : 1D iterable or "Alpha", (N,)
+            Alpha grid.
+        beta_grid : 1D iterable or "Beta", (M,)
+            beta grid.
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        Sab
+            S(alpha, -beta) matrix based on the chosen model.
+
+        Examples
+        --------
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
+
+        FGM:
+        >>> T = 300
+        >>> beta = Beta.generate_grid(T).data
+        >>> alpha = AlphaVect.generate_grid(T, 26).data
+        >>> Sab.from_model(alpha, beta, model="fgm").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta	      0.000000	0.012894	0.025788	0.038682	0.051576
+        alpha
+        0.001050	8.701463	8.417992	7.524148	6.213536	4.740815
+        0.001087	8.553363	8.285768	7.435678	6.181592	4.760714
+        0.001125	8.407781	8.155251	7.346923	6.147319	4.777252
+        0.001164	8.264674	8.026439	7.257961	6.110841	4.790511
+        0.001205	8.124000	7.899326	7.168869	6.072279	4.800575
+        0.001247	7.985718	7.773908	7.079717	6.031753	4.807533
+        0.001291	7.849787	7.650178	6.990574	5.989379	4.811476
+        0.001336	7.716166	7.528129	6.901504	5.945271	4.812500
+        0.001382	7.584817	7.407753	6.812568	5.899540	4.810701
+        0.001431	7.455701	7.289040	6.723822	5.852292	4.806177
+
+        SCT:
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Sab.from_model(alpha, beta, T, pdos, model="sct").data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.342190  8.092079  7.298835  6.121534  4.773978
+        0.001087  8.200211  7.964121  7.209904  6.084151  4.785744
+        0.001125  8.060646  7.837859  7.120876  6.044744  4.794361
+        0.001164  7.923454  7.713288  7.031821  6.003428  4.799921
+        0.001205  7.788595  7.590401  6.942804  5.960320  4.802517
+        0.001247  7.656028  7.469191  6.853888  5.915532  4.802243
+        0.001291  7.525715  7.349649  6.765132  5.869173  4.799196
+        0.001336  7.397618  7.231765  6.676593  5.821349  4.793476
+        0.001382  7.271698  7.115530  6.588322  5.772162  4.785181
+        0.001431  7.147919  7.000933  6.500370  5.721713  4.774412
+
+        Phonon Expansion:
+        >>> T = 800
+        >>> beta = Beta(beta0_).scale(T).data
+        >>> alpha = AlphaVect(alpha0_).scale(T).data
+        >>> Sab.from_model(alpha, beta, T, pdos, model="pdos", nphonon=700).data.iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.038004  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.074701  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.110103  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.144226  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.177088  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.208709  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.239108  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+        """
+        if model.lower() == "fgm":
+            return cls.from_fgm(*args, **kwargs)
+        elif model.lower() == "sct":
+            return cls.from_sct(*args, **kwargs)
+        elif model.lower() == "pdos":
+            return cls.from_pdos(*args, **kwargs)
+
+    @classmethod
+    def from_capt(cls, Ein: [int, float, np.ndarray], T: float, M: float,
+                    beta: Union[Beta, Iterable], *args,
+                    model: str = "pdos", **kwargs):
+        """
+        Generate S(alpha, -beta) matrix using gressier recoil energy alpha grid.
+
+        Parameters
+        ----------
+        Ein: 'float' or 'np.ndarray'
+            Incident neutron energy in eV.
+        T: 'float'
+            Temperature in K.
+        M: 'float'
+            Mass of the target in amu.
+        beta: 'Beta' or 'Iterable'
+            Beta grid.
+        model: 'str'
+            Model to calculate the S(alpha, -beta) matrix.
+
+        Parameters for FGM model:
+        -------------------------
+        wt: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for SCT model:
+        -------------------------
+        pdos : 'solid_cinel.core.material.Pdos'
+            Pdos object.
+        ws: 'float', optional
+            normalization for continuous (vibrational) part. For solid is 1.
+
+        Parameters for Phonon Expansion model:
+        --------------------------------------
+        threshold : 'float', optional
+            Minimun value to take into account in the creation of tauN
+            functions. For T>200 is convenient to set into 1.0e-14 to speed up
+            the calculations. The default is 0.0.
+        nphonon : 'int', optional
+            Phonon expansion order. The default is 1000.
+
+        Returns
+        -------
+        "Sab", (N, M)
+            S(alpha, -beta) matrix.
+
+        Example
+        -------
+        >>> from solid_cinel.data.examples.Al27 import rho_in_energy, interv_in_energy
+        >>> T = 300
+        >>> beta = Beta.generate_grid(T).data
+        >>> Ein = np.array([6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0])
+        >>> M = 26
+        >>> Sab.from_capt(Ein, T, M, beta, model="fgm").data.iloc[::, :5].round(6)
+        beta       0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        9.454095   0.008632  0.008688  0.008744  0.008800  0.008857
+        9.604160   0.008249  0.008302  0.008356  0.008410  0.008464
+        9.754225   0.007884  0.007935  0.007986  0.008038  0.008089
+        9.904290   0.007536  0.007585  0.007634  0.007683  0.007732
+        10.054355  0.007204  0.007251  0.007297  0.007345  0.007392
+        10.204420  0.006888  0.006932  0.006977  0.007022  0.007067
+        10.354485  0.006586  0.006628  0.006671  0.006714  0.006757
+        10.504550  0.006298  0.006339  0.006379  0.006421  0.006462
+
+        SCT:
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> Sab.from_capt(Ein, T, M, beta, pdos, model="sct").data.iloc[::, :5].round(6)
+        beta       0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        9.454095   0.010020  0.010079  0.010139  0.010199  0.010259
+        9.604160   0.009604  0.009661  0.009718  0.009776  0.009834
+        9.754225   0.009207  0.009262  0.009317  0.009372  0.009427
+        9.904290   0.008827  0.008880  0.008932  0.008985  0.009038
+        10.054355  0.008464  0.008514  0.008565  0.008616  0.008667
+        10.204420  0.008117  0.008165  0.008214  0.008262  0.008311
+        10.354485  0.007785  0.007831  0.007878  0.007924  0.007971
+        10.504550  0.007467  0.007511  0.007556  0.007601  0.007646
+
+        Phonon Expansion:
+        >>> Sab.from_capt(Ein, T, M, beta, pdos, model="pdos").data.iloc[::, :5].round(6)
+        beta       0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        9.454095   0.009361  0.009422  0.009483  0.009544  0.009605
+        9.604160   0.008952  0.009010  0.009068  0.009127  0.009186
+        9.754225   0.008562  0.008617  0.008673  0.008729  0.008785
+        9.904290   0.008190  0.008243  0.008296  0.008349  0.008403
+        10.054355  0.007835  0.007885  0.007936  0.007987  0.008039
+        10.204420  0.007496  0.007544  0.007593  0.007642  0.007691
+        10.354485  0.007172  0.007219  0.007265  0.007312  0.007359
+        10.504550  0.006864  0.006908  0.006953  0.006997  0.007043
+        """
+        alpha = AlphaDynamic.from_capt(Ein, M, T).data
+        return cls.from_model(alpha, beta, T, *args, model=model, **kwargs)
+
+    def to_sym(self, detail_balance: bool = True) -> pd.DataFrame:
+        """
+        Generate the symmetric S(alpha, -beta) matrix from the asymmetric
+        S(alpha, -beta) matrix.
+
+        Parameters
+        ----------
+        detail_balance : 'bool', optional
+            Relationships between upscatter and downscatter. The default is
+            True.
+
+        Returns
+        -------
+        "pd.DataFrame"
+            Dataframe containing the symmetric S(alpha, -beta) matrix.
+
+        Example:
+        --------
+        >>> beta_grid = Beta.generate_grid(300).data
+        >>> alpha = AlphaVect.generate_grid(300, 26).data
+        >>> Sab.from_fgm(alpha, beta_grid).to_sym().iloc[:10, :5].round(6) #doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.012894  0.025788  0.038682  0.051576
+        alpha
+        0.001050  8.701463  8.363896  7.427755  6.094516  4.620122
+        0.001087  8.553363  8.232522  7.340419  6.063184  4.639515
+        0.001125  8.407781  8.102844  7.252800  6.029567  4.655632
+        0.001164  8.264674  7.974859  7.164978  5.993787  4.668553
+        0.001205  8.124000  7.848564  7.077028  5.955964  4.678361
+        0.001247  7.985718  7.723951  6.989018  5.916214  4.685142
+        0.001291  7.849787  7.601016  6.901017  5.874652  4.688985
+        0.001336  7.716166  7.479752  6.813088  5.831389  4.689983
+        0.001382  7.584817  7.360149  6.725291  5.786534  4.688230
+        0.001431  7.455701  7.242199  6.637682  5.740191  4.683821
+        """
+        return self.data * np.exp(- self.beta.data / 2) if detail_balance else self.data
+
+
     def update_data(self, sabNew: pd.DataFrame, inplace: bool, axis: int):
         """
         Update the S(alpha, -beta) matrix with new values.
@@ -947,7 +993,7 @@ class Sab:
         >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
-        >>> alpha = Alpha(alpha0_).scale(T)
+        >>> alpha = AlphaVect(alpha0_).scale(T)
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> betaNew = 0.01
@@ -1028,7 +1074,7 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> alpha = AlphaVect(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> betaTest = beta_grid.data[0:5]
         >>> alphaNew = 0.00013
@@ -1097,7 +1143,7 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> alpha = AlphaVect(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alphaNew = 0.00013
         >>> alphaVec = S_mat._interp_alpha(alphaNew)
@@ -1191,7 +1237,7 @@ class Sab:
         >>> T = 300
         >>> pdos = Pdos.from_dE(rho_in_energy_U238, interv_in_energy_U238)
         >>> beta_grid = Beta(beta0_U238).scale(T)
-        >>> alpha = Alpha(alpha0_U238).scale(T)
+        >>> alpha = AlphaVect(alpha0_U238).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta_grid, T, pdos, threshold=1.0e-14)
         >>> alphaNew = [1.25e-4, 1.35e-4]
         >>> betaNew = [0.01, 0.03, -0.01, -0.03]
@@ -1234,7 +1280,7 @@ def _SumRule(x: pd.Series) -> float:
     Example
     -------
     >>> beta_grid = Beta.generate_grid(300)
-    >>> alpha = Alpha.generate_grid(300, 26)
+    >>> alpha = AlphaVect.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha, beta_grid).data
     >>> float(_SumRule(s.iloc[1, ::]).round(6))
     0.001087
@@ -1260,7 +1306,7 @@ def _norm(x: pd.Series) -> float:
     Example
     -------
     >>> beta_grid = Beta.generate_grid(300)
-    >>> alpha = Alpha.generate_grid(300, 26)
+    >>> alpha = AlphaVect.generate_grid(300, 26)
     >>> s = Sab.from_fgm(alpha, beta_grid).data
     >>> float(_norm(s.iloc[0, ::]).round(6))
     1.0
@@ -1300,9 +1346,43 @@ def proportionality_factor(alpha: float, alpha_i: float,
         q = 1
     return q
 
+@nb.jit(nopython=True, cache=True)
+def addP0(sabValues: np.ndarray, alpha: np.ndarray, beta: np.ndarray,
+          DebyeWallerCoeff: float) -> [np.ndarray, np.ndarray]:
+    """
+    Add the P0 value to the S(alpha, -beta) matrix.
 
-@nb.jit(float64[:, :](float64[:, :], int32, float64[:, :], float64),
-        nopython=True, cache=True)
+    Parameters
+    ----------
+    sabValues: 'np.ndarray', (N, M)
+        S(alpha, -beta) matrix values
+    alpha: 'np.ndarray', (N,)
+        alpha grid values.
+    beta: 'np.ndarray', (M,)
+        beta grid values.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
+
+    Returns
+    -------
+    'np.ndarray', (N, M) or (N, M+1)
+        S(alpha, -beta) matrix values.
+    """
+    betaMin = beta[0]
+    if betaMin != 0:
+        # Interpolate linearly the 0 value:
+        valuesInterp = np.vstack((sabValues[:, 0], sabValues[:, 0] * np.exp(-betaMin))).T
+        SvaluesInterp = interp_multyParallel([0], [-betaMin, betaMin], valuesInterp)
+
+        # Update the S(alpha, -beta) matrix:
+        sabValues = np.concatenate((SvaluesInterp, sabValues), axis=1)
+        beta = np.concatenate((np.array([0]), beta))
+
+    sabValues[:, 0] += np.exp(- alpha * DebyeWallerCoeff)
+    return sabValues, beta
+
+
+@nb.jit(nopython=True, cache=True)
 def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
                      DebyeWallerCoeff: float) -> np.ndarray:
     """
@@ -1371,6 +1451,8 @@ def get_SabSct(alpha: np.ndarray, beta: np.ndarray, Tratio: float,
     'np.ndarray', (N, M)
         S(alpha, beta) matrix values.
     """
+    # Common variables:
     alphaCommon = 4 * alpha * Tratio * ws
-    sabValues = np.exp(-(ws * alpha + beta) ** 2 / alphaCommon)
-    return sabValues / np.sqrt(pi * alphaCommon)
+
+    # S(alpha, beta) matrix values:
+    return np.exp(-(ws * alpha + beta) ** 2 / alphaCommon) / np.sqrt(pi * alphaCommon)

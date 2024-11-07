@@ -15,3 +15,5 @@ statsmodels
 typing
 tables
 dask
+intel-cmplr-lib-rt
+mkl

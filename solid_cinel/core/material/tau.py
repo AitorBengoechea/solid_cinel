@@ -2,7 +2,7 @@
 import numpy as np
 import numba as nb
 from numba import cuda, float64, int32
-from solid_cinel.core.scattering_function.beta import Beta
+from solid_cinel.core.dynamic_structure.beta import Beta
 gpu_available = True if cuda.is_available() else False
 
 

@@ -471,7 +471,7 @@ class Sab:
     @classmethod
     def from_pdos(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
                   T: float, pdos: Pdos, nphonon: int = None, decimal: float = 1.0e-6,
-                  orderMax: int = 5000, threshold: float = 0.0):
+                  orderMax: int = 5000, threshold: float = 0.0, p0: bool = False):
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -505,6 +505,9 @@ class Sab:
             1.0e-6.
         order_max : 'int', optional
             Maximum expansion order. The default is 5000.
+        p0 : 'bool', optional
+            If True, the S(alpha, -beta) matrix will have the zero phonon term.
+            The default is False.
 
         Returns
         -------
@@ -554,11 +557,12 @@ class Sab:
         # Get tauN beta grid values:
         tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
 
-        return cls.from_tau(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff)
+        return cls.from_tau(alpha_, beta_, tauN, tauNbeta, DebyeWallerCoeff, p0)
 
     @classmethod
     def from_tau(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
-                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float):
+                 tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float,
+                 p0: bool = False):
         """
         Generate S(alpha, -beta) matrix using tauN functions.
         .. math::
@@ -583,6 +587,9 @@ class Sab:
             Delta beta value.
         DebyeWallerCoeff: float
             Debye Waller coefficient.
+        p0: bool, optional
+            If True, the S(alpha, -beta) matrix will have the zero phonon term.
+            The default is False.
 
         Returns
         -------
@@ -616,6 +623,36 @@ class Sab:
         0.014680  0.268310  0.269164  0.269779  0.270255  0.270631
         0.016515  0.296336  0.297239  0.297853  0.298297  0.298625
         0.018350  0.323212  0.324156  0.324758  0.325158  0.325425
+
+        >>> S_mat = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff, p0=True)
+        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.994173  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.988959  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.984288  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.980094  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.976319  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.972908  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.969812  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.966985  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.964388  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.961982  0.324156  0.324758  0.325158  0.325425
+
+        >>> S_mat = Sab.from_tau(alpha, beta.data[1::], tauN, tauNbeta, DebyeWallerCoeff, p0=True)
+        >>> S_mat.data.round(6).iloc[:10, :5]#doctest: +NORMALIZE_WHITESPACE
+        beta      0.000000  0.009175  0.018350  0.027524  0.036699
+        alpha
+        0.001835  0.994165  0.038171  0.038333  0.038492  0.038645
+        0.003670  0.988929  0.075013  0.075307  0.075590  0.075857
+        0.005505  0.984222  0.110542  0.110941  0.111315  0.111663
+        0.007340  0.979983  0.144776  0.145255  0.145693  0.146093
+        0.009175  0.976152  0.177733  0.178272  0.178749  0.179174
+        0.011010  0.972678  0.209435  0.210015  0.210509  0.210937
+        0.012845  0.969512  0.239904  0.240509  0.241002  0.241412
+        0.014680  0.966610  0.269164  0.269779  0.270255  0.270631
+        0.016515  0.963933  0.297239  0.297853  0.298297  0.298625
+        0.018350  0.961446  0.324156  0.324758  0.325158  0.325425
         """
         # Set the beta grid and the alpha grid:
         alpha_, beta_ = cls.setup_alpha_beta(alpha, beta)
@@ -628,11 +665,13 @@ class Sab:
 
         # Get the S(alpha, -beta) matrix (alpha in matrix form to avoid using
         # outer product):
-        S_values = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
+        SabValues = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
                                     DebyeWallerCoeff)
-
-        return cls(S_values, DebyeWallerCoeff=DebyeWallerCoeff,
-                   columns=beta_, index=alpha_)
+        if p0:
+            SabValues, beta_ = addP0(SabValues, alpha_, beta_, DebyeWallerCoeff)
+            return cls(SabValues, columns=beta_, index=alpha_)
+        return cls(SabValues, DebyeWallerCoeff=DebyeWallerCoeff,
+                    columns=beta_, index=alpha_)
 
     @classmethod
     def from_model(cls, *args, model: str = "pdos", **kwargs):
@@ -1306,6 +1345,41 @@ def proportionality_factor(alpha: float, alpha_i: float,
     elif mode == "const":
         q = 1
     return q
+
+@nb.jit(nopython=True, cache=True)
+def addP0(sabValues: np.ndarray, alpha: np.ndarray, beta: np.ndarray,
+          DebyeWallerCoeff: float) -> [np.ndarray, np.ndarray]:
+    """
+    Add the P0 value to the S(alpha, -beta) matrix.
+
+    Parameters
+    ----------
+    sabValues: 'np.ndarray', (N, M)
+        S(alpha, -beta) matrix values
+    alpha: 'np.ndarray', (N,)
+        alpha grid values.
+    beta: 'np.ndarray', (M,)
+        beta grid values.
+    DebyeWallerCoeff: 'float'
+        Debye Waller coefficient.
+
+    Returns
+    -------
+    'np.ndarray', (N, M) or (N, M+1)
+        S(alpha, -beta) matrix values.
+    """
+    betaMin = beta[0]
+    if betaMin != 0:
+        # Interpolate linearly the 0 value:
+        valuesInterp = np.vstack((sabValues[:, 0], sabValues[:, 0] * np.exp(-betaMin))).T
+        SvaluesInterp = interp_multyParallel([0], [-betaMin, betaMin], valuesInterp)
+
+        # Update the S(alpha, -beta) matrix:
+        sabValues = np.concatenate((SvaluesInterp, sabValues), axis=1)
+        beta = np.concatenate((np.array([0]), beta))
+
+    sabValues[:, 0] += np.exp(- alpha * DebyeWallerCoeff)
+    return sabValues, beta
 
 
 @nb.jit(nopython=True, cache=True)

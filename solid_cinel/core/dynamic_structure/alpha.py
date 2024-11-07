@@ -114,12 +114,50 @@ class AlphaBase:
         -------
         'np.ndarray'
             Cumulative sum of the alpha values.
+
+        Example
+        -------
+        >>> from solid_cinel.core.material import Pdos
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> T = 800
+        >>> alpha_grid = AlphaVect(alpha0_).scale(T)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> debye_waller = pdos.DebyeWallerCoeff(T)
+        >>> alpha_cumsum = alpha_grid.mulCumSum(debye_waller, 1000)
+        >>> pd.Series(alpha_cumsum).iloc[::100].round(6)
+        0      0.000000
+        100    0.000000
+        200    0.000000
+        300    0.000000
+        400    0.000000
+        500    0.000000
+        600    0.002762
+        700    0.869472
+        800    0.999999
+        900    1.000000
+        dtype: float64
+
+        >>> T = 5
+        >>> alpha_grid = AlphaVect(alpha0_).scale(T)
+        >>> debye_waller = pdos.DebyeWallerCoeff(T)
+        >>> alpha_cumsum = alpha_grid.mulCumSum(debye_waller, 140)
+        >>> pd.Series(alpha_cumsum).iloc[::14].round(6)
+        0      0.000000
+        14     0.000000
+        28     0.000000
+        42     0.000001
+        56     0.001090
+        70     0.081060
+        84     0.565192
+        98     0.949794
+        112    0.998866
+        126    0.999995
+        dtype: float64
         """
         # Define the constant:
         alphaMul = np.zeros(orderMax)
         alphaDebye = self.data.max() * DebyeWallerCoeff
         log_alphaDebye = log(alphaDebye)
-
 
         # 1 phonon expansion:
         iterSum = log(alphaDebye)
@@ -176,8 +214,11 @@ class AlphaBase:
         int
             Expansion order.
         """
-        # Check the decimal precision
-        return np.searchsorted(alphaCumsum, decimal, side='right')
+        # Check if the cumulative sum of the alpha values is the unity
+        if alphaCumsum[-1] >= 0.99:
+            return np.searchsorted(alphaCumsum, decimal, side='right')
+        else:
+            return 1
 
     def expansionOrder(self, DebyeWallerCoeff: float, decimal: float,
                        orderMax: int) -> int:
@@ -222,6 +263,42 @@ class AlphaBase:
 
     def expansionRange(self,  DebyeWallerCoeff: float, decimal: float,
                        orderMax: int) -> (int, int):
+        """
+        Get the expansion range for the phonon expansion method using the maximun
+        alpha value and the decimal precision.
+
+        Parameters
+        ----------
+        DebyeWallerCoeff: float
+            Debye Waller coefficient.
+        decimal: float
+            Decimal precision
+        orderMax: int
+            Maximun order for the expansion.
+
+        Returns
+        -------
+        int
+            Expansion order.
+
+        Example
+        -------
+        >>> from solid_cinel.core.material import Pdos
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> T = 800
+        >>> alpha_grid = AlphaVect(alpha0_).scale(T)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> debye_waller = pdos.DebyeWallerCoeff(T)
+        >>> expan = alpha_grid.expansionRange(debye_waller, 1.0e-6, 5000)
+        >>> assert expan == (552, 798)
+
+        >>> T = 5
+        >>> alpha_grid = AlphaVect(alpha0_).scale(T)
+        >>> debye_waller = pdos.DebyeWallerCoeff(T)
+        >>> alpha_cumsum = alpha_grid.mulCumSum(debye_waller, 200)
+        >>> expan = alpha_grid.expansionRange(debye_waller, 1.0e-6, 5000)
+        >>> assert expan == (43, 130)
+        """
         # Get the cumulative sum of the alpha values
         alphaCumsum = self.mulCumSum(DebyeWallerCoeff, orderMax)
 

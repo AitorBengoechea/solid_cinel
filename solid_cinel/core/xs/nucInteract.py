@@ -58,6 +58,31 @@ class InteractTemp:
         """
         return self.T * (1 + self.mu) / 2
 
+    @property
+    def p0(self) -> np.ndarray:
+        """
+        The p0 value for the strict and approx calculation of the interaction
+        temperature.
+
+        Returns
+        -------
+        np.ndarray
+            The p0 value for the strict calculation of the interaction temperature
+
+        Examples
+        --------
+        >>> T = 300
+        >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.75])
+        >>> Tarno = InteractTemp(T, mu)
+        >>> pd.Series(Tarno.p0, index=mu)
+        -1.00      0.00
+        -0.50     37.50
+         0.00     75.00
+         0.50    112.50
+         0.75    131.25
+        dtype: float64
+        """
+        return self.approx4PCF / 2
 
     def strict4PCF(self, Ein: float, Eout: np.ndarray) -> np.ndarray:
         """
@@ -554,6 +579,111 @@ class InteractEnergy(DoubleDiff):
         }
         return getattr(self, "".join([kind_dict[kind], approx_dict[approx]]))
 
+    @property
+    def originalP0(self) -> np.ndarray:
+        """
+        Calculate the original P0 of the material.
+
+        Returns
+        -------
+        float
+            The original P0 of the material
+
+        Examples
+        --------
+        # Example data:
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+        >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.75])
+        >>> M = 238.05077040419212
+        >>> EinMat = InteractEnergy(Ein, M, Eout, mu)
+        >>> pd.Series(EinMat.originalP0, index=mu)
+        -1.00    0.995763
+        -0.50    0.997881
+         0.00    1.000000
+         0.50    1.002119
+         0.75    1.003178
+        dtype: float64
+        """
+        return self.Ein * (self.A + self.mu) / self.A
+    @property
+    def correctP0(self) -> np.ndarray:
+        """
+        Calculate the original P0 of the material.
+
+        Returns
+        -------
+        float
+            The original P0 of the material
+
+        Examples
+        --------
+        # Example data:
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+        >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.75])
+        >>> M = 238.05077040419212
+        >>> EinMat = InteractEnergy(Ein, M, Eout, mu)
+        >>> pd.Series(EinMat.correctP0, index=mu)
+        -1.00    1.000000
+        -0.50    1.002119
+         0.00    1.004237
+         0.50    1.006356
+         0.75    1.007415
+        dtype: float64
+        """
+        return self.originalP0 + self.Ein / self.A
+
+    def p0(self, kind: str = "corrected") -> np.ndarray:
+        """
+        Calculate the P0 of the material.
+        Parameters
+        ----------
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original P0
+            - "modified": Modified original P0
+            - "corrected": Corrected P0
+
+        Returns
+        -------
+        np.ndarray
+            The P0 of the material
+
+        Examples
+        --------
+        # Example data:
+        >>> Ein = 1
+        >>> Eout = np.array([0.5, 0.9, 1.0, 1.1, 1.5, 2])
+        >>> mu = np.array([-1.0, -0.5, 0.0, 0.5, 0.75])
+        >>> M = 238.05077040419212
+        >>> EinMat = InteractEnergy(Ein, M, Eout, mu)
+        >>> pd.Series(EinMat.p0(), index=mu)
+        -1.00    1.000000
+        -0.50    1.002119
+         0.00    1.004237
+         0.50    1.006356
+         0.75    1.007415
+        dtype: float64
+
+        >>> pd.Series(EinMat.p0("original"), index=mu)
+        -1.00    0.995763
+        -0.50    0.997881
+         0.00    1.000000
+         0.50    1.002119
+         0.75    1.003178
+        dtype: float64
+        """
+        kind = kind.lower()
+        if kind not in ["original", "modified", "corrected"]:
+            raise ValueError("kind must be one of 'original', 'modified', or 'corrected'")
+        else:
+            kind_dict = {
+                            "original": "originalP0",
+                            "modified": "correctP0",
+                            "corrected": "correctP0"
+            }
+        return getattr(self, "".join([kind_dict[kind]]))
 
 
 class NucInteractBase:
@@ -603,6 +733,55 @@ class NucInteractBase:
 
         return cls(xs0K, InteractTemp(T, mu),
                    InteractEnergy(Ein, xs0K.M, Eout, mu))
+
+    def alphaCapt(self, approx: bool = True, kind: str = "corrected"):
+        """
+        Calculate the alpha capture of the material.
+
+        Parameters
+        ----------
+        approx
+        kind
+
+        Returns
+        -------
+
+        Examples
+        --------
+        # 0K xs data for U238:
+        >>> import os
+        >>> wd = os.getcwd()
+        >>> os.chdir(__file__.replace("nucInteract.py", ""))
+        >>> os.chdir("../../data/xs/U238/")
+        >>> M = 238.05077040419212
+        >>> xs0K = Xs0K.from_file("u238.0.2", M)
+        >>> os.chdir(wd)
+
+        # Example data:
+        >>> T = 300
+        >>> M = 238.05077040419212
+        >>> theta = np.array([30, 60, 90, 120, 150, 180])
+        >>> mu = np.sort(np.cos(np.deg2rad(theta)))
+        >>> Ein = 6.67
+        >>> Eout = np.array([6.5, 6.6, 6.67, 6.8, 6.9])
+        >>> nuc = NucInteractBase.from_theta(xs0K, Ein, T, Eout, theta)
+        >>> pd.DataFrame(nuc.alphaCapt(), index=mu, columns=Eout)
+                              6.50         6.60         6.67         6.80         6.90
+        -1.000000e+00          inf          inf          inf          inf          inf
+        -8.660254e-01  3832.563612  3861.665299  3882.035998  3919.866269  3948.965588
+        -5.000000e-01  1025.352263  1033.137929  1038.587820  1048.708888  1056.494187
+         6.123234e-17   511.596930   515.481492   518.200686   523.250618   527.135181
+         5.000000e-01   340.345152   342.929347   344.738309   348.097862   350.682179
+         8.660254e-01   273.162249   275.236304   276.688177   279.384586   281.458811
+        """
+        # Get the interaction temperature of the material
+        if approx:
+            Tinteraction = self._Tinteract.to_4PCF()[::, np.newaxis]
+        else:
+            Tinteraction = self._Tinteract.to_4PCF(self._EinMat.Ein, self._EinMat.Eout)
+
+        # Get the alpha capture of the material
+        return self._EinMat.to_4PCF(approx, kind) / (kb * Tinteraction)
 
     def calc_sigma1(self, approx: bool = True, kind: str = "corrected") -> np.ndarray:
         """

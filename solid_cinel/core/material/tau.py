@@ -287,7 +287,7 @@ def calc_tauNfunc_gpu(tauNfunc: np.ndarray, tau1: np.ndarray,
                                                                  tauN, NtauN)
 
         # Copy the data back to the host
-        tauNfunc[n, :NtauN] += tauN.copy_to_host()
+        tauNfunc[n, :NtauN] = tauN.copy_to_host()
 
         # If the last N values are zero, the next tauN will have the same length
         # because the convolution will be zero for the following values

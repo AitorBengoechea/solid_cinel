@@ -96,7 +96,9 @@ class AlphaBase:
             n = alphaCumsumDiff <= decimal
             return np.argmax(n) if n.any() else orderMax
 
-    def mulCumSum(self, DebyeWallerCoeff: float, orderMax: int) -> np.ndarray:
+    @staticmethod
+    @nb.jit(nopython=True, cache=True)
+    def mulCumSum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> np.ndarray:
         """
         Get the alpha multiplication for the phonon expansion cumulative sum for
         the given alpha value and Debye Waller coefficient and the maximun order
@@ -123,7 +125,8 @@ class AlphaBase:
         >>> alpha_grid = AlphaVect(alpha0_).scale(T)
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> debye_waller = pdos.DebyeWallerCoeff(T)
-        >>> alpha_cumsum = alpha_grid.mulCumSum(debye_waller, 1000)
+        >>> alphaMax = alpha_grid.data.max()
+        >>> alpha_cumsum = AlphaBase.mulCumSum(alphaMax, debye_waller, 1000)
         >>> pd.Series(alpha_cumsum).iloc[::100].round(6)
         0      0.000000
         100    0.000000
@@ -140,7 +143,8 @@ class AlphaBase:
         >>> T = 5
         >>> alpha_grid = AlphaVect(alpha0_).scale(T)
         >>> debye_waller = pdos.DebyeWallerCoeff(T)
-        >>> alpha_cumsum = alpha_grid.mulCumSum(debye_waller, 140)
+        >>> alphaMax = alpha_grid.data.max()
+        >>> alpha_cumsum = AlphaBase.mulCumSum(alphaMax, debye_waller, 140)
         >>> pd.Series(alpha_cumsum).iloc[::14].round(6)
         0      0.000000
         14     0.000000
@@ -156,7 +160,7 @@ class AlphaBase:
         """
         # Define the constant:
         alphaMul = np.zeros(orderMax)
-        alphaDebye = self.data.max() * DebyeWallerCoeff
+        alphaDebye = alpha * DebyeWallerCoeff
         log_alphaDebye = log(alphaDebye)
 
         # 1 phonon expansion:
@@ -169,38 +173,10 @@ class AlphaBase:
             alphaMul[n] += exp(iterSum)
         return exp(- alphaDebye) * alphaMul.cumsum()
 
-    def _expansionOrderMax(self, alphaCumsum: np.ndarray, decimal: float,
+    def expansionOrderMin(self, DebyeWallerCoeff: float, decimal: float,
                        orderMax: int) -> int:
         """
         Get the expansion order for the phonon expansion method using the maximun
-        alpha value and the decimal precision.
-
-        Parameters
-        ----------
-        alphaCumsum : np.ndarray
-            Cumulative sum of the alpha values.
-        decimal : float
-            Decimal precision.
-        orderMax : int
-            Maximun order for the expansion.
-
-        Returns
-        -------
-        int
-            Expansion order.
-        """
-        # Check the decimal precision
-        nMin = np.argmax((1 - alphaCumsum) <= decimal)
-
-        # If the decimal precision is not reached, the difference between the
-        # cumulative sum of the alpha values will identify the order of the
-        # expansion.
-        return nMin if nMin > 0 else self.checkDiff(alphaCumsum, decimal, orderMax)
-
-    def _expansionOrderMin(self, alphaCumsum: np.ndarray,
-                           decimal: float) -> int:
-        """
-        Get the expansion order for the phonon expansion method using the maximun
 
         Parameters
         ----------
@@ -213,10 +189,25 @@ class AlphaBase:
         -------
         int
             Expansion order.
+
+        Example
+        -------
+        >>> from solid_cinel.core.material import Pdos
+        >>> from solid_cinel.data.examples.Al27 import beta0_, alpha0_, rho_in_energy, interv_in_energy
+        >>> T = 800
+        >>> alpha_grid = AlphaVect(alpha0_[40::]).scale(T)
+        >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
+        >>> debye_waller = pdos.DebyeWallerCoeff(T)
+        >>> expan = alpha_grid.expansionOrderMin(debye_waller, 1.0e-6, 5000)
+        >>> assert expan == 1
         """
+        # Get the cumulative sum of the minimun alpha value
+        alphaCumsum = self.mulCumSum(self.data.min(), DebyeWallerCoeff, orderMax)
+
         # Check if the cumulative sum of the alpha values is the unity
         if alphaCumsum[-1] >= 0.99:
-            return np.searchsorted(alphaCumsum, decimal, side='right')
+            position = np.searchsorted(alphaCumsum, decimal, side='right')
+            return position if position > 0 else 1
         else:
             return 1
 
@@ -255,11 +246,16 @@ class AlphaBase:
         >>> expan = alpha_grid.expansionOrder(debye_waller, 1.0e-6, 5000)
         >>> assert expan == 798
         """
-        # Get the cumulative sum of the alpha values
-        alphaCumsum = self.mulCumSum(DebyeWallerCoeff, orderMax)
+        # Get the cumulative sum of the maximun alpha value
+        alphaCumsum = self.mulCumSum(self.data.max(), DebyeWallerCoeff, orderMax)
 
-        # Get the expansion order
-        return self._expansionOrderMax(alphaCumsum, decimal, orderMax)
+        # Check the decimal precision
+        nMin = np.argmax((1 - alphaCumsum) <= decimal)
+
+        # If the decimal precision is not reached, the difference between the
+        # cumulative sum of the alpha values will identify the order of the
+        # expansion.
+        return nMin if nMin > 0 else self.checkDiff(alphaCumsum, decimal, orderMax)
 
     def expansionRange(self,  DebyeWallerCoeff: float, decimal: float,
                        orderMax: int) -> (int, int):
@@ -290,23 +286,19 @@ class AlphaBase:
         >>> pdos = Pdos.from_dE(rho_in_energy, interv_in_energy)
         >>> debye_waller = pdos.DebyeWallerCoeff(T)
         >>> expan = alpha_grid.expansionRange(debye_waller, 1.0e-6, 5000)
-        >>> assert expan == (552, 798)
+        >>> assert expan == (1, 798)
 
         >>> T = 5
         >>> alpha_grid = AlphaVect(alpha0_).scale(T)
         >>> debye_waller = pdos.DebyeWallerCoeff(T)
-        >>> alpha_cumsum = alpha_grid.mulCumSum(debye_waller, 200)
         >>> expan = alpha_grid.expansionRange(debye_waller, 1.0e-6, 5000)
-        >>> assert expan == (43, 130)
+        >>> assert expan == (1, 130)
         """
-        # Get the cumulative sum of the alpha values
-        alphaCumsum = self.mulCumSum(DebyeWallerCoeff, orderMax)
-
         # Get the expansion order
-        nMax = self._expansionOrderMax(alphaCumsum, decimal, orderMax)
+        nMax = self.expansionOrder(DebyeWallerCoeff, decimal, orderMax)
 
         # Get the expansion range
-        nMin = self._expansionOrderMin(alphaCumsum, decimal)
+        nMin = self.expansionOrderMin(DebyeWallerCoeff, decimal, orderMax)
 
         # Return the expansion range
         return nMin, nMax

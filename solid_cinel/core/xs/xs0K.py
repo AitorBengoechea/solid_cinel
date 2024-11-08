@@ -10,7 +10,6 @@ from numba import prange
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import interpolation, reshape_differential, to_arrays
 import os
-import dask.bag as db
 from math import pi, log10
 
 # constants
@@ -22,7 +21,7 @@ nb.config.FASTMATH_DEFAULT = False
 
 
 class Xs0K:
-    def __init__(self, M:float, *args, **kwargs):
+    def __init__(self, M: float, *args, **kwargs):
         """
         Initialize the Xs0K class
 
@@ -217,151 +216,7 @@ class Xs0K:
         self.data = dataNew
         return self
 
-    def get_comb(self, T: np.ndarray, Ein: np.ndarray = None) -> list:
-        """
-        Get the combination of temperature and incident energy grid
-        for the calculation of the angle-integrated cross section matrix
-
-        Parameters
-        ----------
-        T: np.ndarray
-            The temperature grid in K
-        Ein: np.ndarray, optional
-            The incoming energy grid in eV. The default is None.
-
-        Returns
-        -------
-        list
-            The combination of temperature and incident energy grid
-
-        Examples
-        --------
-        >>> xs = Xs0K(238.05077040419212, [1, 2, 3], index=[1, 2, 3])
-        >>> T = np.array([300, 1000])
-        >>> EinGrid = np.array([2.0, 6.67])
-        >>> pd.Series(xs.get_comb(T, EinGrid))
-        0      (300, 2.0)
-        1     (300, 6.67)
-        2     (1000, 2.0)
-        3    (1000, 6.67)
-        dtype: object
-
-        >>> EinGrid = np.array([[2.0, 6.67], [3.0, 7.0]])
-        >>> pd.Series(xs.get_comb(T, EinGrid))
-        0     (300, 2.0)
-        1    (300, 6.67)
-        2    (1000, 3.0)
-        3    (1000, 7.0)
-        dtype: object
-
-        >>> T = np.array([[300, 1000], [500, 700]])
-        >>> pd.Series(xs.get_comb(T, EinGrid))
-        0      (300, 2.0)
-        1    (1000, 6.67)
-        2      (500, 3.0)
-        3      (700, 7.0)
-        dtype: object
-        """
-        Ein_ = to_arrays(Ein) if Ein is not None else self.EinGrid
-        T_ = to_arrays(T)
-        if Ein_.ndim == 1 and T_.ndim == 1:
-            return [(Tcalc, Ein_Calc) for Tcalc in T_ for Ein_Calc in Ein_]
-        elif Ein_.ndim == 1 and T_.ndim == 2:
-            rows, cols = T_.shape
-            return [(T_[i, j], Ein_) for i in range(rows) for j in range(cols)]
-        elif Ein_.ndim == 2 and T_.ndim == 1:
-            rows, cols = Ein_.shape
-            return [(T_[i], Ein_[i, j]) for i in range(rows) for j in range(cols)]
-        else:
-            rows, cols = Ein_.shape
-            return [(T_[i, j], Ein_[i, j]) for i in range(rows) for j in range(cols)]
-
-
-    def compute_dask_for_sigma1(self, T: [float, np.ndarray],
-                                Ein: [float, np.ndarray] = None) -> np.ndarray:
-        # Convert the input to arrays
-        EinTcomb = self.get_comb(T, Ein)
-
-        # Create dask bag from the combinations
-        bag = db.from_sequence(EinTcomb, npartitions=os.cpu_count())
-
-        # Calculate the bag usign SIGMA1 to each element in the bag using dask
-        bag = bag.map(lambda x:
-                      calc_sigma1(x[1], x[0], self.M, self.EinGrid, self.values)
-                      )
-
-        # Compute the bag:
-        return np.array(bag.compute())
-
-    def sigma1(self, T: [float, np.ndarray], Ein: [float, np.ndarray] = None,
-               values: bool = False) -> [pd.DataFrame, pd.DataFrame, np.ndarray]:
-        """
-        Calculate the angle-integrated cross section matrix based on SIGMA1 model
-
-        Parameters
-        ----------
-        T: float, np.ndarray
-            The temperature grid in K
-        Ein: float, np.ndarray
-            The incoming energy grid in eV
-        values: bool
-            If True, return the values of the cross section. The default is False.
-
-        Returns
-        -------
-        pd.DataFrame, np.ndarray
-            The angle-integrated cross section matrix
-
-        Examples
-        --------
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("xs0K.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> M = 238.05077040419212
-        >>> xs0K = Xs0K.from_file("u238.0.2", M)
-        >>> os.chdir(wd)
-
-        >>> T = 300
-        >>> EinGrid = [2.0, 6.67]
-        >>> xs0K.sigma1(T, EinGrid)
-        2.00      9.086237
-        6.67    455.670534
-        Name: 300, dtype: float64
-
-        >>> T = [300, 1000]
-        >>> xs0K.sigma1(T, EinGrid)
-                  2.00        6.67
-        300   9.086237  455.670534
-        1000  9.086042  282.297098
-
-        >>> T = np.array([100, 300])
-        >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
-        >>> pd.DataFrame(xs0K.sigma1(T, EinMat, values=True), index=T).round(6)
-                    0           1
-        100  9.086957   19.893739
-        300  8.843855  455.670534
-
-        >>> T = np.array([[500, 1000], [100, 300]])
-        >>> pd.DataFrame(xs0K.sigma1(T, EinMat, values=True)).round(6)
-                  0           1
-        0  9.086010   20.673028
-        1  8.844076  455.670534
-        """
-        # Compute the angle-integrated cross section matrix using dask:
-        xsDb = self.compute_dask_for_sigma1(T, Ein)
-
-        # Reshape the data to a the correct format:
-        shape = to_arrays(Ein).shape if Ein is not None else (len(self.EinGrid),)
-
-        if values:
-            return xsDb if len(shape) == 1 else xsDb.reshape(shape[0], -1)
-        elif len(shape) == 1 and len(to_arrays(T)) == 1:
-            return pd.Series(xsDb, index=Ein, name=T)
-        else:
-            return pd.DataFrame(xsDb.reshape(shape[0], -1), index=T, columns=Ein)
-
-    def nuclearInteract_sigma1(self, Tinteract: np.ndarray,
-                               EinMat: np.ndarray) -> np.ndarray:
+    def db_sigma1(self, Tinteract: np.ndarray, EinMat: np.ndarray) -> np.ndarray:
         """
         Calculate the angle-integrated cross section matrix based on SIGMA1 model
         for the nuclear interaction in 4PCF model
@@ -389,23 +244,30 @@ class Xs0K:
 
         >>> T = np.array([100, 300])
         >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
-        >>> pd.DataFrame(xs0K.nuclearInteract_sigma1(T, EinMat), index=T).round(6)
+        >>> pd.DataFrame(xs0K.db_sigma1(T, EinMat), index=T).round(6)
                     0           1
         100  9.086957   19.893739
         300  8.843855  455.670534
         >>> T = np.array([[500, 1000], [100, 300]])
-        >>> pd.DataFrame(xs0K.nuclearInteract_sigma1(T, EinMat)).round(6)
+        >>> pd.DataFrame(xs0K.db_sigma1(T, EinMat)).round(6)
                   0           1
         0  9.086010   20.673028
         1  8.844076  455.670534
         """
-        XsMat = np.zeros(EinMat.shape)
+        # Ensure the input is an array:
+        Tinteract = to_arrays(Tinteract)
+        EinMat = to_arrays(EinMat)
+
+        # Create the output matrix:
+        XsMat = np.empty(EinMat.shape)
+
+        # Calculate the angle-integrated cross section matrix:
         if len(Tinteract.shape) == 2:
-            NucInteractStrict_sigma1(Tinteract, EinMat, self.M, self.values,
-                                     self.EinGrid, XsMat)
+            NucInteractStrict_sigma1(XsMat, Tinteract, EinMat, self.M, self.values,
+                                     self.EinGrid)
         else:
-            NucInteractAprox_sigma1(Tinteract, EinMat, self.M, self.values,
-                                    self.EinGrid, XsMat)
+            NucInteractAprox_sigma1(XsMat, Tinteract, EinMat, self.M, self.values,
+                                    self.EinGrid)
         return XsMat
 
 
@@ -504,43 +366,6 @@ def default_Eout(Ein: float) -> np.ndarray:
 
 
 @nb.jit(nopython=True, cache=True)
-def EoutMat(Ein:np.ndarray) -> np.ndarray:
-    """
-    Generate the Eout matrix for the convolution
-
-    Parameters
-    ----------
-    Ein: np.ndarray
-        Incoming energy grid in eV
-
-    Returns
-    -------
-    EoutMat: np.ndarray
-        Outgoing energy grid matrix in eV
-
-    Examples
-    --------
-    >>> Ein = np.array([1.0, 2.0])
-    >>> pd.DataFrame(EoutMat(Ein)[::, ::2000], index=Ein)
-           0         1         2         3
-    1.0  0.0  0.990007  1.003344  2.251720
-    2.0  0.0  1.980013  2.006689  3.181654
-    """
-    # Get the length of the incoming energy grid:
-    EinLen = len(Ein)
-
-    # 1 iteration to allocate the matrix:
-    Eout = default_Eout(Ein[0])
-    result = np.zeros((EinLen, len(Eout)))
-    result[0, :] = Eout
-
-    # Next iteration to fill the matrix:
-    for i in range(1, EinLen):
-        result[i, :] = default_Eout(Ein[i])
-    return result
-
-
-@nb.jit(nopython=True, cache=True)
 def transferFunc_sigma1(Eout: float, Ein: float, T: float, M: float):
     """
     Sigma1 function for Energy differential Transfer function
@@ -601,20 +426,28 @@ def transferFunc_sigma1(Eout: float, Ein: float, T: float, M: float):
     return 0.5 * exponetials * np.sqrt(AkbT / pi) * EoutSqrt / Ein
 
 @nb.jit(nopython=True, cache=True)
-def calc_sigma1(Ein: float, T: float, M: float, xs0KEin, xs0Kvalues) -> np.ndarray:
+def calc_sigma1(Ein: float, T: float, M: float, xs0KEin: np.ndarray,
+                xs0Kvalues: np.ndarray) -> np.ndarray:
     """
     Calculate the angle-integrated cross section based on sigma1 model
+
     Parameters
     ----------
-    Ein
-    T
-    M
-    xs0KEin
-    xs0Kvalues
+    Ein: float
+        The incoming energy in eV
+    T: float
+        The temperature in K
+    M: float
+        The mass of the target in am
+    xs0KEin: np.ndarray
+        The incident energy grid in eV
+    xs0Kvalues: np.ndarray
+        The values of the cross section in barn
 
     Returns
     -------
-
+    np.ndarray
+        The angle-integrated cross section
     Examples
     --------
     # 0K xs data for U238:
@@ -635,66 +468,18 @@ def calc_sigma1(Ein: float, T: float, M: float, xs0KEin, xs0Kvalues) -> np.ndarr
     transferFunc *= np.interp(Eout, xs0KEin, xs0Kvalues)
     return np.trapz(transferFunc, x=Eout)
 
-@nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray, EoutMat: np.ndarray,
-                      M: float, xsOkinterp: np.ndarray,
-                      XsMat: np.ndarray) -> np.ndarray:
-    """
-    Calculate angle-integrated cross section matrix based on sigma1 model
-
-    Parameters
-    ----------
-    Tcalc : np.ndarray, (N,)
-        Temperature grid in K
-    Eincalc : np.ndarray, (M,)
-        Incoming energy grid in eV
-    EoutMat : np.ndarray, (M, Z)
-        Outgoing energy grid matrix in eV
-    M : float
-        Mass of the target in amu
-    xsOkinterp : np.ndarray, (M, Z)
-        Interpolated 0K cross section values
-    XsMat : np.ndarray, (M, N)
-        Angle-integrated cross section matrix
-
-    Examples
-    -------
-    # 0K xs data for U238:
-    >>> wd = os.getcwd()
-    >>> os.chdir(__file__.replace("xs0K.py", ""))
-    >>> os.chdir("../../data/xs/U238/")
-    >>> M = 238.05077040419212
-    >>> xs0K = Xs0K.from_file("u238.0.2", M)
-    >>> os.chdir(wd)
-
-    >>> Ein = np.array([2.0, 6.67])
-    >>> T = np.array([300, 1000])
-    >>> EoutMat = EoutMat(Ein)
-    >>> xsOkinterp = xs0K.interpolate(EoutMat, values=True)
-
-    >>> XsMat = np.zeros((len(Ein), len(T)))
-    >>> calc_XsMat_sigma1(T, Ein, EoutMat, M, xsOkinterp, XsMat)
-    >>> pd.DataFrame(XsMat, index=Ein, columns=T).round(6)
-                    300         1000
-        2.00    9.086237    9.086042
-        6.67  455.670534  282.297098
-    """
-    Eincalc = Eincalc[::, np.newaxis]
-    for j in prange(len(Tcalc)):
-        XsMat[:, j] = np.trapz(
-            transferFunc_sigma1(EoutMat, Eincalc, Tcalc[j], M) * xsOkinterp, x=EoutMat
-        )
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
-                            M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray,
-                            XsMat: np.ndarray):
+def NucInteractAprox_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray, Eincalc: np.ndarray,
+                            M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray):
     """
     Update the angle-integrated cross section matrix based on SIGMA1 model
     for the nuclear interaction in 4PCF model
 
     Parameters
     ----------
+    XsMat: np.ndarray
+        The angle-integrated cross section matrix
     Tcalc: np.ndarray
         The temperature grid in K
     Eincalc: np.ndarray
@@ -705,8 +490,6 @@ def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
         The values of the cross section
     xs0KEin: np.ndarray
         The incident energy grid
-    XsMat: np.ndarray
-        The angle-integrated cross section matrix
 
     Returns
     -------
@@ -726,36 +509,29 @@ def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     >>> T = np.array([100, 300])
     >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
     >>> XsMat = np.zeros(EinMat.shape)
-    >>> NucInteractAprox_sigma1(T, EinMat, M, xs0K.values, xs0K.EinGrid, XsMat)
+    >>> NucInteractAprox_sigma1(XsMat, T, EinMat, M, xs0K.values, xs0K.EinGrid)
     >>> pd.DataFrame(XsMat, index=T).round(6)
                 0           1
     100  9.086957   19.893739
     300  8.843855  455.670534
     """
-    # 1 iteration to allocate the matrix and modify in place:
-    EoutMatrix = EoutMat(Eincalc[0])
-    transferFunc = transferFunc_sigma1(EoutMatrix, Eincalc[0][::, np.newaxis], Tcalc[0], M)
-    transferFunc *= np.interp(EoutMatrix, xs0KEin, xs0Kvalues)
-    XsMat[0] = np.trapz(transferFunc, x=EoutMatrix)
-
-    # Next interactions with the same Eout grid:
-    for i in prange(1, XsMat.shape[0]):
-        EoutMatrix[:] = EoutMat(Eincalc[i])
-        transferFunc[:] = transferFunc_sigma1(EoutMatrix, Eincalc[i][::, np.newaxis], Tcalc[i], M)
-        transferFunc *= np.interp(EoutMatrix, xs0KEin, xs0Kvalues)
-        XsMat[i] = np.trapz(transferFunc, x=EoutMatrix)
+    rows, columns = XsMat.shape
+    for i in prange(rows):
+        for j in prange(columns):
+            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i], M, xs0KEin, xs0Kvalues)
 
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
-                             M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray,
-                             XsMat: np.ndarray):
+def NucInteractStrict_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray, Eincalc: np.ndarray,
+                             M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray):
     """
     Update the angle-integrated cross section matrix based on SIGMA1 model
     for the nuclear interaction in 4PCF model with strict calculation
 
     Parameters
     ----------
+    XsMat: np.ndarray
+        The angle-integrated cross section matrix
     Tcalc: np.ndarray
         The temperature grid in K
     Eincalc: np.ndarray
@@ -766,8 +542,6 @@ def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
         The values of the cross section
     xs0KEin: np.ndarray
         The incident energy grid
-    XsMat: np.ndarray
-        The angle-integrated cross section matrix
 
     Returns
     -------
@@ -787,16 +561,14 @@ def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     >>> T = np.array([[500, 1000], [100, 300]])
     >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
     >>> XsMat = np.zeros(EinMat.shape)
-    >>> NucInteractStrict_sigma1(T, EinMat, M, xs0K.values, xs0K.EinGrid, XsMat)
+    >>> NucInteractStrict_sigma1(XsMat, T, EinMat, M, xs0K.values, xs0K.EinGrid)
     >>> pd.DataFrame(XsMat).round(6)
               0           1
     0  9.086010   20.673028
     1  8.844076  455.670534
     """
-    for i in prange(XsMat.shape[0]):
-        for j in range(XsMat.shape[1]):
-            Eout = default_Eout(Eincalc[i, j])
-            transferFunc = transferFunc_sigma1(Eout, Eincalc[i, j], Tcalc[i, j], M)
-            transferFunc *= np.interp(Eout, xs0KEin, xs0Kvalues)
-            XsMat[i, j] = np.trapz(transferFunc, x=Eout)
+    rows, columns = XsMat.shape
+    for i in prange(rows):
+        for j in prange(columns):
+            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i, j], M, xs0KEin, xs0Kvalues)
 

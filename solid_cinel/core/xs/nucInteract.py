@@ -734,17 +734,24 @@ class NucInteractBase:
         return cls(xs0K, InteractTemp(T, mu),
                    InteractEnergy(Ein, xs0K.M, Eout, mu))
 
-    def alphaCapt(self, approx: bool = True, kind: str = "corrected"):
+    def alphaCapt(self, approx: bool = True, kind: str = "corrected") -> np.ndarray:
         """
         Calculate the alpha capture of the material.
 
         Parameters
         ----------
-        approx
-        kind
+        approx: bool
+            Whether to use the approximation or strict calculation
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
 
         Returns
         -------
+        np.ndarray
+            The alpha capture of the material
 
         Examples
         --------
@@ -782,6 +789,74 @@ class NucInteractBase:
 
         # Get the alpha capture of the material
         return self._EinMat.to_4PCF(approx, kind) / (kb * Tinteraction)
+
+    def _sigma1Approx(self, EinMat: np.ndarray, Tinteraction: np.ndarray) -> np.ndarray:
+        """
+        Calculate the cross section from the nuclear interaction of the material.
+
+        Parameters
+        ----------
+        EinMat: np.ndarray
+            The interaction energy of the material in eV
+        Tinteraction: np.ndarray
+            The interaction temperature of the material
+
+        Returns
+        -------
+        np.ndarray
+            The cross section of the material in barns
+        """
+        if Tinteraction[0] == 0:
+            return np.vstack(
+                (
+                    self._xs0K.interpolate(EinMat[0], values=True),
+                    self._xs0K.db_sigma1(Tinteraction[1:], EinMat[1:])
+                )
+            )
+        else:
+            return self._xs0K.db_sigma1(Tinteraction, EinMat)
+
+    def _sigma1Strict(self, EinMat: np.ndarray, Tinteraction: np.ndarray) -> np.ndarray:
+        """
+        Calculate the cross section from the nuclear interaction of the material.
+
+        Parameters
+        ----------
+        EinMat: np.ndarray
+            The interaction energy of the material in eV
+        Tinteraction: np.ndarray
+            The interaction temperature of the material
+
+        Returns
+        -------
+        np.ndarray
+            The cross section of the material in barns
+        """
+        # Initialize the result
+        result = []
+
+        # Check if the first value is zero (mu = -1) in the temperature:
+        if Tinteraction[0, 0] == 0:
+            start = 1
+            result.append(self._xs0K.interpolate(EinMat[0], values=True))
+        else:
+            start = 0
+
+        # Check if the last value is zero (mu = 1) in the temperature:
+        ismu1 = Tinteraction[-1, 0] == 0
+        if ismu1:
+            end = len(Tinteraction[0, :]) - 2
+        else:
+            end = len(Tinteraction[0, :]) - 1
+
+        # Sigma1 algorithm calculation for intermediate values
+        result.append(
+            self._xs0K.db_sigma1(Tinteraction[start:end], EinMat[start:end]))
+
+        # Add the last value if mu = 1
+        if ismu1:
+            result.append(self._xs0K.interpolate(EinMat[-1], values=True))
+        return np.vstack(result)
 
     def calc_sigma1(self, approx: bool = True, kind: str = "corrected") -> np.ndarray:
         """
@@ -841,37 +916,10 @@ class NucInteractBase:
         EinMat = self._EinMat.to_4PCF(approx, kind)
 
         # Calculate the interaction cross section:
-        if approx and Tinteraction[0] == 0:
-            return np.vstack(
-                (
-                    self._xs0K.interpolate(EinMat[0], values=True),
-                    self._xs0K.db_sigma1(Tinteraction[1:], EinMat[1:])
-                )
-            )
-        elif not approx:
-            result = []
-
-            # Check if the first value is zero (mu = -1):
-            if Tinteraction[0, 0] == 0:
-                start = 1
-                result.append(self._xs0K.interpolate(EinMat[0], values=True))
-            else:
-                start = 0
-
-            # Check if the last value is zero (mu = 1):
-            ismu1 = Tinteraction[-1, 0] == 0
-            end = len(Tinteraction[0, :]) - 2 if ismu1 else len(Tinteraction[0, :]) - 1
-
-            # Sigma1 algorithm calculation for intermediate values
-            result.append(
-                self._xs0K.db_sigma1(Tinteraction[start:end], EinMat[start:end]))
-
-            # Add the last value if mu = 1
-            if ismu1:
-                result.append(self._xs0K.interpolate(EinMat[-1], values=True))
-            return np.vstack(result)
+        if approx:
+            return self._sigma1Approx(EinMat, Tinteraction)
         else:
-            return self._xs0K.db_sigma1(Tinteraction, EinMat)
+            return self._sigma1Strict(EinMat, Tinteraction)
 
     def calc_alpha0(self) -> np.ndarray:
         """

@@ -549,10 +549,12 @@ class Sab:
         if nphonon is not None:
             warnings.warn("Is posible that the expansion order is not enough to get the correct results")
         else:
-            nphonon = AlphaBase(alpha_).expansionOrder(DebyeWallerCoeff, decimal, orderMax)
+            nphonon = AlphaBase(alpha_).expansionOrder(DebyeWallerCoeff,
+                                                       decimal,
+                                                       orderMax)
 
         # Get tauN function:
-        tauN = Tpdos.tauN(nphonon, threshold=threshold, values=True)
+        tauN = Tpdos.tauN(nphonon, threshold=threshold)
 
         # Get tauN beta grid values:
         tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])

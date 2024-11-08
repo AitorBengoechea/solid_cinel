@@ -635,6 +635,40 @@ class Sab_to_DynamicStruc(DoubleDiff):
         """
         return self.recoil / self.kbT
 
+    def expansionOrder(self, DebyeWallerCoeff: float, decimal: float = 1.0e-6,
+                       order_max: int = 5000) -> int:
+        """
+        Calculate the expansion order.
+
+        Parameters
+        ----------
+        DebyeWallerCoeff : float
+            Debye-Waller coefficient in LEAPR formalism
+        decimal : float, optional
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max : int, optional
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        int
+            The expansion order
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([40, 80, 120, 160])
+        >>> mu = np.cos(np.deg2rad(theta))[::-1]
+        >>> sabValues = Sab_to_DynamicStruc(Ein, M, T, Eout, mu)
+        >>> sabValues.expansionOrder(1.0, 1.0e-6, 5000)
+        3
+        """
+        return AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff, decimal, order_max)
+
     @property
     def betaAbs(self) -> np.ndarray:
         """
@@ -779,10 +813,8 @@ class Sab_to_DynamicStruc(DoubleDiff):
         # Dynamic Structure factor values selection:
         col = self.downScatIndex
         dynamicStruc = np.concatenate(
-            (
-                sabValues[::, :col],
-                np.exp(-betaAbs[col:]) * sabValues[::, col:]
-            ), axis=1
+            (sabValues[::, :col], sabValues[::, col:] * np.exp(-betaAbs[col:])),
+            axis=1
         )
         # Normalization constant
         return self.apply_norm(dynamicStruc)
@@ -854,12 +886,12 @@ class Sab_to_DynamicStruc(DoubleDiff):
                 warnings.warn("Is posible that the expansion order is not enough to get the correct results")
                 nphonon = kwargs.get("nphonon")
             else:
-                nphonon = AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff,
-                                                    kwargs.get("decimal", 1.0e-6),
-                                                    kwargs.get("order_max", 5000))
+                nphonon = self.expansionOrder(DebyeWallerCoeff,
+                                              kwargs.get("decimal", 1.0e-6),
+                                              kwargs.get("order_max", 5000))
 
             # Get tauN function:
-            tauN = Tpdos.tauN(nphonon, kwargs.get("threshold", 0.0), values=True)
+            tauN = Tpdos.tauN(nphonon, kwargs.get("threshold", 0.0))
             tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
             return self.tau(tauN, tauNbeta, DebyeWallerCoeff)
 

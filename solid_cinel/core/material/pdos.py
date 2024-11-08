@@ -405,7 +405,7 @@ class Tpdos:
         return tau1
 
     def tauN(self, nphonon: int, threshold: float, check: bool = True,
-             values: bool = False) -> [np.ndarray, pd.DataFrame]:
+             values: bool = True) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
         for a certain temperature.
@@ -432,7 +432,7 @@ class Tpdos:
         >>> T = 800
         >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
         >>> threshold = 0.0
-        >>> tauN = p.tauN(5, threshold, values=True)
+        >>> tauN = p.tauN(5, threshold, values=False)
         >>> tauN.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000

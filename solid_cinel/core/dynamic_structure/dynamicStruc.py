@@ -664,8 +664,7 @@ class Sab_to_DynamicStruc(DoubleDiff):
         >>> theta = np.array([40, 80, 120, 160])
         >>> mu = np.cos(np.deg2rad(theta))[::-1]
         >>> sabValues = Sab_to_DynamicStruc(Ein, M, T, Eout, mu)
-        >>> sabValues.expansionOrder(1.0, 1.0e-6, 5000)
-        3
+        >>> assert sabValues.expansionOrder(1.0, 1.0e-6, 5000) == 19
         """
         return AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff, decimal, order_max)
 

@@ -18,6 +18,27 @@ m = const["neutron mass in u"][0]
 class InteractTemp:
     """
     Class to calculate the interaction temperature of a material.
+
+    Parameters
+    ----------
+    T : float
+        The temperature of the material in Kelvin
+    mu : np.ndarray
+        The cosine of the angle between the incident and outgoing particles
+
+    Properties
+    ----------
+    approx4PCF : np.ndarray
+        Approximation of the interaction temperature from the 4PCF model
+    p0 : np.ndarray
+        The p0 value for the strict calculation of the interaction temperature
+
+    Methods
+    -------
+    strict4PCF -> np.ndarray
+        Strict calculation of the interaction temperature from the 4PCF model
+    to_4PCF -> [pd.DataFrame, pd.Series]
+        Calculate the interaction temperature from the 4PCF model
     """
     T: float
     mu: np.ndarray
@@ -166,6 +187,55 @@ class InteractTemp:
 class InteractEnergy(DoubleDiff):
     """
     Class to calculate the interaction energy of a material.
+
+    Parameters
+    ----------
+    Ein : float
+        The energy of the incident particle in eV
+    M : float
+        The mass of the target nucleus in amu
+    Eout : np.ndarray
+        The energy of the outgoing particles in eV
+    mu : np.ndarray
+        The cosine of the angle between the incident and outgoing particles
+
+    Properties
+    ----------
+    Esqrt : np.ndarray
+        Square root of the product of the incident and outgoing energies
+    Eplus : np.ndarray
+        Sum of the incident and outgoing energies
+    recoilMod : np.ndarray
+        Recoil energy modification
+    correctEout : np.ndarray
+        Corrected outgoing energy with the recoil energy
+    original4PCFapprox : np.ndarray
+        Approximation of the interaction energy from the original 4PCF model
+    original4PCFstrict : np.ndarray
+        Strict calculation of the interaction energy from the original 4PCF model
+    mod4PCFapprox : np.ndarray
+        Approximation of the interaction energy of the 4PCF model with the modification
+    mod4PCFstrict : np.ndarray
+        Strict calculation of the interaction energy of the 4PCF model with the
+        modification
+    corr4PCFapprox : np.ndarray
+        Approximation of the interaction energy from the corrected 4PCF model
+    corr4PCFstrict : np.ndarray
+        Strict calculation of the interaction energy from the corrected 4PCF model
+    originalP0 : np.ndarray
+        The p0 value for the strict calculation of the interaction energy
+    correctP0 : np.ndarray
+        The p0 value for the strict calculation of the interaction energy with
+        the recoil
+
+    Methods
+    -------
+    apply_mod -> np.ndarray
+        Apply the modification to the original function
+    to_4PCF -> InteractEnergy
+        Calculate the interaction energy from the 4PCF model
+    p0 -> np.ndarray
+        The p0 value for the strict calculation of the interaction energy
     """
 
     def __init__(self, Ein: float, M: float, Eout: np.ndarray, mu: np.ndarray):
@@ -689,15 +759,47 @@ class InteractEnergy(DoubleDiff):
 class NucInteractBase:
     """
     Class to calculate the nuclear interaction of the material with the neutron.
+
+    Parameters
+    ----------
+    xs0K : Xs0K
+        The 0K cross section data of the material
+    Tinteract : InteractTemp
+        The interaction temperature of the material
+    EinMat : InteractEnergy
+        The interaction energy of the material
+
+    Methods
+    -------
+    from_theta -> NucInteractBase:
+        Create the class from the data
+    alphaCapt -> np.ndarray:
+        Calculate the alpha capture of the material
+    calc_sigma1 -> np.ndarray:
+        Calculate the cross section from the nuclear interaction of the material
+        from SIGMA1 algorithm
+    calc_alpha0 -> np.ndarray:
+        Calculate the cross section from the nuclear interaction of the material
+        from alpha0 algorithm
     """
     def __init__(self, xs0K: Xs0K, Tinteract: InteractTemp,
                  EinMat: InteractEnergy) -> "NucInteractBase":
         """
         Initialize the class with the data.
+
         Parameters
         ----------
-        data: Iterable
-            The data to be stored in the class
+        xs0K : Xs0K
+            The 0K cross section data of the material
+        Tinteract : InteractTemp
+            The interaction temperature of the material
+        EinMat : InteractEnergy
+            The interaction energy of the material
+
+        Returns
+        -------
+        NucInteractBase
+            The class with the data
         """
         self._xs0K = xs0K
         self._Tinteract = Tinteract
@@ -934,14 +1036,57 @@ class NucInteractBase:
 
 
 class NucInteract(DoubleDiffData):
+    """
+    Class to manipulate the nuclear interaction of the material with the neutron
+    used in the 4PCF model.
+
+    Parameters
+    ----------
+    approx: bool
+        Whether to use the approximation or strict calculation.
+    kind: str
+        The type of calculation to be performed. The options are:
+        - "original": Original 4PCF model
+        - "modified": Modified original 4PCF model
+        - "corrected": Corrected 4PCF model
+    nuc: NucInteractBase
+        The nuclear interaction data of the material with the neutron. The
+        default is None.
+
+    Properties
+    ----------
+    norm: float
+        The normalization factor of the data
+    data: pd.DataFrame
+        The data of the class
+    transferFunc: pd.Series
+        The transfer function of the data
+    angularDist: pd.Series
+        The angular distribution of the data
+
+    Methods
+    -------
+    from_sigma -> NucInteract:
+        Initialize the class with the data
+    """
     def __init__(self, approx: bool, kind: str,
                  *args, nuc: NucInteractBase = None, **kwargs):
         """
         Initialize the class with the data.
+
         Parameters
         ----------
-        data: Iterable
-            The data to be stored in the class
+        approx: bool
+            Whether to use the approximation or strict calculation. Default is
+            True.
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
+        nuc: NucInteractBase
+            The nuclear interaction data of the material with the neutron. The
+            default is None.
         """
         # Atributes of the Nuclear Interaction class:
         self.approx = approx
@@ -955,6 +1100,18 @@ class NucInteract(DoubleDiffData):
             self.__post_init__(nuc)
 
     def __post_init__(self, nuc: NucInteractBase):
+        """
+        Extract the data from NucInteractBase if is an input.
+
+        Parameters
+        ----------
+        nuc : NucInteractBase
+            The nuclear interaction data of the material with the neutron
+
+        Returns
+        -------
+        None
+        """
         # Extract the values
         self.Ein = nuc._EinMat.Ein
         self.T = nuc._Tinteract.T

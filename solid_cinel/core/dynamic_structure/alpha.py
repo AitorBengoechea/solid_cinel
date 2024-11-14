@@ -33,19 +33,19 @@ class AlphaBase:
 
     Methods
     -------
-    recoil(T: float) -> np.ndarray:
+    recoil -> np.ndarray:
         Get the alpha recoil value from the parameters of the function.
-    checkDiff(alphaCumsum: np.ndarray, decimal: float, orderMax: int) -> int:
+    checkDiff -> int:
         Check the difference between the cumulative sum of the alpha values.
-    mulCumSum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> np.ndarray:
+    mulCumSum -> np.ndarray:
         Get the alpha multiplication for the phonon expansion cumulative sum.
-    expansionOrderMin(DebyeWallerCoeff: float, decimal: float, orderMax: int) -> int:
+    expansionOrderMin -> int:
         Get the expansion order for the phonon expansion method.
-    expansionOrder(DebyeWallerCoeff: float, decimal: float, orderMax: int) -> int:
+    expansionOrder -> int:
         Get the expansion order for the phonon expansion method.
-    expansionRange(DebyeWallerCoeff: float, decimal: float, orderMax: int) -> (int, int):
+    expansionRange -> (int, int):
         Get the expansion range for the phonon expansion method.
-    update(newValues):
+    update:
         Update the alpha grid with new values.
     """
 
@@ -399,14 +399,17 @@ class AlphaDynamic(AlphaBase):
     alpha : np.ndarray
         Array of alpha values
 
+    Properties
+    ----------
+    recoil -> np.ndarray:
+        Get the alpha recoil value.
+
     Methods
     -------
-    from_param(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray) -> 'AlphaDynamic':
+    from_param -> 'AlphaDynamic':
         Initialize the AlphaDynaMic class from the parameters of the function.
-    from_capt(Ein: np.ndarray, M: float, T: float) -> "AlphaDynamic":
+    from_capt -> "AlphaDynamic":
         Initialize the AlphaDynaMic class from the parameters of the function.
-    recoil() -> np.ndarray:
-        Get the alpha recoil value.
     """
 
     # Define the slots for the class
@@ -522,13 +525,11 @@ class AlphaVect(AlphaBase):
 
     Methods
     -------
-    generate_grid(T: float, M: float, num_grid: int = 300, min_E: float = 2.8e-3,
-                    thermal_threshold: float = 5., scale: bool = False, **kwargs) -> "AlphaVect":
+    generate_grid -> "AlphaVect":
             Generate a alpha grid for a given temperature and atomic mass.
-    from_file(file_path: str, delimiter: str = None, skiprows: int = 0,
-                usecols: list = None) -> "AlphaVect":
-                Read a 1D array from a file.
-    scale(T: float, therm: float = 0.0253) -> "AlphaVect":
+    from_file -> "AlphaVect":
+            Read a 1D array from a file.
+    scale -> "AlphaVect":
         Scale alpha or beta spectrum
     """
     def __init__(self, alpha: np.ndarray):

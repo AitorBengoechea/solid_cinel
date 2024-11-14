@@ -5,21 +5,52 @@ Python file for working with alpha function.
 @author: AB272525
 """
 from scipy.constants import physical_constants as const
-from solid_cinel.core.dynamic_structure.beta import Beta
-from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.generic import to_arrays
-from typing import Iterable, Union
+from typing import Iterable
 import numpy as np
 import pandas as pd
 import numba as nb
-from numba import prange
 from math import exp, log
 
 # constants
 kb = const["Boltzmann constant in eV/K"][0]
 m = const["neutron mass in u"][0]
 
+
 class AlphaBase:
+    """
+    Abstract class for common methods for the alpha grid:
+
+    Parameters
+    ----------
+    alpha : Iterable
+        Array of alpha values
+
+    Attributes
+    ----------
+    data : np.ndarray
+        Array of alpha values
+
+    Methods
+    -------
+    recoil(T: float) -> np.ndarray:
+        Get the alpha recoil value from the parameters of the function.
+    checkDiff(alphaCumsum: np.ndarray, decimal: float, orderMax: int) -> int:
+        Check the difference between the cumulative sum of the alpha values.
+    mulCumSum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> np.ndarray:
+        Get the alpha multiplication for the phonon expansion cumulative sum.
+    expansionOrderMin(DebyeWallerCoeff: float, decimal: float, orderMax: int) -> int:
+        Get the expansion order for the phonon expansion method.
+    expansionOrder(DebyeWallerCoeff: float, decimal: float, orderMax: int) -> int:
+        Get the expansion order for the phonon expansion method.
+    expansionRange(DebyeWallerCoeff: float, decimal: float, orderMax: int) -> (int, int):
+        Get the expansion range for the phonon expansion method.
+    update(newValues):
+        Update the alpha grid with new values.
+    """
+
+    # Define the slots for the class
+    __slots__ = ['_data']
     def __init__(self, alpha: Iterable):
         """
         Initialize the Alpha class
@@ -32,7 +63,7 @@ class AlphaBase:
         self.data = alpha
 
     @property
-    def data(self) -> pd.DataFrame:
+    def data(self) -> np.ndarray:
         """Dataframe with the S(alpha, -beta) matrix values."""
         return self._data
 
@@ -58,6 +89,18 @@ class AlphaBase:
         self._data = alphaData_
 
     def recoil(self, T: float) -> np.ndarray:
+        """
+        Get the alpha recoil value from the parameters of the function:
+
+        Parameters
+        ----------
+        T : 'float'
+            Temperature in K.
+
+        Returns
+        -------
+        'np.ndarray', (N,)
+        """
         return self.data * kb * T
 
     @staticmethod
@@ -174,7 +217,7 @@ class AlphaBase:
         return exp(- alphaDebye) * alphaMul.cumsum()
 
     def expansionOrderMin(self, DebyeWallerCoeff: float, decimal: float,
-                       orderMax: int) -> int:
+                          orderMax: int) -> int:
         """
         Get the expansion order for the phonon expansion method using the maximun
 
@@ -304,6 +347,19 @@ class AlphaBase:
         return nMin, nMax
 
     def update(self, newValues):
+        """
+        Update the alpha grid with new values.
+
+        Parameters
+        ----------
+        newValues : np.ndarray
+            New values for the alpha grid.
+
+        Returns
+        -------
+        None
+            Update the alpha grid with new values.
+        """
         np.copyto(self.data, newValues)
 
 
@@ -312,8 +368,49 @@ class AlphaDynamic(AlphaBase):
     Abstract class for the alpha grid calculation for the function:
     .. math::
         \alpha = \frac{E^\prime + E - 2 \mu\sqrt{E^\prime E}}{A * kb * T}
+
+    Parameters
+    ----------
+    Eout : np.ndarray
+        Output energy of the neutron in eV.
+    Ein : float
+        Incidente energy of the neutron in eV.
+    T : float
+        Temperature in K.
+    M : float
+        Mass in amu of the scatterer.
+    mu : np.ndarray
+        Cosine of the scattering angle.
+    alpha : np.ndarray
+        Array of alpha values
+
+    Attributes
+    ----------
+    Ein : float
+        Incidente energy of the neutron in eV.
+    M : float
+        Mass in amu of the scatterer.
+    T : float
+        Temperature in K.
+    Eout : np.ndarray
+        Output energy of the neutron in eV.
+    mu : np.ndarray
+        Cosine of the scattering angle.
+    alpha : np.ndarray
+        Array of alpha values
+
+    Methods
+    -------
+    from_param(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray) -> 'AlphaDynamic':
+        Initialize the AlphaDynaMic class from the parameters of the function.
+    from_capt(Ein: np.ndarray, M: float, T: float) -> "AlphaDynamic":
+        Initialize the AlphaDynaMic class from the parameters of the function.
+    recoil() -> np.ndarray:
+        Get the alpha recoil value.
     """
-    __slots__ = ['Ein', 'M', 'T', 'Eout', 'mu']
+
+    # Define the slots for the class
+    __slots__ = ['Eout', 'Ein', 'M', 'T', 'mu', 'alpha']
     def __init__(self, Eout: np.ndarray, Ein: [float, np.ndarray], T: float,
                  M: float, mu: np.ndarray, alpha: np.ndarray):
         """
@@ -369,8 +466,8 @@ class AlphaDynamic(AlphaBase):
         """
         Eout_ = to_arrays(Eout)
         mu_ = to_arrays(mu)
-        return cls(Eout_, Ein, T, M, mu_,
-                   calc_alpha(Ein, M, T, Eout_, mu_[::, np.newaxis]))
+        alpha = calc_alpha(Ein, M, T, Eout_, mu_[::, np.newaxis])
+        return cls(Eout_, Ein, T, M, mu_, alpha)
 
     @classmethod
     def from_capt(cls, Ein: np.ndarray, M: float, T: float) -> "AlphaDynamic":
@@ -409,7 +506,30 @@ class AlphaDynamic(AlphaBase):
 
 class AlphaVect(AlphaBase):
     """
-    Abstract class for the alpha grid.
+    Abstract class for the alpha grid. The class is used to generate the alpha
+    grid for a given temperature and atomic mass or for reading a alpha grid
+    from a file.
+
+    Parameters
+    ----------
+    alpha : Iterable
+        Array of alpha values
+
+    Attributes
+    ----------
+    data : np.ndarray
+        Array of alpha values
+
+    Methods
+    -------
+    generate_grid(T: float, M: float, num_grid: int = 300, min_E: float = 2.8e-3,
+                    thermal_threshold: float = 5., scale: bool = False, **kwargs) -> "AlphaVect":
+            Generate a alpha grid for a given temperature and atomic mass.
+    from_file(file_path: str, delimiter: str = None, skiprows: int = 0,
+                usecols: list = None) -> "AlphaVect":
+                Read a 1D array from a file.
+    scale(T: float, therm: float = 0.0253) -> "AlphaVect":
+        Scale alpha or beta spectrum
     """
     def __init__(self, alpha: np.ndarray):
         """
@@ -425,7 +545,7 @@ class AlphaVect(AlphaBase):
     @classmethod
     def generate_grid(cls, T: float, M: float, num_grid: int = 300,
                       min_E: float = 2.8e-3, thermal_threshold: float = 5.,
-                      scale: bool = False, **kwargs):
+                      scale: bool = False, **kwargs) -> "AlphaVect":
         """
         Generate a alpha grid for a given temperature and atomic mass.
 
@@ -481,7 +601,7 @@ class AlphaVect(AlphaBase):
 
     @classmethod
     def from_file(cls, file_path: str, delimiter: str = None, skiprows: int = 0,
-                  usecols: list = None):
+                  usecols: list = None) -> "AlphaVect":
         """
         Read a 1D array from a file.
 
@@ -505,7 +625,7 @@ class AlphaVect(AlphaBase):
         return cls(np.loadtxt(file_path, delimiter=delimiter, skiprows=skiprows,
                               usecols=usecols))
 
-    def scale(self, T: float, therm: float = 0.0253):
+    def scale(self, T: float, therm: float = 0.0253) -> "AlphaVect":
         """
         Scale alpha or beta spectrum.
         .. math::
@@ -594,7 +714,8 @@ def calc_alpha(Ein: [float, np.ndarray], M: float, T: float, Eout: np.ndarray,
 
 @nb.jit(nopython=True, cache=True)
 def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
-                    mu: np.ndarray, DebyeWallerCoeff: float, alpha0: float) -> np.ndarray:
+                    mu: np.ndarray, DebyeWallerCoeff: float,
+                    alpha0: float) -> np.ndarray:
     """
     Get all the posible alpha modified values from the parameters of the function
     Parameters

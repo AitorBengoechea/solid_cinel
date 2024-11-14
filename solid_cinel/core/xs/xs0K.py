@@ -21,6 +21,37 @@ nb.config.FASTMATH_DEFAULT = False
 
 
 class Xs0K:
+    """
+    Class to work with the 0K cross section data
+
+    Attributes
+    ----------
+    M: float
+        The mass of the target in amu
+    data: pd.Series
+        The data of the cross section
+
+    Properties
+    ----------
+    values: np.ndarray
+        The values of the cross section
+    EinGrid: np.ndarray
+        The incident energy grid in eV
+
+    Methods
+    -------
+    read_xs : pd.Series
+        Read the xs data from a file
+    from_file : Xs0K
+        Create an instance of the Xs0K class from a file
+    interpolate : Xs0K, pd.Series, np.ndarray
+        Interpolate the cross section data
+    update : Xs0K
+        Update the cross section data
+    db_sigma1 : np.ndarray
+        Calculate the angle-integrated cross section matrix based on SIGMA1
+        algorithm
+    """
     def __init__(self, M: float, *args, **kwargs):
         """
         Initialize the Xs0K class
@@ -366,7 +397,8 @@ def default_Eout(Ein: float) -> np.ndarray:
 
 
 @nb.jit(nopython=True, cache=True)
-def transferFunc_sigma1(Eout: float, Ein: float, T: float, M: float):
+def transferFunc_sigma1(Eout: [float, np.ndarray], Ein: float, T: float,
+                        M: float) -> [float, np.ndarray]:
     """
     Sigma1 function for Energy differential Transfer function
     ..math::
@@ -374,18 +406,18 @@ def transferFunc_sigma1(Eout: float, Ein: float, T: float, M: float):
 
     Parameters
     ----------
-    Eout : np.array
+    Eout : np.ndarray
         Outgoing energy grid in eV
     Ein : float
         Incoming energy in eV
     T : float
         Temperature in K
-    M :
+    M : float
         Mass of the target in amu
 
     Returns
     -------
-    scatfunc : np.array
+    np.ndarray
         Transfer function based on sigma1 model
 
     Examples
@@ -425,11 +457,12 @@ def transferFunc_sigma1(Eout: float, Ein: float, T: float, M: float):
     # Calculate the Transfer function:
     return 0.5 * exponetials * np.sqrt(AkbT / pi) * EoutSqrt / Ein
 
+
 @nb.jit(nopython=True, cache=True)
 def calc_sigma1(Ein: float, T: float, M: float, xs0KEin: np.ndarray,
                 xs0Kvalues: np.ndarray) -> np.ndarray:
     """
-    Calculate the angle-integrated cross section based on sigma1 model
+    Calculate the angle-integrated cross section based on SIGMA1 algorithm
 
     Parameters
     ----------
@@ -471,7 +504,8 @@ def calc_sigma1(Ein: float, T: float, M: float, xs0KEin: np.ndarray,
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
 def NucInteractAprox_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray, Eincalc: np.ndarray,
-                            M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray):
+                            M: float, xs0Kvalues: np.ndarray,
+                            xs0KEin: np.ndarray) -> None:
     """
     Update the angle-integrated cross section matrix based on SIGMA1 model
     for the nuclear interaction in 4PCF model
@@ -518,12 +552,14 @@ def NucInteractAprox_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray, Eincalc: np.nd
     rows, columns = XsMat.shape
     for i in prange(rows):
         for j in prange(columns):
-            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i], M, xs0KEin, xs0Kvalues)
+            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i], M,
+                                      xs0KEin, xs0Kvalues)
 
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def NucInteractStrict_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray, Eincalc: np.ndarray,
-                             M: float, xs0Kvalues: np.ndarray, xs0KEin: np.ndarray):
+def NucInteractStrict_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray,
+                             Eincalc: np.ndarray, M: float,
+                             xs0Kvalues: np.ndarray, xs0KEin: np.ndarray) -> None:
     """
     Update the angle-integrated cross section matrix based on SIGMA1 model
     for the nuclear interaction in 4PCF model with strict calculation
@@ -570,5 +606,6 @@ def NucInteractStrict_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray, Eincalc: np.n
     rows, columns = XsMat.shape
     for i in prange(rows):
         for j in prange(columns):
-            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i, j], M, xs0KEin, xs0Kvalues)
+            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i, j], M,
+                                      xs0KEin, xs0Kvalues)
 

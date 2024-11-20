@@ -18,6 +18,27 @@ m = const["neutron mass in u"][0]
 class InteractTemp:
     """
     Class to calculate the interaction temperature of a material.
+
+    Parameters
+    ----------
+    T : float
+        The temperature of the material in Kelvin
+    mu : np.ndarray
+        The cosine of the angle between the incident and outgoing particles
+
+    Properties
+    ----------
+    approx4PCF : np.ndarray
+        Approximation of the interaction temperature from the 4PCF model
+    p0 : np.ndarray
+        The p0 value for the strict calculation of the interaction temperature
+
+    Methods
+    -------
+    strict4PCF -> np.ndarray
+        Strict calculation of the interaction temperature from the 4PCF model
+    to_4PCF -> [pd.DataFrame, pd.Series]
+        Calculate the interaction temperature from the 4PCF model
     """
     T: float
     mu: np.ndarray
@@ -166,6 +187,55 @@ class InteractTemp:
 class InteractEnergy(DoubleDiff):
     """
     Class to calculate the interaction energy of a material.
+
+    Parameters
+    ----------
+    Ein : float
+        The energy of the incident particle in eV
+    M : float
+        The mass of the target nucleus in amu
+    Eout : np.ndarray
+        The energy of the outgoing particles in eV
+    mu : np.ndarray
+        The cosine of the angle between the incident and outgoing particles
+
+    Properties
+    ----------
+    Esqrt : np.ndarray
+        Square root of the product of the incident and outgoing energies
+    Eplus : np.ndarray
+        Sum of the incident and outgoing energies
+    recoilMod : np.ndarray
+        Recoil energy modification
+    correctEout : np.ndarray
+        Corrected outgoing energy with the recoil energy
+    original4PCFapprox : np.ndarray
+        Approximation of the interaction energy from the original 4PCF model
+    original4PCFstrict : np.ndarray
+        Strict calculation of the interaction energy from the original 4PCF model
+    mod4PCFapprox : np.ndarray
+        Approximation of the interaction energy of the 4PCF model with the modification
+    mod4PCFstrict : np.ndarray
+        Strict calculation of the interaction energy of the 4PCF model with the
+        modification
+    corr4PCFapprox : np.ndarray
+        Approximation of the interaction energy from the corrected 4PCF model
+    corr4PCFstrict : np.ndarray
+        Strict calculation of the interaction energy from the corrected 4PCF model
+    originalP0 : np.ndarray
+        The p0 value for the strict calculation of the interaction energy
+    correctP0 : np.ndarray
+        The p0 value for the strict calculation of the interaction energy with
+        the recoil
+
+    Methods
+    -------
+    apply_mod -> np.ndarray
+        Apply the modification to the original function
+    to_4PCF -> InteractEnergy
+        Calculate the interaction energy from the 4PCF model
+    p0 -> np.ndarray
+        The p0 value for the strict calculation of the interaction energy
     """
 
     def __init__(self, Ein: float, M: float, Eout: np.ndarray, mu: np.ndarray):
@@ -689,15 +759,47 @@ class InteractEnergy(DoubleDiff):
 class NucInteractBase:
     """
     Class to calculate the nuclear interaction of the material with the neutron.
+
+    Parameters
+    ----------
+    xs0K : Xs0K
+        The 0K cross section data of the material
+    Tinteract : InteractTemp
+        The interaction temperature of the material
+    EinMat : InteractEnergy
+        The interaction energy of the material
+
+    Methods
+    -------
+    from_theta -> NucInteractBase:
+        Create the class from the data
+    alphaCapt -> np.ndarray:
+        Calculate the alpha capture of the material
+    calc_sigma1 -> np.ndarray:
+        Calculate the cross section from the nuclear interaction of the material
+        from SIGMA1 algorithm
+    calc_alpha0 -> np.ndarray:
+        Calculate the cross section from the nuclear interaction of the material
+        from alpha0 algorithm
     """
     def __init__(self, xs0K: Xs0K, Tinteract: InteractTemp,
                  EinMat: InteractEnergy) -> "NucInteractBase":
         """
         Initialize the class with the data.
+
         Parameters
         ----------
-        data: Iterable
-            The data to be stored in the class
+        xs0K : Xs0K
+            The 0K cross section data of the material
+        Tinteract : InteractTemp
+            The interaction temperature of the material
+        EinMat : InteractEnergy
+            The interaction energy of the material
+
+        Returns
+        -------
+        NucInteractBase
+            The class with the data
         """
         self._xs0K = xs0K
         self._Tinteract = Tinteract
@@ -734,17 +836,24 @@ class NucInteractBase:
         return cls(xs0K, InteractTemp(T, mu),
                    InteractEnergy(Ein, xs0K.M, Eout, mu))
 
-    def alphaCapt(self, approx: bool = True, kind: str = "corrected"):
+    def alphaCapt(self, approx: bool = True, kind: str = "corrected") -> np.ndarray:
         """
         Calculate the alpha capture of the material.
 
         Parameters
         ----------
-        approx
-        kind
+        approx: bool
+            Whether to use the approximation or strict calculation
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
 
         Returns
         -------
+        np.ndarray
+            The alpha capture of the material
 
         Examples
         --------
@@ -782,6 +891,74 @@ class NucInteractBase:
 
         # Get the alpha capture of the material
         return self._EinMat.to_4PCF(approx, kind) / (kb * Tinteraction)
+
+    def _sigma1Approx(self, EinMat: np.ndarray, Tinteraction: np.ndarray) -> np.ndarray:
+        """
+        Calculate the cross section from the nuclear interaction of the material.
+
+        Parameters
+        ----------
+        EinMat: np.ndarray
+            The interaction energy of the material in eV
+        Tinteraction: np.ndarray
+            The interaction temperature of the material
+
+        Returns
+        -------
+        np.ndarray
+            The cross section of the material in barns
+        """
+        if Tinteraction[0] == 0:
+            return np.vstack(
+                (
+                    self._xs0K.interpolate(EinMat[0], values=True),
+                    self._xs0K.db_sigma1(Tinteraction[1:], EinMat[1:])
+                )
+            )
+        else:
+            return self._xs0K.db_sigma1(Tinteraction, EinMat)
+
+    def _sigma1Strict(self, EinMat: np.ndarray, Tinteraction: np.ndarray) -> np.ndarray:
+        """
+        Calculate the cross section from the nuclear interaction of the material.
+
+        Parameters
+        ----------
+        EinMat: np.ndarray
+            The interaction energy of the material in eV
+        Tinteraction: np.ndarray
+            The interaction temperature of the material
+
+        Returns
+        -------
+        np.ndarray
+            The cross section of the material in barns
+        """
+        # Initialize the result
+        result = []
+
+        # Check if the first value is zero (mu = -1) in the temperature:
+        if Tinteraction[0, 0] == 0:
+            start = 1
+            result.append(self._xs0K.interpolate(EinMat[0], values=True))
+        else:
+            start = 0
+
+        # Check if the last value is zero (mu = 1) in the temperature:
+        ismu1 = Tinteraction[-1, 0] == 0
+        if ismu1:
+            end = len(Tinteraction[0, :]) - 2
+        else:
+            end = len(Tinteraction[0, :]) - 1
+
+        # Sigma1 algorithm calculation for intermediate values
+        result.append(
+            self._xs0K.db_sigma1(Tinteraction[start:end], EinMat[start:end]))
+
+        # Add the last value if mu = 1
+        if ismu1:
+            result.append(self._xs0K.interpolate(EinMat[-1], values=True))
+        return np.vstack(result)
 
     def calc_sigma1(self, approx: bool = True, kind: str = "corrected") -> np.ndarray:
         """
@@ -841,38 +1018,10 @@ class NucInteractBase:
         EinMat = self._EinMat.to_4PCF(approx, kind)
 
         # Calculate the interaction cross section:
-        if approx and Tinteraction[0] == 0:
-            return np.vstack(
-                (
-                    self._xs0K.interpolate(EinMat[0], values=True),
-                    self._xs0K.sigma1(Tinteraction[1:], EinMat[1:], values=True)
-                )
-            )
-        elif not approx:
-            result = []
-
-            # Check if the first value is zero (mu = -1):
-            if Tinteraction[0, 0] == 0:
-                start = 1
-                result.append(self._xs0K.interpolate(EinMat[0], values=True))
-            else:
-                start = 0
-
-            # Check if the last value is zero (mu = 1):
-            ismu1 = Tinteraction[-1, 0] == 0
-            end = len(Tinteraction[0, :]) - 2 if ismu1 else len(Tinteraction[0, :]) - 1
-
-            # Sigma1 algorithm calculation for intermediate values
-            result.append(
-                self._xs0K.sigma1(Tinteraction[start:end], EinMat[start:end],
-                                 values=True))
-
-            # Add the last value if mu = 1
-            if ismu1:
-                result.append(self._xs0K.interpolate(EinMat[-1], values=True))
-            return np.vstack(result)
+        if approx:
+            return self._sigma1Approx(EinMat, Tinteraction)
         else:
-            return self._xs0K.sigma1(Tinteraction, EinMat, values=True)
+            return self._sigma1Strict(EinMat, Tinteraction)
 
     def calc_alpha0(self) -> np.ndarray:
         """
@@ -887,14 +1036,57 @@ class NucInteractBase:
 
 
 class NucInteract(DoubleDiffData):
+    """
+    Class to manipulate the nuclear interaction of the material with the neutron
+    used in the 4PCF model.
+
+    Parameters
+    ----------
+    approx: bool
+        Whether to use the approximation or strict calculation.
+    kind: str
+        The type of calculation to be performed. The options are:
+        - "original": Original 4PCF model
+        - "modified": Modified original 4PCF model
+        - "corrected": Corrected 4PCF model
+    nuc: NucInteractBase
+        The nuclear interaction data of the material with the neutron. The
+        default is None.
+
+    Properties
+    ----------
+    norm: float
+        The normalization factor of the data
+    data: pd.DataFrame
+        The data of the class
+    transferFunc: pd.Series
+        The transfer function of the data
+    angularDist: pd.Series
+        The angular distribution of the data
+
+    Methods
+    -------
+    from_sigma -> NucInteract:
+        Initialize the class with the data
+    """
     def __init__(self, approx: bool, kind: str,
                  *args, nuc: NucInteractBase = None, **kwargs):
         """
         Initialize the class with the data.
+
         Parameters
         ----------
-        data: Iterable
-            The data to be stored in the class
+        approx: bool
+            Whether to use the approximation or strict calculation. Default is
+            True.
+        kind: str
+            The type of calculation to be performed. The options are:
+            - "original": Original 4PCF model
+            - "modified": Modified original 4PCF model
+            - "corrected": Corrected 4PCF model
+        nuc: NucInteractBase
+            The nuclear interaction data of the material with the neutron. The
+            default is None.
         """
         # Atributes of the Nuclear Interaction class:
         self.approx = approx
@@ -908,6 +1100,18 @@ class NucInteract(DoubleDiffData):
             self.__post_init__(nuc)
 
     def __post_init__(self, nuc: NucInteractBase):
+        """
+        Extract the data from NucInteractBase if is an input.
+
+        Parameters
+        ----------
+        nuc : NucInteractBase
+            The nuclear interaction data of the material with the neutron
+
+        Returns
+        -------
+        None
+        """
         # Extract the values
         self.Ein = nuc._EinMat.Ein
         self.T = nuc._Tinteract.T
@@ -1080,91 +1284,3 @@ class NucInteract(DoubleDiffData):
         dtype: float64
         """
         return super().rowIntegral
-
-    def updateApprox(self, Ein: float, kind: str = "corrected",
-                     Eout: np.ndarray = None):
-        """
-        Update the approximation of the interaction energy of the material.
-
-        Parameters
-        ----------
-        Ein : float
-            The energy of the incident particle in eV
-        kind : bool
-            The type of calculation to be performed. Default is True.
-        Eout : np.ndarray
-            The energy of the outgoing particles in eV
-
-        Returns
-        -------
-        np.ndarray
-            The interaction energy of the material in eV
-
-        Examples
-        --------
-        # 0K xs data for U238:
-        >>> import os
-        >>> wd = os.getcwd()
-        >>> os.chdir(__file__.replace("nucInteract.py", ""))
-        >>> os.chdir("../../data/xs/U238/")
-        >>> M = 238.05077040419212
-        >>> xs0K = Xs0K.from_file("u238.0.2", M)
-        >>> os.chdir(wd)
-
-        # Example data:
-        >>> T = 300
-        >>> M = 238.05077040419212
-        >>> theta = np.array([30, 60, 90, 120, 150, 180])
-        >>> mu = np.sort(np.cos(np.deg2rad(theta)))
-        >>> Ein = 6.67
-        >>> Eout = np.array([6.5, 6.6, 6.67, 6.8, 6.9])
-        >>> nucOriginal = NucInteract.from_sigma(xs0K, Ein, T, Eout, theta)
-        >>> nucOriginal.data
-        Eout                 6.50        6.60        6.67        6.80       6.90
-        mu
-        -1.000000e+00  109.429067  578.174610  132.000620   47.804039  33.258262
-        -8.660254e-01  114.424855  797.111411  158.423511   50.115934  34.138420
-        -5.000000e-01  111.529220  749.375088  314.215063   58.499214  36.945805
-         6.123234e-17   85.702705  542.581865  491.664735   82.203465  42.255244
-         5.000000e-01   62.495084  387.510240  511.456837  140.088731  51.371004
-         8.660254e-01   49.379282  304.044914  474.211771  201.620717  64.069957
-
-        >>> nucOriginal.updateApprox(6.8)
-        >>> nucOriginal.data
-        Eout                 6.63        6.73       6.80       6.93       7.03
-        mu
-        -1.000000e+00   73.712425   39.075815  33.258262  33.258262  33.258262
-        -8.660254e-01   83.443289   40.528704  34.138420  34.138420  34.138420
-        -5.000000e-01  137.183671   45.566606  36.945805  36.945805  36.945805
-         6.123234e-17  208.191548   58.234533  42.255244  42.255244  42.255244
-         5.000000e-01  254.351965   86.860419  51.371004  51.371004  51.371004
-         8.660254e-01  285.489953  119.096513  64.069957  64.069957  64.069957
-        """
-        if Eout is None:
-            dE = self.Eout - self.Ein
-            Eout_ = Ein + dE
-        else:
-            Eout_ = Eout
-
-        # Get the incident energy matrix:
-        EinMat = self._EinMat
-        XsMat = self.data.values
-        Tinteract = self._Tinteract
-
-        # Generate the new incide energy matrix:
-        EinMatNew = InteractEnergy(Ein, self._xs0K.M, Eout_, self.mu).to_4PCF(self.approx, kind)
-
-        XsMatNew = np.zeros(EinMat.shape)
-        for i in range(EinMat.shape[0]):
-            # Define the limits of the interpolation:
-            col = (EinMatNew[i, :] > EinMat[i, :]).sum()
-
-            # Perform the interpolation:
-            XsMatNew[i, :col] = np.interp(EinMatNew[i, :col], EinMat[i, :col], XsMat[i, :col])
-
-            # Perform the calculations:
-            XsMatNew[i, col:] = self._xs0K.sigma1(Tinteract[i], EinMatNew[i, col:])
-
-        # Update the EinMat with the new values:
-        self._EinMat[:] = EinMatNew
-        super().inplace(pd.DataFrame(XsMatNew, columns=Eout_, index=self.mu))

@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import numba as nb
 from math import pi
-from numba import float64, int32
 import warnings
 
 # Constants:
@@ -31,43 +30,51 @@ class Sab:
     ----------
     data : pd.DataFrame
         Dataframe with the S(alpha, -beta) matrix values.
-    alpha : Alpha
-        Initialize the Alpha class with the information of S(alpha, beta)
+    DebyeWallerCoeff : float
+        Debye-Waller coefficient for the normalization constrain.
+
+    Properties
+    ----------
+    alpha : AlphaVect
+        Alpha class with the alpha grid information.
     beta : Beta
-        Initialize the Beta class with the information of S(alpha, beta)
+        Beta class with the beta grid information in absolute values.
+    values : np.ndarray
+        Return the values of the S(alpha, -beta) matrix.
+    full : [pd.Series, pd.DataFrame]
+        Return the full S(alpha, beta) matrix.
 
     Methods
     -------
-    to_sym -> pd.DataFrame
-        Return the symmetric S(alpha, -beta) matrix
-    full -> pd.DataFrame
-        Return the full S(alpha, beta) matrix
+    check_alpha -> AlphaVect
+        Generate the Alpha class for the creation of S(alpha, beta) table.
+    check_beta -> Beta
+        Generate the Beta class for the creation of S(alpha, beta) table.
+    setup_alpha_beta -> [np.array, np.array]
+        Setup the Alpha and Beta grids for the calculation of S(alpha, -beta)
+        matrix.
     from_fgm -> Sab
-        Return the S(alpha, beta) matrix from the FGM model
+        Generate S(alpha, -beta) matrix using Free Gas Model.
     from_sct -> Sab
-        Return the S(alpha, beta) matrix from the SCT model
+        Generate S(alpha, -beta) matrix using Short Collision Time.
     from_pdos -> Sab
-        Return the S(alpha, beta) matrix from the PDOS model
-    SumRule_check -> bool
-        Check if the sum rule is satisfied
-    NormCheck -> bool
-        Check if the normalization is satisfied
-    get_momentum -> Sab or pd.DataFrame
-        Return the S(alpha, beta) matrix n momentum
-    interp_beta -> Sab or pd.DataFrame
-        Quadratic interpolation to get the probability of the new beta value
-    interp_alpha -> Sab or pd.DataFrame
-        Unit base interpolation to get the probability of the new alpha values
-    get_value_from_alpha_beta -> pd.DataFrame
-        Return the S(alpha, beta) matrix value for a given alpha and beta
-    get_matrix_from_parameters -> Sab or pd.DataFrame
-        Based on the set of variables introduced, interpolate the existing
-        S(alpha, -beta) to make a new S(alpha, beta) matrix with the alpha and
-        beta values created from the set of variables
-    get_scattering_function -> pd.DataFrame
-        Return the scattering function from S(alpha, beta) matrix
-    get_inelastic_Xs -> pd.DataFrame
-        Return the inelastic cross section from S(alpha, beta) matrix
+        Generate S(alpha, -beta) matrix using phonon expansion.
+    from_tau -> Sab
+        Generate S(alpha, -beta) matrix using tauN functions.
+    get_Tratio -> float
+        Get the 0K scattering function with all the data.
+    SumRule_check -> None
+        Check if the S(alpha, beta) matrix satifies the sum rule constrain.
+    NormCheck -> None
+        Check if the S(alpha, beta) matrix satifies the normalization constrain.
+    to_sym -> pd.DataFrame
+        Return the symmetric S(alpha, beta) matrix.
+    interp_beta -> pd.DataFrame
+        Interpolate the S(alpha, beta) matrix to a new beta grid.
+    interp_alpha -> pd.DataFrame
+        Interpolate the S(alpha, beta) matrix to a new alpha grid.
+    interp_alphaBeta -> pd.DataFrame
+        Interpolate the S(alpha, beta) matrix to a new alpha and beta grid.
     """
 
     def __init__(self, *args, DebyeWallerCoeff: float = .0, **kwargs):
@@ -136,7 +143,6 @@ class Sab:
     def values(self) -> np.ndarray:
         """Return the values of the S(alpha, -beta) matrix."""
         return self.data.values
-
 
     @staticmethod
     def check_alpha(alpha: Union[AlphaVect, Iterable, str]) -> AlphaVect:
@@ -289,9 +295,12 @@ class Sab:
         # Check the sum rule:
         SumRule = S.apply(_SumRule, axis="columns")
         SumRule /= S.index.values
-        if (abs(1 - abs(SumRule)) > 0.6).any():
+
+        # Check the sum rule:
+        SumRuleCheck = abs(1 - abs(SumRule))
+        if (SumRuleCheck > 0.6).any():
             raise ValueError("Sum rule of S(alpha, -beta) not satisfied")
-        if (abs(1 - abs(SumRule)) > 1.0e-3).any():
+        elif (SumRuleCheck > 1.0e-3).any():
             warnings.warn(
                 "Sum rule of S(alpha, -beta) not satisfied with an precision of 1.0e-3")
         return
@@ -355,7 +364,7 @@ class Sab:
 
     @classmethod
     def from_fgm(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
-                 T: float = None, wt: float = 1):
+                 T: float = None, wt: float = 1) -> "Sab":
         """
         Generate S(alpha, -beta) matrix using Free Gas Model.
         .. math::
@@ -409,7 +418,7 @@ class Sab:
 
     @classmethod
     def from_sct(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
-                 T: float, pdos: Pdos, ws: float = 1):
+                 T: float, pdos: Pdos, ws: float = 1) -> "Sab":
         """
         Generate S(alpha, -beta) matrix using Short Collision Time.
         .. math::
@@ -471,7 +480,8 @@ class Sab:
     @classmethod
     def from_pdos(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
                   T: float, pdos: Pdos, nphonon: int = None, decimal: float = 1.0e-6,
-                  orderMax: int = 5000, threshold: float = 0.0, p0: bool = False):
+                  orderMax: int = 5000, threshold: float = 0.0,
+                  p0: bool = False) -> "Sab":
         """
         Generate S(alpha, -beta) matrix using phonon expansion.
         .. math::
@@ -549,10 +559,12 @@ class Sab:
         if nphonon is not None:
             warnings.warn("Is posible that the expansion order is not enough to get the correct results")
         else:
-            nphonon = AlphaBase(alpha_).expansionOrder(DebyeWallerCoeff, decimal, orderMax)
+            nphonon = AlphaBase(alpha_).expansionOrder(DebyeWallerCoeff,
+                                                       decimal,
+                                                       orderMax)
 
         # Get tauN function:
-        tauN = Tpdos.tauN(nphonon, threshold=threshold, values=True)
+        tauN = Tpdos.tauN(nphonon, threshold=threshold)
 
         # Get tauN beta grid values:
         tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
@@ -562,7 +574,7 @@ class Sab:
     @classmethod
     def from_tau(cls, alpha: Union[AlphaVect, Iterable, str], beta: Union[Beta, Iterable, str],
                  tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float,
-                 p0: bool = False):
+                 p0: bool = False) -> "Sab":
         """
         Generate S(alpha, -beta) matrix using tauN functions.
         .. math::
@@ -667,14 +679,17 @@ class Sab:
         # outer product):
         SabValues = phonon_expansion(alpha_[:, np.newaxis], nphonon, tauNinterp,
                                     DebyeWallerCoeff)
+
+        # Add the zero phonon term:
         if p0:
             SabValues, beta_ = addP0(SabValues, alpha_, beta_, DebyeWallerCoeff)
             return cls(SabValues, columns=beta_, index=alpha_)
-        return cls(SabValues, DebyeWallerCoeff=DebyeWallerCoeff,
-                    columns=beta_, index=alpha_)
+        else:
+            return cls(SabValues, DebyeWallerCoeff=DebyeWallerCoeff,
+                        columns=beta_, index=alpha_)
 
     @classmethod
-    def from_model(cls, *args, model: str = "pdos", **kwargs):
+    def from_model(cls, *args, model: str = "pdos", **kwargs) -> "Sab":
         """
         Create Sab object from different models. The models available are:
             - "phonon expansion": Phonon expansion model.
@@ -802,7 +817,7 @@ class Sab:
     @classmethod
     def from_capt(cls, Ein: [int, float, np.ndarray], T: float, M: float,
                     beta: Union[Beta, Iterable], *args,
-                    model: str = "pdos", **kwargs):
+                    model: str = "pdos", **kwargs) -> "Sab":
         """
         Generate S(alpha, -beta) matrix using gressier recoil energy alpha grid.
 
@@ -928,10 +943,14 @@ class Sab:
         0.001382  7.584817  7.360149  6.725291  5.786534  4.688230
         0.001431  7.455701  7.242199  6.637682  5.740191  4.683821
         """
-        return self.data * np.exp(- self.beta.data / 2) if detail_balance else self.data
+        if detail_balance:
+            return self.data * np.exp(- self.beta.data / 2)
+        else:
+            return self.data
 
 
-    def update_data(self, sabNew: pd.DataFrame, inplace: bool, axis: int):
+    def update_data(self, sabNew: pd.DataFrame, inplace: bool,
+                    axis: int) -> [None, "Sab"]:
         """
         Update the S(alpha, -beta) matrix with new values.
 
@@ -964,7 +983,8 @@ class Sab:
         else:
             return Sab(dataNew)
 
-    def interp_beta(self, betaNew: Union[Iterable, float], inplace: bool = False) -> pd.DataFrame:
+    def interp_beta(self, betaNew: Union[Iterable, float],
+                    inplace: bool = False) -> pd.DataFrame:
         """
         Quadratic interpolation to get the probability of the new beta value
         for all the alpha existing in the S(alpha, -beta) matrix:

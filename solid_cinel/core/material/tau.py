@@ -1,7 +1,7 @@
 
 import numpy as np
 import numba as nb
-from numba import cuda, float64, int32
+from numba import cuda, float64, int32, prange
 from solid_cinel.core.dynamic_structure.beta import Beta
 gpu_available = True if cuda.is_available() else False
 
@@ -68,7 +68,7 @@ def tauNconvol(expBeta: np.ndarray, deltaBeta: np.ndarray, tau1: np.ndarray,
 
     # Initialize the convolution:
     convol = 0.
-    for j in range(1, Ntau1):
+    for j in prange(1, Ntau1):
         convol_j = 0.
 
         # tauNminus1(-(beta-beta^prime))
@@ -219,7 +219,7 @@ def calc_tauNfunc_cpu(tauNfunc: np.ndarray, tau1: np.ndarray, Ntau1: int,
         calc_tauN(expBeta, deltaBeta, tau1, Ntau1, tauNminus1, tauN, 0, NtauN, 1)
 
         # Copy thet data into the array:
-        tauNfunc[n, :NtauN] += tauN
+        tauNfunc[n, :NtauN] = tauN
 
         # If the last N values are zero, the next tauN will have the same length
         # because the convolution will be zero for the following values
@@ -287,7 +287,7 @@ def calc_tauNfunc_gpu(tauNfunc: np.ndarray, tau1: np.ndarray,
                                                                  tauN, NtauN)
 
         # Copy the data back to the host
-        tauNfunc[n, :NtauN] += tauN.copy_to_host()
+        tauNfunc[n, :NtauN] = tauN.copy_to_host()
 
         # If the last N values are zero, the next tauN will have the same length
         # because the convolution will be zero for the following values

@@ -39,6 +39,19 @@ class DoubleDiff:
         The neutron outgoing energy
     mu : np.ndarray
         The cosine of the angle of the distribution in degrees
+
+    Properties
+    ----------
+    A : float
+        The mass ratio of the neutron to the target material
+    aws : float
+        The average atomic weight of the target material
+    downScatIndex : int
+        The downscattering index
+    recoil : np.ndarray
+        The recoil energy
+    dE : np.ndarray
+        The energy transfer
     """
     Ein: float
     M: float
@@ -114,6 +127,57 @@ class DoubleDiff:
 class DoubleDiffData:
     """
     Abstract class for handeling Double Differential data.
+
+    Parameters
+    ----------
+    args : Iterable
+        The values for the pd.DataFrame
+    kwargs : dict
+        Optional arguments for the construction of the pd.DataFrame
+
+    Properties
+    ----------
+    data : pd.DataFrame
+        Double differential data
+    values : np.ndarray
+        The values of the Double Differential data
+    Eout : np.ndarray
+        The outgoing energy grid
+    mu : np.ndarray
+        The cosine of the angle of the distribution in degrees
+    shape : tuple
+        The shape of the Double Differential data
+    theta : np.ndarray
+        The angle of the distribution in degrees
+    rowIntegral : pd.Series
+        Integral of the Double Differential data by row
+    columsIntegral : pd.Series
+        Integral of the Double Differential data by column
+    doubleIntegral : float
+        Double integral of the Double Differential data
+    pdf : pd.DataFrame
+        Probability density function of the Double Differential data
+    rowPdf : pd.Series
+        Probability density function of the Double Differential data by row
+    columsPdf : pd.Series
+        Probability density function of the Double Differential data by column
+    cdf : pd.DataFrame
+        Cumulative distribution function of the Dynamic Structure Factor
+
+    Methods
+    -------
+    integrate -> pd.Series
+        Integrate the Double Differential data
+    update_axis -> None
+        Update the axis of the Double Differential data
+    update -> None
+        Update the Double Differential data with data of the same dimensions
+    inplace -> None
+        Make the Double Differential data in place for changing the dimensions
+        of the data
+    cut_axis -> [pd.DataFrame, None]
+        Drop the axis of the Double Differential data where the maximum value is
+        below the threshold
     """
     def __init__(self, *args, **kwargs):
         """
@@ -565,6 +629,46 @@ class DoubleDiffData:
 class Sab_to_DynamicStruc(DoubleDiff):
     """
     Abstract class for Dynamic Structure Factor calculations.
+
+    Parameters
+    ----------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray
+        The neutron outgoing energy
+    mu : np.ndarray
+
+    Properties
+    ----------
+    kbT : float
+        Calculate the product of the Boltzmann constant and the temperature
+    normFactor : np.ndarray
+        Calculate the normalization factor
+    beta : np.ndarray
+        Calculate the beta values
+    alpha : np.ndarray
+        Calculate the alpha values
+    betaAbs : np.ndarray
+        Calculate the absolute beta values
+
+    Methods
+    -------
+    expansionOrder -> int
+        Calculate the expansion order
+    apply_norm -> np.ndarray
+        Normalize the Dynamic Structure Factor
+    sct -> np.ndarray
+        Calculate the Dynamic Structure Factor from a S(alpha, -beta) table based
+        on Short Collision Time model
+    tau -> np.ndarray
+        Calculate the Dynamic Structure Factor from a S(alpha, -beta) table based
+        on phonon expansion tau functions
+    calc_values -> np.ndarray
+        Calculate the Dynamic Structure Factor values
     """
     def __init__(self, Ein: float, M: float, T: float, Eout: np.ndarray,
                  mu: np.ndarray):
@@ -634,6 +738,39 @@ class Sab_to_DynamicStruc(DoubleDiff):
             The alpha values
         """
         return self.recoil / self.kbT
+
+    def expansionOrder(self, DebyeWallerCoeff: float, decimal: float = 1.0e-6,
+                       order_max: int = 5000) -> int:
+        """
+        Calculate the expansion order.
+
+        Parameters
+        ----------
+        DebyeWallerCoeff : float
+            Debye-Waller coefficient in LEAPR formalism
+        decimal : float, optional
+            Decimal precision for the calculation of the expansion order.
+            The default is 1.0e-6.
+        order_max : int, optional
+            Maximun expansion order. The default is 5000.
+
+        Returns
+        -------
+        int
+            The expansion order
+
+        Examples
+        --------
+        >>> Ein = 7.2
+        >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+        >>> T = 1000
+        >>> M = 238.05077040419212
+        >>> theta = np.array([40, 80, 120, 160])
+        >>> mu = np.cos(np.deg2rad(theta))[::-1]
+        >>> sabValues = Sab_to_DynamicStruc(Ein, M, T, Eout, mu)
+        >>> assert sabValues.expansionOrder(1.0, 1.0e-6, 5000) == 19
+        """
+        return AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff, decimal, order_max)
 
     @property
     def betaAbs(self) -> np.ndarray:
@@ -712,7 +849,6 @@ class Sab_to_DynamicStruc(DoubleDiff):
         """
         return self.apply_norm(get_SabSct(self.alpha, self.beta, Tratio, ws))
 
-
     def tau(self, tauN: np.ndarray, tauNbeta: np.ndarray,
             DebyeWallerCoeff: float) -> np.ndarray:
         """
@@ -779,10 +915,8 @@ class Sab_to_DynamicStruc(DoubleDiff):
         # Dynamic Structure factor values selection:
         col = self.downScatIndex
         dynamicStruc = np.concatenate(
-            (
-                sabValues[::, :col],
-                np.exp(-betaAbs[col:]) * sabValues[::, col:]
-            ), axis=1
+            (sabValues[::, :col], sabValues[::, col:] * np.exp(-betaAbs[col:])),
+            axis=1
         )
         # Normalization constant
         return self.apply_norm(dynamicStruc)
@@ -854,12 +988,12 @@ class Sab_to_DynamicStruc(DoubleDiff):
                 warnings.warn("Is posible that the expansion order is not enough to get the correct results")
                 nphonon = kwargs.get("nphonon")
             else:
-                nphonon = AlphaBase(self.alpha).expansionOrder(DebyeWallerCoeff,
-                                                    kwargs.get("decimal", 1.0e-6),
-                                                    kwargs.get("order_max", 5000))
+                nphonon = self.expansionOrder(DebyeWallerCoeff,
+                                              kwargs.get("decimal", 1.0e-6),
+                                              kwargs.get("order_max", 5000))
 
             # Get tauN function:
-            tauN = Tpdos.tauN(nphonon, kwargs.get("threshold", 0.0), values=True)
+            tauN = Tpdos.tauN(nphonon, kwargs.get("threshold", 0.0))
             tauNbeta = get_tauNbeta(Tpdos.beta.data, tauN.shape[1])
             return self.tau(tauN, tauNbeta, DebyeWallerCoeff)
 
@@ -869,6 +1003,27 @@ class Sab_to_DynamicStruc(DoubleDiff):
 
     def update(self, Ein: float, M: float = None, T: float = None,
                Eout: np.ndarray = None, mu: np.ndarray = None) -> None:
+        """
+        Update the attributes of the Sab_to_DynamicStruc class.
+
+        Parameters
+        ----------
+        Ein : float
+            The incident energy of the neutron in eV
+        M : float, optional
+            The mass of the target material in amu
+        T : float, optional
+            Temperature of the material in K
+        Eout : np.ndarray, optional
+            The neutron outgoing energy
+        mu :  np.ndarray, optional
+            The cosine of the angle of the distribution in degrees
+
+        Returns
+        -------
+        None
+            Update the attributes of the Sab_to_DynamicStruc class
+        """
         # Update Ein and consequently Eout:
         self.Ein = Ein
         if Eout is None:
@@ -889,6 +1044,47 @@ class Sab_to_DynamicStruc(DoubleDiff):
 class DynamicStruc(DoubleDiffData):
     """
     Dynamic structure factor class.
+
+    Parameters
+    ----------
+    Ein : float
+        The neutron incident energy in eV
+    T : float
+        Temperature of the material in K
+    M : float
+        Mass of the material in amu
+    args : Iterable, (N, M)
+        The Transfer function data for the pd.DataFrame
+    kwargs : dict
+        Optional arguments for the construction of the pd.DataFrame
+
+    Properties
+    ----------
+    alpha : np.ndarray or pd.DataFrame
+        The alpha values for the Dynamic Structure Factor
+    recoil : np.ndarray or pd.DataFrame
+        The recoil energy for the Dynamic Structure Factor
+    alpha0 : float
+        The $\alpha_0$ parameter of the Dynamic Structure Factor
+    norm : float
+        Normalization of the Dynamic Structure Factor
+    transferFunc : pd.Series
+        The transfer function of the Dynamic Structure Factor
+    angularDistr : pd.Series
+        The angle distribution of the Dynamic Structure Factor
+
+    Methods
+    -------
+    update_axis -> None
+        Update the axis of the Double Differential data
+    update -> None
+        Update the Double Differential data with data of the same dimensions
+    inplace -> None
+        Make the Double Differential data in place for changing the dimensions
+        of the data
+    cut_axis -> pd.DataFrame or None
+        Drop the axis of the Double Differential data where the maximum value is
+        below the threshold
     """
 
     def __init__(self, *args, sabValues: Sab_to_DynamicStruc = None,
@@ -951,7 +1147,8 @@ class DynamicStruc(DoubleDiffData):
         if values:
             return self._sabValues.recoil
         else:
-            return pd.DataFrame(self._sabValues.recoil, index=self.mu, columns=self.Eout)
+            return pd.DataFrame(self._sabValues.recoil, index=self.mu,
+                                columns=self.Eout)
 
     @property
     def alpha0(self) -> float:
@@ -1059,7 +1256,8 @@ class DynamicStruc(DoubleDiffData):
 
     @classmethod
     def from_model(cls, Ein: float, M: float, T: float, Eout: np.ndarray,
-                   theta: np.ndarray, *args, model: str = "fgm", **kwargs):
+                   theta: np.ndarray, *args, model: str = "fgm",
+                   **kwargs) -> "DynamicStruc":
         """
         Generate Dynamic Structure Factor from a S(alpha, -beta) table.
         ..math::
@@ -1416,9 +1614,12 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
     # Interpolation of tauN functions to reduce the number of calculations:
     tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
 
+    # Get the dynamic structure factor alpha values matrix:
+    alphaMat = get_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0)
+
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = phonon_expansion(get_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0),
-                                 tauN.shape[0], tauNinterp, DebyeWallerCoeff)
+    sabValues = phonon_expansion(alphaMat, tauN.shape[0], tauNinterp,
+                                 DebyeWallerCoeff)
 
     # Dynamic Structure factor values selection:
     dynamicStruc = np.concatenate(

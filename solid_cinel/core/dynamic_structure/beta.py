@@ -3,7 +3,7 @@ Python file for working with beta function.
 
 @author: AB272525
 """
-from typing import Iterable, Union
+from typing import Iterable
 import numpy as np
 import pandas as pd
 import numba as nb
@@ -84,7 +84,7 @@ class Beta:
         return kind
 
     @property
-    def grid(self):
+    def grid(self) -> np.ndarray:
         """
         Return the beta grid. The beta grid is the difference between the
         elements of the beta grid.
@@ -98,7 +98,7 @@ class Beta:
         return np.append(diff, diff[-1])
 
     @classmethod
-    def from_default(cls, T: float, kind: str = "abs"):
+    def from_default(cls, T: float, kind: str = "abs") -> "Beta":
         """
         Generate beta grid for a given temperature using the default beta grid.
 
@@ -122,7 +122,7 @@ class Beta:
     @classmethod
     def generate_grid(cls, T: float, num_grid: int = 400, mid_E: int = 0.08,
                       thermal_threshold: float = 5., scale: bool = False,
-                      **kwargs):
+                      **kwargs) -> "Beta":
         """
         Generate beta grid for a given temperature. The grid is created using
         linear separated grid from 0eV to mid_E and in logaritmic scale
@@ -180,7 +180,7 @@ class Beta:
             return cls(beta_grid)
 
     @classmethod
-    def from_dE(cls, energy_grid: Iterable, T: float):
+    def from_dE(cls, energy_grid: Iterable, T: float) -> "Beta":
         """
         Tranform a energy grid into a beta grid. (use in pdos.py)
         .. math::
@@ -209,7 +209,7 @@ class Beta:
         return cls(np.array(energy_grid) / (kb * T))
 
     @classmethod
-    def from_Eout(cls, Eout: np.ndarray, Ein: float, T: float):
+    def from_Eout(cls, Eout: np.ndarray, Ein: float, T: float) -> "Beta":
         """
         Generate a beta grid based on the output energies and the incident
         neutron energy.
@@ -241,7 +241,7 @@ class Beta:
         return cls(get_AbsBeta(Eout, Ein, T))
 
     @classmethod
-    def from_Ein(cls, Eout: float, Ein: np.ndarray, T: float):
+    def from_Ein(cls, Eout: float, Ein: np.ndarray, T: float) -> "Beta":
         """
         Generate a beta grid based on the incident energies and the output
         neutron energy.
@@ -275,7 +275,7 @@ class Beta:
 
     @classmethod
     def from_file(cls, file_path: str, delimiter: str = None, skiprows: int = 0,
-                  usecols: list = None):
+                  usecols: list = None) -> "Beta":
         """
         Read a 1D array from a file.
 
@@ -330,7 +330,7 @@ class Beta:
         """
         return self.data * kb * T
 
-    def get_Eout(self, T: float, Ein: Union[Iterable, float],
+    def get_Eout(self, T: float, Ein: [Iterable, float],
                  side: str = "upscattering") -> pd.Series:
         """
         Based on the S(alpha, -beta) matrix, get the posible
@@ -418,7 +418,7 @@ class Beta:
         else:
             raise SyntaxError("Side option not available")
 
-    def scale(self, T: float, therm: float = 0.0253):
+    def scale(self, T: float, therm: float = 0.0253) -> "Beta":
         """
         Scale alpha or beta spectrum.
         .. math::
@@ -447,8 +447,9 @@ class Beta:
         scale_grid = self.data * therm / (kb * T)
         return Beta(scale_grid)
 
+
 @nb.jit(nopython=True, cache=True)
-def calc_dE(Eout: [np.ndarray, float], Ein: [np.ndarray, float]) -> np.ndarray:
+def calc_dE(Eout: [np.ndarray, float], Ein: [np.ndarray, float]) -> [np.ndarray, float]:
     """
     Calculate the dE values from the parameters of the function:
     .. math::
@@ -472,7 +473,7 @@ def calc_dE(Eout: [np.ndarray, float], Ein: [np.ndarray, float]) -> np.ndarray:
 
 @nb.jit(nopython=True, cache=True)
 def calc_Beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
-              T: float) -> np.ndarray:
+              T: float) -> [np.ndarray, float]:
     """
     Calculate the beta values from the parameters of the function:
     .. math::
@@ -497,8 +498,8 @@ def calc_Beta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
 
 
 @nb.jit(nopython=True, cache=True)
-def get_AbsBeta(Eout: Union[np.ndarray, float], Ein: Union[np.ndarray, float],
-                T: float, unique: bool = True, sort: bool = True) -> np.ndarray:
+def get_AbsBeta(Eout: [np.ndarray, float], Ein: [np.ndarray, float],
+                T: float, unique: bool = True, sort: bool = True) -> [np.ndarray, float]:
     """
     Get the positive beta values from the parameters of the function:
     .. math::

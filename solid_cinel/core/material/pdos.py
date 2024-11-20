@@ -22,6 +22,38 @@ class Tpdos:
     """
     Object containing the method and properties of the phonon density of states
     for a certain temperature.
+
+    Properties
+    ----------
+    rho : 'pd.Series'
+        Pandas Series containing the rho values in energy (index).
+    beta : 'Beta'
+        Initialize the Beta class with the information of S(alpha, -beta) matrix.
+    P : 'pd.Series'
+        Calculate P function for LEAPR formalism with PDOS.
+    Teff : 'float'
+        Calculate the effective temperature.
+    DebyeWaller : 'float'
+        Calculate the Debye-Waller factor for LEAPR formalism with PDOS.
+    tau1 : 'pd.Series'
+        Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
+    tauN : 'pd.DataFrame'
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
+        for a certain temperature.
+    to_Epdos : 'Epdos'
+        Transform from a specific temperature phonon spectrum to a general
+        phonon spectrum in energy.
+
+    Methods
+    -------
+    from_dE : 'Tpdos'
+        Extract rho in energy from the introduced data and create a pdos object
+        for a certain temperature.
+    from_file : 'Tpdos'
+        Extract rho in energy from the introduced file.
+    from_dE_file : 'Tpdos'
+        Extract rho in energy from the introduced file and create a Tpdos object
+        based on the temperature.
     """
     def __init__(self, T: float, *args, **kwargs):
         """
@@ -109,7 +141,7 @@ class Tpdos:
         return Beta(self.data.index.values)
 
     @classmethod
-    def from_dE(cls, T: float, rho: Iterable, intervalE: float):
+    def from_dE(cls, T: float, rho: Iterable, intervalE: float) -> 'Tpdos':
         """
         Extract rho in energy from the introduced data and create a pdos object
         for a certain temperature.
@@ -152,7 +184,7 @@ class Tpdos:
 
     @classmethod
     def from_file(cls, T: float, file: str, header=None, index_col=None,
-                  usecols=None, engine="python"):
+                  usecols=None, engine="python") -> 'Tpdos':
         """
         Extract rho in energy from the introduced file.
 
@@ -183,7 +215,7 @@ class Tpdos:
         return cls(T, df)
 
     def from_dE_file(T: float, file: str, header=None, index_col=None,
-                     usecols=None, engine="python"):
+                     usecols=None, engine="python") -> 'Tpdos':
         """
         Extract rho in energy from the introduced file and create a Tpdos object
         based on the temperature.
@@ -405,7 +437,7 @@ class Tpdos:
         return tau1
 
     def tauN(self, nphonon: int, threshold: float, check: bool = True,
-             values: bool = False) -> [np.ndarray, pd.DataFrame]:
+             values: bool = True) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
         for a certain temperature.
@@ -432,7 +464,7 @@ class Tpdos:
         >>> T = 800
         >>> p = Tpdos.from_dE(T, rho_in_energy, interv_in_energy)
         >>> threshold = 0.0
-        >>> tauN = p.tauN(5, threshold)
+        >>> tauN = p.tauN(5, threshold, values=False)
         >>> tauN.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
@@ -466,7 +498,7 @@ class Tpdos:
             return tauN
 
     @property
-    def to_Epdos(self):
+    def to_Epdos(self) -> 'Epdos':
         """
         Transform from a specific temperature phonon spectrum to a general
         phonon spectrum in energy.
@@ -513,23 +545,26 @@ class Epdos:
     ----------
     rho : 'pd.Series'
         Pandas Series containing the rho values in energy (index).
+    data : 'pd.Series'
+        Pandas Series containing the rho values in energy (index).
 
     Methods
     -------
-    from_dE: Pdos
-        Create a pdos object from a rho in energy
-    beta_grid: Pdos
-        Change the energy grid of rho for a beta grid
-    plot: None
-        Plot the pdos data
-    P: pd.Series
-        Calculate P function for LEAPR formalism with PDOS
-    Teff: float
-        Calculate the effective temperature
-    DebyeWaller: float
-        Calculate the Debye-Waller factor for LEAPR formalism with PDOS
-    get_tau: pd.DataFrame
-        Calculate the tauN functions
+    from_dE : 'Epdos'
+        Extract rho in energy from the introduced data.
+    from_file : 'Epdos'
+        Extract rho in energy from the introduced file.
+    get_Tpdos : 'Tpdos'
+        Change the energy grid of rho to beta grid.
+    Teff : 'float'
+        Calculate the effective temperature for a certain pdos information.
+    DebyeWallerCoeff : 'float'
+        Calculate Debye Waller Coefficient in LEAPR formalism for a certain
+        pdos information.
+    tau1 : 'pd.Series'
+        Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
+    tauN : 'pd.DataFrame'
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
     """
 
     def __init__(self, *args, **kwargs):
@@ -694,8 +729,7 @@ class Epdos:
 
     def get_Tpdos(self, T: float) -> Tpdos:
         """
-        Change the energy grid of rho. Two options available:
-            - Tranform energy grid in beta grid by introducing T
+        Change the energy grid of rho to beta grid.
 
         Parameters
         ----------
@@ -817,7 +851,7 @@ class Epdos:
         return self.get_Tpdos(T).tau1
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
-              values: bool = False) -> [np.ndarray, pd.DataFrame]:
+              values: bool = True) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
         for a certain temperature.
@@ -846,7 +880,7 @@ class Epdos:
         >>> T = 800
         >>> p = Epdos.from_dE(rho_in_energy, interv_in_energy)
         >>> threshold = 0.0
-        >>> tauN = p.tauN(T, 5, threshold)
+        >>> tauN = p.tauN(T, 5, threshold, values=False)
         >>> tauN.iloc[::, :100:20].round(6)
            0.000000  0.232090  0.464181  0.696271  0.928361
         1  0.862582  1.322890  0.341423  0.000000  0.000000
@@ -862,6 +896,50 @@ class Npdos:
     """
     Object containing the method and properties of N phonon density of states
     for N temperatures.
+
+    Attributes
+    ----------
+    instance : 'dict'
+        Dictionary containing the pdos objects for N temperatures.
+    interp_spline : 'None'
+        Interpolation spline for the Npdos object.
+
+    Properties
+    ----------
+    data : 'pd.DataFrame'
+        Data of the pdos objects in a DataFrame format.
+
+    Methods
+    -------
+    check_list : 'Union[float, Iterable[float]]'
+        Check the temperature input.
+    get_Tnew : 'pd.Index'
+        Get the new temperatures to calculate.
+    from_file : 'Npdos'
+        Extract rho in energy from the introduced file and create a Tpdos object
+        for each temperature.
+    from_directory : 'Npdos'
+        Extract rho in energy from the introduced directory and create a Tpdos
+        object for each temperature.
+    from_dE : 'Npdos'
+        Extract rho in energy from the introduced data and create a Tpdos object
+        for each temperature.
+    compute_interp_spline : 'None'
+        Compute the interpolation spline for the Npdos object.
+    Tinterp : 'Tpdos'
+        Interpolate the pdos objects for a certain temperature.
+    get_Tpdos : 'Tpdos'
+        Get the Tpdos object for a certain temperature.
+    Teff : 'float'
+        Calculate the effective temperature for a certain pdos information.
+    DebyeWallerCoeff : 'float'
+        Calculate Debye Waller Coefficient in LEAPR formalism for a certain
+        pdos information.
+    tau1 : 'pd.Series'
+        Get the Tau(-beta) function for 1 phonon expansion in LEAPR formalism.
+    tauN : 'pd.DataFrame'
+        Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
+        for a certain temperature.
     """
     def __init__(self, pdos_dict: dict):
         """
@@ -905,7 +983,7 @@ class Npdos:
         return data
 
     @staticmethod
-    def check_list(temperatures: Union[float, Iterable[float]]):
+    def check_list(temperatures: Union[float, Iterable[float]]) -> [float, Iterable[float]]:
         """
         Check the temperature input
 
@@ -957,7 +1035,7 @@ class Npdos:
     def from_file(cls, T: [float, list], file: [str, list],
                   header: [int, list] = None, index_col: [int, list] = 0,
                   usecols: [int, list] = [0, 1], engine: str = "python",
-                  grid: str = "dE"):
+                  grid: str = "dE") -> 'Npdos':
         """
         Extract rho in energy from the introduced file and create a Tpdos object
         for each temperature.
@@ -1016,7 +1094,7 @@ class Npdos:
         return cls({T: method(T, file, *args) for file, T in zip(file_, T_)})
 
     @classmethod
-    def from_directory(cls, pathToDirectory: str, **kwargs):
+    def from_directory(cls, pathToDirectory: str, **kwargs) -> 'Npdos':
         """
         Create a Npdos object from a directory containing the pdos files. The
         files must have the temperature in the name of the file.
@@ -1066,7 +1144,8 @@ class Npdos:
         return cls.from_file(file_dict.keys(), file_dict.values(), **kwargs)
 
     @classmethod
-    def from_dE(cls, T: [float, list], rho: np.ndarray, intervalE: [float, list]):
+    def from_dE(cls, T: [float, list], rho: np.ndarray,
+                intervalE: [float, list]) -> 'Npdos':
         """
         Create a Npdos object from a list of Tpdos objects.
 
@@ -1127,9 +1206,10 @@ class Npdos:
         return cls({T_[i]: Tpdos.from_dE(T_[i], rho_[::, i], intervalE_[i]) for i in range(Ntemp)})
 
 
-    def compute_spline(self):
+    def compute_spline(self) -> None:
         """
         Compute the spline interpolation of the pdos data if it is not computed
+        yet.
         """
         data_ = self.data.copy()
         T = data_.columns
@@ -1255,7 +1335,7 @@ class Npdos:
         return self.Tinterp(T)
 
     def tauN(self, T: float, nphonon: int, threshold: float, check: bool = True,
-              values: bool = False) -> [np.ndarray, pd.DataFrame]:
+              values: bool = True) -> [np.ndarray, pd.DataFrame]:
         """
         Get the Tau(-beta) function for n phonon expansion in LEAPR formalism
         for a certain temperature. The tauN function is computed by interpolating
@@ -1281,7 +1361,21 @@ class Npdos:
         """
         return self.Tinterp(T).tauN(nphonon, threshold, check, values)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name) -> [float, pd.Series]:
+        """
+        Get the attribute of the Npdos object.
+
+        Parameters
+        ----------
+        name : 'str'
+            Attribute name. The default is None. Options are "Teff",
+            "DebyeWallerCoeff", "P", "tau1".
+
+        Returns
+        -------
+        "pd.Series"
+            Attribute value.
+        """
         if name in ["Teff", "DebyeWallerCoeff", "P", "tau1"]:
             results = {key: getattr(pdos, name)()
                        for key, pdos in self.instance.items()}
@@ -1291,6 +1385,30 @@ class Npdos:
 
 
 class Pdos:
+    """
+    Object containing the method and properties of the pdos object.
+
+    Attributes
+    ----------
+    instance : 'Epdos', 'Tpdos', 'Npdos'
+        Pdos object instance.
+
+    Properties
+    ----------
+    type : 'str'
+        Get the type of the pdos object instace (Epdos, Tpdos, Npdos).
+
+    Methods
+    -------
+    from_dE : 'Pdos'
+        Extract rho in energy from the introduced data.
+    from_file : 'Pdos'
+        Extract rho in energy from the introduced file.
+    from_directory : 'Pdos'
+        Extract rho in energy from the introduced directory.
+    fix_T : 'Tpdos'
+        Check if the Pdos object is fixed for 1 temperature.
+    """
     def __init__(self, *args, **kwargs):
         if isinstance(args[0], (Epdos, Tpdos, Npdos)):
             self.instance = args[0]
@@ -1302,7 +1420,22 @@ class Pdos:
             self.instance = Npdos(*args, **kwargs)
 
     @classmethod
-    def from_dE(cls, *args, **kwargs):
+    def from_dE(cls, *args, **kwargs) -> 'Pdos':
+        """
+        Extract rho in energy from the introduced data.
+
+        Parameters
+        ----------
+        args : 'Iterable'
+            Arguments to pass to the Epdos, Tpdos, Npdos from_dE function.
+        kwargs : 'dict'
+            Arguments to pass to the Epdos, Tpdos, Npdos from_dE function.
+
+        Returns
+        -------
+        "Pdos"
+            Rho normalize object.
+        """
         if len(args) == 0:
             raise TypeError("No arguments provided")
         elif isinstance(args[0], (int, float)):
@@ -1313,7 +1446,22 @@ class Pdos:
             return cls(getattr(Epdos, 'from_dE')(*args, **kwargs))
 
     @classmethod
-    def from_file(cls, *args, **kwargs):
+    def from_file(cls, *args, **kwargs) -> 'Pdos':
+        """
+        Extract rho in energy from the introduced file.
+
+        Parameters
+        ----------
+        args : 'Iterable'
+            Arguments to pass to the Epdos, Tpdos, Npdos from_file function.
+        kwargs : 'dict'
+            Arguments to pass to the Epdos, Tpdos, Npdos from_file function.
+
+        Returns
+        -------
+        "Pdos"
+            Rho normalize object.
+        """
         if len(args) == 0:
             raise TypeError("No arguments provided")
         elif len(args) == 1:
@@ -1324,7 +1472,7 @@ class Pdos:
             return cls(getattr(Npdos, 'from_file')(*args, **kwargs))
 
     @classmethod
-    def from_directory(cls, *args, **kwargs):
+    def from_directory(cls, *args, **kwargs) -> 'Pdos':
         """
         Create a Pdos object from a directory containing the pdos files. The
         files must have the temperature in the name of the file.
@@ -1400,7 +1548,21 @@ class Pdos:
         else:
             return self.instance.get_Tpdos(T)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name) -> [float, pd.Series]:
+        """
+        Get the attribute of the Pdos object.
+
+        Parameters
+        ----------
+        name :  'str'
+            Attribute name. The default is None. Options are "Teff",
+            "DebyeWallerCoeff", "P", "tau1".
+
+        Returns
+        -------
+        "pd.Series"
+            Attribute value.
+        """
         if hasattr(self.instance, name):
             return getattr(self.instance, name)
         else:

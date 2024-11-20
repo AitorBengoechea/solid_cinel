@@ -25,6 +25,38 @@ nb.config.FASTMATH_DEFAULT = False
 class DDxs(DoubleDiffData):
     """
     Class for the Double differential cross section for elastic scattering
+
+    Attributes
+    ----------
+    xs0K : Xs0K
+        Xs object with the cross section xs data for the given material in barns
+    Ein : float
+        The incident energy of the neutron in eV
+    T : float
+        Temperature of the material in K
+
+    Properties
+    ----------
+    scatFunc : pd.Series
+        The Scattering function of the Double Differential XS for inelastic
+        scattering
+    angularDistr : pd.Series
+        The angular probability distribution of the Double Differential XS
+    angleIntegrated : float
+        The integral value of the Double Differential XS
+    upscattering : float
+        The upscattering probability of the Double Differential XS
+    downscattering : float
+        The downscattering probability of the Double Differential XS
+
+    Methods
+    -------
+    from_Sab -> DDxs
+        Generate the Double Differential XS for elastic scattering from
+        S(alpha, -beta) tables
+    from_4PCF -> DDxs
+        Generate the Double Differential XS for elastic scattering from Fourier
+        double-Laplace transform of a 4-point correlation function
     """
 
     def __init__(self, xs0K: Xs0K, Ein: float, T: float, *args, **kwargs):
@@ -230,7 +262,7 @@ class DDxs(DoubleDiffData):
 
     @classmethod
     def from_Sab(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray, theta: np.ndarray, *args,
-                 **kwargs):
+                 **kwargs) -> "DDxs":
         """
         Generate the Double Differential XS for elastic scattering from
         S(alpha, -beta) tables
@@ -326,8 +358,8 @@ class DDxs(DoubleDiffData):
 
     @classmethod
     def from_4PCF(cls, xs0K: Xs0K, Ein: float, T: float, Eout: np.ndarray,
-                  theta: np.ndarray, *args, algorithm: str = "sigma1",
-                  approx: bool = True, kind: str = "corrected", **kwargs):
+                  theta: np.ndarray, *args, approx: bool = True,
+                  kind: str = "corrected", **kwargs) -> "DDxs":
         """
         Generate the Double Differential XS for elastic scattering from Fourier
         double-Laplace transform of a 4-point correlation function
@@ -438,11 +470,11 @@ class DDxs(DoubleDiffData):
         """
         # Generate Dynamic structure of the phonon dynamics:
         dynamicStruc = DynamicStruc.from_model(Ein, xs0K.M, T, Eout, theta,
-                                               *args, **kwargs)
+                                               *args, **kwargs).data
 
         # Get nuclear interaction parameters:
-        nuclearInteract = NucInteract.from_sigma(xs0K, Ein, T, Eout, theta, approx=approx,
-                                       kind=kind)
+        nuclearInteract = NucInteract.from_sigma(xs0K, Ein, T, Eout, theta,
+                                                 approx=approx, kind=kind).data
 
         # Convolve the dynamic structure with the nuclear Interaction:
-        return cls(xs0K, Ein, T,  dynamicStruc.data * nuclearInteract.data)
+        return cls(xs0K, Ein, T,  dynamicStruc * nuclearInteract)

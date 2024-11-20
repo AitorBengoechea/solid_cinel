@@ -552,8 +552,8 @@ def NucInteractAprox_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray, Eincalc: np.nd
     rows, columns = XsMat.shape
     for i in prange(rows):
         for j in prange(columns):
-            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i], M,
-                                      xs0KEin, xs0Kvalues)
+            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i], M, xs0KEin,
+                                      xs0Kvalues)
 
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
@@ -606,6 +606,6 @@ def NucInteractStrict_sigma1(XsMat: np.ndarray, Tcalc: np.ndarray,
     rows, columns = XsMat.shape
     for i in prange(rows):
         for j in prange(columns):
-            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i, j], M,
-                                      xs0KEin, xs0Kvalues)
+            XsMat[i, j] = calc_sigma1(Eincalc[i, j], Tcalc[i, j], M, xs0KEin,
+                                      xs0Kvalues)
 

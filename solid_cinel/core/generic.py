@@ -46,13 +46,11 @@ def integrate(series: pd.Series, kind="trapezoidal") -> float:
 
     # Integrate the function
     if kind == "trapezoidal":
-        y_norm = sp.integrate.trapezoid(y, x=x)
+        return sp.integrate.trapezoid(y, x=x)
     elif kind == "simpson":
-        y_norm = sp.integrate.simpson(y, x=x)
+        return sp.integrate.simpson(y, x=x)
     else:
         raise ValueError("kind is not properly introduced")
-
-    return y_norm
 
 @nb.jit(nopython=True, nogil=True, parallel=True, cache=True)
 def trapz_parallel(data: np.ndarray, x: np.ndarray) -> np.ndarray:

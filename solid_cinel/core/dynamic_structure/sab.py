@@ -1343,14 +1343,15 @@ def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
 
     # Zero phonon expansion:
     IterSum = np.log(alphaDebye)
-    sabValues = alphaDebye * tauNinterp[0]
+    sabValues = np.exp(IterSum - alphaDebye) * tauNinterp[0]
 
     # Higher phonon expansion (nphonon >= 1):
+    # For higher alpha values, np.exp(IterSum - alphaDebye) must be done iteratively to avoid inf.
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
         IterSum += np.log(alphaDebye / (n + 1))
-        sabValues += np.exp(IterSum) * tauNinterp[n]
-    return np.exp(- alphaDebye) * sabValues
+        sabValues += np.exp(IterSum - alphaDebye) * tauNinterp[n]
+    return sabValues
 
 
 @nb.jit(nopython=True, cache=True)

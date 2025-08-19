@@ -517,7 +517,8 @@ def sigma1_XsMat(Tcalc: np.ndarray, Eincalc: np.ndarray,
     # T and Einc
     for i in prange(rows):
         for j in prange(cols):
-            XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[j], M, xs0KEin, xs0Kvalues)
+            XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[j],
+                                      M, xs0KEin, xs0Kvalues)
 
     # Return the angle-integrated cross section matrix:
     return XsMat
@@ -578,7 +579,8 @@ def sigma1_NucInteract_Aprox(Tcalc: np.ndarray, Eincalc: np.ndarray,
     # T and Einc
     for i in prange(rows):
         for j in prange(cols):
-            XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[i, j], M, xs0KEin, xs0Kvalues)
+            XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[i, j],
+                                      M, xs0KEin, xs0Kvalues)
 
     # Return the angle-integrated cross section matrix:
     return XsMat
@@ -639,7 +641,8 @@ def sigma1_NucInteract_Strict(Tcalc: np.ndarray, Eincalc: np.ndarray,
     # T and Einc
     for i in prange(rows):
         for j in prange(cols):
-            XsMat[i, j] = calc_sigma1(Tcalc[i, j], Eincalc[i, j], M, xs0KEin, xs0Kvalues)
+            XsMat[i, j] = calc_sigma1(Tcalc[i, j], Eincalc[i, j],
+                                      M, xs0KEin, xs0Kvalues)
 
     # Return the angle-integrated cross section matrix:
     return XsMat

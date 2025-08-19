@@ -271,7 +271,7 @@ class Xs0K:
         Ein_ = self.EinGrid if Ein is None else to_arrays(Ein)
 
         # Calculate the angle-integrated cross section matrix:
-        xsDb = calc_XsMat_sigma1(T_, Ein_, self.M, self.EinGrid, self.values)
+        xsDb = sigma1_XsMat(T_, Ein_, self.M, self.EinGrid, self.values)
 
         if values:
             return xsDb
@@ -328,9 +328,9 @@ class Xs0K:
 
         # Check the shape of Tinteract:
         if len(Tinteract.shape) == 2:
-            return NucInteractStrict_sigma1(Tinteract, EinMat, self.M, self.EinGrid, self.values)
+            return sigma1_NucInteract_Strict(Tinteract, EinMat, self.M, self.EinGrid, self.values)
         else:
-            return NucInteractAprox_sigma1(Tinteract, EinMat, self.M, self.EinGrid, self.values)
+            return sigma1_NucInteract_Aprox(Tinteract, EinMat, self.M, self.EinGrid, self.values)
 
 
 @nb.jit(nopython=True, cache=True)
@@ -465,7 +465,7 @@ def calc_sigma1(T: float, Ein: float, M: float,  xs0KEin: np.ndarray,
     return np.trapz(transferFunc, x=Eout)
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
+def sigma1_XsMat(Tcalc: np.ndarray, Eincalc: np.ndarray,
                       M: float,  xs0KEin: np.ndarray,
                       xs0Kvalues: np.ndarray) -> np.ndarray:
     """
@@ -503,7 +503,7 @@ def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     >>> Ein = np.array([2.0, 6.67])
     >>> T = np.array([300, 1000])
 
-    >>> XsMat = calc_XsMat_sigma1(T, Ein, M, xs0K.EinGrid, xs0K.values)
+    >>> XsMat = sigma1_XsMat(T, Ein, M, xs0K.EinGrid, xs0K.values)
     >>> pd.DataFrame(XsMat, index=Ein, columns=T).T.round(6)
                 2.00        6.67
     300     9.086237    9.086042
@@ -524,7 +524,7 @@ def calc_XsMat_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
 
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
+def sigma1_NucInteract_Aprox(Tcalc: np.ndarray, Eincalc: np.ndarray,
                             M: float, xs0KEin: np.ndarray,
                             xs0Kvalues: np.ndarray) -> np.ndarray:
     """
@@ -564,7 +564,7 @@ def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
 
     # Calculate the angle-integrated cross section matrix:
-    >>> XsMat = NucInteractAprox_sigma1(T, EinMat, M, xs0K.EinGrid, xs0K.values)
+    >>> XsMat = sigma1_NucInteract_Aprox(T, EinMat, M, xs0K.EinGrid, xs0K.values)
     >>> pd.DataFrame(XsMat, index=T).round(6)
                 0           1
     100  9.086957   19.893739
@@ -585,7 +585,7 @@ def NucInteractAprox_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
 
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
-def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
+def sigma1_NucInteract_Strict(Tcalc: np.ndarray, Eincalc: np.ndarray,
                              M: float, xs0KEin: np.ndarray,
                             xs0Kvalues: np.ndarray) -> np.ndarray:
     """
@@ -625,7 +625,7 @@ def NucInteractStrict_sigma1(Tcalc: np.ndarray, Eincalc: np.ndarray,
     >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
 
     # Calculate the angle-integrated cross section matrix:
-    >>> XsMat = NucInteractStrict_sigma1(T, EinMat, M, xs0K.EinGrid, xs0K.values)
+    >>> XsMat = sigma1_NucInteract_Strict(T, EinMat, M, xs0K.EinGrid, xs0K.values)
     >>> pd.DataFrame(XsMat).round(6)
               0           1
     0  9.086010   20.673028

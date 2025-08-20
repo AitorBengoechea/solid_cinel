@@ -12,6 +12,7 @@ from solid_cinel.core.dynamic_structure.sab import Sab
 from solid_cinel.core.dynamic_structure.dynamicStruc import DynamicStruc
 from solid_cinel.core.material import Pdos, Solid
 from solid_cinel.core.xs import DDxs, Xs0K
+from solid_cinel.application.xsApp import calc_alpha0
 
 
 class BaseTestScinel(unittest.TestCase):
@@ -99,6 +100,26 @@ class BaseTestScinel(unittest.TestCase):
         """
         # Generate the expected result
         expected_result = Expected_result.from_method(method, *variables, model=model)
+
+        # Check the results
+        expected_result.check_results(self.get_results(*command_line))
+
+    def functionCheck(self, variables: list, method,
+                      command_line: list) -> None:
+        """
+        Test the specified function for the calculation.
+
+        Parameters
+        ----------
+        variables : list
+            The variables for the function.
+        method : method
+            The method to use for the calculation.
+        command_line : list
+            The command line arguments.
+        """
+        # Generate the expected result
+        expected_result = Expected_result.from_method(method, *variables)
 
         # Check the results
         expected_result.check_results(self.get_results(*command_line))
@@ -484,6 +505,68 @@ class TestScinel_XsCoh(TestScinel_BraggEdges):
 
         # Check the results
         expected_result.check_results(results)
+
+class TestScinel_Xs(BaseTestScinel):
+    """
+    Test the DDxs class terminal application in the solid_cinel package.
+    """
+    def setUp(self) -> None:
+        """
+        Set up the test common variables.
+        """
+        super().setUp()
+        self.keyword = 'xs'
+        self.file_EinGrid = os.path.join(self.file_dir, 'inputTest/EinGrid')
+
+
+    @property
+    def get_var(self) -> list:
+        """
+        Get the variables for the model.
+        """
+        xs = Xs0K(self.M, self.xs0K).data
+        EinGrid = np.loadtxt(self.file_EinGrid)
+        return [xs, EinGrid, self.M, self.T, self.pdos]
+
+    def get_command(self, model: str) -> list:
+        """
+        Get the command line arguments for the model.
+
+        Parameters
+        ----------
+        model : str
+            The model to use for the calculation.
+
+        Returns
+        -------
+        list
+            The command line arguments.
+        """
+        return [self.keyword, model, self.file_xs0K, self.file_EinGrid,
+                self.M, self.T, self.file_pdos]
+
+    def modelTest(self, model: str) -> None:
+        """
+        Test the specified model for the calculation of the double differential
+        scattering cross section.
+
+        Parameters
+        model : str
+            The model to test. Can be 'fgm', 'sct', or 'pdos'.
+
+        Returns
+        -------
+        None
+            Pass the test if the results are equal.
+        """
+        # Check the results
+        self.functionCheck(self.get_var, calc_alpha0, self.get_command(model))
+
+    def test_alpha0(self) -> None:
+        """
+        Test the sct model for the generating S(alpha, -beta) tables.
+        """
+        self.modelTest('alpha0')
 
 
 if __name__ == '__main__':

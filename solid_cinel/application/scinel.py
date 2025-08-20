@@ -16,7 +16,7 @@ KEYWORD_TO_FUNCTION_MAP = {
         "add": add_SabArgs,
         "handle": handle_SabArgs,
     },
-    "dynamicstruc": {
+    "dsf": {
         "add": add_DynamicStrucArgs,
         "handle": handle_DynamicStrucArgs,
     },

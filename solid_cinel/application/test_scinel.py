@@ -243,7 +243,7 @@ class TestScinelDynamicStruc(BaseTestScinel):
         Set up the test common variables.
         """
         super().setUp()
-        self.keyword = 'dynamicstruc'
+        self.keyword = 'dsf'
 
     @property
     def get_fgm_var(self) -> list:

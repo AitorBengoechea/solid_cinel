@@ -501,13 +501,14 @@ def sigma1_XsMat(Tcalc: np.ndarray, Eincalc: np.ndarray,
     >>> os.chdir(wd)
 
     >>> Ein = np.array([2.0, 6.67])
-    >>> T = np.array([300, 1000])
+    >>> T = np.array([0, 300, 1000])
 
     >>> XsMat = sigma1_XsMat(T, Ein, M, xs0K.EinGrid, xs0K.values)
-    >>> pd.DataFrame(XsMat, index=Ein, columns=T).T.round(6)
-                2.00        6.67
-    300     9.086237    9.086042
-    1000  455.670534  282.297098
+    >>> pd.DataFrame(XsMat, index=T, columns=Ein).round(6)
+              2.00         6.67
+    0     9.085342  1269.792131
+    300   9.086237   455.670534
+    1000  9.086042   282.297098
     """
     # Create the output matrix:
     rows, cols = len(Tcalc), len(Eincalc)
@@ -516,9 +517,13 @@ def sigma1_XsMat(Tcalc: np.ndarray, Eincalc: np.ndarray,
     # Calculate the angle-integrated cross section for each combination of
     # T and Einc
     for i in prange(rows):
-        for j in prange(cols):
-            XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[j],
-                                      M, xs0KEin, xs0Kvalues)
+        if Tcalc[i] == 0.0:
+            # If the temperature is 0K, use the 0K cross section values
+            XsMat[i, :] = np.interp(Eincalc, xs0KEin, xs0Kvalues)
+        else:
+            for j in prange(cols):
+                XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[j],
+                                          M, xs0KEin, xs0Kvalues)
 
     # Return the angle-integrated cross section matrix:
     return XsMat
@@ -526,8 +531,8 @@ def sigma1_XsMat(Tcalc: np.ndarray, Eincalc: np.ndarray,
 
 @nb.jit(nopython=True, parallel=True, cache=True, nogil=True)
 def sigma1_NucInteract_Aprox(Tcalc: np.ndarray, Eincalc: np.ndarray,
-                            M: float, xs0KEin: np.ndarray,
-                            xs0Kvalues: np.ndarray) -> np.ndarray:
+                             M: float, xs0KEin: np.ndarray,
+                             xs0Kvalues: np.ndarray) -> np.ndarray:
     """
     Update the angle-integrated cross section matrix based on SIGMA1 model
     for the nuclear interaction in 4PCF model
@@ -561,26 +566,31 @@ def sigma1_NucInteract_Aprox(Tcalc: np.ndarray, Eincalc: np.ndarray,
     >>> os.chdir(wd)
 
     # Example with a single temperature and multiple incident energies:
-    >>> T = np.array([100, 300])
-    >>> EinMat = np.array([[2.0, 7.0], [3.0, 6.67]])
+    >>> T = np.array([0.0, 100, 300])
+    >>> EinMat = np.array([[5.0, 10.0], [2.0, 3.0], [6.67, 7.0]])
 
     # Calculate the angle-integrated cross section matrix:
     >>> XsMat = sigma1_NucInteract_Aprox(T, EinMat, M, xs0K.EinGrid, xs0K.values)
     >>> pd.DataFrame(XsMat, index=T).round(6)
-                0           1
-    100  9.086957   19.893739
-    300  8.843855  455.670534
+                    0          1
+    0.0      7.805580   9.681257
+    100.0    9.086957   8.844076
+    300.0  455.670534  20.039076
     """
     # Allocate the output matrix:
-    rows, cols = Eincalc.shape
+    rows, cols = len(Tcalc), Eincalc.shape[1]
     XsMat = np.zeros((rows, cols))
 
     # Calculate the angle-integrated cross section for each combination of
     # T and Einc
     for i in prange(rows):
-        for j in prange(cols):
-            XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[i, j],
-                                      M, xs0KEin, xs0Kvalues)
+        if Tcalc[i] == 0.0:
+            # If the temperature is 0K, use the 0K cross section values
+            XsMat[i, :] = np.interp(Eincalc[i, :], xs0KEin, xs0Kvalues)
+        else:
+            for j in prange(cols):
+                XsMat[i, j] = calc_sigma1(Tcalc[i], Eincalc[i, j],
+                                          M, xs0KEin, xs0Kvalues)
 
     # Return the angle-integrated cross section matrix:
     return XsMat
@@ -641,8 +651,12 @@ def sigma1_NucInteract_Strict(Tcalc: np.ndarray, Eincalc: np.ndarray,
     # T and Einc
     for i in prange(rows):
         for j in prange(cols):
-            XsMat[i, j] = calc_sigma1(Tcalc[i, j], Eincalc[i, j],
-                                      M, xs0KEin, xs0Kvalues)
+            if Tcalc[i, j] == 0.0:
+                # If the temperature is 0K, use the 0K cross section values
+                XsMat[i, j] = np.interp(Eincalc[i, j], xs0KEin, xs0Kvalues)
+            else:
+                XsMat[i, j] = calc_sigma1(Tcalc[i, j], Eincalc[i, j],
+                                          M, xs0KEin, xs0Kvalues)
 
     # Return the angle-integrated cross section matrix:
     return XsMat

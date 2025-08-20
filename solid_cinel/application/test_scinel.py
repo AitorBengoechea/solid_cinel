@@ -12,7 +12,7 @@ from solid_cinel.core.dynamic_structure.sab import Sab
 from solid_cinel.core.dynamic_structure.dynamicStruc import DynamicStruc
 from solid_cinel.core.material import Pdos, Solid
 from solid_cinel.core.xs import DDxs, Xs0K
-from solid_cinel.application.xsApp import calc_alpha0
+from solid_cinel.application.xsApp import calc_alpha0, calc_sta
 
 
 class BaseTestScinel(unittest.TestCase):
@@ -407,13 +407,13 @@ class TestScinel_DDxs(BaseTestScinel):
         """
         self.modelTest("fgm")
 
-    def test_4pcf_sct(self) -> None:
+    def test_sta_sct(self) -> None:
         """
         Test the sct model for the generating S(alpha, -beta) tables.
         """
         self.modelTest('sct')
 
-    def test_4pcf_pdos(self) -> None:
+    def test_sta_pdos(self) -> None:
         """
         Test the pdos model for the generating S(alpha, -beta) tables.
         """
@@ -524,7 +524,7 @@ class TestScinel_Xs(BaseTestScinel):
         """
         Get the variables for the model.
         """
-        xs = Xs0K(self.M, self.xs0K).data
+        xs = Xs0K(self.M, self.xs0K)
         EinGrid = np.loadtxt(self.file_EinGrid)
         return [xs, EinGrid, self.M, self.T, self.pdos]
 
@@ -560,13 +560,19 @@ class TestScinel_Xs(BaseTestScinel):
             Pass the test if the results are equal.
         """
         # Check the results
-        self.functionCheck(self.get_var, calc_alpha0, self.get_command(model))
+
 
     def test_alpha0(self) -> None:
         """
         Test the sct model for the generating S(alpha, -beta) tables.
         """
-        self.modelTest('alpha0')
+        self.functionCheck(self.get_var, calc_alpha0, self.get_command('alpha0'))
+
+    def test_sta(self) -> None:
+        """
+        Test the sct model for the generating S(alpha, -beta) tables.
+        """
+        self.functionCheck(self.get_var, calc_sta, self.get_command('sta'))
 
 
 if __name__ == '__main__':

@@ -47,14 +47,14 @@ def add_XsArgs(parser: argparse.ArgumentParser):
                         help='Grid for the scattering angle in degrees')
 
 
-def calc_alpha0(xs0K: Xs0K, Ein: np.ndarray, M: float, T: float,
+def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
                 pdos: Pdos, nphonon = None) -> np.ndarray:
     """
     Calculate the XS using alpha0 model asymtotic value.
 
     Parameters
     ----------
-    xs0K : Xs0K
+    xs0K : pd.Series
         The cross section at 0 K.
     Ein : np.ndarray
         The incident energy in eV.
@@ -98,7 +98,7 @@ def calc_alpha0(xs0K: Xs0K, Ein: np.ndarray, M: float, T: float,
     EoutCalc = scatfunc.columns.values * kb * T + (Ein + recoil)[::, np.newaxis]
 
     # Integrate the cross section:
-    xsDb = (scatfunc * reshape_differential(xs0K.data, EoutCalc)).apply(integrate,
+    xsDb = (scatfunc * reshape_differential(xs0K, EoutCalc)).apply(integrate,
                                                                    axis=1)
     return xsDb
 

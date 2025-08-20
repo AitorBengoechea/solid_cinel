@@ -520,7 +520,16 @@ class TestScinel_Xs(BaseTestScinel):
 
 
     @property
-    def get_var(self) -> list:
+    def get_var_alpha0(self) -> list:
+        """
+        Get the variables for the model.
+        """
+        xs = Xs0K(self.M, self.xs0K)
+        EinGrid = np.loadtxt(self.file_EinGrid)
+        return [xs.data, EinGrid, self.M, self.T, self.pdos]
+
+    @property
+    def get_var_sta(self) -> list:
         """
         Get the variables for the model.
         """
@@ -566,13 +575,13 @@ class TestScinel_Xs(BaseTestScinel):
         """
         Test the sct model for the generating S(alpha, -beta) tables.
         """
-        self.functionCheck(self.get_var, calc_alpha0, self.get_command('alpha0'))
+        self.functionCheck(self.get_var_alpha0, calc_alpha0, self.get_command('alpha0'))
 
     def test_sta(self) -> None:
         """
         Test the sct model for the generating S(alpha, -beta) tables.
         """
-        self.functionCheck(self.get_var, calc_sta, self.get_command('sta'))
+        self.functionCheck(self.get_var_sta, calc_sta, self.get_command('sta'))
 
 
 if __name__ == '__main__':

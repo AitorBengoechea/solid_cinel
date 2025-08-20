@@ -125,7 +125,7 @@ class Expected_result:
             np.testing.assert_array_equal(self.expected_result, other)
 
 
-class TestScinelTeff(BaseTestScinel):
+class TestScinel_Teff(BaseTestScinel):
     """
     Test the Effective temperature calculation in terminal application in the
     solid_cinel package.
@@ -162,7 +162,7 @@ class TestScinelTeff(BaseTestScinel):
         expected_result.check_results(results)
 
 
-class TestScinelSab(BaseTestScinel):
+class TestScinel_Sab(BaseTestScinel):
     """
     Test the Sab class terminal application in the solid_cinel package.
     """
@@ -217,7 +217,8 @@ class TestScinelSab(BaseTestScinel):
         variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
 
         # Check the results
-        self.modelCheck(model, variables, Sab.from_model, self.get_command(model))
+        self.modelCheck(model, variables, Sab.from_model,
+                        self.get_command(model))
 
     def test_fgm(self) -> None:
         """
@@ -237,8 +238,8 @@ class TestScinelSab(BaseTestScinel):
         """
         self.modelTest('pdos')
 
-class TestScinelDynamicStruc(BaseTestScinel):
-    def setUpClass(self) -> None:
+class TestScinel_DynamicStruc(BaseTestScinel):
+    def setUp(self) -> None:
         """
         Set up the test common variables.
         """
@@ -259,7 +260,7 @@ class TestScinelDynamicStruc(BaseTestScinel):
         """
         return self.get_fgm_var + [self.pdos]
 
-    def get_command(self, algorithm: str, model: str) -> list:
+    def get_command(self, model: str) -> list:
         """
         Get the command line arguments for the model.
 
@@ -273,11 +274,51 @@ class TestScinelDynamicStruc(BaseTestScinel):
         list
             The command line arguments.
         """
-        command = [self.keyword, algorithm, model, self.file_xs0K, self.Ein,
+        command = [self.keyword, model, self.Ein,
                    self.M, self.T, self.file_Eout, self.file_theta]
+
         return command if model == 'fgm' else command + [self.file_pdos]
 
-class TestScinelDDxs(BaseTestScinel):
+    def modelTest(self, model: str) -> None:
+        """
+        Test the specified model for the calculation of the dynamic structure factor.
+
+        Parameters
+        ----------
+        algorithm : str
+            The algorithm to use for the calculation.
+        method : method
+            The method to use for the calculation.
+        model : str
+            The model to test. Can be 'fgm', 'sct', or 'pdos'.
+        """
+        # Determine the appropriate variables based on the model
+        variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
+
+        # Check the results
+        self.modelCheck(model, variables, DynamicStruc.from_model,
+                        self.get_command(model))
+
+    def test_fgm(self) -> None:
+        """
+        Test the fgm model for the generating S(alpha, -beta) tables.
+        """
+        self.modelTest("fgm")
+
+    def test_sct(self) -> None:
+        """
+        Test the sct model for the generating S(alpha, -beta) tables.
+        """
+        self.modelTest('sct')
+
+    def test_pdos(self) -> None:
+        """
+        Test the pdos model for the generating S(alpha, -beta) tables.
+        """
+        self.modelTest('pdos')
+
+
+class TestScinel_DDxs(BaseTestScinel):
     """
     Test the DDxs class terminal application in the solid_cinel package.
     """
@@ -348,13 +389,6 @@ class TestScinelDDxs(BaseTestScinel):
         # Test PDOS:
         self.modelTest(algorithm, method, "pdos")
 
-    def test_sab(self) -> None:
-        """
-        Test the SAB algorithm for the generating double differential scattering
-        cross section.
-        """
-        self.allModelTest('sab', DDxs.from_Sab)
-
     def test_4pcf(self) -> None:
         """
         Test the 4PCF algorithm for the generating double differential scattering
@@ -363,7 +397,7 @@ class TestScinelDDxs(BaseTestScinel):
         self.allModelTest('4pcf', DDxs.from_4PCF)
 
 
-class TestScinelBraggEdges(BaseTestScinel):
+class TestScinel_BraggEdges(BaseTestScinel):
     """
     Test the Bragg Edges calculation in terminal application.
     """
@@ -418,7 +452,7 @@ class TestScinelBraggEdges(BaseTestScinel):
         expected_result.check_results(results)
 
 
-class TestScinelXsCoh(TestScinelBraggEdges):
+class TestScinel_XsCoh(TestScinel_BraggEdges):
     """
     Test the XsCoh class terminal application in the solid_cinel package.
     """

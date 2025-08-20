@@ -222,19 +222,19 @@ class TestScinel_Sab(BaseTestScinel):
 
     def test_fgm(self) -> None:
         """
-        Test the fgm model for the generating S(alpha, -beta) tables.
+        Test the fgm model for generating S(alpha, -beta) tables.
         """
         self.modelTest("fgm")
 
     def test_sct(self) -> None:
         """
-        Test the sct model for the generating S(alpha, -beta) tables.
+        Test the sct model for generating S(alpha, -beta) tables.
         """
         self.modelTest('sct')
 
     def test_pdos(self) -> None:
         """
-        Test the pdos model for the generating S(alpha, -beta) tables.
+        Test the pdos model for generating S(alpha, -beta) tables.
         """
         self.modelTest('pdos')
 
@@ -281,14 +281,11 @@ class TestScinel_DynamicStruc(BaseTestScinel):
 
     def modelTest(self, model: str) -> None:
         """
-        Test the specified model for the calculation of the dynamic structure factor.
+        Test the specified model for the calculation of the dynamic structure
+        factor.
 
         Parameters
         ----------
-        algorithm : str
-            The algorithm to use for the calculation.
-        method : method
-            The method to use for the calculation.
         model : str
             The model to test. Can be 'fgm', 'sct', or 'pdos'.
         """
@@ -301,19 +298,19 @@ class TestScinel_DynamicStruc(BaseTestScinel):
 
     def test_fgm(self) -> None:
         """
-        Test the fgm model for the generating S(alpha, -beta) tables.
+        Test the fgm model for generating Dynamic Structure Factors.
         """
         self.modelTest("fgm")
 
     def test_sct(self) -> None:
         """
-        Test the sct model for the generating S(alpha, -beta) tables.
+        Test the sct model for generating Dynamic Structure Factors.
         """
         self.modelTest('sct')
 
     def test_pdos(self) -> None:
         """
-        Test the pdos model for the generating S(alpha, -beta) tables.
+        Test the pdos model for generating Dynamic Structure Factors.
         """
         self.modelTest('pdos')
 
@@ -344,7 +341,7 @@ class TestScinel_DDxs(BaseTestScinel):
         """
         return self.get_fgm_var + [self.pdos]
 
-    def get_command(self, algorithm: str, model: str) -> list:
+    def get_command(self, model: str) -> list:
         """
         Get the command line arguments for the model.
 
@@ -358,43 +355,48 @@ class TestScinel_DDxs(BaseTestScinel):
         list
             The command line arguments.
         """
-        command = [self.keyword, algorithm, model, self.file_xs0K, self.Ein,
+        command = [self.keyword, model, self.file_xs0K, self.Ein,
                    self.M, self.T, self.file_Eout, self.file_theta]
         return command if model == 'fgm' else command + [self.file_pdos]
 
-    def modelTest(self, algorithm: str, method, model: str) -> None:
+    def modelTest(self, model: str) -> None:
+        """
+        Test the specified model for the calculation of the double differential
+        scattering cross section.
+
+        Parameters
+        model : str
+            The model to test. Can be 'fgm', 'sct', or 'pdos'.
+
+        Returns
+        -------
+        None
+            Pass the test if the results are equal.
+        """
         # Determine the appropriate variables based on the model
         variables = self.get_fgm_var if model == 'fgm' else self.get_sct_var
 
         # Check the results
-        self.modelCheck(model, variables, method, self.get_command(algorithm, model))
+        self.modelCheck(model, variables, DDxs.from_4PCF,
+                        self.get_command(model))
 
-    def allModelTest(self, algorithm: str,  method) -> None:
+    def test_4pcf_fgm(self) -> None:
         """
-        Test the double differential scattering cross section calculation.
-
-        Parameters
-        ----------
-        algorithm : str
-            The algorithm to use for the calculation.
-        method : method
-            The method to use for the calculation.
+        Test the fgm model for the generating S(alpha, -beta) tables.
         """
-        # Test FGM:
-        self.modelTest(algorithm, method, "fgm")
+        self.modelTest("fgm")
 
-        # Test SCT:
-        self.modelTest(algorithm, method, "sct")
-
-        # Test PDOS:
-        self.modelTest(algorithm, method, "pdos")
-
-    def test_4pcf(self) -> None:
+    def test_4pcf_sct(self) -> None:
         """
-        Test the 4PCF algorithm for the generating double differential scattering
-        cross section.
+        Test the sct model for the generating S(alpha, -beta) tables.
         """
-        self.allModelTest('4pcf', DDxs.from_4PCF)
+        self.modelTest('sct')
+
+    def test_4pcf_pdos(self) -> None:
+        """
+        Test the pdos model for the generating S(alpha, -beta) tables.
+        """
+        self.modelTest('pdos')
 
 
 class TestScinel_BraggEdges(BaseTestScinel):

@@ -28,13 +28,13 @@ def get_sab(args: argparse.Namespace) -> Sab:
     if args.T < 0:
         raise ValueError("Temperature must be greater than 0")
 
+    # Get the extra arguments for Pdos
+    argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
+
     # Get Sab class based on the model
-    if args.model == "pdos":
-        return Sab.from_pdos(args.alpha, args.beta, args.T, get_Pdos(args))
-    elif args.model == "sct":
-        return Sab.from_sct(args.alpha, args.beta, args.T, get_Pdos(args))
-    else:
-        return Sab.from_fgm(args.alpha, args.beta, args.T)
+    return Sab.from_model(args.alpha, args.beta, args.T, *argsPdos,
+                          model=args.model)
+
 
 def handle_SabArgs(args: argparse.Namespace) -> dict:
     """

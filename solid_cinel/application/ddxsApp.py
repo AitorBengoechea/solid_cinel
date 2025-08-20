@@ -15,18 +15,17 @@ def add_DDxsArgs(parser: argparse.ArgumentParser):
     parser : argparse.ArgumentParser
         The argument parser to which the arguments should be added.
     """
-    parser.add_argument('algorithm', type=str,
-                        help='Algorithm to use for the calculation of the DDxs: Sab or 4PCF')
-    parser.add_argument('model', type=str,
+    parser.add_argument('model', type=str.lower,
+                        choices=['fgm', 'sct', 'pdos'],
                         help='Model to use for the calculation of the algorithm')
     parser.add_argument('xs0K', type=str,
                         help='Cross section at 0 K')
     parser.add_argument('Ein', type=float,
-                        help='incident energy in eV')
+                        help='Incident energy in eV')
     parser.add_argument('M', type=float,
-                        help='mass of the target atom in a.m.u.')
+                        help='Mass of the target atom in a.m.u.')
     parser.add_argument('T', type=float,
-                        help='temperature in K')
+                        help='Temperature in K')
     parser.add_argument('Eout', type=str,
                         help='Grid for the output energy in eV')
     parser.add_argument('theta', type=str,
@@ -62,12 +61,10 @@ def get_DDxs(args: argparse.Namespace) -> DDxs:
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
 
     # Compute the function:
-    if args.algorithm.lower() == "sab":
-        return DDxs.from_Sab(xs, args.Ein, args.T, Eout, theta, *argsPdos,
-                             model=args.model)
-    elif args.algorithm.lower() == "4pcf":
-        return DDxs.from_4PCF(xs, args.Ein, args.T, Eout, theta, *argsPdos,
-                              model=args.model)
+    return DDxs.from_4PCF(xs, args.Ein, args.T, Eout, theta, *argsPdos,
+                          model=args.model)
+
+
 def handle_DDxsArgs(args: argparse.Namespace) -> dict:
     """
     Handle the arguments for the calculation of the double differential scattering
@@ -95,4 +92,6 @@ def handle_DDxsArgs(args: argparse.Namespace) -> dict:
         results["scatFunc"] = ddxs.scatFunc.values
     if 'angleDistr' in args.output:
         results["angleDistr"] = ddxs.angleDistr.values
+
+    # Return the results as a dictionary:
     return results

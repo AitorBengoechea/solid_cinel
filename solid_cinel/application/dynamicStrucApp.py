@@ -78,11 +78,17 @@ def handle_DynamicStrucArgs(args: argparse.Namespace) -> dict:
         An array containing the values of the scattering function.
     """
     result = {}
+
+    # Get the DynamicStruc object based on the arguments:
     dynamicStructure = get_DynamicStruc(args)
+
+    # Get the requested outputs:
     if 'dynamicStruc' in args.output:
         result['values'] = dynamicStructure.values
     if 'transferFunc' in args.output:
         result['transferFunc'] = dynamicStructure.transferFunc
     if 'angleDistr' in args.output:
         result['angleDistr'] = dynamicStructure.angularDistr
+
+    # Return the results as a dictionary:
     return result

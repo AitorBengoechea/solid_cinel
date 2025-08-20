@@ -21,7 +21,7 @@ def add_DynamicStrucArgs(parser: argparse.ArgumentParser):
         The argument parser to which the arguments should be added.
     """
     parser.add_argument('model', type=str.lower,
-                        choices=['fgm', 'sct', 'clm'],
+                        choices=['fgm', 'sct', 'pdos'],
                         help='Model to use for the calculation of the scattering function')
     parser.add_argument('Ein', type=float,
                         help='Incident energy in eV')

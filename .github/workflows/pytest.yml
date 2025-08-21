@@ -9,7 +9,8 @@ on:
     branches: [ develop ]
 
 jobs:
-  test:
+  # Job to run the core tests
+  core_tests:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,6 +26,22 @@ jobs:
         run: bash install.sh
       - name: pytest solid_cinel code core
         run: pytest --cov=solid_cinel solid_cinel/core/
+
+  # Job to run the applications tests
+  applications_tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10.12'
+          cache: 'pip'
+
+      - name: install solid_cinel
+        run: bash install.sh
       - name: pytest solid_cinel code applications
         run:  python -m unittest solid_cinel/application/test_scinel.py
 

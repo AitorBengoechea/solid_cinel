@@ -320,12 +320,12 @@ class Beta:
         >>> from solid_cinel.data.examples.Al27 import beta0_
         >>> T = 800
         >>> beta_grid = Beta(beta0_).scale(T)
-        >>> pd.Series(beta_grid.get_dE(T), index=beta_grid.data).iloc[0:5]
-        0.000000    0.000000
-        0.009175    0.000633
-        0.018350    0.001265
-        0.027524    0.001898
-        0.036699    0.002530
+        >>> pd.Series(beta_grid.get_dE(T), index=beta_grid.data).iloc[0:5].round(4)
+        0.000000    0.0000
+        0.009175    0.0006
+        0.018350    0.0013
+        0.027524    0.0019
+        0.036699    0.0025
         dtype: float64
         """
         return self.data * kb * T

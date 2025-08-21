@@ -193,8 +193,7 @@ class DDxs(DoubleDiffData):
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> theta = np.arange(0, 180, 15)[1::]
         >>> ddxs = DDxs.from_4PCF(xs, Ein, T, Eout, theta)
-        >>> round(ddxs.upscattering, 2)
-        0.39
+        >>> assert round(ddxs.upscattering, 2) == 0.39
         """
         return integrate(super().columsPdf[self.Eout > self.Ein])
 
@@ -224,8 +223,7 @@ class DDxs(DoubleDiffData):
         >>> Eout = np.linspace(Ein * 0.9 , Ein * 1.1, 1000)
         >>> theta = np.arange(0, 180, 15)[1::]
         >>> ddxs = DDxs.from_4PCF(xs, Ein, T, Eout, theta)
-        >>> round(ddxs.downscattering, 2)
-        0.61
+        >>> assert round(ddxs.downscattering, 2) == 0.61
         """
         return integrate(super().columsPdf[self.Eout < self.Ein])
 

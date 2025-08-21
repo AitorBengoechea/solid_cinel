@@ -45,10 +45,11 @@ def add_XsArgs(parser: argparse.ArgumentParser):
     parser.add_argument('--theta', type=str,
                         default=None,
                         help='Grid for the scattering angle in degrees')
-
+    parser.add_argument('--p0', type=bool, default=True,
+                        help='Add p0 to the calculation. Default is True.')
 
 def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
-                pdos: Pdos, nphonon = None) -> np.ndarray:
+                pdos: Pdos, nphonon: int = None, p0: bool = True) -> np.ndarray:
     """
     Calculate the XS using alpha0 model asymtotic value.
 
@@ -67,6 +68,8 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     nphonon : int, optional
         The number of phonon modes to consider. If None, it will be calculated
         based on the maximum alpha value. Default is None.
+    p0 : bool, optional
+        Whether to add p0 to the calculation. Default is True.
 
     Returns
     -------
@@ -95,11 +98,16 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     scatfunc = Sab.from_tau(alpha, beta, tauN, tauNbeta, DebyeWallerCoeff).full
 
     # Get the outgoing energy grid:
-    EoutCalc = scatfunc.columns.values * kb * T + (Ein + recoil)[::, np.newaxis]
+    EinCalc = Ein + recoil
+    EoutCalc = scatfunc.columns.values * kb * T + EinCalc[::, np.newaxis]
 
     # Integrate the cross section:
     xsDb = (scatfunc * reshape_differential(xs0K, EoutCalc)).apply(integrate,
                                                                    axis=1)
+
+    # Add p0 to the calculation:
+    if p0:
+        xsDb += np.exp(- DebyeWallerCoeff * alpha) * reshape_differential(xs0K, EinCalc)
     return xsDb
 
 

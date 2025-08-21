@@ -221,8 +221,58 @@ def EinLoopOpt(EinGrid: np.ndarray, M: float, T: float, mu: np.ndarray,
         resultCLM[i] = np.trapz(np.trapz(PhononDyn * xsInterp, x=Eout), x=mu)
     return resultCLM
 
+@nb.jit(nopython=True, cache=True)
+def calc_sta_p0(EinGrid: np.ndarray, M: float, mu: np.ndarray, T: float,
+                DebyeWallerCoeff: float, xsMatrix: np.ndarray,
+                xsMatrixEin: np.ndarray):
+    """
+    Calculate p0 contribution for the scattering cross section using the
+    sta method.
+
+    Parameters
+    ----------
+    EinGrid : np.ndarray, (N,)
+        The incident energy grid in eV.
+    M : float
+        The mass of the target atom in a.m.u.
+    mu : np.ndarray, (Nmu,)
+        The chemical potential values.
+    T : float
+        The temperature in K.
+    DebyeWallerCoeff : float
+        The Debye Waller coefficient.
+    xsMatrix : np.ndarray, (Nmu, NEin_0K)
+        The cross section matrix for the given mu values and incoming energies.
+    xsMatrixEin : np.ndarray, (NEin_0K,)
+        The incoming energy grid for the cross section matrix.
+
+    Returns
+    -------
+    np.ndarray, (N,)
+        The p0 term for the given incident energy grid.
+    """
+    A = m / (m + M)
+
+    # Calculate the interaction energy matrix:
+    EinMat = EinGrid * (A + 1 - mu[::, np.newaxis]) / A
+
+    # Calculate the ALPHA matrix:
+    alpha = 2 * EinGrid * (1 - mu[::, np.newaxis]) / (A * kb * T)
+
+    # Initialize the xsInterp matrix:
+    xsInterp = np.zeros(EinMat.shape)
+    for j in prange(len(mu)):
+        # Interpolate the xsMatrix to the EinMat:
+        xsInterp[j, :] = np.interp(EinMat[j, ::], xsMatrixEin, xsMatrix[j])
+
+    # Calculate the phonon dynamics for CLM:
+    XsMat_mu = 0.5 * np.exp(- DebyeWallerCoeff * alpha) * xsInterp
+
+    return np.trapz(XsMat_mu.T, x=mu)
+
 def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
-              pdos: Pdos, nphonon = None, theta = None) -> np.ndarray:
+             pdos: Pdos, nphonon: int = None, theta: bool = None,
+             p0: bool = True) -> np.ndarray:
     """
     Calculate the double differential scattering cross section using the
     sta method.
@@ -243,6 +293,8 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
         based on the maximum alpha value. Default is None.
     theta : str or None, optional
         The path to the theta grid file. If None, a default grid will be used.
+    p0 : bool, optional
+        Whether to add p0 to the calculation. Default is True.
 
     Returns
     -------
@@ -264,7 +316,7 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
 
     # Change the index to mu values instead of Temperatures:
     Tarno = Teff * (1 + mu) / 2
-    EinGrid_0K = xs0K.EinGrid <= 2 * EinGrid[-1]
+    EinGrid_0K = xs0K.EinGrid[xs0K.EinGrid <= 2 * EinGrid[-1]]
     xsData = xs0K.sigma1(Tarno, EinGrid_0K, values=True)
 
     # Get the Expansion order:
@@ -284,9 +336,16 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
     tauNcut = tauN[::, betaMask]
     beta = tauNbeta[betaMask]
 
+    xsDb = EinLoopOpt(EinGrid, M, T, mu, tauNcut, beta, DebyeWallerCoeff,
+                      xsData, EinGrid_0K)
+
+    # If p0 is True, add the p0 contribution:
+    if p0:
+        xsDb += calc_sta_p0(EinGrid, M, mu, T, DebyeWallerCoeff,
+                            xsData, EinGrid_0K)
+
     # Save the result:
-    return EinLoopOpt(EinGrid, M, T, mu, tauNcut, beta,
-                      DebyeWallerCoeff, xsData, EinGrid_0K)
+    return xsDb
 
 
 def get_Xs(args: argparse.Namespace) -> np.ndarray:

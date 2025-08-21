@@ -373,11 +373,11 @@ def get_Xs(args: argparse.Namespace) -> np.ndarray:
 
     if args.model == "sta":
         return calc_sta(xs, Ein, args.M, args.T, argsPdos,
-                        nphonon=args.nphonon, theta=args.theta)
+                        nphonon=args.nphonon, theta=args.theta, p0=args.p0)
     elif args.model == "alpha0":
         # Calculate the Xs using alpha0 model asymtotic value:
         return calc_alpha0(xs.data, Ein, args.M, args.T, argsPdos,
-                           nphonon=args.nphonon)
+                           nphonon=args.nphonon, p0=args.p0)
     else:
         raise ValueError(f"Unknown model: {args.model}")
 

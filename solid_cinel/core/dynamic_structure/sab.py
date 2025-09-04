@@ -997,19 +997,11 @@ class Sab:
         >>> beta = Beta(beta0_).scale(T)
         >>> S_mat = Sab.from_pdos(alpha, beta, T, pdos, threshold=1.0e-14)
         >>> betaNew = 0.01
-        >>> S_mat.interp_beta(betaNew).data.iloc[1, 0:10].round(6)
-        beta
-        0.000000    0.010712
-        0.010000    0.010765
-        0.024466    0.010842
-        0.048932    0.010972
-        0.073399    0.011103
-        0.097865    0.011232
-        0.122331    0.011355
-        0.146797    0.011491
-        0.171263    0.011625
-        0.195730    0.011759
-        Name: 0.009786476949338778, dtype: float64
+        >>> S_mat.interp_beta(betaNew).data.iloc[0:2, 0:4].round(6)
+        beta      0.000000  0.010000  0.024466  0.048932
+        alpha
+        0.004893  0.005396  0.005423  0.005462  0.005528
+        0.009786  0.010712  0.010765  0.010842  0.010972
 
         >>> betaNew = [0.01, 0.03]
         >>> S_mat.interp_beta(betaNew, inplace=True).data.iloc[0:10, 0:4] #doctest: +NORMALIZE_WHITESPACE
@@ -1417,14 +1409,14 @@ def phonon_expansion(alpha: np.ndarray, nphonon: int, tauNinterp: np.ndarray,
 
     # Zero phonon expansion:
     IterSum = np.log(alphaDebye)
-    sabValues = alphaDebye * tauNinterp[0]
+    sabValues = np.exp(IterSum - alphaDebye) * tauNinterp[0]
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, nphonon):
         # Compute S(alpha, -beta) for tauN reshape
         IterSum += np.log(alphaDebye / (n + 1))
-        sabValues += np.exp(IterSum) * tauNinterp[n]
-    return np.exp(- alphaDebye) * sabValues
+        sabValues += np.exp(IterSum - alphaDebye) * tauNinterp[n]
+    return sabValues
 
 
 @nb.jit(nopython=True, cache=True)

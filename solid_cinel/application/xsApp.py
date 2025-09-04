@@ -84,6 +84,7 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     if nphonon is None:
         alphaMax = m / (m + M) * (Ein[-1]) / (kb * T)
         nphonon = AlphaBase(alphaMax).expansionOrder(DebyeWallerCoeff, 1.0e-6, 7000)
+        print("Number of phonons:", nphonon)
 
     # Calculate the recoil and the alpha values:
     recoil = m / (m + M) * (Ein)
@@ -323,8 +324,8 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
     if nphonon is None:
         EoutMax = default_Eout(EinGrid[-1])
         alphaMat = get_alphaMat(EoutMax, EinGrid[-1], T, M, mu).max()
-        nphonon = AlphaBase(alphaMat).expansionOrder(DebyeWallerCoeff,
-                                                           1.0e-6, 8000)
+        nphonon = AlphaBase(alphaMat).expansionOrder(DebyeWallerCoeff,1.0e-6, 8000)
+        print("Number of phonons:", nphonon)
 
     # Calculate the necessary phonon expansion and the tau N functions:
     tauN = pdos_.tauN(nphonon, 0.0, values=True)

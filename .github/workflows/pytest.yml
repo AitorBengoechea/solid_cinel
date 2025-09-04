@@ -10,6 +10,14 @@ on:
 
 jobs:
   test:
+    # A strategy matrix allows us to run the same job for multiple test targets
+    strategy:
+      fail-fast: false # This ensures all tests run even if one fails
+      matrix:
+        test_target:
+          - core/
+          - application/test_scinel.py
+
     runs-on: ubuntu-latest
 
     steps:
@@ -23,8 +31,34 @@ jobs:
 
       - name: install solid_cinel
         run: bash install.sh
-      - name: pytest solid_cinel code core
-        run: pytest --cov=solid_cinel solid_cinel/core/
-      - name: pytest solid_cinel code applications
-        run:  python -m unittest solid_cinel/application/test_scinel.py
 
+      # Run pytest for the core tests
+      - name: pytest solid_cinel code core
+        if: matrix.test_target == 'core/'
+        run: pytest --cov=solid_cinel solid_cinel/core/
+
+      # Run unittest for the application tests
+      - name: pytest solid_cinel code applications
+        if: matrix.test_target == 'application/test_scinel.py'
+        run: python -m unittest solid_cinel/application/test_scinel.py
+
+jobs:
+  # Job to run the core tests on a Windows runner
+  core_tests:
+    # This specifies that the job should run on the latest version of Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10.12'
+          cache: 'pip'
+
+      - name: install solid_cinel
+        run: bash install.sh
+      - name: pytest solid_cinel code core
+        # Ensure the pytest command is compatible with the Windows shell if needed
+        run: pytest --cov=solid_cinel solid_cinel/core/

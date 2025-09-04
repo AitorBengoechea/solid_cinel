@@ -123,13 +123,13 @@ class AlphaBase:
 
         # 1 phonon expansion:
         iterSum = log(alphaDebye)
-        alphaMul[0] += exp(iterSum)
+        alphaMul[0] += exp(iterSum - alphaDebye)
 
         # Higher phonon expansion (nphonon >= 1):
         for n in range(1, orderMax):
             iterSum += log_alphaDebye - log(n + 1)
-            alphaMul[n] += exp(iterSum)
-        return exp(- alphaDebye) * alphaMul.cumsum()
+            alphaMul[n] += exp(iterSum - alphaDebye)
+        return alphaMul.cumsum()
 
     def _expansionOrderMax(self, alphaCumsum: np.ndarray, decimal: float,
                        orderMax: int) -> int:

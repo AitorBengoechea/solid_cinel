@@ -20,14 +20,15 @@ def add_DynamicStrucArgs(parser: argparse.ArgumentParser):
     parser : argparse.ArgumentParser
         The argument parser to which the arguments should be added.
     """
-    parser.add_argument('model', type=str,
+    parser.add_argument('model', type=str.lower,
+                        choices=['fgm', 'sct', 'pdos'],
                         help='Model to use for the calculation of the scattering function')
     parser.add_argument('Ein', type=float,
-                        help='incident energy in eV')
+                        help='Incident energy in eV')
     parser.add_argument('M', type=float,
-                        help='mass of the target atom in a.m.u.')
+                        help='Mass of the target atom in a.m.u.')
     parser.add_argument('T', type=float,
-                        help='temperature in K')
+                        help='Temperature in K')
     parser.add_argument('Eout', type=str,
                         help='Grid for the output energy in eV')
     parser.add_argument('theta', type=str_or_float,
@@ -77,11 +78,17 @@ def handle_DynamicStrucArgs(args: argparse.Namespace) -> dict:
         An array containing the values of the scattering function.
     """
     result = {}
+
+    # Get the DynamicStruc object based on the arguments:
     dynamicStructure = get_DynamicStruc(args)
+
+    # Get the requested outputs:
     if 'dynamicStruc' in args.output:
         result['values'] = dynamicStructure.values
     if 'transferFunc' in args.output:
         result['transferFunc'] = dynamicStructure.transferFunc
     if 'angleDistr' in args.output:
         result['angleDistr'] = dynamicStructure.angularDistr
+
+    # Return the results as a dictionary:
     return result

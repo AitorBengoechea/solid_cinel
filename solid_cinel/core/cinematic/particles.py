@@ -210,9 +210,9 @@ class Nucleus(Particle):
 
         Example
         -------
-        >>> Nucleus(238).get_E(np.array([10000, 20000]))
-        array([123.33480887, 493.33923547])
-        >>> Nucleus(1).get_E(np.array([10000, 20000]))
-        array([0.51821348, 2.07285393])
+        >>> Nucleus(238).get_E(np.array([10000, 20000])).round(3)
+        array([123.335, 493.339])
+        >>> Nucleus(1).get_E(np.array([10000, 20000])).round(3)
+        array([0.518, 2.073])
         """
         return v ** 2 * self.m / 2

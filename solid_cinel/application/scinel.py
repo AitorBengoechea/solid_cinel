@@ -5,6 +5,7 @@ from solid_cinel.application.sabApp import add_SabArgs, handle_SabArgs
 from solid_cinel.application.dynamicStrucApp import add_DynamicStrucArgs, handle_DynamicStrucArgs
 from solid_cinel.application.ddxsApp import add_DDxsArgs, handle_DDxsArgs
 from solid_cinel.application.xscohApp import add_BraggEdgesArgs, handle_xsCohArgs, handle_BraggEdgesArgs
+from solid_cinel.application.xsApp import add_XsArgs, handle_XsArgs
 
 # Map keywords to their respective functions
 KEYWORD_TO_FUNCTION_MAP = {
@@ -16,7 +17,7 @@ KEYWORD_TO_FUNCTION_MAP = {
         "add": add_SabArgs,
         "handle": handle_SabArgs,
     },
-    "dynamicstruc": {
+    "dsf": {
         "add": add_DynamicStrucArgs,
         "handle": handle_DynamicStrucArgs,
     },
@@ -31,7 +32,11 @@ KEYWORD_TO_FUNCTION_MAP = {
     "braggedges": {
         "add": add_BraggEdgesArgs,
         "handle": handle_BraggEdgesArgs,
-    }
+    },
+    "xs": {
+        "add": add_XsArgs,
+        "handle": handle_XsArgs,
+    },
 }
 
 

@@ -657,15 +657,16 @@ def get_alphaMulCumsum(alpha: float, DebyeWallerCoeff: float, orderMax: int) -> 
     dtype: float64
     """
     alphaMul = np.zeros(orderMax)
+    alphaDebye = alpha * DebyeWallerCoeff
 
     # Zero phonon expansion:
-    iterSum = np.log(alpha * DebyeWallerCoeff)
-    alphaMul[0] += np.exp(- alpha * DebyeWallerCoeff + iterSum)
+    iterSum = np.log(alphaDebye)
+    alphaMul[0] += np.exp(iterSum - alphaDebye)
 
     # Higher phonon expansion (nphonon >= 1):
     for n in range(1, orderMax):
-        iterSum += np.log(alpha * DebyeWallerCoeff / (n + 1))
-        alphaMul[n] += np.exp(- alpha * DebyeWallerCoeff + iterSum)
+        iterSum += np.log(alphaDebye / (n + 1))
+        alphaMul[n] = np.exp(iterSum - alphaDebye)
     return alphaMul.cumsum()
 
 

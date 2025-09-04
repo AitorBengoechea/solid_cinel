@@ -140,7 +140,10 @@ class Expected_result:
     def check_results(self, other):
         if isinstance(other, dict):
             for key, value in other.items():
-                expected_value = getattr(self.expected_result, key)
+                if not hasattr(self.expected_result, key):
+                    expected_value = self.expected_result
+                else:
+                    expected_value = getattr(self.expected_result, key)
                 np.testing.assert_array_equal(expected_value, value)
         else:
             np.testing.assert_array_equal(self.expected_result, other)
@@ -553,22 +556,6 @@ class TestScinel_Xs(BaseTestScinel):
         """
         return [self.keyword, model, self.file_xs0K, self.file_EinGrid,
                 self.M, self.T, self.file_pdos]
-
-    def modelTest(self, model: str) -> None:
-        """
-        Test the specified model for the calculation of the double differential
-        scattering cross section.
-
-        Parameters
-        model : str
-            The model to test. Can be 'fgm', 'sct', or 'pdos'.
-
-        Returns
-        -------
-        None
-            Pass the test if the results are equal.
-        """
-        # Check the results
 
 
     def test_alpha0(self) -> None:

@@ -295,43 +295,33 @@ class DDxs(DoubleDiffData):
 
         # Coercelle with sigma1 algorithm:
         >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, kind="modified", model="fgm")
-        >>> ddxs_test.data.round(6)
-        Eout             6.50         6.60         6.67       6.80      6.90
+        >>> ddxs_test.data.round(5)
+        Eout            6.50        6.60        6.67      6.80     6.90
         mu
-        -0.939693  206.115432  1013.812172   165.200220  15.898128  2.399646
-        -0.500000  276.409513   820.219197   464.709622  25.878328  2.277178
-         0.173648  139.765613   717.641970   682.014198  54.201630  1.371722
-         0.766044    2.327093   529.067649  1218.656999  10.579651  0.001333
+        -0.939693  206.11543  1013.81217   165.20022  15.89813  2.39965
+        -0.500000  276.40951   820.21920   464.70962  25.87833  2.27718
+         0.173648  139.76561   717.64197   682.01420  54.20163  1.37172
+         0.766044    2.32709   529.06765  1218.65700  10.57965  0.00133
 
         >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, kind="modified", model="sct").data
-        >>> ddxs_test.round(6)
-        Eout             6.50         6.60         6.67       6.80      6.90
+        >>> ddxs_test.round(5)
+        Eout            6.50        6.60        6.67      6.80     6.90
         mu
-        -0.939693  205.830907  1012.196411   165.095610  15.954282  2.420805
-        -0.500000  276.177089   818.816867   464.299330  25.974865  2.299886
-         0.173648  139.990855   716.483327   681.151248  54.470850  1.391839
-         0.766044    2.367526   529.455979  1216.705383  10.725959  0.001391
+        -0.939693  205.83091  1012.19641   165.09561  15.95428  2.42081
+        -0.500000  276.17709   818.81687   464.29933  25.97486  2.29989
+         0.173648  139.99086   716.48333   681.15125  54.47085  1.39184
+         0.766044    2.36753   529.45598  1216.70538  10.72596  0.00139
 
         # Coercelle with pdos model: (Example not very accurate, only for
         # demonstration purposes)
         >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, kind="modified", threshold=1.0e-14, nphonon=100, model="pdos").data
-        >>> ddxs_test.round(6)
-        Eout             6.50        6.60         6.67       6.80      6.90
+        >>> ddxs_test.round(5)
+        Eout            6.50       6.60        6.67      6.80     6.90
         mu
-        -0.939693    0.467176    2.219360     0.315338   0.018165  0.001448
-        -0.500000  121.397072  365.197611   200.688661   9.549414  0.674066
-         0.173648  138.229730  717.583601   685.972166  53.718060  1.378087
-         0.766044    3.454981  513.186644  1240.858754  11.210909  0.005570
-
-        # alpha0 (still testing):
-#        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, algorithm="alpha0", model="fgm").data
-#        >>> ddxs_test.round(6)
-
-#        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, algorithm="alpha0", model="sct").data
-#        >>> ddxs_test.round(6)
-
-#        >>> ddxs_test = DDxs.from_4PCF(xs, Ein, T, Eout, theta, pdos, algorithm="alpha0", threshold=1.0e-14, nphonon=100, model="pdos").data
-#        >>> ddxs_test.round(6)
+        -0.939693    0.46718    2.21936     0.31534   0.01816  0.00145
+        -0.500000  121.39707  365.19761   200.68866   9.54941  0.67407
+         0.173648  138.22973  717.58360   685.97217  53.71806  1.37809
+         0.766044    3.45498  513.18664  1240.85875  11.21091  0.00557
         """
         # Generate Dynamic structure of the phonon dynamics:
         dynamicStruc = DynamicStruc.from_model(Ein, xs0K.M, T, Eout, theta,

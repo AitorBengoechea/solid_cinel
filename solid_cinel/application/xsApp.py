@@ -252,7 +252,7 @@ def calc_sta_p0(EinGrid: np.ndarray, M: float, mu: np.ndarray, T: float,
     np.ndarray, (N,)
         The p0 term for the given incident energy grid.
     """
-    A = m / (m + M)
+    A = (m + M) / A
 
     # Calculate the interaction energy matrix:
     EinMat = EinGrid * (A + 1 - mu[::, np.newaxis]) / A

@@ -109,7 +109,7 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     # Add p0 to the calculation:
     if p0:
         xsDb += np.exp(- DebyeWallerCoeff * alpha) * reshape_differential(xs0K, EinCalc)
-    return xsDb
+    return xsDb.values
 
 
 @nb.jit(nopython=True, cache=True)

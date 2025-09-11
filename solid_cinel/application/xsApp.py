@@ -76,6 +76,37 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     -------
     np.ndarray
         The Xs values.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Calculate the Xs using alpha0 model asymtotic value:
+    >>> xsDb = calc_alpha0(xs0K.data, EinGrid, M, T, pdos, nphonon=50, p0=True)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    138.781
+    6.9050     26.236
+    dtype: float64
+
+    # Same calculation but withouth p0:
+    >>> xsDb = calc_alpha0(xs0K.data, EinGrid, M, T, pdos, nphonon=50, p0=False)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    138.769
+    6.9050     26.232
+    dtype: float64
     """
     # Get the temperature dependent pdos and the Debye Waller coefficient:
     pdos_ = pdos.get_Tpdos(T)
@@ -148,6 +179,48 @@ def EinLoopOpt(EinGrid: np.ndarray, M: float, T: float, mu: np.ndarray,
     -------
     np.ndarray, (N,)
         The Xs for the given incident energy grid.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Get the temperature dependent pdos and the Debye Waller coefficient:
+    >>> pdos_ = pdos.get_Tpdos(T)
+    >>> DebyeWallerCoeff = pdos_.DebyeWallerCoeff
+    >>> Teff = pdos_.Teff
+    >>> Tarno = Teff * (1 + mu) / 2
+    >>> EinGrid_0K = xs0K.EinGrid[xs0K.EinGrid <= 2 * EinGrid[-1]]
+    >>> xsData = xs0K.sigma1(Tarno, EinGrid_0K, values=True)
+
+    # Calculate the necessary phonon expansion and the tau N functions:
+    >>> nphonon = 50
+    >>> tauN = pdos_.tauN(nphonon, 0.0, values=True)
+    >>> tauNbeta = get_tauNbeta(pdos_.beta.data, tauN.shape[1])
+    >>> betaMax = EinGrid[-1] / (kb * T) * 1.1
+    >>> betaMask = tauNbeta <= betaMax
+    >>> tauNcut = tauN[::, betaMask]
+    >>> beta = tauNbeta[betaMask]
+
+    # Calculate the Xs using the sta method:
+    >>> xsDb = EinLoopOpt(EinGrid, M, T, mu, tauNcut, beta, DebyeWallerCoeff,
+    ...                   xsData, EinGrid_0K)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    135.986
+    6.9050     25.362
+    dtype: float64
     """
     Nmu = len(mu)
     mu2D = mu[::, np.newaxis]
@@ -212,6 +285,38 @@ def calc_sta_p0(EinGrid: np.ndarray, M: float, mu: np.ndarray, T: float,
     -------
     np.ndarray, (N,)
         The p0 term for the given incident energy grid.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Get the temperature dependent pdos and the Debye Waller coefficient:
+    >>> pdos_ = pdos.get_Tpdos(T)
+    >>> DebyeWallerCoeff = pdos_.DebyeWallerCoeff
+    >>> Teff = pdos_.Teff
+    >>> Tarno = Teff * (1 + mu) / 2
+    >>> EinGrid_0K = xs0K.EinGrid[xs0K.EinGrid <= 2 * EinGrid[-1]]
+    >>> xsData = xs0K.sigma1(Tarno, EinGrid_0K, values=True)
+
+    # Calculate the Xs p0 contribution:
+    >>> xsDb = calc_sta_p0(EinGrid, M, mu, T, DebyeWallerCoeff, xsData, EinGrid_0K)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    3.962
+    6.9050    0.755
+    dtype: float64
     """
     A = (m + M) / m
 
@@ -262,13 +367,44 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
     -------
     np.ndarray
         Xs values.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Calculate the Xs using alpha0 model asymtotic value:
+    >>> xsDb = calc_sta(xs0K, EinGrid, M, T, pdos, nphonon=50, p0=True)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    139.948
+    6.9050     26.117
+    dtype: float64
+
+    # Same calculation but withouth p0:
+    >>> xsDb = calc_sta(xs0K, EinGrid, M, T, pdos, nphonon=50, p0=False)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    135.986
+    6.9050     25.362
+    dtype: float64
     """
     if theta is None:
         # Default theta grid if not provided
         theta = np.arange(1, 181, 1)[::-1]
     else:
         theta = np.loadtxt(theta)
-    mu = np.cos(np.deg2rad(theta))
+    mu = np.sort(np.cos(np.deg2rad(theta)))
 
 
     # Get the temperature dependent pdos and the Debye Waller coefficient:

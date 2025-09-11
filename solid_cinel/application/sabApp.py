@@ -22,6 +22,20 @@ def add_SabArgs(parser: argparse.ArgumentParser):
                         help='Beta grid')
     parser.add_argument('T', type=float,
                         help='Temperature in Kelvin')
+    parser.add_argument('--nphonon', type=int,
+                        default=None,
+                        help='Number of phonon')
+    parser.add_argument('--decimal', type=float,
+                        default=1.0e-6,
+                        help='Decimal precision for the calculation of the number of phonons')
+    parser.add_argument('--orderMax', type=int,
+                        default=5000,
+                        help='Maximum order for the calculation of the number of phonons')
+    parser.add_argument('--threshold', type=float,
+                        default=0.0,
+                        help='Threshold for the calculation of the number of phonons')
+    parser.add_argument('--p0', action='store_true',
+                        help='Include the elastic peak in the calculation of the number of phonons')
 
 def get_sab(args: argparse.Namespace) -> Sab:
     # Validate temperature
@@ -30,10 +44,13 @@ def get_sab(args: argparse.Namespace) -> Sab:
 
     # Get the extra arguments for Pdos
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
+    kwargsPdos = {"nphonon": args.nphonon, "decimal": args.decimal,
+                  "orderMax": args.orderMax, "threshold": args.threshold,
+                  "p0": args.p0} if args.model == "pdos" else {}
 
     # Get Sab class based on the model
     return Sab.from_model(args.alpha, args.beta, args.T, *argsPdos,
-                          model=args.model)
+                          model=args.model, **kwargsPdos)
 
 
 def handle_SabArgs(args: argparse.Namespace) -> dict:

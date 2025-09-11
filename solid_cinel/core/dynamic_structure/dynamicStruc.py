@@ -9,7 +9,7 @@ import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_dE
-from solid_cinel.core.dynamic_structure.alpha import get_alphaMatMod, AlphaBase, calc_alphaRecoil
+from solid_cinel.core.dynamic_structure.alpha import calc_alphaMatMod, AlphaBase, calc_recoil
 from solid_cinel.core.dynamic_structure.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
@@ -96,7 +96,7 @@ class DoubleDiff:
         np.ndarray
             The recoil energy
         """
-        return calc_alphaRecoil(self.Ein, self.M, self.Eout, self.mu2D)
+        return calc_recoil(self.Ein, self.M, self.Eout, self.mu2D)
 
     @property
     def dE(self):
@@ -1417,7 +1417,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
     tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
 
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = phonon_expansion(get_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0),
+    sabValues = phonon_expansion(calc_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0),
                                  tauN.shape[0], tauNinterp, DebyeWallerCoeff)
 
     # Dynamic Structure factor values selection:

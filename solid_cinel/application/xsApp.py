@@ -8,7 +8,8 @@ from scipy.constants import physical_constants as const
 # Import from solid_cinel:
 from solid_cinel import Pdos, AlphaBase, Beta, Xs0K, Sab
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel import default_Eout, get_ScatFuncClm, get_tauNbeta
+from solid_cinel import default_Eout, calc_dsf, get_tauNbeta
+from solid_cinel.core.dynamic_structure.alpha import calc_recoil, calc_alphaMat
 
 # Import from application:
 from solid_cinel.application.pdosApp import get_Pdos
@@ -75,6 +76,37 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     -------
     np.ndarray
         The Xs values.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Calculate the Xs using alpha0 model asymtotic value:
+    >>> xsDb = calc_alpha0(xs0K.data, EinGrid, M, T, pdos, nphonon=50, p0=True)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    138.781
+    6.9050     26.236
+    dtype: float64
+
+    # Same calculation but withouth p0:
+    >>> xsDb = calc_alpha0(xs0K.data, EinGrid, M, T, pdos, nphonon=50, p0=False)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    138.769
+    6.9050     26.232
+    dtype: float64
     """
     # Get the temperature dependent pdos and the Debye Waller coefficient:
     pdos_ = pdos.get_Tpdos(T)
@@ -102,64 +134,16 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     EinCalc = Ein + recoil
     EoutCalc = scatfunc.columns.values * kb * T + EinCalc[::, np.newaxis]
 
+    # Interpolate the xs0K to the outgoing energy grid:
+    xsInterp = reshape_differential(xs0K, EoutCalc)
+
     # Integrate the cross section:
-    xsDb = (scatfunc * reshape_differential(xs0K, EoutCalc)).apply(integrate,
-                                                                   axis=1)
+    xsDb = (scatfunc * xsInterp).apply(integrate, axis=1)
 
     # Add p0 to the calculation:
     if p0:
         xsDb += np.exp(- DebyeWallerCoeff * alpha) * reshape_differential(xs0K, EinCalc)
-    return xsDb
-
-
-@nb.jit(nopython=True, cache=True)
-def get_recoil(Eout, Ein, M, mu):
-    """
-    Calculate the recoil energy for the given outgoing and incoming energies.
-
-    Parameters
-    ----------
-    Eout : np.ndarray
-        The outgoing energy grid.
-    Ein : float
-        The incoming energy.
-    M : float
-        The mass of the target atom in a.m.u.
-    mu : np.ndarray
-        The chemical potential values.
-
-    Returns
-    -------
-    np.ndarray
-        The recoil energy.
-    """
-    return (Eout + Ein - 2 * mu[::, np.newaxis] * np.sqrt(Eout * Ein)) / (M / m)
-
-
-@nb.jit(nopython=True, cache=True)
-def get_alphaMat(Eout, Ein, T, M, mu):
-    """
-    Calculate the alpha matrix for the given outgoing and incoming energies.
-
-    Parameters
-    ----------
-    Eout : np.ndarray
-        The outgoing energy grid.
-    Ein : float
-        The incoming energy.
-    T : float
-        The temperature in K.
-    M : float
-        The mass of the target atom in a.m.u.
-    mu_ : np.ndarray
-        The chemical potential values.
-
-    Returns
-    -------
-    np.ndarray
-        The alpha matrix.
-    """
-    return get_recoil(Eout, Ein, M, mu) / (kb * T)
+    return xsDb.values
 
 
 @nb.jit(nopython=True, parallel=True, nogil=True, cache=True)
@@ -195,9 +179,56 @@ def EinLoopOpt(EinGrid: np.ndarray, M: float, T: float, mu: np.ndarray,
     -------
     np.ndarray, (N,)
         The Xs for the given incident energy grid.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Get the temperature dependent pdos and the Debye Waller coefficient:
+    >>> pdos_ = pdos.get_Tpdos(T)
+    >>> DebyeWallerCoeff = pdos_.DebyeWallerCoeff
+    >>> Teff = pdos_.Teff
+    >>> Tarno = Teff * (1 + mu) / 2
+    >>> EinGrid_0K = xs0K.EinGrid[xs0K.EinGrid <= 2 * EinGrid[-1]]
+    >>> xsData = xs0K.sigma1(Tarno, EinGrid_0K, values=True)
+
+    # Calculate the necessary phonon expansion and the tau N functions:
+    >>> nphonon = 50
+    >>> tauN = pdos_.tauN(nphonon, 0.0, values=True)
+    >>> tauNbeta = get_tauNbeta(pdos_.beta.data, tauN.shape[1])
+    >>> betaMax = EinGrid[-1] / (kb * T) * 1.1
+    >>> betaMask = tauNbeta <= betaMax
+    >>> tauNcut = tauN[::, betaMask]
+    >>> beta = tauNbeta[betaMask]
+
+    # Calculate the Xs using the sta method:
+    >>> xsDb = EinLoopOpt(EinGrid, M, T, mu, tauNcut, beta, DebyeWallerCoeff,
+    ...                   xsData, EinGrid_0K)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    135.986
+    6.9050     25.362
+    dtype: float64
     """
     Nmu = len(mu)
+    mu2D = mu[::, np.newaxis]
+
+    # Initialize the result array:
     resultCLM = np.zeros((len(EinGrid)), dtype=np.float64)
+
+
     for i in prange(len(EinGrid)):
         # Get the outgoing energy
         if EinGrid[i] >= 10.0:
@@ -207,19 +238,22 @@ def EinLoopOpt(EinGrid: np.ndarray, M: float, T: float, mu: np.ndarray,
             Eout = default_Eout(EinGrid[i])
 
         # Get the phonon dynamics for CLM:
-        PhononDyn = get_ScatFuncClm(EinGrid[i], M, T, Eout, mu, tauNcut, beta,
-                                    DebyeWallerCoeff, 0.0)
+        PhononDyn = calc_dsf(EinGrid[i], M, T, Eout, mu, tauNcut, beta, DebyeWallerCoeff)
 
         # Get the interaction energy matrix:
-        EinMat = 0.5 * (EinGrid[i] + Eout + get_recoil(Eout, EinGrid[i], M, mu))
+        EinMat = 0.5 * (EinGrid[i] + Eout + calc_recoil(EinGrid[i], M, Eout, mu2D))
 
-        # Interpolate the db data to the interaction energy matrix:
-        xsInterp = np.zeros(EinMat.shape)
+        # Calculate the scattering function for each mu value:
+        scatFunc = np.zeros(Nmu)
         for j in prange(Nmu):
-            xsInterp[j, :] = np.interp(EinMat[j, ::], xsMatrixEin, xsMatrix[j])
+            # Interpolate the xsMatrix to the EinMat:
+            xsInterp = np.interp(EinMat[j, ::], xsMatrixEin, xsMatrix[j])
 
-        # Integrate:
-        resultCLM[i] = np.trapz(np.trapz(PhononDyn * xsInterp, x=Eout), x=mu)
+            # Integrate the DDXS over Eout:
+            scatFunc[j] = np.trapz(PhononDyn[j] * xsInterp, x=Eout)
+
+        # Integrate the scattering kernel over mu:
+        resultCLM[i] = np.trapz(scatFunc, x=mu)
     return resultCLM
 
 @nb.jit(nopython=True, cache=True)
@@ -251,8 +285,40 @@ def calc_sta_p0(EinGrid: np.ndarray, M: float, mu: np.ndarray, T: float,
     -------
     np.ndarray, (N,)
         The p0 term for the given incident energy grid.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Get the temperature dependent pdos and the Debye Waller coefficient:
+    >>> pdos_ = pdos.get_Tpdos(T)
+    >>> DebyeWallerCoeff = pdos_.DebyeWallerCoeff
+    >>> Teff = pdos_.Teff
+    >>> Tarno = Teff * (1 + mu) / 2
+    >>> EinGrid_0K = xs0K.EinGrid[xs0K.EinGrid <= 2 * EinGrid[-1]]
+    >>> xsData = xs0K.sigma1(Tarno, EinGrid_0K, values=True)
+
+    # Calculate the Xs p0 contribution:
+    >>> xsDb = calc_sta_p0(EinGrid, M, mu, T, DebyeWallerCoeff, xsData, EinGrid_0K)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    3.962
+    6.9050    0.755
+    dtype: float64
     """
-    A = m / (m + M)
+    A = (m + M) / m
 
     # Calculate the interaction energy matrix:
     EinMat = EinGrid * (A + 1 - mu[::, np.newaxis]) / A
@@ -301,13 +367,44 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
     -------
     np.ndarray
         Xs values.
+
+    Examples
+    --------
+    # Create the general arguments:
+    >>> mu = np.cos(np.deg2rad(np.arange(1, 181, 1)[::-1]))
+    >>> M = 238.05077040419212  # U-238
+    >>> T = 300.0  # Temperature in K
+
+    # Charge the data:
+    >>> import os
+    >>> wd = os.getcwd()
+    >>> os.chdir(__file__.replace("xsApp.py", ""))
+    >>> os.chdir("inputTest/")
+    >>> xs0K = Xs0K.from_file("u238.0.2", M)
+    >>> EinGrid = np.loadtxt("EinGrid")
+    >>> pdos = Pdos.from_file("interp.300")
+    >>> os.chdir(wd)
+
+    # Calculate the Xs using alpha0 model asymtotic value:
+    >>> xsDb = calc_sta(xs0K, EinGrid, M, T, pdos, nphonon=50, p0=True)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    139.948
+    6.9050     26.117
+    dtype: float64
+
+    # Same calculation but withouth p0:
+    >>> xsDb = calc_sta(xs0K, EinGrid, M, T, pdos, nphonon=50, p0=False)
+    >>> pd.Series(xsDb, index=EinGrid).round(3)
+    6.7554    135.986
+    6.9050     25.362
+    dtype: float64
     """
     if theta is None:
         # Default theta grid if not provided
         theta = np.arange(1, 181, 1)[::-1]
     else:
         theta = np.loadtxt(theta)
-    mu = np.cos(np.deg2rad(theta))
+    mu = np.sort(np.cos(np.deg2rad(theta)))
 
 
     # Get the temperature dependent pdos and the Debye Waller coefficient:
@@ -323,7 +420,7 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
     # Get the Expansion order:
     if nphonon is None:
         EoutMax = default_Eout(EinGrid[-1])
-        alphaMat = get_alphaMat(EoutMax, EinGrid[-1], T, M, mu).max()
+        alphaMat = calc_alphaMat(EoutMax, EinGrid[-1], T, M, mu).max()
         nphonon = AlphaBase(alphaMat).expansionOrder(DebyeWallerCoeff,1.0e-6, 8000)
         print("Number of phonons:", nphonon)
 

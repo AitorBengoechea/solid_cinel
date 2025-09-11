@@ -470,8 +470,8 @@ class AlphaVect(AlphaBase):
 
 
 @nb.jit(nopython=True, cache=True)
-def calc_alphaRecoil(Ein: [float, np.ndarray], M: float, Eout: np.ndarray,
-                     mu: np.ndarray) -> [float, np.ndarray]:
+def calc_recoil(Ein: [float, np.ndarray], M: float, Eout: np.ndarray,
+                mu: np.ndarray) -> [float, np.ndarray]:
     """
     Get the alpha recoil value from the parameters of the function:
     .. math::
@@ -520,11 +520,61 @@ def calc_alpha(Ein: [float, np.ndarray], M: float, T: float, Eout: np.ndarray,
     'np.ndarray', (N,)
         Array containing all posible alpha values for the input parameters.
     """
-    return calc_alphaRecoil(Ein, M, Eout, mu) / (kb * T)
+    return calc_recoil(Ein, M, Eout, mu) / (kb * T)
 
 
 @nb.jit(nopython=True, cache=True)
-def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
+def calc_alphaMat(Eout: np.ndarray, Ein: float, T: float, M: float, mu: np.ndarray) -> np.ndarray:
+    """
+    Calculate the alpha matrix for the given outgoing and incoming energies.
+
+    Parameters
+    ----------
+    Eout: np.ndarray, (N,)
+        Output energy of the neutron in eV.
+    Ein: float
+        Incidente energy of the neutron in eV.
+    T: float
+        Temperature in K.
+    M: float
+        Mass in amu of the scatterer.
+    mu: np.ndarray, (K,)
+        Cosine of the scattering angle.
+
+    Returns
+    -------
+    np.ndarray, (K, N)
+        The alpha matrix.
+
+    Example
+    -------
+    >>> T = 800
+    >>> Ein = 0.33118
+    >>> Eout = np.array([0.331180, 0.331812, 0.332445, 0.333077, 0.333710])
+    >>> M = 26.98153433356103
+    >>> theta = np.array([45, 90, 135, 180])
+    >>> mu = np.cos(np.deg2rad(theta))
+    >>> values = calc_alphaMat(Eout, Ein, T, M, mu)
+    >>> pd.DataFrame(values.round(3), index=theta, columns=Eout)
+         0.331180  0.331812  0.332445  0.333077  0.333710
+    45      0.105     0.105     0.105     0.106     0.106
+    90      0.359     0.360     0.360     0.360     0.361
+    135     0.613     0.614     0.614     0.615     0.615
+    180     0.718     0.719     0.720     0.720     0.721
+
+    # Test for the case of a single angle:
+    >>> theta = np.array([90])
+    >>> mu = np.cos(np.deg2rad(theta))
+    >>> values = calc_alphaMat(Eout, Ein, T, M, mu)
+    >>> pd.DataFrame(values.round(3), index=theta, columns=Eout)
+        0.331180  0.331812  0.332445  0.333077  0.333710
+    90     0.359      0.36      0.36      0.36     0.361
+    """
+    return calc_recoil(Ein, M, Eout, mu[::, np.newaxis]) / (kb * T)
+
+
+@nb.jit(nopython=True, cache=True)
+def calc_alphaMatMod(Eout: np.ndarray, Ein: float,  M: float, T: float,
                     mu: np.ndarray, DebyeWallerCoeff: float, alpha0: float) -> np.ndarray:
     """
     Get all the posible alpha modified values from the parameters of the function
@@ -559,7 +609,7 @@ def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
     >>> mu = np.cos(np.deg2rad(theta))
     >>> DebyeWallerCoeff = 7.5
     >>> alpha0 = Ein / (M / m * kb * T)
-    >>> values = get_alphaMatMod(Eout, Ein, T, M, mu, DebyeWallerCoeff, alpha0)
+    >>> values = calc_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0)
     >>> pd.DataFrame(values.round(6), index=theta, columns=Eout)
          0.331180  0.331812  0.332445  0.333077  0.333710
     45   0.160246  0.160272  0.160298  0.160324  0.160351
@@ -570,20 +620,16 @@ def get_alphaMatMod(Eout: np.ndarray, Ein: float, T: float, M: float,
     # Test for the case of a single angle:
     >>> theta = np.array([90])
     >>> mu = np.cos(np.deg2rad(theta))
-    >>> values = get_alphaMatMod(Eout, Ein, T, M, mu, DebyeWallerCoeff, alpha0)
+    >>> values = calc_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0)
     >>> pd.DataFrame(values.round(6), index=theta, columns=Eout)
         0.331180  0.331812  0.332445  0.333077  0.333710
     90   0.22629  0.226379  0.226468  0.226558  0.226647
     """
-    mu_ = mu[::, np.newaxis]
-    if alpha0 == 0 or DebyeWallerCoeff == 0:
-        return calc_alpha(Eout, Ein, T, M, mu_)
-    else:
-        # Define the constants for the calculation
-        AkbT = M / m * kb * T
-        expTerm = exp(- alpha0 * DebyeWallerCoeff)
+    # Define the constants for the calculation
+    AkbT = M / m * kb * T
+    expTerm = exp(- alpha0 * DebyeWallerCoeff)
 
-        # Modify the alpha matrix with outgoing energy and cosine of the
-        # scattering angle modification
-        return (Ein + (Eout - 2 * mu_ * np.sqrt(Eout * Ein)) * expTerm) / AkbT
-
+    # Modify the alpha matrix with outgoing energy and cosine of the
+    # scattering angle modification
+    Emod = Eout - 2 * mu[::, np.newaxis] * np.sqrt(Eout * Ein)
+    return (Ein + Emod * expTerm) / AkbT

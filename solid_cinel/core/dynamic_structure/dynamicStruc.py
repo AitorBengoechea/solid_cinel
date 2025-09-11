@@ -9,7 +9,7 @@ import numba as nb
 from scipy.constants import physical_constants as const
 from solid_cinel.core.generic import integrate, interp_multyParallel
 from solid_cinel.core.dynamic_structure.beta import get_AbsBeta, calc_dE
-from solid_cinel.core.dynamic_structure.alpha import get_alphaMatMod, AlphaBase, calc_alphaRecoil
+from solid_cinel.core.dynamic_structure.alpha import calc_alphaMatMod, AlphaBase, calc_recoil, calc_alphaMat
 from solid_cinel.core.dynamic_structure.sab import get_SabSct, phonon_expansion
 from solid_cinel.core.material.pdos import Pdos
 from solid_cinel.core.material.tau import get_tauNbeta
@@ -96,7 +96,7 @@ class DoubleDiff:
         np.ndarray
             The recoil energy
         """
-        return calc_alphaRecoil(self.Ein, self.M, self.Eout, self.mu2D)
+        return calc_recoil(self.Ein, self.M, self.Eout, self.mu2D)
 
     @property
     def dE(self):
@@ -1345,7 +1345,93 @@ def normFactor(Eout: np.ndarray, Ein: float, T: float, M: float) -> np.ndarray:
     return aws * np.sqrt(Eout / Ein) / two_kb_T
 
 @nb.jit(nopython=True, cache=True)
-def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
+def calc_dsf(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
+             tauN: np.ndarray, tauNbeta: np.ndarray, DebyeWallerCoeff: float) -> np.ndarray:
+    """
+    Generate the Transfer function from a S(alpha, -beta) table based on
+    the phonon expansion model.
+
+    Parameters
+    ----------
+    Ein : float
+        The incident energy of the neutron in eV
+    M : float
+        The mass of the target material in amu
+    T : float
+        Temperature of the material in K
+    Eout : np.ndarray, (N,)
+        The neutron outgoing energy grid in eV
+    mu : float
+        Cosine of the scattering angle
+    tauN : 'np.ndarray', (M, T)
+        all tau n functions in one array.
+    tauNbeta : 'np.ndarray', (M,)
+        Space between beta grid points of tau n functions.
+    DebyeWallerCoeff : float
+        Debye Waller coefficient
+
+    Returns
+    -------
+    S_diag : 'np.ndarray', (N,)
+        Transfer function values for a single angle.
+
+    Examples
+    --------
+    >>> from solid_cinel.data.examples.UO2 import rho_in_energy_U238, interv_in_energy_U238
+    >>> from solid_cinel import AlphaBase, calc_alpha
+    >>> Ein = 7.2
+    >>> Eout = np.linspace(6.7554, 7.448, num=1000, endpoint=True)
+    >>> Eout_test = np.array([6.7554, 6.905 , 7.0439, 7.2   , 7.3157, 7.448 ])
+    >>> Eout = np.unique(np.concatenate((Eout, Eout_test), axis=None))
+    >>> T = 1000.0
+    >>> M = 238.05077040419212
+    >>> mu = np.cos(np.deg2rad([120]))
+    >>> pdos = Pdos.from_dE(T, rho_in_energy_U238, interv_in_energy_U238)
+    >>> DebyeWallerCoeff = pdos.DebyeWallerCoeff
+    >>> alpha = AlphaBase(calc_alpha(Ein, M, T, Eout, mu.min()))
+    >>> nphonon = alpha.expansionOrder(DebyeWallerCoeff, 1.0e-6, 5000)
+    >>> tauN = pdos.tauN(nphonon, 1.0e-14, values=True)
+    >>> tau1beta = pdos.beta.data
+    >>> tauNbeta = get_tauNbeta(tau1beta, tauN.shape[1])
+
+    # Using the alpha0 parameter:
+    >>> sd_pdf = calc_dsf(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff)
+    >>> pd.Series(sd_pdf[0], index=Eout).loc[Eout_test].round(6)
+    6.7554    0.026675
+    6.9050    0.403623
+    7.0439    1.383022
+    7.2000    1.232574
+    7.3157    0.412462
+    7.4480    0.042739
+    dtype: float64
+    """
+    # Get the beta grid:
+    betaAbs = get_AbsBeta(Eout, Ein, T, unique=False, sort=False)
+
+    # Define the dowscattering mask:
+    mask = Eout <= Ein
+
+    # Interpolation of tauN functions to reduce the number of calculations:
+    tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
+
+    # Get the alpha matrix:
+    alphaMat = calc_alphaMat(Eout, Ein, T, M, mu)
+
+    # Get the S(alpha, -beta) values for the alpha and beta combinations:
+    sabValues = phonon_expansion(alphaMat, tauN.shape[0], tauNinterp, DebyeWallerCoeff)
+
+    # Dynamic Structure factor values selection:
+    dynamicStruc = np.concatenate(
+        (sabValues[::, mask],
+         np.exp(-betaAbs[~mask]) * sabValues[::, ~mask]),
+        axis=1
+    )
+    # Normalization constant
+    return dynamicStruc * normFactor(Eout, Ein, T, M)
+
+
+@nb.jit(nopython=True, cache=True)
+def calc_dsfMod(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.ndarray,
                     tauN: np.ndarray, tauNbeta: np.ndarray,
                     DebyeWallerCoeff: float, alpha0: float) -> np.ndarray:
     """
@@ -1397,7 +1483,7 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
 
     # Using the alpha0 parameter:
     >>> alpha0 = Ein / M / (kb * T)
-    >>> sd_pdf = get_ScatFuncClm(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff, alpha0)
+    >>> sd_pdf = calc_dsfMod(Ein, M, T, Eout, mu, tauN, tauNbeta, DebyeWallerCoeff, alpha0)
     >>> pd.Series(sd_pdf[0], index=Eout).loc[Eout_test].round(6)
     6.7554    0.000002
     6.9050    0.005037
@@ -1416,9 +1502,11 @@ def get_ScatFuncClm(Ein: float, M: float, T: float, Eout: np.ndarray, mu: np.nda
     # Interpolation of tauN functions to reduce the number of calculations:
     tauNinterp = interp_multyParallel(betaAbs, tauNbeta, tauN)
 
+    # Get the modidfied alpha matrix:
+    alphaMatMod = calc_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0)
+
     # Get the S(alpha, -beta) values for the alpha and beta combinations:
-    sabValues = phonon_expansion(get_alphaMatMod(Eout, Ein, M, T, mu, DebyeWallerCoeff, alpha0),
-                                 tauN.shape[0], tauNinterp, DebyeWallerCoeff)
+    sabValues = phonon_expansion(alphaMatMod, tauN.shape[0], tauNinterp, DebyeWallerCoeff)
 
     # Dynamic Structure factor values selection:
     dynamicStruc = np.concatenate(

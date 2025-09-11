@@ -37,6 +37,18 @@ def add_DynamicStrucArgs(parser: argparse.ArgumentParser):
                         choices=['dynamicStruc', 'transferFunc', 'angularDistr'],
                         default=['dynamicStruc'],
                         help='What to return: dynamicStruc, transferFunc, angularDistr')
+    parser.add_argument('--nphonon', type=int,
+                        default=None,
+                        help='Number of phonon')
+    parser.add_argument('--decimal', type=float,
+                        default=1.0e-6,
+                        help='Decimal precision for the calculation of the number of phonons')
+    parser.add_argument('--orderMax', type=int,
+                        default=5000,
+                        help='Maximum order for the calculation of the number of phonons')
+    parser.add_argument('--threshold', type=float,
+                        default=0.0,
+                        help='Threshold for the calculation of the number of phonons')
 
 def get_DynamicStruc(args: argparse.Namespace) -> DynamicStruc:
     """
@@ -59,9 +71,12 @@ def get_DynamicStruc(args: argparse.Namespace) -> DynamicStruc:
     # Get the extra arguments for Pdos
     argsPdos = [get_Pdos(args)] if args.model != "fgm" else []
 
+    kwargsPdos = {"nphonon": args.nphonon, "decimal": args.decimal,
+                  "orderMax": args.orderMax, "threshold": args.threshold} if args.model == "pdos" else {}
+
     # Compute the function:
     return DynamicStruc.from_model(args.Ein, args.M, args.T, Eout, theta,
-                                   *argsPdos, model=args.model)
+                                   *argsPdos, model=args.model, **kwargsPdos)
 
 def handle_DynamicStrucArgs(args: argparse.Namespace) -> dict:
     """

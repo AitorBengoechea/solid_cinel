@@ -46,7 +46,7 @@ def add_XsArgs(parser: argparse.ArgumentParser):
     parser.add_argument('--theta', type=str,
                         default=None,
                         help='Grid for the scattering angle in degrees')
-    parser.add_argument('--p0', type=bool, default=True,
+    parser.add_argument('--ine', action='store_false',
                         help='Add p0 to the calculation. Default is True.')
 
 def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
@@ -471,11 +471,11 @@ def get_Xs(args: argparse.Namespace) -> np.ndarray:
 
     if args.model == "sta":
         return calc_sta(xs, Ein, args.M, args.T, argsPdos,
-                        nphonon=args.nphonon, theta=args.theta, p0=args.p0)
+                        nphonon=args.nphonon, theta=args.theta, p0=args.ine)
     elif args.model == "alpha0":
         # Calculate the Xs using alpha0 model asymtotic value:
         return calc_alpha0(xs.data, Ein, args.M, args.T, argsPdos,
-                           nphonon=args.nphonon, p0=args.p0)
+                           nphonon=args.nphonon, p0=args.ine)
     else:
         raise ValueError(f"Unknown model: {args.model}")
 

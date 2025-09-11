@@ -32,7 +32,7 @@ def optional_jit(func):
     if gpu_available:
         return cuda.jit(func)
     else:
-        return nb.jit(func, nopython=True, nogil=True, cache=True, parallel=True)
+        return nb.jit(func, nopython=True, cache=True)
 
 
 @optional_jit

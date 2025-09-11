@@ -8,7 +8,8 @@ from scipy.constants import physical_constants as const
 # Import from solid_cinel:
 from solid_cinel import Pdos, AlphaBase, Beta, Xs0K, Sab
 from solid_cinel.core.generic import integrate, reshape_differential
-from solid_cinel import default_Eout, get_ScatFuncClm, get_tauNbeta
+from solid_cinel import default_Eout, calc_dsf, get_tauNbeta
+from solid_cinel.core.dynamic_structure.alpha import calc_recoil, calc_alphaMat
 
 # Import from application:
 from solid_cinel.application.pdosApp import get_Pdos
@@ -102,64 +103,16 @@ def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
     EinCalc = Ein + recoil
     EoutCalc = scatfunc.columns.values * kb * T + EinCalc[::, np.newaxis]
 
+    # Interpolate the xs0K to the outgoing energy grid:
+    xsInterp = reshape_differential(xs0K, EoutCalc)
+
     # Integrate the cross section:
-    xsDb = (scatfunc * reshape_differential(xs0K, EoutCalc)).apply(integrate,
-                                                                   axis=1)
+    xsDb = (scatfunc * xsInterp).apply(integrate, axis=1)
 
     # Add p0 to the calculation:
     if p0:
         xsDb += np.exp(- DebyeWallerCoeff * alpha) * reshape_differential(xs0K, EinCalc)
     return xsDb.values
-
-
-@nb.jit(nopython=True, cache=True)
-def get_recoil(Eout, Ein, M, mu):
-    """
-    Calculate the recoil energy for the given outgoing and incoming energies.
-
-    Parameters
-    ----------
-    Eout : np.ndarray
-        The outgoing energy grid.
-    Ein : float
-        The incoming energy.
-    M : float
-        The mass of the target atom in a.m.u.
-    mu : np.ndarray
-        The chemical potential values.
-
-    Returns
-    -------
-    np.ndarray
-        The recoil energy.
-    """
-    return (Eout + Ein - 2 * mu[::, np.newaxis] * np.sqrt(Eout * Ein)) / (M / m)
-
-
-@nb.jit(nopython=True, cache=True)
-def get_alphaMat(Eout, Ein, T, M, mu):
-    """
-    Calculate the alpha matrix for the given outgoing and incoming energies.
-
-    Parameters
-    ----------
-    Eout : np.ndarray
-        The outgoing energy grid.
-    Ein : float
-        The incoming energy.
-    T : float
-        The temperature in K.
-    M : float
-        The mass of the target atom in a.m.u.
-    mu_ : np.ndarray
-        The chemical potential values.
-
-    Returns
-    -------
-    np.ndarray
-        The alpha matrix.
-    """
-    return get_recoil(Eout, Ein, M, mu) / (kb * T)
 
 
 @nb.jit(nopython=True, parallel=True, nogil=True, cache=True)
@@ -197,7 +150,12 @@ def EinLoopOpt(EinGrid: np.ndarray, M: float, T: float, mu: np.ndarray,
         The Xs for the given incident energy grid.
     """
     Nmu = len(mu)
+    mu2D = mu[::, np.newaxis]
+
+    # Initialize the result array:
     resultCLM = np.zeros((len(EinGrid)), dtype=np.float64)
+
+
     for i in prange(len(EinGrid)):
         # Get the outgoing energy
         if EinGrid[i] >= 10.0:
@@ -207,19 +165,22 @@ def EinLoopOpt(EinGrid: np.ndarray, M: float, T: float, mu: np.ndarray,
             Eout = default_Eout(EinGrid[i])
 
         # Get the phonon dynamics for CLM:
-        PhononDyn = get_ScatFuncClm(EinGrid[i], M, T, Eout, mu, tauNcut, beta,
-                                    DebyeWallerCoeff, 0.0)
+        PhononDyn = calc_dsf(EinGrid[i], M, T, Eout, mu, tauNcut, beta, DebyeWallerCoeff)
 
         # Get the interaction energy matrix:
-        EinMat = 0.5 * (EinGrid[i] + Eout + get_recoil(Eout, EinGrid[i], M, mu))
+        EinMat = 0.5 * (EinGrid[i] + Eout + calc_recoil(EinGrid[i], M, Eout, mu2D))
 
-        # Interpolate the db data to the interaction energy matrix:
-        xsInterp = np.zeros(EinMat.shape)
+        # Calculate the scattering function for each mu value:
+        scatFunc = np.zeros(Nmu)
         for j in prange(Nmu):
-            xsInterp[j, :] = np.interp(EinMat[j, ::], xsMatrixEin, xsMatrix[j])
+            # Interpolate the xsMatrix to the EinMat:
+            xsInterp = np.interp(EinMat[j, ::], xsMatrixEin, xsMatrix[j])
 
-        # Integrate:
-        resultCLM[i] = np.trapz(np.trapz(PhononDyn * xsInterp, x=Eout), x=mu)
+            # Integrate the DDXS over Eout:
+            scatFunc[j] = np.trapz(PhononDyn[j] * xsInterp, x=Eout)
+
+        # Integrate the scattering kernel over mu:
+        resultCLM[i] = np.trapz(scatFunc, x=mu)
     return resultCLM
 
 @nb.jit(nopython=True, cache=True)
@@ -323,7 +284,7 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
     # Get the Expansion order:
     if nphonon is None:
         EoutMax = default_Eout(EinGrid[-1])
-        alphaMat = get_alphaMat(EoutMax, EinGrid[-1], T, M, mu).max()
+        alphaMat = calc_alphaMat(EoutMax, EinGrid[-1], T, M, mu).max()
         nphonon = AlphaBase(alphaMat).expansionOrder(DebyeWallerCoeff,1.0e-6, 8000)
         print("Number of phonons:", nphonon)
 

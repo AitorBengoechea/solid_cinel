@@ -48,6 +48,9 @@ def add_XsArgs(parser: argparse.ArgumentParser):
                         help='Grid for the scattering angle in degrees')
     parser.add_argument('--ine', action='store_false',
                         help='Add p0 to the calculation. Default is True.')
+    parser.add_argument('--num_cores', type=int,
+                        default=None,
+                        help='Number of cores to use. Default is None, which uses all available cores.')
 
 def calc_alpha0(xs0K: pd.Series, Ein: np.ndarray, M: float, T: float,
                 pdos: Pdos, nphonon: int = None, p0: bool = True) -> np.ndarray:
@@ -256,6 +259,35 @@ def EinLoopOpt(EinGrid: np.ndarray, M: float, T: float, mu: np.ndarray,
         resultCLM[i] = np.trapz(scatFunc, x=mu)
     return resultCLM
 
+
+def EinLoop_wrapper(*args, num_cores: int = None) -> np.ndarray:
+    """
+    Wrapper for the EinLoopOpt function to set the number of threads.
+
+    Parameters
+    ----------
+    args: tuple
+        Arguments for the EinLoopOpt function.
+
+    num_cores: int or None
+        Number of cores to use. If None, use the default number of threads.
+
+    Returns
+    -------
+    np.ndarray
+        The result of the EinLoopOpt function.
+    """
+    max_threads = nb.config.NUMBA_DEFAULT_NUM_THREADS
+    if num_cores is not None:
+        if num_cores > max_threads:
+            print(f"Warning: Requested {num_cores} cores, but only {max_threads} available. Using {max_threads}.")
+            nb.set_num_threads(max_threads)
+        else:
+            nb.set_num_threads(num_cores)
+    else:
+        nb.set_num_threads(max_threads)
+    return EinLoopOpt(*args)
+
 @nb.jit(nopython=True, cache=True)
 def calc_sta_p0(EinGrid: np.ndarray, M: float, mu: np.ndarray, T: float,
                 DebyeWallerCoeff: float, xsMatrix: np.ndarray,
@@ -339,7 +371,7 @@ def calc_sta_p0(EinGrid: np.ndarray, M: float, mu: np.ndarray, T: float,
 
 def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
              pdos: Pdos, nphonon: int = None, theta: bool = None,
-             p0: bool = True) -> np.ndarray:
+             p0: bool = True, num_cores: int = None) -> np.ndarray:
     """
     Calculate the double differential scattering cross section using the
     sta method.
@@ -362,6 +394,8 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
         The path to the theta grid file. If None, a default grid will be used.
     p0 : bool, optional
         Whether to add p0 to the calculation. Default is True.
+    num_cores : int or None, optional
+        Number of cores to use. If None, use the default number of threads.
 
     Returns
     -------
@@ -434,8 +468,8 @@ def calc_sta(xs0K: Xs0K, EinGrid: np.ndarray, M: float, T: float,
     tauNcut = tauN[::, betaMask]
     beta = tauNbeta[betaMask]
 
-    xsDb = EinLoopOpt(EinGrid, M, T, mu, tauNcut, beta, DebyeWallerCoeff,
-                      xsData, EinGrid_0K)
+    xsDb = EinLoop_wrapper(EinGrid, M, T, mu, tauNcut, beta, DebyeWallerCoeff,
+                            xsData, EinGrid_0K, num_cores=num_cores)
 
     # If p0 is True, add the p0 contribution:
     if p0:
@@ -471,7 +505,8 @@ def get_Xs(args: argparse.Namespace) -> np.ndarray:
 
     if args.model == "sta":
         return calc_sta(xs, Ein, args.M, args.T, argsPdos,
-                        nphonon=args.nphonon, theta=args.theta, p0=args.ine)
+                        nphonon=args.nphonon, theta=args.theta, p0=args.ine,
+                        num_cores=args.num_cores)
     elif args.model == "alpha0":
         # Calculate the Xs using alpha0 model asymtotic value:
         return calc_alpha0(xs.data, Ein, args.M, args.T, argsPdos,

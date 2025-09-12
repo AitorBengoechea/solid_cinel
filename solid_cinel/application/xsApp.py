@@ -281,11 +281,11 @@ def EinLoop_wrapper(*args, num_cores: int = None) -> np.ndarray:
     if num_cores is not None:
         if num_cores > max_threads:
             print(f"Warning: Requested {num_cores} cores, but only {max_threads} available. Using {max_threads}.")
-            nb.set_parallel_num_threads(max_threads)
+            nb.set_num_threads(max_threads)
         else:
-            nb.set_parallel_num_threads(num_cores)
+            nb.set_num_threads(num_cores)
     else:
-        nb.set_parallel_num_threads(max_threads)
+        nb.set_num_threads(max_threads)
     return EinLoopOpt(*args)
 
 @nb.jit(nopython=True, cache=True)

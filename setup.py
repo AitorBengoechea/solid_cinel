@@ -1,5 +1,7 @@
-from setuptools import setup, find_packages
 import multiprocessing
+from setuptools import setup, find_packages
+from setuptools.command.build_py import build_py as _build_py
+from sphinx.setup_command import BuildDoc
 
 
 requirements = "requirements.txt"
@@ -18,6 +20,15 @@ and to provide a high-level interface to the most common tasks in solid state
 physics. It is built on top of the popular Python packages  pandas, numpy and 
 numba.
 """
+class build_py(_build_py):
+    def run(self):
+        self.run_command('build_sphinx')
+        _build_py.run(self)
+
+cmdclass = {
+    'build_sphinx': BuildDoc,
+    'build_py': build_py,
+}
 
 if __name__ == "__main__":
     # Freeze to support parallel compilation when using spawn instead of fork
@@ -44,6 +55,7 @@ if __name__ == "__main__":
         install_requires=open(requirements).read().splitlines(),
         extras_require={
             'gpu':  ['cupy'],  # general cupy package
+            'docs': ['sphinx', 'sphinx-rtd-theme'],
         },
         entry_points={
             'console_scripts': [
@@ -56,4 +68,14 @@ if __name__ == "__main__":
         ],
         python_requires='>=3.10',
         include_package_data=True,
+        cmdclass=cmdclass,
+        command_options={
+            'build_sphinx': {
+                'project': ('setup.py', 'solid_cinel'),
+                'version': ('setup.py', '0.1.0'),
+                'release': ('setup.py', '0.1.0'),
+                'source_dir': ('setup.py', 'docs/source'),
+                'build_dir': ('setup.py', 'docs/build'),
+            }
+        },
     )
